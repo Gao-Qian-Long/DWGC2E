@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>DwgTranslator.Cad</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- AutoCAD .NET API references - adjust paths to your AutoCAD installation -->
+    <Reference Include="AcCoreMgd">
+      <HintPath>D:\autocad2021\AutoCAD 2021\accoremgd.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="AcDbMgd">
+      <HintPath>D:\autocad2021\AutoCAD 2021\acdbmgd.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="AcMgd">
+      <HintPath>D:\autocad2021\AutoCAD 2021\AcMgd.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="AcCui">
+      <HintPath>D:\autocad2021\AutoCAD 2021\AcCui.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\DwgTranslator.Core\DwgTranslator.Core.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,317 @@
+<Window x:Class="DwgTranslator.App.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:DwgTranslator.App.ViewModels"
+        xmlns:conv="clr-namespace:DwgTranslator.App.Converters"
+        Title="DWG Translator - 图纸中英文互译" Height="750" Width="1200"
+        WindowStartupLocation="CenterScreen"
+        Topmost="True"
+        Background="#F0F4F8">
+    <Window.DataContext>
+        <vm:MainViewModel/>
+    </Window.DataContext>
+    <Window.Resources>
+        <conv:StatusToBrushConverter x:Key="StatusBrush"/>
+        <conv:BoolToVisibilityConverter x:Key="BoolToVis"/>
+
+        <!-- Row style: base colors + status overrides (triggers must beat default setters) -->
+        <Style x:Key="TranslationRowStyle" TargetType="DataGridRow">
+            <Setter Property="Height" Value="32"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Style.Triggers>
+                <!-- Alternating row via AlternationIndex -->
+                <Trigger Property="AlternationIndex" Value="0">
+                    <Setter Property="Background" Value="White"/>
+                </Trigger>
+                <Trigger Property="AlternationIndex" Value="1">
+                    <Setter Property="Background" Value="#F9FAFB"/>
+                </Trigger>
+                <!-- Status overrides -->
+                <DataTrigger Binding="{Binding Status}" Value="Translated">
+                    <Setter Property="Background" Value="#F1F8E9"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Status}" Value="Reviewed">
+                    <Setter Property="Background" Value="#E2F0D9"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Status}" Value="TranslationFailed">
+                    <Setter Property="Background" Value="#FFF0F0"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Status}" Value="Skipped">
+                    <Setter Property="Background" Value="#F2F2F2"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding GlossaryHit}" Value="True">
+                    <Setter Property="Background" Value="#FFFDE7"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Centered cell style -->
+        <Style x:Key="CenteredCellStyle" TargetType="TextBlock">
+            <Setter Property="TextAlignment" Value="Center"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="FontSize" Value="12"/>
+        </Style>
+
+        <!-- Wrap cell style -->
+        <Style x:Key="WrapCellStyle" TargetType="TextBlock">
+            <Setter Property="TextWrapping" Value="Wrap"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="FontSize" Value="12"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Toolbar Row 1 -->
+        <Border Grid.Row="0" Background="White" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1" Padding="5">
+            <StackPanel Orientation="Horizontal">
+                <Button Content="📁 导入 DWG" Command="{Binding ImportDwgCommand}" Padding="10,6" Margin="2"
+                        ToolTip="选择一个或多个 DWG 文件，提取文本实体"
+                        Background="#1976D2" Foreground="White" FontWeight="Bold"/>
+                <Separator Margin="5,0"/>
+
+                <!-- Language Direction Toggle -->
+                <Button Padding="10,6" Margin="2" ToolTip="点击切换翻译方向"
+                        Background="#FF9800" Foreground="White" FontWeight="Bold"
+                        Command="{Binding ToggleLanguageDirectionCommand}">
+                    <TextBlock TextAlignment="Center">
+                        <Run Text="⇄ " FontSize="16"/><Run Text="{Binding LanguageDirection}" FontSize="12"/>
+                    </TextBlock>
+                </Button>
+                <Separator Margin="5,0"/>
+
+                <Button Content="🌐 翻译" Command="{Binding TranslateCommand}" Padding="10,6" Margin="2"
+                        ToolTip="AI 并发翻译（去重 + 智能并发）"
+                        Background="#4CAF50" Foreground="White" FontWeight="Bold"
+                        Visibility="{Binding IsProcessing, Converter={StaticResource BoolToVis}, ConverterParameter=false}"/>
+                <Button Content="⏹ 停止" Command="{Binding CancelTranslateCommand}" Padding="10,6" Margin="2"
+                        ToolTip="停止正在进行的翻译"
+                        Background="#E53935" Foreground="White" FontWeight="Bold"
+                        Visibility="{Binding IsProcessing, Converter={StaticResource BoolToVis}}"/>
+                <Separator Margin="5,0"/>
+
+                <Button Content="📊 导出 Excel" Command="{Binding ExportExcelCommand}" Padding="10,6" Margin="2"
+                        ToolTip="导出翻译表到 Excel 进行校对"/>
+                <Button Content="📥 导入 Excel" Command="{Binding ImportExcelCommand}" Padding="10,6" Margin="2"
+                        ToolTip="从校对后的 Excel 导入译文"/>
+                <Separator Margin="5,0"/>
+
+                <Button Content="💾 导出 DWG" Command="{Binding ExportDwgCommand}" Padding="10,6" Margin="2"
+                        ToolTip="离线回写译文到 DWG 文件"
+                        Background="#2E7D32" Foreground="White" FontWeight="Bold"/>
+                <Separator Margin="5,0"/>
+
+                <Button Content="✅ 全部审阅" Command="{Binding MarkAllReviewedCommand}" Padding="10,6" Margin="2"
+                        ToolTip="标记所有已翻译条目为已审阅"/>
+                <Button Content="🔄 重试失败" Command="{Binding RetryFailedCommand}" Padding="10,6" Margin="2"/>
+                <Separator Margin="5,0"/>
+
+                <Button Content="📚 术语库" Command="{Binding OpenGlossaryManagerCommand}" Padding="10,6" Margin="2"
+                        ToolTip="查看和编辑术语库"/>
+                <Button Content="📥 导入术语" Command="{Binding ImportGlossaryCommand}" Padding="10,6" Margin="2"/>
+                <Separator Margin="5,0"/>
+
+                <Button Content="🗑 清空" Command="{Binding ClearAllCommand}" Padding="10,6" Margin="2"/>
+                <Button Content="⚙ 设置" Command="{Binding SettingsCommand}" Padding="10,6" Margin="2"/>
+                <Button Content="📌" Command="{Binding ToggleTopmostCommand}" Padding="8,6" Margin="2"
+                        ToolTip="窗口置顶切换" FontSize="14"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Toolbar Row 2: Filter + Stats -->
+        <Border Grid.Row="1" Background="White" Padding="10,5">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="筛选:" VerticalAlignment="Center" Margin="0,0,5,0" FontSize="12"/>
+                <ComboBox ItemsSource="{Binding FilterOptions}"
+                          SelectedItem="{Binding FilterStatusText, UpdateSourceTrigger=PropertyChanged}"
+                          Width="95" Height="26" Margin="0,0,15,0"/>
+                <TextBlock Text="🔍" VerticalAlignment="Center" Margin="0,0,3,0"/>
+                <TextBox Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" Width="180" Height="26"
+                         ToolTip="搜索原文/译文/类型"/>
+                <Button Content="查找" Command="{Binding ApplySearchCommand}" Padding="8,3" Margin="5,0,15,0"/>
+
+                <Border Background="#E3F2FD" CornerRadius="4" Padding="10,4">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock FontSize="12">
+                            <Run Text="总数:" FontWeight="Bold"/><Run Text="{Binding TotalCount}"/>
+                        </TextBlock>
+                        <TextBlock Margin="12,0,0,0" FontSize="12">
+                            <Run Text="已翻译:" FontWeight="Bold" Foreground="#1976D2"/>
+                            <Run Text="{Binding TranslatedCount}" Foreground="#1976D2"/>
+                        </TextBlock>
+                        <TextBlock Margin="12,0,0,0" FontSize="12">
+                            <Run Text="失败:" FontWeight="Bold" Foreground="#E53935"/>
+                            <Run Text="{Binding FailedCount}" Foreground="#E53935"/>
+                        </TextBlock>
+                        <TextBlock Margin="12,0,0,0" FontSize="12">
+                            <Run Text="术语:" FontWeight="Bold" Foreground="#E65100"/>
+                            <Run Text="{Binding GlossaryHitCount}" Foreground="#E65100"/>
+                        </TextBlock>
+                        <TextBlock Margin="12,0,0,0" FontSize="12">
+                            <Run Text="缓存:" FontWeight="Bold" Foreground="#78909C"/>
+                            <Run Text="{Binding CacheHitCount}" Foreground="#78909C"/>
+                        </TextBlock>
+                        <TextBlock Margin="12,0,0,0" FontSize="12">
+                            <Run Text="显示:" FontWeight="Bold"/>
+                            <Run Text="{Binding VisibleCount}"/>
+                        </TextBlock>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </Border>
+
+        <!-- Progress Bar -->
+        <ProgressBar Grid.Row="2" Height="4" Margin="10,2"
+                     Value="{Binding ProgressValue}" Maximum="100"
+                     Visibility="{Binding IsProcessing, Converter={StaticResource BoolToVis}}"
+                     Foreground="#4CAF50" Background="#E8E8E8"/>
+
+        <!-- Data Grid -->
+        <DataGrid Grid.Row="3" Margin="10,5,10,5"
+                  ItemsSource="{Binding FilteredEntities}"
+                  AutoGenerateColumns="False"
+                  CanUserAddRows="False"
+                  SelectionMode="Single"
+                  CanUserSortColumns="True"
+                  GridLinesVisibility="Horizontal"
+                  RowStyle="{StaticResource TranslationRowStyle}"
+                  AlternationCount="2"
+                  CanUserResizeColumns="True"
+                  EnableRowVirtualization="True"
+                  IsReadOnly="False"
+                  RowHeight="32"
+                  FontSize="12"
+                  HeadersVisibility="Column"
+                  HorizontalGridLinesBrush="#E0E0E0">
+            <DataGrid.Resources>
+                <Style TargetType="DataGridColumnHeader">
+                    <Setter Property="Background" Value="#37474F"/>
+                    <Setter Property="Foreground" Value="White"/>
+                    <Setter Property="FontWeight" Value="Bold"/>
+                    <Setter Property="FontSize" Value="12"/>
+                    <Setter Property="Height" Value="34"/>
+                    <Setter Property="HorizontalContentAlignment" Value="Center"/>
+                    <Setter Property="Padding" Value="4,0"/>
+                </Style>
+                <Style TargetType="DataGridCell">
+                    <Setter Property="VerticalAlignment" Value="Center"/>
+                    <Setter Property="Padding" Value="4,2"/>
+                    <Setter Property="FontSize" Value="12"/>
+                    <Setter Property="BorderThickness" Value="0"/>
+                    <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                </Style>
+            </DataGrid.Resources>
+            <DataGrid.Columns>
+                <!-- Handle -->
+                <DataGridTextColumn Header="Handle" Binding="{Binding Handle}" Width="70" IsReadOnly="True"
+                                    CanUserSort="True" SortMemberPath="Handle">
+                    <DataGridTextColumn.ElementStyle>
+                        <Style TargetType="TextBlock" BasedOn="{StaticResource CenteredCellStyle}">
+                            <Setter Property="FontFamily" Value="Consolas"/>
+                            <Setter Property="FontSize" Value="10"/>
+                        </Style>
+                    </DataGridTextColumn.ElementStyle>
+                </DataGridTextColumn>
+
+                <!-- Entity Type -->
+                <DataGridTextColumn Header="类型" Binding="{Binding EntityType}" Width="95" IsReadOnly="True"
+                                    CanUserSort="True" SortMemberPath="EntityType"
+                                    ElementStyle="{StaticResource CenteredCellStyle}"/>
+
+                <!-- Source Text -->
+                <DataGridTextColumn Header="原文" Binding="{Binding PlainText}" Width="240" IsReadOnly="True"
+                                    CanUserSort="True" SortMemberPath="PlainText"
+                                    ElementStyle="{StaticResource WrapCellStyle}"/>
+
+                <!-- Translated Text (EDITABLE) -->
+                <DataGridTemplateColumn Header="译文" Width="250" SortMemberPath="TranslatedText" CanUserSort="True">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <TextBox Text="{Binding TranslatedText, UpdateSourceTrigger=LostFocus}"
+                                     TextWrapping="Wrap" AcceptsReturn="True" MinHeight="24"
+                                     BorderBrush="#BDBDBD" Background="Transparent"
+                                     FontSize="12" VerticalContentAlignment="Center"
+                                     ToolTip="双击直接编辑翻译"/>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+
+                <!-- Glossary Hit -->
+                <DataGridTemplateColumn Header="术语" Width="55" SortMemberPath="GlossaryHit" CanUserSort="True">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="13"
+                                       ToolTip="术语库自动匹配。✅=命中">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Text" Value=""/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding GlossaryHit}" Value="True">
+                                                <Setter Property="Text" Value="✅"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+
+                <!-- Status -->
+                <DataGridTemplateColumn Header="状态" Width="100" SortMemberPath="Status" CanUserSort="True">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <Border CornerRadius="3" Padding="4,2"
+                                    Background="{Binding Status, Converter={StaticResource StatusBrush}}"
+                                    ToolTip="{Binding Status}">
+                                <TextBlock Text="{Binding Status}" FontSize="11" FontWeight="Bold"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+
+                <!-- Block Name -->
+                <DataGridTextColumn Header="所属块" Binding="{Binding BlockName}" Width="100" IsReadOnly="True"
+                                    CanUserSort="True" SortMemberPath="BlockName"
+                                    ElementStyle="{StaticResource CenteredCellStyle}"/>
+
+                <!-- Notes -->
+                <DataGridTextColumn Header="备注" Binding="{Binding Notes}" Width="130" IsReadOnly="False"
+                                    CanUserSort="True" SortMemberPath="Notes"
+                                    ElementStyle="{StaticResource WrapCellStyle}"/>
+            </DataGrid.Columns>
+        </DataGrid>
+
+        <!-- Status Bar -->
+        <StatusBar Grid.Row="4" Background="#ECEFF1" Margin="0,0,0,0">
+            <StatusBar.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                    </Grid>
+                </ItemsPanelTemplate>
+            </StatusBar.ItemsPanel>
+            <StatusBarItem Grid.Column="0">
+                <TextBlock Text="{Binding StatusMessage}" TextTrimming="CharacterEllipsis" FontSize="12"/>
+            </StatusBarItem>
+            <StatusBarItem Grid.Column="1">
+                <TextBlock Text="{Binding GlossaryStatsText}" Foreground="#78909C" FontSize="11" Margin="0,0,15,0"/>
+            </StatusBarItem>
+            <StatusBarItem Grid.Column="2">
+                <TextBlock Text="DWG Translator v1.3" Foreground="#90A4AE" FontSize="10"/>
+            </StatusBarItem>
+        </StatusBar>
+    </Grid>
+</Window>

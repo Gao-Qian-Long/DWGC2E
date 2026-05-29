@@ -1,0 +1,71 @@
+# ===== .NET Build Output =====
+[Bb]in/
+[Oo]bj/
+*.exe
+*.dll
+*.pdb
+*.ilk
+
+# ===== NuGet =====
+packages/
+*.nupkg
+# NuGet packages are restored via `dotnet restore`
+
+# ===== Visual Studio =====
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.userprefs
+
+# ===== VS Code =====
+.vscode/
+!.vscode/tasks.json
+!.vscode/launch.json
+
+# ===== Rider =====
+.idea/
+
+# ===== App Settings (contains API Key!) =====
+settings.json
+appsettings*.json
+!settings.json.example
+
+# ===== Logs =====
+logs/
+*.log
+Serilog/
+
+# ===== Translation Cache =====
+translation_cache.json
+
+# ===== Export / Temp =====
+exports/
+*.xlsx
+!glossaries/*.xlsx
+
+# ===== DWG Files =====
+*.dwg
+*.bak
+!glossaries/
+!prompts/
+
+# ===== OS Files =====
+Thumbs.db
+.DS_Store
+Desktop.ini
+
+# ===== Publish =====
+publish/
+*.zip
+
+# ===== Installer =====
+installer/Output/
+*.exe
+!DwgTranslator.iss
+
+# ===== Test Output =====
+TestResults/
+*.trx
+*.coverage
