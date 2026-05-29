@@ -133,13 +133,15 @@ public class DwgReaderService : IDwgReaderService
     {
         Handle = mtext.Handle.ToString(),
         RawText = mtext.Value ?? string.Empty,
-        PlainText = mtext.PlainText ?? StripMTextFormatCodes(mtext.Value ?? string.Empty),
+        PlainText = !string.IsNullOrWhiteSpace(mtext.PlainText)
+            ? mtext.PlainText
+            : StripMTextFormatCodes(mtext.Value ?? string.Empty),
         FormatTemplate = mtext.Value ?? string.Empty,
         EntityType = "MText", Height = mtext.Height, Rotation = mtext.Rotation,
         TextStyleName = mtext.Style?.Name ?? "Standard", BlockName = blockName, IsXref = false,
         Position = new Point3d(mtext.InsertPoint.X, mtext.InsertPoint.Y, mtext.InsertPoint.Z),
         OriginalWidth = mtext.RectangleWidth > 0 ? mtext.RectangleWidth : EstimateTextWidth(
-            mtext.PlainText ?? StripMTextFormatCodes(mtext.Value ?? string.Empty), mtext.Height)
+            !string.IsNullOrWhiteSpace(mtext.PlainText) ? mtext.PlainText : StripMTextFormatCodes(mtext.Value ?? string.Empty), mtext.Height)
     };
 
     private static OurTextEntity CreateDimensionEntity(CadDimension dim, string blockName) => new()
@@ -180,7 +182,7 @@ public class DwgReaderService : IDwgReaderService
 
     private static OurTextEntity CreateAttributeEntity(CadAttributeEntity att, string blockName) => new()
     {
-        Handle = $"{att.Owner.Handle}/{att.Tag}",
+        Handle = att.Owner != null ? $"{att.Owner.Handle}/{att.Tag}" : $"{att.Handle}/{att.Tag}",
         RawText = att.Value ?? string.Empty,
         PlainText = StripFormatCodes(att.Value ?? string.Empty),
         FormatTemplate = att.Value ?? string.Empty,

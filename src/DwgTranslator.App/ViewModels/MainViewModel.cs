@@ -298,7 +298,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
             Padding = new Thickness(10, 5, 10, 5),
             Margin = new Thickness(0, 0, 5, 0)
         };
-        saveButton.Click += (s, e) =>
+        saveButton.Click += async (s, e) =>
         {
             // Save to AppData glossary file
             var targetPath = Path.Combine(App.AppDataDir, "glossaries", "mechanical_zh_en.json");
@@ -311,10 +311,10 @@ public partial class MainViewModel : ObservableObject, IDisposable
                 WriteIndented = true,
                 PropertyNamingPolicy = JsonNamingPolicy.CamelCase
             });
-            File.WriteAllText(targetPath, json);
+            await File.WriteAllTextAsync(targetPath, json);
 
             // Reload into service
-            _glossaryService.LoadGlossaryAsync(targetPath).GetAwaiter().GetResult();
+            await _glossaryService.LoadGlossaryAsync(targetPath);
             RefreshGlossaryDataFromList(list);
 
             window.Close();
@@ -350,7 +350,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     /// Import glossary entries from Excel or JSON.
     /// </summary>
     [RelayCommand]
-    private void ImportGlossary()
+    private async Task ImportGlossaryAsync()
     {
         var dialog = new OpenFileDialog
         {
@@ -368,7 +368,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
             File.Copy(dialog.FileName, targetPath, overwrite: true);
         }
 
-        _glossaryService.LoadGlossaryAsync(targetPath).GetAwaiter().GetResult();
+        await _glossaryService.LoadGlossaryAsync(targetPath);
         RefreshGlossaryData();
         StatusMessage = $"术语库已导入: {GlossaryEntries.Count} 条";
     }
@@ -684,7 +684,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         try
         {
             var result = await Task.Run(() =>
-                _dwgWriterService.WriteTranslations(sourceFilePath, dialog2.FileName, entitiesToWrite));
+                _dwgWriterService.WriteTranslations(sourceFilePath, dialog2.FileName, entitiesToWrite, IsCnToEn));
 
             ProgressValue = 100;
 

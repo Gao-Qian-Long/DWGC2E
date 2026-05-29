@@ -5,7 +5,7 @@
         xmlns:conv="clr-namespace:DwgTranslator.App.Converters"
         Title="DWG Translator - 图纸中英文互译" Height="750" Width="1200"
         WindowStartupLocation="CenterScreen"
-        Topmost="True"
+        Topmost="False"
         Background="#F0F4F8">
     <Window.DataContext>
         <vm:MainViewModel/>
@@ -71,7 +71,7 @@
 
         <!-- Toolbar Row 1 -->
         <Border Grid.Row="0" Background="White" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1" Padding="5">
-            <StackPanel Orientation="Horizontal">
+            <WrapPanel Orientation="Horizontal">
                 <Button Content="📁 导入 DWG" Command="{Binding ImportDwgCommand}" Padding="10,6" Margin="2"
                         ToolTip="选择一个或多个 DWG 文件，提取文本实体"
                         Background="#1976D2" Foreground="White" FontWeight="Bold"/>
@@ -122,7 +122,7 @@
                 <Button Content="⚙ 设置" Command="{Binding SettingsCommand}" Padding="10,6" Margin="2"/>
                 <Button Content="📌" Command="{Binding ToggleTopmostCommand}" Padding="8,6" Margin="2"
                         ToolTip="窗口置顶切换" FontSize="14"/>
-            </StackPanel>
+            </WrapPanel>
         </Border>
 
         <!-- Toolbar Row 2: Filter + Stats -->
@@ -221,17 +221,17 @@
                 </DataGridTextColumn>
 
                 <!-- Entity Type -->
-                <DataGridTextColumn Header="类型" Binding="{Binding EntityType}" Width="95" IsReadOnly="True"
+                <DataGridTextColumn Header="类型" Binding="{Binding EntityType}" Width="80" IsReadOnly="True"
                                     CanUserSort="True" SortMemberPath="EntityType"
                                     ElementStyle="{StaticResource CenteredCellStyle}"/>
 
                 <!-- Source Text -->
-                <DataGridTextColumn Header="原文" Binding="{Binding PlainText}" Width="240" IsReadOnly="True"
+                <DataGridTextColumn Header="原文" Binding="{Binding PlainText}" Width="2*" MinWidth="150" IsReadOnly="True"
                                     CanUserSort="True" SortMemberPath="PlainText"
                                     ElementStyle="{StaticResource WrapCellStyle}"/>
 
                 <!-- Translated Text (EDITABLE) -->
-                <DataGridTemplateColumn Header="译文" Width="250" SortMemberPath="TranslatedText" CanUserSort="True">
+                <DataGridTemplateColumn Header="译文" Width="2*" MinWidth="150" SortMemberPath="TranslatedText" CanUserSort="True">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
                             <TextBox Text="{Binding TranslatedText, UpdateSourceTrigger=LostFocus}"
@@ -265,7 +265,7 @@
                 </DataGridTemplateColumn>
 
                 <!-- Status -->
-                <DataGridTemplateColumn Header="状态" Width="100" SortMemberPath="Status" CanUserSort="True">
+                <DataGridTemplateColumn Header="状态" Width="90" SortMemberPath="Status" CanUserSort="True">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
                             <Border CornerRadius="3" Padding="4,2"
@@ -279,12 +279,12 @@
                 </DataGridTemplateColumn>
 
                 <!-- Block Name -->
-                <DataGridTextColumn Header="所属块" Binding="{Binding BlockName}" Width="100" IsReadOnly="True"
+                <DataGridTextColumn Header="所属块" Binding="{Binding BlockName}" Width="*" MinWidth="80" IsReadOnly="True"
                                     CanUserSort="True" SortMemberPath="BlockName"
                                     ElementStyle="{StaticResource CenteredCellStyle}"/>
 
                 <!-- Notes -->
-                <DataGridTextColumn Header="备注" Binding="{Binding Notes}" Width="130" IsReadOnly="False"
+                <DataGridTextColumn Header="备注" Binding="{Binding Notes}" Width="*" MinWidth="80" IsReadOnly="False"
                                     CanUserSort="True" SortMemberPath="Notes"
                                     ElementStyle="{StaticResource WrapCellStyle}"/>
             </DataGrid.Columns>

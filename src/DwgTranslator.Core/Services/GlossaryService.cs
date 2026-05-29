@@ -22,7 +22,7 @@ public class GlossaryService : IGlossaryService
             return;
         }
 
-        var json = await File.ReadAllTextAsync(filePath);
+        var json = await File.ReadAllTextAsync(filePath).ConfigureAwait(false);
         var entries = JsonSerializer.Deserialize<List<GlossaryEntry>>(json, new JsonSerializerOptions
         {
             PropertyNameCaseInsensitive = true

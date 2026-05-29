@@ -69,3 +69,4 @@ installer/Output/
 TestResults/
 *.trx
 *.coverage
+.codebuddy/

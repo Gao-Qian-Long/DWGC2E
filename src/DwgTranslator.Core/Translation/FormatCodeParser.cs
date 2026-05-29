@@ -57,10 +57,12 @@ public partial class FormatCodeParser
             sb.Insert(start, placeholder);
         }
 
-        // Strip grouping braces and clean whitespace
-        var result = StripBraces(sb.ToString());
+        // Keep template with placeholders for restore (preserve braces for format grouping)
+        var template = sb.ToString();
+        // Strip grouping braces and clean whitespace for plain text only
+        var result = StripBraces(template);
         result = Regex.Replace(result, @"\s{2,}", " ").Trim();
-        return (result, result, formatCodes);
+        return (result, template, formatCodes);
     }
 
     /// <summary>

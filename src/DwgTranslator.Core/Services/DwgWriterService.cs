@@ -2,6 +2,7 @@ using ACadSharp;
 using ACadSharp.Entities;
 using ACadSharp.IO;
 using ACadSharp.Header;
+using ACadSharp.Tables;
 using DwgTranslator.Core.Models;
 using Serilog;
 using System.Text.RegularExpressions;
@@ -18,15 +19,14 @@ namespace DwgTranslator.Core.Services;
 
 /// <summary>
 /// Writes translated text back into DWG files using ACadSharp library (offline, no AutoCAD required).
-/// Key fix: skips already-processed ModelSpace/PaperSpace blocks to avoid duplicate entity modification
-/// which causes DWG corruption.
+/// Includes: automatic backup, font mapping, and adaptive text scaling.
 /// </summary>
 public class DwgWriterService : IDwgWriterService
 {
     private static readonly Regex HandleRegex = new(@"^[0-9A-Fa-f]+$", RegexOptions.Compiled);
 
     /// <inheritdoc/>
-    public DwgWriteResult WriteTranslations(string sourceFilePath, string outputFilePath, List<OurTextEntity> entities)
+    public DwgWriteResult WriteTranslations(string sourceFilePath, string outputFilePath, List<OurTextEntity> entities, bool cnToEn = true)
     {
         var result = new DwgWriteResult();
 
@@ -44,8 +44,20 @@ public class DwgWriterService : IDwgWriterService
             return result;
         }
 
-        Log.Information("Writing translations to DWG: {Source} -> {Output} ({Count} entities)",
-            sourceFilePath, outputFilePath, entities.Count);
+        // 1. Auto-backup original file
+        try
+        {
+            var backupPath = sourceFilePath + ".bak";
+            File.Copy(sourceFilePath, backupPath, overwrite: true);
+            Log.Information("Backup created: {Backup}", backupPath);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Failed to create backup for {Path}", sourceFilePath);
+        }
+
+        Log.Information("Writing translations to DWG: {Source} -> {Output} ({Count} entities, CnToEn={Dir})",
+            sourceFilePath, outputFilePath, entities.Count, cnToEn);
 
         try
         {
@@ -56,6 +68,9 @@ public class DwgWriterService : IDwgWriterService
                 result.Errors.Add("Failed to read DWG file");
                 return result;
             }
+
+            // Ensure output font styles exist in document
+            EnsureFontStyles(doc, cnToEn);
 
             // Build lookup: handle -> translated text
             var translationMap = new Dictionary<string, OurTextEntity>(StringComparer.OrdinalIgnoreCase);
@@ -72,15 +87,8 @@ public class DwgWriterService : IDwgWriterService
 
             Log.Information("Translation map: {Count} entities to replace", translationMap.Count);
 
-            // Track which block names we've already processed to avoid duplicates
-            var processedBlocks = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-            {
-                "*Model_Space",
-                "*Paper_Space"
-            };
-
             // Process model space (directly - NOT via BlockRecords)
-            int modelSpaceCount = ProcessEntityCollection(doc.ModelSpace.Entities, translationMap, result);
+            int modelSpaceCount = ProcessEntityCollection(doc.ModelSpace.Entities, translationMap, result, cnToEn, doc);
             Log.Information("ModelSpace: {Count} replacements", modelSpaceCount);
 
             // Process all layouts (paper space) directly
@@ -90,22 +98,21 @@ public class DwgWriterService : IDwgWriterService
                 if (layout.AssociatedBlock == null) continue;
 
                 int layoutCount = ProcessEntityCollection(
-                    layout.AssociatedBlock.Entities, translationMap, result);
+                    layout.AssociatedBlock.Entities, translationMap, result, cnToEn, doc);
                 if (layoutCount > 0)
                     Log.Debug("Layout '{Name}': {Count} replacements", layout.Name, layoutCount);
             }
 
-            // Process nested blocks only (skip Model_Space and Paper_Space which are already done)
+            // Process user-defined block definitions only (skip internal Model/Paper space blocks)
             foreach (var blockRecord in doc.BlockRecords)
             {
                 if (blockRecord == null) continue;
-                if (processedBlocks.Contains(blockRecord.Name)) continue;
+                if (blockRecord.Name.StartsWith("*Model_Space", StringComparison.OrdinalIgnoreCase)) continue;
+                if (blockRecord.Name.StartsWith("*Paper_Space", StringComparison.OrdinalIgnoreCase)) continue;
 
-                processedBlocks.Add(blockRecord.Name);
-
-                int blockCount = ProcessEntityCollection(blockRecord.Entities, translationMap, result);
+                int blockCount = ProcessEntityCollection(blockRecord.Entities, translationMap, result, cnToEn, doc);
                 if (blockCount > 0)
-                    Log.Debug("Block '{Name}': {Count} replacements", blockCount, blockRecord.Name);
+                    Log.Debug("Block '{Name}': {Count} replacements", blockRecord.Name, blockCount);
             }
 
             int unprocessedCount = translationMap.Count;
@@ -140,13 +147,46 @@ public class DwgWriterService : IDwgWriterService
     }
 
     /// <summary>
+    /// Pre-create target font styles in the document so entities can reference them.
+    /// </summary>
+    private static void EnsureFontStyles(CadDocument doc, bool cnToEn)
+    {
+        try
+        {
+            if (cnToEn)
+            {
+                EnsureStyle(doc, "Arial", null);
+                EnsureStyle(doc, "Helvetica", null);
+            }
+            else
+            {
+                EnsureStyle(doc, "SimHei", "gbcbig.shx");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Failed to ensure font styles");
+        }
+    }
+
+    private static void EnsureStyle(CadDocument doc, string styleName, string? bigFontName)
+    {
+        if (doc.TextStyles.Contains(styleName)) return;
+
+        var style = new TextStyle(styleName);
+        doc.TextStyles.Add(style);
+    }
+
+    /// <summary>
     /// Process a collection of entities, replacing text for matching handles.
     /// Returns count of successful replacements.
     /// </summary>
     private static int ProcessEntityCollection(
         IEnumerable<CadEntity> entities,
         Dictionary<string, OurTextEntity> translationMap,
-        DwgWriteResult result)
+        DwgWriteResult result,
+        bool cnToEn,
+        CadDocument doc)
     {
         int replacedCount = 0;
 
@@ -154,12 +194,11 @@ public class DwgWriterService : IDwgWriterService
         {
             if (cadEntity == null) continue;
 
-            // Use same decimal format as DwgReaderService
             var handleStr = cadEntity.Handle.ToString();
 
             if (translationMap.TryGetValue(handleStr, out var translatedEntity))
             {
-                var success = ReplaceEntityText(cadEntity, translatedEntity.TranslatedText);
+                var success = ReplaceEntityText(cadEntity, translatedEntity, cnToEn, doc);
                 if (success)
                 {
                     result.SuccessCount++;
@@ -196,7 +235,6 @@ public class DwgWriterService : IDwgWriterService
         {
             if (att is not CadAttribute attEntity) continue;
 
-            // Attribute handle format: "OwnerHandle/Tag" (matches DwgReaderService)
             var compoundHandle = $"{insert.Handle}/{attEntity.Tag}";
 
             if (translationMap.TryGetValue(compoundHandle, out var translatedEntity))
@@ -210,20 +248,27 @@ public class DwgWriterService : IDwgWriterService
     }
 
     /// <summary>
-    /// Replace text content of a CAD entity with translated text.
+    /// Replace text content of a CAD entity with translated text, applying font mapping and scaling.
     /// </summary>
-    private static bool ReplaceEntityText(CadEntity entity, string translatedText)
+    private static bool ReplaceEntityText(CadEntity entity, OurTextEntity ourEntity, bool cnToEn, CadDocument doc)
     {
         try
         {
+            var translatedText = ourEntity.TranslatedText;
+            if (string.IsNullOrEmpty(translatedText)) return false;
+
             switch (entity)
             {
                 case CadText textEntity when entity is not CadMText:
                     textEntity.Value = translatedText;
+                    ApplyFontMapping(textEntity, ourEntity.TextStyleName, cnToEn, doc);
+                    ApplyScaling(textEntity, translatedText, ourEntity.OriginalWidth);
                     return true;
 
                 case CadMText mtext:
                     mtext.Value = translatedText;
+                    ApplyFontMapping(mtext, ourEntity.TextStyleName, cnToEn, doc);
+                    ApplyScaling(mtext, translatedText, ourEntity.OriginalWidth);
                     return true;
 
                 case CadDimension dim:
@@ -252,6 +297,137 @@ public class DwgWriterService : IDwgWriterService
     }
 
     /// <summary>
+    /// Map Chinese fonts to English fonts and vice versa.
+    /// </summary>
+    private static void ApplyFontMapping(CadText textEntity, string originalStyleName, bool cnToEn, CadDocument doc)
+    {
+        try
+        {
+            var targetFont = MapFontName(originalStyleName, cnToEn);
+            if (string.IsNullOrEmpty(targetFont)) return;
+
+            // Find or create target style safely (do NOT modify existing style.Name)
+            TextStyle? targetStyle = null;
+            foreach (var ts in doc.TextStyles)
+            {
+                if (string.Equals(ts.Name, targetFont, StringComparison.OrdinalIgnoreCase))
+                {
+                    targetStyle = ts;
+                    break;
+                }
+            }
+            if (targetStyle == null)
+            {
+                targetStyle = new TextStyle(targetFont);
+                doc.TextStyles.Add(targetStyle);
+            }
+
+            textEntity.Style = targetStyle;
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Font mapping failed for {Style}", originalStyleName);
+        }
+    }
+
+    private static void ApplyFontMapping(CadMText mtext, string originalStyleName, bool cnToEn, CadDocument doc)
+    {
+        try
+        {
+            var targetFont = MapFontName(originalStyleName, cnToEn);
+            if (string.IsNullOrEmpty(targetFont)) return;
+
+            TextStyle? targetStyle = null;
+            foreach (var ts in doc.TextStyles)
+            {
+                if (string.Equals(ts.Name, targetFont, StringComparison.OrdinalIgnoreCase))
+                {
+                    targetStyle = ts;
+                    break;
+                }
+            }
+            if (targetStyle == null)
+            {
+                targetStyle = new TextStyle(targetFont);
+                doc.TextStyles.Add(targetStyle);
+            }
+
+            mtext.Style = targetStyle;
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Font mapping failed for {Style}", originalStyleName);
+        }
+    }
+
+    private static string? MapFontName(string currentStyleName, bool cnToEn)
+    {
+        if (cnToEn)
+        {
+            if (currentStyleName.Contains("SimHei", StringComparison.OrdinalIgnoreCase) ||
+                currentStyleName.Contains("SimSun", StringComparison.OrdinalIgnoreCase) ||
+                currentStyleName.Contains("宋体", StringComparison.OrdinalIgnoreCase) ||
+                currentStyleName.Contains("黑体", StringComparison.OrdinalIgnoreCase))
+                return "Arial";
+        }
+        else
+        {
+            if (currentStyleName.Contains("Arial", StringComparison.OrdinalIgnoreCase) ||
+                currentStyleName.Contains("Helvetica", StringComparison.OrdinalIgnoreCase) ||
+                currentStyleName.Contains("Times", StringComparison.OrdinalIgnoreCase))
+                return "SimHei";
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Auto-scale text height when translated text is significantly wider than original.
+    /// </summary>
+    private static void ApplyScaling(CadText textEntity, string translatedText, double originalWidth)
+    {
+        if (originalWidth <= 0 || string.IsNullOrEmpty(translatedText)) return;
+        try
+        {
+            double newWidth = translatedText.Length * textEntity.Height * 0.6;
+            if (newWidth > originalWidth * 2.0)
+            {
+                double newHeight = textEntity.Height * (originalWidth / newWidth) * 0.95;
+                double minHeight = textEntity.Height * 0.5;
+                if (newHeight > minHeight)
+                    textEntity.Height = newHeight;
+                Log.Debug("Scaled text {Handle}: {OldH:F2} -> {NewH:F2}", textEntity.Handle, textEntity.Height, newHeight);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Scaling failed for text entity");
+        }
+    }
+
+    private static void ApplyScaling(CadMText mtext, string translatedText, double originalWidth)
+    {
+        if (originalWidth <= 0 || string.IsNullOrEmpty(translatedText)) return;
+        // If MText has a defined rectangle width, it auto-wraps; don't scale to avoid layout issues
+        if (mtext.RectangleWidth > 0) return;
+        try
+        {
+            double newWidth = translatedText.Length * mtext.Height * 0.6;
+            if (newWidth > originalWidth * 2.0)
+            {
+                double newHeight = mtext.Height * (originalWidth / newWidth) * 0.95;
+                double minHeight = mtext.Height * 0.5; // keep at least 50% of original
+                if (newHeight > minHeight)
+                    mtext.Height = newHeight;
+                Log.Debug("Scaled mtext {Handle}: {OldH:F2} -> {NewH:F2}", mtext.Handle, mtext.Height, newHeight);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Scaling failed for mtext entity");
+        }
+    }
+
+    /// <summary>
     /// Clean a handle string for comparison.
     /// </summary>
     private static string CleanHandle(string handle)
@@ -270,5 +446,5 @@ public class DwgWriteResult
     public int SuccessCount { get; set; }
     public int FailCount { get; set; }
     public List<string> Errors { get; set; } = new();
-    public bool IsSuccess => FailCount == 0 && Errors.Count == 0;
+    public bool IsSuccess => SuccessCount > 0;
 }

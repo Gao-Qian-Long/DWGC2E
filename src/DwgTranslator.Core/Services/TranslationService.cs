@@ -18,6 +18,7 @@ public class TranslationService : ITranslationService
     private readonly string _systemPrompt;
     private readonly int _batchSize;
     private readonly int _maxRetryCount;
+    private readonly int _maxConcurrency;
     private readonly TranslationConsistencyService _consistencyService;
 
     public TranslationService(
@@ -36,6 +37,7 @@ public class TranslationService : ITranslationService
         _systemPrompt = systemPrompt;
         _batchSize = batchSize;
         _maxRetryCount = maxRetryCount;
+        _maxConcurrency = maxConcurrency;
         _consistencyService = consistencyService ?? new TranslationConsistencyService();
     }
 
@@ -71,8 +73,8 @@ public class TranslationService : ITranslationService
         Log.Information("Translation: {Unique} unique texts from {Total} entities (saved {Saved} API calls)",
             uniqueCount, totalCount, savedCalls);
 
-        // Step 2: Adaptive concurrency based on count
-        int concurrency = Math.Clamp(uniqueCount, 5, 30);
+        // Step 2: Adaptive concurrency based on count (capped by maxConcurrency)
+        int concurrency = Math.Clamp(uniqueCount, 1, _maxConcurrency);
         Log.Information("Using {Concurrency} concurrent streams for {Count} unique texts", concurrency, uniqueCount);
 
         var semaphore = new SemaphoreSlim(concurrency, concurrency);
@@ -146,6 +148,34 @@ public class TranslationService : ITranslationService
         @"^[\s\d\.\,\+\-\*\/\=<>≤≥±°\#\%‰〇零一二三四五六七八九十百千万亿φΦ⌀ⓧⓓ]+$",
         RegexOptions.Compiled);
 
+    private static bool ShouldSkipTranslation(string text, string sourceLang, string targetLang)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return true;
+        var trimmed = text.Trim();
+
+        // Engineering labels: short text with digits and few letters (e.g. 24V, Φ12, M8, IP65, 50Hz)
+        if (trimmed.Length <= 15 && trimmed.Any(char.IsDigit) && !HasCjk(trimmed))
+        {
+            var letterCount = trimmed.Count(char.IsLetter);
+            if (letterCount <= 5) return true;
+        }
+
+        // Already target language detection
+        if (sourceLang == "ZH" && targetLang == "EN")
+        {
+            if (!HasCjk(trimmed)) return true; // No CJK = already English
+        }
+        else if (sourceLang == "EN" && targetLang == "ZH")
+        {
+            if (!HasAsciiLetters(trimmed)) return true; // No ASCII letters = already Chinese
+        }
+
+        return false;
+    }
+
+    private static bool HasCjk(string text) => text.Any(c => c >= 0x4E00 && c <= 0x9FFF);
+    private static bool HasAsciiLetters(string text) => text.Any(c => (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z'));
+
     private async Task<TranslationPair> TranslateSingleAsync(
         TextEntity entity, string sourceLanguage, string targetLanguage, CancellationToken ct)
     {
@@ -158,6 +188,18 @@ public class TranslationService : ITranslationService
             if (NumericOnlyRegex.IsMatch(entity.PlainText.Trim()))
             {
                 Log.Debug("Skipped numeric-only text: {Text}", entity.PlainText);
+                return new TranslationPair
+                {
+                    Handle = entity.Handle, SourceText = entity.PlainText,
+                    TranslatedText = entity.PlainText, GlossaryHit = false,
+                    Status = TranslationStatus.Skipped
+                };
+            }
+
+            // Skip engineering labels and already-target-language text
+            if (ShouldSkipTranslation(entity.PlainText, sourceLanguage, targetLanguage))
+            {
+                Log.Debug("Skipped translation for {Text}", entity.PlainText);
                 return new TranslationPair
                 {
                     Handle = entity.Handle, SourceText = entity.PlainText,

@@ -13,6 +13,7 @@ public interface IDwgWriterService
     /// <param name="sourceFilePath">Path to the original DWG file.</param>
     /// <param name="outputFilePath">Path where the translated DWG should be saved.</param>
     /// <param name="entities">List of entities with translated text to apply.</param>
+    /// <param name="cnToEn">True for Chinese→English, false for English→Chinese (used for font mapping).</param>
     /// <returns>Result with success/failure counts.</returns>
-    DwgWriteResult WriteTranslations(string sourceFilePath, string outputFilePath, List<TextEntity> entities);
+    DwgWriteResult WriteTranslations(string sourceFilePath, string outputFilePath, List<TextEntity> entities, bool cnToEn = true);
 }
