@@ -45,6 +45,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty] private string _filterStatusText = "全部";
     [ObservableProperty] private string _searchText = string.Empty;
     [ObservableProperty] private int _visibleCount;
+    [ObservableProperty] private bool _isTopmost;
 
     /// <summary>Whether current direction is Chinese→English (true) or English→Chinese (false).</summary>
     [ObservableProperty] private bool _isCnToEn = true;
@@ -187,8 +188,11 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private void ToggleTopmost()
     {
         if (Application.Current.MainWindow != null)
+        {
             Application.Current.MainWindow.Topmost = !Application.Current.MainWindow.Topmost;
-        StatusMessage = Application.Current.MainWindow?.Topmost == true ? "窗口已置顶 📌" : "窗口取消置顶";
+            IsTopmost = Application.Current.MainWindow.Topmost;
+        }
+        StatusMessage = IsTopmost ? "窗口已置顶 📍" : "窗口取消置顶";
     }
 
     /// <summary>

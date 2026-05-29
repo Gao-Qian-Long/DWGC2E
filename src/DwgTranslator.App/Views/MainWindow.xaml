@@ -6,7 +6,12 @@
         Title="DWG Translator - 图纸中英文互译" Height="750" Width="1200"
         WindowStartupLocation="CenterScreen"
         Topmost="False"
+        WindowStyle="None"
+        ResizeMode="CanResize"
         Background="#F0F4F8">
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="32" ResizeBorderThickness="6" GlassFrameThickness="0" CornerRadius="0"/>
+    </WindowChrome.WindowChrome>
     <Window.DataContext>
         <vm:MainViewModel/>
     </Window.DataContext>
@@ -62,6 +67,7 @@
 
     <Grid>
         <Grid.RowDefinitions>
+            <RowDefinition Height="32"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -69,8 +75,67 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
+        <!-- Custom Title Bar -->
+        <Border Grid.Row="0" Background="#1976D2">
+            <Grid>
+                <TextBlock Text="DWG Translator - 图纸中英文互译"
+                           Foreground="White" FontSize="13"
+                           VerticalAlignment="Center" Margin="12,0,0,0"/>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <Button Command="{Binding ToggleTopmostCommand}"
+                            ToolTip="窗口置顶切换"
+                            WindowChrome.IsHitTestVisibleInChrome="True"
+                            Width="46" Height="32"
+                            Foreground="White" BorderThickness="0" FontSize="14"
+                            VerticalContentAlignment="Center" HorizontalContentAlignment="Center">
+                        <Button.Style>
+                            <Style TargetType="Button">
+                                <Setter Property="Background" Value="Transparent"/>
+                                <Setter Property="Content" Value="📌"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsTopmost}" Value="True">
+                                        <Setter Property="Background" Value="#FF9800"/>
+                                        <Setter Property="Content" Value="📍"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+                    <Button x:Name="MinimizeButton" Content="&#x2013;"
+                            Click="MinimizeButton_Click"
+                            WindowChrome.IsHitTestVisibleInChrome="True"
+                            Width="46" Height="32" Background="Transparent"
+                            Foreground="White" BorderThickness="0" FontSize="16"
+                            VerticalContentAlignment="Center" HorizontalContentAlignment="Center"/>
+                    <Button x:Name="MaximizeButton" Content="&#x25A1;"
+                            Click="MaximizeButton_Click"
+                            WindowChrome.IsHitTestVisibleInChrome="True"
+                            Width="46" Height="32" Background="Transparent"
+                            Foreground="White" BorderThickness="0" FontSize="14"
+                            VerticalContentAlignment="Center" HorizontalContentAlignment="Center"/>
+                    <Button Content="&#x2715;"
+                            Click="CloseButton_Click"
+                            WindowChrome.IsHitTestVisibleInChrome="True"
+                            Width="46" Height="32" Background="Transparent"
+                            Foreground="White" BorderThickness="0" FontSize="14"
+                            VerticalContentAlignment="Center" HorizontalContentAlignment="Center">
+                        <Button.Style>
+                            <Style TargetType="Button">
+                                <Setter Property="Background" Value="Transparent"/>
+                                <Style.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter Property="Background" Value="#E81123"/>
+                                    </Trigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+                </StackPanel>
+            </Grid>
+        </Border>
+
         <!-- Toolbar Row 1 -->
-        <Border Grid.Row="0" Background="White" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1" Padding="5">
+        <Border Grid.Row="1" Background="White" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1" Padding="5">
             <WrapPanel Orientation="Horizontal">
                 <Button Content="📁 导入 DWG" Command="{Binding ImportDwgCommand}" Padding="10,6" Margin="2"
                         ToolTip="选择一个或多个 DWG 文件，提取文本实体"
@@ -120,13 +185,11 @@
 
                 <Button Content="🗑 清空" Command="{Binding ClearAllCommand}" Padding="10,6" Margin="2"/>
                 <Button Content="⚙ 设置" Command="{Binding SettingsCommand}" Padding="10,6" Margin="2"/>
-                <Button Content="📌" Command="{Binding ToggleTopmostCommand}" Padding="8,6" Margin="2"
-                        ToolTip="窗口置顶切换" FontSize="14"/>
             </WrapPanel>
         </Border>
 
         <!-- Toolbar Row 2: Filter + Stats -->
-        <Border Grid.Row="1" Background="White" Padding="10,5">
+        <Border Grid.Row="2" Background="White" Padding="10,5">
             <StackPanel Orientation="Horizontal">
                 <TextBlock Text="筛选:" VerticalAlignment="Center" Margin="0,0,5,0" FontSize="12"/>
                 <ComboBox ItemsSource="{Binding FilterOptions}"
@@ -168,13 +231,13 @@
         </Border>
 
         <!-- Progress Bar -->
-        <ProgressBar Grid.Row="2" Height="4" Margin="10,2"
+        <ProgressBar Grid.Row="3" Height="4" Margin="10,2"
                      Value="{Binding ProgressValue}" Maximum="100"
                      Visibility="{Binding IsProcessing, Converter={StaticResource BoolToVis}}"
                      Foreground="#4CAF50" Background="#E8E8E8"/>
 
         <!-- Data Grid -->
-        <DataGrid Grid.Row="3" Margin="10,5,10,5"
+        <DataGrid Grid.Row="4" Margin="10,5,10,5"
                   ItemsSource="{Binding FilteredEntities}"
                   AutoGenerateColumns="False"
                   CanUserAddRows="False"
@@ -291,7 +354,7 @@
         </DataGrid>
 
         <!-- Status Bar -->
-        <StatusBar Grid.Row="4" Background="#ECEFF1" Margin="0,0,0,0">
+        <StatusBar Grid.Row="5" Background="#ECEFF1" Margin="0,0,0,0">
             <StatusBar.ItemsPanel>
                 <ItemsPanelTemplate>
                     <Grid>

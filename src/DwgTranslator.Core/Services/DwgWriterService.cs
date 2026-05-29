@@ -266,7 +266,7 @@ public class DwgWriterService : IDwgWriterService
                     return true;
 
                 case CadMText mtext:
-                    mtext.Value = translatedText;
+                    mtext.Value = translatedText.Replace("\r\n", "\\P").Replace("\n", "\\P").Replace("\r", "\\P");
                     ApplyFontMapping(mtext, ourEntity.TextStyleName, cnToEn, doc);
                     ApplyScaling(mtext, translatedText, ourEntity.OriginalWidth);
                     return true;
@@ -389,13 +389,14 @@ public class DwgWriterService : IDwgWriterService
         try
         {
             double newWidth = translatedText.Length * textEntity.Height * 0.6;
-            if (newWidth > originalWidth * 2.0)
+            if (newWidth > originalWidth)
             {
-                double newHeight = textEntity.Height * (originalWidth / newWidth) * 0.95;
-                double minHeight = textEntity.Height * 0.5;
-                if (newHeight > minHeight)
-                    textEntity.Height = newHeight;
-                Log.Debug("Scaled text {Handle}: {OldH:F2} -> {NewH:F2}", textEntity.Handle, textEntity.Height, newHeight);
+                double scale = originalWidth / newWidth;
+                if (scale < 0.6) scale = 0.6; // keep at least 60% of original height
+                double newHeight = textEntity.Height * scale;
+                double oldHeight = textEntity.Height;
+                textEntity.Height = newHeight;
+                Log.Debug("Scaled text {Handle}: {OldH:F2} -> {NewH:F2}", textEntity.Handle, oldHeight, newHeight);
             }
         }
         catch (Exception ex)
@@ -407,18 +408,19 @@ public class DwgWriterService : IDwgWriterService
     private static void ApplyScaling(CadMText mtext, string translatedText, double originalWidth)
     {
         if (originalWidth <= 0 || string.IsNullOrEmpty(translatedText)) return;
-        // If MText has a defined rectangle width, it auto-wraps; don't scale to avoid layout issues
+        // If MText has a defined rectangle width, it auto-wraps; don't scale height to avoid layout issues
         if (mtext.RectangleWidth > 0) return;
         try
         {
             double newWidth = translatedText.Length * mtext.Height * 0.6;
-            if (newWidth > originalWidth * 2.0)
+            if (newWidth > originalWidth)
             {
-                double newHeight = mtext.Height * (originalWidth / newWidth) * 0.95;
-                double minHeight = mtext.Height * 0.5; // keep at least 50% of original
-                if (newHeight > minHeight)
-                    mtext.Height = newHeight;
-                Log.Debug("Scaled mtext {Handle}: {OldH:F2} -> {NewH:F2}", mtext.Handle, mtext.Height, newHeight);
+                double scale = originalWidth / newWidth;
+                if (scale < 0.6) scale = 0.6;
+                double newHeight = mtext.Height * scale;
+                double oldHeight = mtext.Height;
+                mtext.Height = newHeight;
+                Log.Debug("Scaled mtext {Handle}: {OldH:F2} -> {NewH:F2}", mtext.Handle, oldHeight, newHeight);
             }
         }
         catch (Exception ex)

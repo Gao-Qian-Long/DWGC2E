@@ -269,11 +269,36 @@ public class TranslationService : ITranslationService
 
     private string RestoreFormatCodes(string translated, string rawText)
     {
-        if (string.IsNullOrEmpty(rawText)) return translated;
-        var codes = _formatCodeParser.ExtractFormatCodes(rawText);
+        if (string.IsNullOrEmpty(rawText) || string.IsNullOrEmpty(translated)) return translated;
+
+        var (_, template, codes) = _formatCodeParser.Parse(rawText);
         if (codes.Count == 0) return translated;
-        var (_, _, oc) = _formatCodeParser.Parse(rawText);
-        return oc.Count > 0 ? _formatCodeParser.Restore(translated, oc) : _formatCodeParser.Restore(translated, codes);
+
+        // Build a template where all non-placeholder text is replaced with translated text
+        var parts = Regex.Split(template, @"(__FMT_\d+__)");
+        var sb = new System.Text.StringBuilder();
+        bool textInserted = false;
+        foreach (var part in parts)
+        {
+            if (Regex.IsMatch(part, @"^__FMT_\d+__$"))
+            {
+                sb.Append(part);
+            }
+            else if (!string.IsNullOrEmpty(part))
+            {
+                if (!textInserted)
+                {
+                    sb.Append(translated);
+                    textInserted = true;
+                }
+                // Remaining original text segments are omitted to avoid duplication
+            }
+        }
+        var withPlaceholders = sb.ToString();
+        var result = _formatCodeParser.Restore(withPlaceholders, codes);
+        // Ensure MText line breaks use \P
+        result = result.Replace("\r\n", "\\P").Replace("\n", "\\P").Replace("\r", "\\P");
+        return result;
     }
 
     private static string CleanTranslationOutput(string text)
