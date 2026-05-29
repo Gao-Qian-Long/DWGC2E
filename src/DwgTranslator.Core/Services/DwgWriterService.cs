@@ -262,13 +262,13 @@ public class DwgWriterService : IDwgWriterService
                 case CadText textEntity when entity is not CadMText:
                     textEntity.Value = translatedText;
                     ApplyFontMapping(textEntity, ourEntity.TextStyleName, cnToEn, doc);
-                    ApplyScaling(textEntity, translatedText, ourEntity.OriginalWidth);
+                    ApplyScaling(textEntity, translatedText, ourEntity);
                     return true;
 
                 case CadMText mtext:
                     mtext.Value = translatedText.Replace("\r\n", "\\P").Replace("\n", "\\P").Replace("\r", "\\P");
                     ApplyFontMapping(mtext, ourEntity.TextStyleName, cnToEn, doc);
-                    ApplyScaling(mtext, translatedText, ourEntity.OriginalWidth);
+                    ApplyScaling(mtext, translatedText, ourEntity);
                     return true;
 
                 case CadDimension dim:
@@ -382,18 +382,22 @@ public class DwgWriterService : IDwgWriterService
 
     /// <summary>
     /// Auto-scale text height when translated text is significantly wider than original.
+    /// Uses improved per-character width estimation (CJK vs ASCII).
     /// </summary>
-    private static void ApplyScaling(CadText textEntity, string translatedText, double originalWidth)
+    private static void ApplyScaling(CadText textEntity, string translatedText, OurTextEntity ourEntity)
     {
+        double originalWidth = ourEntity.OriginalWidth;
+        double originalHeight = ourEntity.OriginalHeight > 0 ? ourEntity.OriginalHeight : textEntity.Height;
         if (originalWidth <= 0 || string.IsNullOrEmpty(translatedText)) return;
+
         try
         {
-            double newWidth = translatedText.Length * textEntity.Height * 0.6;
+            double newWidth = EstimateTextWidth(translatedText, textEntity.Height);
             if (newWidth > originalWidth)
             {
                 double scale = originalWidth / newWidth;
                 if (scale < 0.6) scale = 0.6; // keep at least 60% of original height
-                double newHeight = textEntity.Height * scale;
+                double newHeight = originalHeight * scale;
                 double oldHeight = textEntity.Height;
                 textEntity.Height = newHeight;
                 Log.Debug("Scaled text {Handle}: {OldH:F2} -> {NewH:F2}", textEntity.Handle, oldHeight, newHeight);
@@ -405,28 +409,155 @@ public class DwgWriterService : IDwgWriterService
         }
     }
 
-    private static void ApplyScaling(CadMText mtext, string translatedText, double originalWidth)
+    /// <summary>
+    /// Adaptive layout for MText: optimizes rectangle width, text height, and line spacing
+    /// to prevent overflow and keep best readability. Handles both fixed-width and free-width MText.
+    /// </summary>
+    private static void ApplyScaling(CadMText mtext, string translatedText, OurTextEntity ourEntity)
     {
-        if (originalWidth <= 0 || string.IsNullOrEmpty(translatedText)) return;
-        // If MText has a defined rectangle width, it auto-wraps; don't scale height to avoid layout issues
-        if (mtext.RectangleWidth > 0) return;
+        if (string.IsNullOrEmpty(translatedText) || ourEntity.OriginalWidth <= 0) return;
+
         try
         {
-            double newWidth = translatedText.Length * mtext.Height * 0.6;
-            if (newWidth > originalWidth)
+            double originalWidth = ourEntity.OriginalWidth;
+            double originalHeight = ourEntity.OriginalHeight > 0 ? ourEntity.OriginalHeight : mtext.Height;
+            double currentHeight = mtext.Height;
+
+            // Always use compact line spacing for better readability
+            mtext.LineSpacing = 0.85;
+            mtext.LineSpacingStyle = LineSpacingStyleType.Exact;
+
+            string textForEstimation = translatedText.Replace("\\P", " ");
+            double translatedWidth = EstimateTextWidth(textForEstimation, currentHeight);
+
+            if (mtext.RectangleWidth > 0)
             {
-                double scale = originalWidth / newWidth;
-                if (scale < 0.6) scale = 0.6;
-                double newHeight = mtext.Height * scale;
-                double oldHeight = mtext.Height;
-                mtext.Height = newHeight;
-                Log.Debug("Scaled mtext {Handle}: {OldH:F2} -> {NewH:F2}", mtext.Handle, oldHeight, newHeight);
+                double rectWidth = mtext.RectangleWidth;
+
+                // Estimate original and translated line counts
+                string originalText = (ourEntity.RawText ?? string.Empty).Replace("\\P", " ");
+                int originalLines = EstimateLineCount(originalText, originalHeight, rectWidth);
+                int translatedLines = EstimateLineCount(textForEstimation, currentHeight, rectWidth);
+
+                // If translated text needs more lines, apply adaptive optimizations
+                if (translatedLines > originalLines)
+                {
+                    double widthRatio = translatedWidth / Math.Max(originalWidth, 1.0);
+
+                    // 1. Moderately expand rectangle width (up to 1.4x) to reduce line count
+                    if (widthRatio > 1.2)
+                    {
+                        double newRectWidth = rectWidth * Math.Min(widthRatio, 1.4);
+                        mtext.RectangleWidth = newRectWidth;
+                        rectWidth = newRectWidth;
+                        translatedLines = EstimateLineCount(textForEstimation, currentHeight, rectWidth);
+                    }
+
+                    // 2. Scale down height to fit within approximate original total height
+                    double originalTotalHeight = originalLines * originalHeight; // default spacing ~1.0
+                    double translatedTotalHeight = translatedLines * currentHeight * 0.85;
+
+                    if (translatedTotalHeight > originalTotalHeight && originalTotalHeight > 0)
+                    {
+                        double scale = originalTotalHeight / translatedTotalHeight;
+                        double newHeight = currentHeight * scale;
+                        double minHeight = originalHeight * 0.5;
+                        if (newHeight < minHeight) newHeight = minHeight;
+
+                        if (newHeight < currentHeight)
+                        {
+                            mtext.Height = newHeight;
+                            currentHeight = newHeight;
+                            translatedLines = EstimateLineCount(textForEstimation, currentHeight, rectWidth);
+                            translatedTotalHeight = translatedLines * currentHeight * 0.85;
+                        }
+                    }
+
+                    // 3. Fine-tune line spacing if still slightly overflowing
+                    if (translatedTotalHeight > originalTotalHeight * 1.05 && originalTotalHeight > 0)
+                    {
+                        double spacing = originalTotalHeight / (translatedLines * currentHeight);
+                        if (spacing < 0.6) spacing = 0.6;
+                        if (spacing > 1.0) spacing = 1.0;
+                        mtext.LineSpacing = spacing;
+                    }
+                }
+            }
+            else
+            {
+                // No rectangle width defined - set one to control layout
+                if (translatedWidth > originalWidth * 1.1)
+                {
+                    // Set rectangle width to avoid overly long single line
+                    double targetWidth = Math.Min(originalWidth * 1.3, Math.Max(originalWidth, translatedWidth * 0.6));
+                    mtext.RectangleWidth = targetWidth;
+
+                    // Scale height if text is significantly wider
+                    double scale = originalWidth / translatedWidth;
+                    if (scale < 0.6) scale = 0.6;
+                    double newHeight = originalHeight * scale;
+                    if (newHeight < currentHeight)
+                        mtext.Height = newHeight;
+                }
+                else if (translatedWidth > 0)
+                {
+                    // Set natural width to prevent sparse layout (words too far apart)
+                    mtext.RectangleWidth = Math.Max(translatedWidth * 1.05, originalWidth * 0.5);
+                }
             }
         }
         catch (Exception ex)
         {
-            Log.Warning(ex, "Scaling failed for mtext entity");
+            Log.Warning(ex, "MText scaling failed for entity {Handle}", mtext.Handle);
         }
+    }
+
+    private static double EstimateTextWidth(string text, double height)
+    {
+        if (string.IsNullOrEmpty(text) || height <= 0) return 0;
+        double width = 0;
+        foreach (char c in text)
+        {
+            if (c == ' ')
+                width += height * 0.25;
+            else if (c >= 0x4E00 && c <= 0x9FFF)      // CJK Unified Ideographs
+                width += height * 1.0;
+            else if (c >= 0x3000 && c <= 0x303F)      // CJK Symbols and Punctuation
+                width += height * 1.0;
+            else if (c >= 0xFF00 && c <= 0xFFEF)      // Fullwidth forms
+                width += height * 1.0;
+            else if (c >= 0x3040 && c <= 0x309F)      // Hiragana
+                width += height * 1.0;
+            else if (c >= 0x30A0 && c <= 0x30FF)      // Katakana
+                width += height * 1.0;
+            else if (char.IsUpper(c))
+                width += height * 0.6;
+            else if (char.IsLower(c))
+                width += height * 0.5;
+            else if (char.IsDigit(c))
+                width += height * 0.55;
+            else
+                width += height * 0.5;                // punctuation, symbols
+        }
+        return width;
+    }
+
+    private static int EstimateLineCount(string text, double height, double rectWidth)
+    {
+        if (rectWidth <= 0 || string.IsNullOrEmpty(text) || height <= 0) return 1;
+        var hardLines = text.Split(new[] { "\\P", "\n", "\r\n" }, StringSplitOptions.None);
+        int totalLines = 0;
+        foreach (var line in hardLines)
+        {
+            if (string.IsNullOrEmpty(line))
+            {
+                totalLines++;
+                continue;
+            }
+            double lineWidth = EstimateTextWidth(line, height);
+            totalLines += Math.Max(1, (int)Math.Ceiling(lineWidth / rectWidth));
+        }
+        return Math.Max(1, totalLines);
     }
 
     /// <summary>

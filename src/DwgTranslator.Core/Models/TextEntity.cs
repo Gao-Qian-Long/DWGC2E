@@ -56,6 +56,10 @@ public partial class TextEntity : ObservableObject
     [ObservableProperty]
     private double _originalWidth;
 
+    /// <summary>Original text height recorded at extraction time.</summary>
+    [ObservableProperty]
+    private double _originalHeight;
+
     /// <summary>Translation status.</summary>
     [ObservableProperty]
     private TranslationStatus _status = TranslationStatus.Pending;

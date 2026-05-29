@@ -126,7 +126,8 @@ public class DwgReaderService : IDwgReaderService
         EntityType = entityType, Height = text.Height, Rotation = text.Rotation,
         TextStyleName = text.Style?.Name ?? "Standard", BlockName = blockName, IsXref = false,
         Position = new Point3d(text.InsertPoint.X, text.InsertPoint.Y, text.InsertPoint.Z),
-        OriginalWidth = EstimateTextWidth(text.Value ?? string.Empty, text.Height)
+        OriginalWidth = EstimateTextWidth(text.Value ?? string.Empty, text.Height),
+        OriginalHeight = text.Height
     };
 
     private static OurTextEntity CreateMTextEntity(CadMText mtext, string blockName) => new()
@@ -141,7 +142,8 @@ public class DwgReaderService : IDwgReaderService
         TextStyleName = mtext.Style?.Name ?? "Standard", BlockName = blockName, IsXref = false,
         Position = new Point3d(mtext.InsertPoint.X, mtext.InsertPoint.Y, mtext.InsertPoint.Z),
         OriginalWidth = mtext.RectangleWidth > 0 ? mtext.RectangleWidth : EstimateTextWidth(
-            !string.IsNullOrWhiteSpace(mtext.PlainText) ? mtext.PlainText : StripMTextFormatCodes(mtext.Value ?? string.Empty), mtext.Height)
+            !string.IsNullOrWhiteSpace(mtext.PlainText) ? mtext.PlainText : StripMTextFormatCodes(mtext.Value ?? string.Empty), mtext.Height),
+        OriginalHeight = mtext.Height
     };
 
     private static OurTextEntity CreateDimensionEntity(CadDimension dim, string blockName) => new()
@@ -208,6 +210,51 @@ public class DwgReaderService : IDwgReaderService
         return Regex.Replace(result, @"\s{2,}", " ").Trim();
     }
 
-    private static double EstimateTextWidth(string text, double height) =>
-        (text?.Length ?? 0) * height * 0.6;
+    private static double EstimateTextWidth(string text, double height)
+    {
+        if (string.IsNullOrEmpty(text) || height <= 0) return 0;
+        double width = 0;
+        foreach (char c in text)
+        {
+            if (c == ' ')
+                width += height * 0.25;
+            else if (c >= 0x4E00 && c <= 0x9FFF)      // CJK Unified Ideographs
+                width += height * 1.0;
+            else if (c >= 0x3000 && c <= 0x303F)      // CJK Symbols and Punctuation
+                width += height * 1.0;
+            else if (c >= 0xFF00 && c <= 0xFFEF)      // Fullwidth forms
+                width += height * 1.0;
+            else if (c >= 0x3040 && c <= 0x309F)      // Hiragana
+                width += height * 1.0;
+            else if (c >= 0x30A0 && c <= 0x30FF)      // Katakana
+                width += height * 1.0;
+            else if (char.IsUpper(c))
+                width += height * 0.6;
+            else if (char.IsLower(c))
+                width += height * 0.5;
+            else if (char.IsDigit(c))
+                width += height * 0.55;
+            else
+                width += height * 0.5;                // punctuation, symbols
+        }
+        return width;
+    }
+
+    private static int EstimateLineCount(string text, double height, double rectWidth)
+    {
+        if (rectWidth <= 0 || string.IsNullOrEmpty(text) || height <= 0) return 1;
+        var hardLines = text.Split(new[] { "\\P", "\n", "\r\n" }, StringSplitOptions.None);
+        int totalLines = 0;
+        foreach (var line in hardLines)
+        {
+            if (string.IsNullOrEmpty(line))
+            {
+                totalLines++;
+                continue;
+            }
+            double lineWidth = EstimateTextWidth(line, height);
+            totalLines += Math.Max(1, (int)Math.Ceiling(lineWidth / rectWidth));
+        }
+        return Math.Max(1, totalLines);
+    }
 }
