@@ -446,9 +446,25 @@ public class DwgWriterService : IDwgWriterService
 
             if (mtext.RectangleWidth > 0)
             {
-                // FIXED rectangle width: do NOT expand — designer already tuned it.
-                // Only scale down height if more lines are needed.
+                // FIXED rectangle width: adapt to translated text width to prevent sparse word spacing.
                 double rectWidth = mtext.RectangleWidth;
+                double translatedEstWidth = EstimateTextWidth(textForEstimation, currentHeight);
+                double widthRatio = translatedEstWidth / rectWidth;
+
+                if (widthRatio < 0.55)
+                {
+                    // Text is much narrower — shrink rectangle to prevent stretched gaps
+                    double targetWidth = Math.Max(translatedEstWidth * 1.20, rectWidth * 0.45);
+                    mtext.RectangleWidth = targetWidth;
+                    rectWidth = targetWidth;
+                }
+                else if (widthRatio < 0.75)
+                {
+                    double targetWidth = Math.Max(translatedEstWidth * 1.12, rectWidth * 0.6);
+                    mtext.RectangleWidth = targetWidth;
+                    rectWidth = targetWidth;
+                }
+                // else: keep original fixed width
 
                 string originalText = (ourEntity.RawText ?? string.Empty).Replace("\\P", " ");
                 int originalLines = EstimateLineCount(originalText, originalHeight, rectWidth);
@@ -520,53 +536,9 @@ public class DwgWriterService : IDwgWriterService
         }
     }
 
-    private static double EstimateTextWidth(string text, double height)
-    {
-        if (string.IsNullOrEmpty(text) || height <= 0) return 0;
-        double width = 0;
-        foreach (char c in text)
-        {
-            if (c == ' ')
-                width += height * 0.20;
-            else if (c >= 0x4E00 && c <= 0x9FFF)      // CJK Unified Ideographs
-                width += height * 1.0;
-            else if (c >= 0x3000 && c <= 0x303F)      // CJK Symbols and Punctuation
-                width += height * 1.0;
-            else if (c >= 0xFF00 && c <= 0xFFEF)      // Fullwidth forms
-                width += height * 1.0;
-            else if (c >= 0x3040 && c <= 0x309F)      // Hiragana
-                width += height * 1.0;
-            else if (c >= 0x30A0 && c <= 0x30FF)      // Katakana
-                width += height * 1.0;
-            else if (char.IsUpper(c))
-                width += height * 0.55;
-            else if (char.IsLower(c))
-                width += height * 0.45;
-            else if (char.IsDigit(c))
-                width += height * 0.50;
-            else
-                width += height * 0.45;                // punctuation, symbols
-        }
-        return width;
-    }
+    private static double EstimateTextWidth(string text, double height) => TextWidthEstimator.EstimateTextWidth(text, height);
 
-    private static int EstimateLineCount(string text, double height, double rectWidth)
-    {
-        if (rectWidth <= 0 || string.IsNullOrEmpty(text) || height <= 0) return 1;
-        var hardLines = text.Split(new[] { "\\P", "\n", "\r\n" }, StringSplitOptions.None);
-        int totalLines = 0;
-        foreach (var line in hardLines)
-        {
-            if (string.IsNullOrEmpty(line))
-            {
-                totalLines++;
-                continue;
-            }
-            double lineWidth = EstimateTextWidth(line, height);
-            totalLines += Math.Max(1, (int)Math.Ceiling(lineWidth / rectWidth));
-        }
-        return Math.Max(1, totalLines);
-    }
+    private static int EstimateLineCount(string text, double height, double rectWidth) => TextWidthEstimator.EstimateLineCount(text, height, rectWidth);
 
     /// <summary>
     /// Clean a handle string for comparison.

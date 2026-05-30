@@ -6,9 +6,9 @@ namespace DwgTranslator.Core.Models;
 public enum LicenseType
 {
     None,
-    Trial,
-    Perpetual,   // Buy-out / lifetime
-    Subscription // Monthly / yearly
+    Trial,        // 3 free uses, no activation code needed
+    Perpetual,    // Buy-out / lifetime — ¥699 one-time
+    Subscription  // Monthly ¥49 / yearly ¥399
 }
 
 /// <summary>
@@ -32,6 +32,7 @@ public class LicenseInfo
     public string? MachineId { get; set; }
     public DateTime? ExpiryDate { get; set; }
     public DateTime? ActivatedAt { get; set; }
+    public DateTime? FirstUseDate { get; set; }
     public int TrialUsesRemaining { get; set; }
     public string? ActivationCode { get; set; }
 
@@ -66,10 +67,10 @@ public class LicenseInfo
             LicenseStatus.Valid => Type == LicenseType.Trial
                 ? $"体验模式 (剩余 {TrialUsesRemaining} 次)"
                 : Type == LicenseType.Perpetual
-                    ? "永久授权"
+                    ? "永久授权 (买断制)"
                     : $"订阅授权 (到期: {ExpiryDate:yyyy-MM-dd})",
-            LicenseStatus.Expired => "订阅已过期",
-            LicenseStatus.TrialExhausted => "体验次数已用完",
+            LicenseStatus.Expired => "订阅已过期 — 请续费",
+            LicenseStatus.TrialExhausted => "体验次数已用完 — 请购买授权",
             LicenseStatus.Invalid => "授权无效",
             _ => "未激活"
         };

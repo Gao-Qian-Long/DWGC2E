@@ -15,6 +15,11 @@ public static class CollisionDetector
     public const double MinCollisionAvoidanceScale = 0.5;
 
     /// <summary>
+    /// Number of binary search iterations for collision resolution.
+    /// </summary>
+    private const int BinarySearchIterations = 8;
+
+    /// <summary>
     /// Finds the closest frame to a given point (usually text insertion point).
     /// Returns null if no frames are provided.
     /// </summary>
@@ -116,7 +121,9 @@ public static class CollisionDetector
             double padding = originalHeight * 0.15; // small safety margin
             double minHeight = originalHeight * minHeightRatio;
 
-            // Collect other entities that might collide (exclude text-like entities)
+            // Collect other entities that might collide
+            // Strategy: skip Dimension entities (text always overlaps dimension line),
+            // but check against other text entities with smaller padding to catch real overlaps
             var colliders = new List<Extents3d>();
             foreach (ObjectId otherId in btr)
             {
@@ -132,14 +139,19 @@ public static class CollisionDetector
 
                 if (other == null) continue;
 
-                // Skip other text entities (labels often intentionally overlap near leaders)
-                if (other is DBText or MText or AttributeReference or Dimension)
+                // Skip Dimension entities — dimension text intentionally overlaps its own line
+                if (other is Dimension)
                     continue;
+
+                // For text-to-text collisions, use smaller padding (they often coexist near each other)
+                double collisionPadding = (other is DBText or MText or AttributeReference)
+                    ? padding * 0.3   // Much smaller margin for text-to-text overlap detection
+                    : padding;        // Full margin for geometry (lines, hatches, etc.)
 
                 try
                 {
                     var otherBounds = other.GeometricExtents;
-                    if (BoundsIntersect2D(textBounds, otherBounds, padding))
+                    if (BoundsIntersect2D(textBounds, otherBounds, collisionPadding))
                     {
                         colliders.Add(otherBounds);
                     }
@@ -156,7 +168,7 @@ public static class CollisionDetector
             double bestHeight = originalHeight;
             bool resolved = false;
 
-            for (int i = 0; i < 6; i++)
+            for (int i = 0; i < BinarySearchIterations; i++)
             {
                 double midHeight = (lowHeight + highHeight) / 2.0;
                 SetTextHeight(textEntity, midHeight);

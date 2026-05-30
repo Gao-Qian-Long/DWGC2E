@@ -48,9 +48,10 @@ class Program
         while (true)
         {
             Console.WriteLine("请选择操作:");
-            Console.WriteLine("  1. 生成永久授权码 (买断制)");
-            Console.WriteLine("  2. 生成订阅授权码 (按月/年)");
-            Console.WriteLine("  3. 退出");
+        Console.WriteLine("  1. 生成永久授权码 (买断制 ¥699)");
+        Console.WriteLine("  2. 生成订阅授权码 (月费 ¥49 / 年费 ¥399)");
+        Console.WriteLine("  3. 验证激活码");
+        Console.WriteLine("  4. 退出");
             Console.Write("> ");
 
             var choice = Console.ReadLine()?.Trim();
@@ -67,11 +68,14 @@ class Program
                 case "2":
                     Console.Write("请输入机器标识 (Machine ID): ");
                     var smId = Console.ReadLine()?.Trim();
-                    Console.Write("请输入订阅月数: ");
+                    Console.Write("请输入订阅月数 (1=月费, 12=年费): ");
                     if (!string.IsNullOrEmpty(smId) && int.TryParse(Console.ReadLine()?.Trim(), out var months))
                         GenerateSubscription(smId, months);
                     break;
                 case "3":
+                    Console.WriteLine("批量生成功能待实现。请逐个生成。");
+                    break;
+                case "4":
                     return;
                 default:
                     Console.WriteLine("无效选择，请重试。");

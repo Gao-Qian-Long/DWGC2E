@@ -45,26 +45,43 @@ public static class LayoutOptimizer
 
         if (originalRectWidth > 0)
         {
-            // FIXED rectangle width: keep original — designer already tuned it.
-            // Only scale down height if text overflows the fixed width.
-            mtext.Width = originalRectWidth;
+            // FIXED rectangle width: adapt to translated text width to prevent sparse word spacing.
+            // The original width was tuned for the source language; after translation the text
+            // may be much narrower (CN→EN) or wider (EN→CN), causing AutoCAD to stretch gaps.
+            double widthRatio = translatedWidth / originalRectWidth;
+
+            if (widthRatio < 0.55)
+            {
+                // Translated text is much narrower than the fixed rectangle.
+                // Shrink rectangle to fit the text with a small margin, preventing
+                // AutoCAD from distributing words across excessive whitespace.
+                double targetWidth = Math.Max(translatedWidth * 1.20, originalRectWidth * 0.45);
+                mtext.Width = targetWidth;
+            }
+            else if (widthRatio < 0.75)
+            {
+                // Moderately narrower — reduce width proportionally
+                double targetWidth = Math.Max(translatedWidth * 1.12, originalRectWidth * 0.6);
+                mtext.Width = targetWidth;
+            }
+            else
+            {
+                // Text roughly fills the rectangle — keep original fixed width
+                mtext.Width = originalRectWidth;
+            }
         }
         else if (mtext.Width <= 0 && originalWidth > 0)
         {
             // FREE width: only set rectangle width when truly necessary to prevent overflow.
-            // NEVER set an excessively wide rectangle — that causes AutoCAD to stretch
-            // word spacing (especially in justified/Fit modes) and destroys readability.
             if (translatedWidth > originalWidth * 1.3)
             {
-                // Translated text is significantly longer; cap expansion to avoid sparse layout.
                 double maxAllowable = originalWidth * 1.3;
-                double preferred = translatedWidth * 0.65; // slightly underestimate to keep lines compact
+                double preferred = translatedWidth * 0.65;
                 double targetWidth = Math.Min(maxAllowable, Math.Max(originalWidth * 1.05, preferred));
                 mtext.Width = targetWidth;
             }
             else if (translatedWidth > originalWidth * 1.05)
             {
-                // Moderate growth: snug fit, no excessive whitespace
                 double targetWidth = Math.Min(translatedWidth * 1.05, originalWidth * 1.25);
                 mtext.Width = targetWidth;
             }
@@ -177,41 +194,7 @@ public static class LayoutOptimizer
         }
     }
 
-    private static double EstimateTextWidth(string text, double height)
-    {
-        if (string.IsNullOrEmpty(text) || height <= 0) return 0;
-        double width = 0;
-        foreach (char c in text)
-        {
-            if (c == ' ') width += height * 0.20;
-            else if (c >= 0x4E00 && c <= 0x9FFF) width += height * 1.0;
-            else if (c >= 0x3000 && c <= 0x303F) width += height * 1.0;
-            else if (c >= 0xFF00 && c <= 0xFFEF) width += height * 1.0;
-            else if (c >= 0x3040 && c <= 0x309F) width += height * 1.0;
-            else if (c >= 0x30A0 && c <= 0x30FF) width += height * 1.0;
-            else if (char.IsUpper(c)) width += height * 0.55;
-            else if (char.IsLower(c)) width += height * 0.45;
-            else if (char.IsDigit(c)) width += height * 0.50;
-            else width += height * 0.45;
-        }
-        return width;
-    }
+    private static double EstimateTextWidth(string text, double height) => Core.Services.TextWidthEstimator.EstimateTextWidth(text, height);
 
-    private static int EstimateLineCount(string text, double height, double rectWidth)
-    {
-        if (rectWidth <= 0 || string.IsNullOrEmpty(text) || height <= 0) return 1;
-        var hardLines = text.Split(new[] { "\\P", "\n", "\r\n" }, StringSplitOptions.None);
-        int totalLines = 0;
-        foreach (var line in hardLines)
-        {
-            if (string.IsNullOrEmpty(line))
-            {
-                totalLines++;
-                continue;
-            }
-            double lineWidth = EstimateTextWidth(line, height);
-            totalLines += Math.Max(1, (int)Math.Ceiling(lineWidth / rectWidth));
-        }
-        return Math.Max(1, totalLines);
-    }
+    private static int EstimateLineCount(string text, double height, double rectWidth) => Core.Services.TextWidthEstimator.EstimateLineCount(text, height, rectWidth);
 }

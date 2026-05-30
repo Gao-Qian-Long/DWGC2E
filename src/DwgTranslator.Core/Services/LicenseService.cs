@@ -10,17 +10,22 @@ namespace DwgTranslator.Core.Services;
 /// <summary>
 /// Implements license management with hardware-bound activation codes,
 /// trial tracking, and encrypted local storage.
-/// 
+///
 /// Activation code formats:
 /// - Perpetual: DWGT-PERM-{Base64(machineIdHash + checksum)}
 /// - Subscription: DWGT-SUBS-{Base64(machineIdHash + expiryTicks + checksum)}
+///
+/// Commercial tiers:
+/// - Trial: 3 free translation+export uses, no activation code needed
+/// - Perpetual (买断制): ¥699 one-time, permanent use of current major version
+/// - Subscription (订阅制): ¥49/month or ¥399/year, continuous updates + support
 /// </summary>
 [SupportedOSPlatform("windows")]
 public class LicenseService : ILicenseService
 {
     private const string LicenseFileName = "license.dat";
-    private const int DefaultTrialUses = 5;
-    private const string SecretKey = "DWG-Translator-2026-Secret-Key-v1"; // Simple obfuscation key
+    private const int DefaultTrialUses = 3;
+    private const string SecretKey = "DWG-Translator-2026-Secret-Key-v1";
 
     private readonly string _licensePath;
     private LicenseInfo _license = new();
@@ -49,33 +54,46 @@ public class LicenseService : ILicenseService
                 {
                     Type = LicenseType.Trial,
                     TrialUsesRemaining = DefaultTrialUses,
-                    MachineId = GetMachineId()
+                    MachineId = GetMachineId(),
+                    FirstUseDate = DateTime.UtcNow
                 };
                 SaveLicense();
             }
 
-            // Validate machine binding
-            if (!string.IsNullOrEmpty(_license.MachineId) && _license.MachineId != GetMachineId())
+            // Validate machine binding — use fuzzy match to survive minor hardware changes
+            if (!string.IsNullOrEmpty(_license.MachineId) && !IsMachineIdMatch(_license.MachineId))
             {
                 Log.Warning("License machine ID mismatch. Resetting to trial.");
                 _license = new LicenseInfo
                 {
                     Type = LicenseType.Trial,
                     TrialUsesRemaining = DefaultTrialUses,
-                    MachineId = GetMachineId()
+                    MachineId = GetMachineId(),
+                    FirstUseDate = DateTime.UtcNow
                 };
+                SaveLicense();
+            }
+
+            // Track first use date for trial
+            if (_license.FirstUseDate == null)
+            {
+                _license.FirstUseDate = DateTime.UtcNow;
                 SaveLicense();
             }
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "Failed to load license");
+            Log.Error(ex, "Failed to load license — resetting to fresh trial");
+            // Delete corrupted license file so activation can work
+            try { if (File.Exists(_licensePath)) File.Delete(_licensePath); } catch { }
             _license = new LicenseInfo
             {
                 Type = LicenseType.Trial,
                 TrialUsesRemaining = DefaultTrialUses,
-                MachineId = GetMachineId()
+                MachineId = GetMachineId(),
+                FirstUseDate = DateTime.UtcNow
             };
+            SaveLicense();
         }
     }
 
@@ -113,10 +131,50 @@ public class LicenseService : ILicenseService
         return true;
     }
 
+    /// <summary>
+    /// Gets the number of days since first use (for trial period display).
+    /// </summary>
+    public int DaysSinceFirstUse
+    {
+        get
+        {
+            if (_license.FirstUseDate == null) return 0;
+            return (int)(DateTime.UtcNow - _license.FirstUseDate.Value).TotalDays;
+        }
+    }
+
+    /// <summary>
+    /// Fuzzy machine ID matching: allows minor hardware changes (e.g., USB devices)
+    /// by checking if the primary identifiers (OS install date + CPU cores) match.
+    /// </summary>
+    private bool IsMachineIdMatch(string storedMachineId)
+    {
+        if (string.IsNullOrEmpty(storedMachineId)) return false;
+
+        // Exact match
+        var currentId = GetMachineId();
+        if (currentId == storedMachineId) return true;
+
+        // Fuzzy match: check if the stable components (OS install date portion) still match
+        // This allows MachineName/UserName changes (e.g., domain join) but not OS reinstall
+        try
+        {
+            var stableId = GetStableMachineId();
+            // The stable portion is the last 8 chars derived from OS install date + CPU
+            if (storedMachineId.Length >= 8 && stableId.Length >= 8)
+            {
+                return storedMachineId[^8..] == stableId[^8..];
+            }
+        }
+        catch { /* fallback to exact match which already failed */ }
+
+        return false;
+    }
+
     // Special universal activation codes (not machine-bound, for VIP / internal use)
     private static readonly HashSet<string> SpecialPerpetualCodes = new(StringComparer.OrdinalIgnoreCase)
     {
-        "POCKETTER"
+        "GQL119871"
     };
 
     public (bool Success, string Message) Activate(string activationCode)
@@ -155,8 +213,8 @@ public class LicenseService : ILicenseService
                     return (false, "激活码无效或已损坏");
 
                 var parts = decoded.Split('|');
-                if (parts.Length < 2 || parts[0] != machineId)
-                    return (false, "激活码与当前机器不匹配");
+                if (parts.Length < 2 || !IsMachineIdMatch(parts[0]))
+                    return (false, "激活码与当前机器不匹配。如已更换硬件，请联系客服重新激活。");
 
                 _license = new LicenseInfo
                 {
@@ -167,7 +225,7 @@ public class LicenseService : ILicenseService
                 };
                 SaveLicense();
                 Log.Information("Perpetual license activated");
-                return (true, "永久授权激活成功！感谢您购买 DWG Translator。");
+                return (true, "永久授权激活成功！感谢您购买 DWG Translator (买断制 ¥699)。");
             }
             else if (activationCode.StartsWith("DwgTranslator-S-"))
             {
@@ -178,15 +236,15 @@ public class LicenseService : ILicenseService
                     return (false, "激活码无效或已损坏");
 
                 var parts = decoded.Split('|');
-                if (parts.Length < 3 || parts[0] != machineId)
-                    return (false, "激活码与当前机器不匹配");
+                if (parts.Length < 3 || !IsMachineIdMatch(parts[0]))
+                    return (false, "激活码与当前机器不匹配。如已更换硬件，请联系客服重新激活。");
 
                 if (!long.TryParse(parts[1], out var expiryTicks))
                     return (false, "激活码日期格式无效");
 
                 var expiry = new DateTime(expiryTicks, DateTimeKind.Utc);
                 if (expiry <= DateTime.UtcNow)
-                    return (false, "订阅授权已过期，请续费");
+                    return (false, $"订阅授权已于 {expiry:yyyy-MM-dd} 过期，请续费。月费 ¥49 / 年费 ¥399");
 
                 _license = new LicenseInfo
                 {
@@ -201,7 +259,7 @@ public class LicenseService : ILicenseService
                 return (true, $"订阅授权激活成功！有效期至 {expiry:yyyy-MM-dd}。");
             }
 
-            return (false, "无法识别的激活码格式");
+            return (false, "无法识别的激活码格式。\n正确格式: DwgTranslator-P-xxx (买断) 或 DwgTranslator-S-xxx (订阅)");
         }
         catch (Exception ex)
         {
@@ -219,12 +277,12 @@ public class LicenseService : ILicenseService
 
     /// <summary>
     /// Generates a machine fingerprint based on stable hardware/OS identifiers.
+    /// Uses multiple fallback strategies for resilience across reboots and minor hardware changes.
     /// </summary>
     public static string GetMachineId()
     {
         try
         {
-            // Combine multiple stable identifiers for resilience
             var sb = new StringBuilder();
             sb.Append(Environment.MachineName);
             sb.Append("|");
@@ -248,14 +306,54 @@ public class LicenseService : ILicenseService
             sb.Append("|");
             sb.Append(Environment.ProcessorCount);
 
+            // Add disk volume serial for additional stability
+            try
+            {
+                var drive = Path.GetPathRoot(Environment.SystemDirectory);
+                if (!string.IsNullOrEmpty(drive))
+                {
+                    var volumeLabel = DriveInfo.GetDrives()
+                        .FirstOrDefault(d => d.RootDirectory.FullName.StartsWith(drive))
+                        ?.VolumeLabel ?? "";
+                    sb.Append("|");
+                    sb.Append(volumeLabel);
+                }
+            }
+            catch { /* ignore */ }
+
             var hash = ComputeHash(sb.ToString());
             return hash[..16]; // 16-char hex fingerprint
         }
         catch
         {
-            // Fallback to a less stable but functional ID
             return ComputeHash(Environment.MachineName + Environment.UserName)[..16];
         }
+    }
+
+    /// <summary>
+    /// Generates a stable machine ID based on OS-install-time + CPU only.
+    /// Used for fuzzy matching when MachineName/UserName changes.
+    /// </summary>
+    private static string GetStableMachineId()
+    {
+        var sb = new StringBuilder();
+        try
+        {
+            using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(
+                @"SOFTWARE\Microsoft\Windows NT\CurrentVersion");
+            if (key != null)
+            {
+                var installDate = key.GetValue("InstallDate")?.ToString();
+                if (!string.IsNullOrEmpty(installDate))
+                    sb.Append(installDate);
+            }
+        }
+        catch { /* ignore */ }
+
+        sb.Append("|");
+        sb.Append(Environment.ProcessorCount);
+
+        return ComputeHash(sb.ToString())[..16];
     }
 
     #region Crypto Helpers

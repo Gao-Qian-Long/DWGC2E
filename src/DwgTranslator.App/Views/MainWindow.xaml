@@ -11,7 +11,7 @@
         ResizeMode="CanResize"
         Background="#F0F4F8">
     <WindowChrome.WindowChrome>
-        <WindowChrome CaptionHeight="32" ResizeBorderThickness="6" GlassFrameThickness="0" CornerRadius="0"/>
+        <WindowChrome CaptionHeight="36" ResizeBorderThickness="6" GlassFrameThickness="0" CornerRadius="0"/>
     </WindowChrome.WindowChrome>
     <Window.DataContext>
         <vm:MainViewModel/>
@@ -20,23 +20,28 @@
         <conv:StatusToBrushConverter x:Key="StatusBrush"/>
         <conv:BoolToVisibilityConverter x:Key="BoolToVis"/>
 
+        <!-- Drop Shadow Effect -->
+        <DropShadowEffect x:Key="CardShadow" ShadowDepth="1" BlurRadius="6" Opacity="0.12" Direction="270"/>
+
         <!-- Modern Button Style -->
         <Style x:Key="ToolButton" TargetType="Button">
-            <Setter Property="Padding" Value="10,6"/>
+            <Setter Property="Padding" Value="12,6"/>
             <Setter Property="Margin" Value="2"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="FontSize" Value="12"/>
-            <Setter Property="Foreground" Value="#37474F"/>
-            <Setter Property="Background" Value="White"/>
+            <Setter Property="FontWeight" Value="Medium"/>
+            <Setter Property="Foreground" Value="#455A64"/>
+            <Setter Property="Background" Value="Transparent"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border Background="{TemplateBinding Background}" 
+                        <Border Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="4">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Margin="{TemplateBinding Padding}"/>
+                                CornerRadius="6" Padding="{TemplateBinding Padding}"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                     </ControlTemplate>
                 </Setter.Value>
@@ -48,13 +53,44 @@
                 <Trigger Property="IsPressed" Value="True">
                     <Setter Property="Background" Value="#BBDEFB"/>
                 </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Foreground" Value="#B0BEC5"/>
+                    <Setter Property="Cursor" Value="Arrow"/>
+                </Trigger>
             </Style.Triggers>
         </Style>
 
         <!-- Primary Action Button -->
         <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource ToolButton}">
             <Setter Property="Foreground" Value="White"/>
-            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="0"
+                                CornerRadius="6" Padding="{TemplateBinding Padding}"
+                                SnapsToDevicePixels="True"
+                                Effect="{StaticResource CardShadow}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Opacity" Value="0.9"/>
+                </Trigger>
+                <Trigger Property="IsPressed" Value="True">
+                    <Setter Property="Opacity" Value="0.8"/>
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Foreground" Value="#B0BEC5"/>
+                    <Setter Property="Background" Value="#E0E0E0"/>
+                    <Setter Property="Cursor" Value="Arrow"/>
+                </Trigger>
+            </Style.Triggers>
         </Style>
 
         <!-- Row style: base colors + status overrides -->
@@ -72,7 +108,7 @@
                     <Setter Property="Background" Value="#F1F8E9"/>
                 </DataTrigger>
                 <DataTrigger Binding="{Binding Status}" Value="Reviewed">
-                    <Setter Property="Background" Value="#E2F0D9"/>
+                    <Setter Property="Background" Value="#E8F5E9"/>
                 </DataTrigger>
                 <DataTrigger Binding="{Binding Status}" Value="TranslationFailed">
                     <Setter Property="Background" Value="#FFF0F0"/>
@@ -101,7 +137,7 @@
 
     <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="32"/>
+            <RowDefinition Height="36"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -109,19 +145,32 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- Custom Title Bar -->
-        <Border Grid.Row="0" Background="#1976D2">
+        <!-- Custom Title Bar with gradient -->
+        <Border Grid.Row="0">
+            <Border.Background>
+                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                    <GradientStop Color="#1565C0" Offset="0"/>
+                    <GradientStop Color="#1976D2" Offset="0.5"/>
+                    <GradientStop Color="#1E88E5" Offset="1"/>
+                </LinearGradientBrush>
+            </Border.Background>
             <Grid>
-                <TextBlock Text="DWG Translator - 图纸中英文互译"
-                           Foreground="White" FontSize="13"
-                           VerticalAlignment="Center" Margin="12,0,0,0"/>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
+                    <TextBlock Text="DWG" Foreground="White" FontSize="13" FontWeight="Bold"
+                               VerticalAlignment="Center" Opacity="0.9"/>
+                    <TextBlock Text=" Translator" Foreground="White" FontSize="13"
+                               VerticalAlignment="Center" Opacity="0.9"/>
+                    <TextBlock Text=" — 图纸中英文互译" Foreground="#BBDEFB" FontSize="11"
+                               VerticalAlignment="Center" Margin="4,0,0,0"/>
+                </StackPanel>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                     <Button Command="{Binding ToggleTopmostCommand}"
                             ToolTip="窗口置顶切换"
                             WindowChrome.IsHitTestVisibleInChrome="True"
-                            Width="46" Height="32"
+                            Width="46" Height="36"
                             Foreground="White" BorderThickness="0" FontSize="14"
-                            VerticalContentAlignment="Center" HorizontalContentAlignment="Center">
+                            VerticalContentAlignment="Center" HorizontalContentAlignment="Center"
+                            Background="Transparent">
                         <Button.Style>
                             <Style TargetType="Button">
                                 <Setter Property="Background" Value="Transparent"/>
@@ -131,6 +180,9 @@
                                         <Setter Property="Background" Value="#FF9800"/>
                                         <Setter Property="Content" Value="&#x1F4CD;"/>
                                     </DataTrigger>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter Property="Background" Value="#1976D2"/>
+                                    </Trigger>
                                 </Style.Triggers>
                             </Style>
                         </Button.Style>
@@ -138,19 +190,41 @@
                     <Button x:Name="MinimizeButton" Content="&#x2013;"
                             Click="MinimizeButton_Click"
                             WindowChrome.IsHitTestVisibleInChrome="True"
-                            Width="46" Height="32" Background="Transparent"
+                            Width="46" Height="36" Background="Transparent"
                             Foreground="White" BorderThickness="0" FontSize="16"
-                            VerticalContentAlignment="Center" HorizontalContentAlignment="Center"/>
+                            VerticalContentAlignment="Center" HorizontalContentAlignment="Center">
+                        <Button.Style>
+                            <Style TargetType="Button">
+                                <Setter Property="Background" Value="Transparent"/>
+                                <Style.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter Property="Background" Value="#1976D2"/>
+                                    </Trigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
                     <Button x:Name="MaximizeButton" Content="&#x25A1;"
                             Click="MaximizeButton_Click"
                             WindowChrome.IsHitTestVisibleInChrome="True"
-                            Width="46" Height="32" Background="Transparent"
+                            Width="46" Height="36" Background="Transparent"
                             Foreground="White" BorderThickness="0" FontSize="14"
-                            VerticalContentAlignment="Center" HorizontalContentAlignment="Center"/>
+                            VerticalContentAlignment="Center" HorizontalContentAlignment="Center">
+                        <Button.Style>
+                            <Style TargetType="Button">
+                                <Setter Property="Background" Value="Transparent"/>
+                                <Style.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter Property="Background" Value="#1976D2"/>
+                                    </Trigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
                     <Button Content="&#x2715;"
                             Click="CloseButton_Click"
                             WindowChrome.IsHitTestVisibleInChrome="True"
-                            Width="46" Height="32" Background="Transparent"
+                            Width="46" Height="36" Background="Transparent"
                             Foreground="White" BorderThickness="0" FontSize="14"
                             VerticalContentAlignment="Center" HorizontalContentAlignment="Center">
                         <Button.Style>
@@ -169,113 +243,193 @@
         </Border>
 
         <!-- Toolbar Row 1 -->
-        <Border Grid.Row="1" Background="White" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1" Padding="8,6">
+        <Border Grid.Row="1" Background="White" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1" Padding="10,8">
             <WrapPanel Orientation="Horizontal">
-                <Button Style="{StaticResource PrimaryButton}" Content="导入 DWG" Command="{Binding ImportDwgCommand}"
-                        Background="#1976D2" ToolTip="选择一个或多个 DWG 文件，提取文本实体"/>
+                <Button Style="{StaticResource PrimaryButton}" Command="{Binding ImportDwgCommand}"
+                        Background="#1976D2" ToolTip="选择一个或多个 DWG 文件，提取文本实体">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#x1F4C2;" Margin="0,0,4,0"/>
+                        <TextBlock Text="导入 DWG"/>
+                    </StackPanel>
+                </Button>
                 <Separator Margin="6,0" Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}"/>
 
                 <Button Style="{StaticResource PrimaryButton}"
                         Background="#FF9800" Command="{Binding ToggleLanguageDirectionCommand}"
-                        ToolTip="点击切换翻译方向">
+                        ToolTip="点击切换翻译方向" Margin="2">
                     <TextBlock TextAlignment="Center">
                         <Run Text="&#x21C4; " FontSize="14"/><Run Text="{Binding LanguageDirection}" FontSize="12"/>
                     </TextBlock>
                 </Button>
                 <Separator Margin="6,0" Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}"/>
 
-                <Button Style="{StaticResource PrimaryButton}" Content="翻译" Command="{Binding TranslateCommand}"
+                <Button Style="{StaticResource PrimaryButton}" Command="{Binding TranslateCommand}"
                         Background="#4CAF50" ToolTip="AI 并发翻译（去重 + 智能并发）"
-                        Visibility="{Binding IsProcessing, Converter={StaticResource BoolToVis}, ConverterParameter=false}"/>
-                <Button Style="{StaticResource PrimaryButton}" Content="停止" Command="{Binding CancelTranslateCommand}"
+                        Visibility="{Binding IsProcessing, Converter={StaticResource BoolToVis}, ConverterParameter=false}">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#x25B6;" Margin="0,0,4,0" FontSize="11"/>
+                        <TextBlock Text="翻译"/>
+                    </StackPanel>
+                </Button>
+                <Button Style="{StaticResource PrimaryButton}" Command="{Binding CancelTranslateCommand}"
                         Background="#E53935" ToolTip="停止正在进行的翻译"
-                        Visibility="{Binding IsProcessing, Converter={StaticResource BoolToVis}}"/>
+                        Visibility="{Binding IsProcessing, Converter={StaticResource BoolToVis}}">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#x25A0;" Margin="0,0,4,0" FontSize="11"/>
+                        <TextBlock Text="停止"/>
+                    </StackPanel>
+                </Button>
                 <Separator Margin="6,0" Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}"/>
 
-                <Button Style="{StaticResource ToolButton}" Content="导出 Excel" Command="{Binding ExportExcelCommand}"
-                        ToolTip="导出翻译表到 Excel 进行校对"/>
-                <Button Style="{StaticResource ToolButton}" Content="导入 Excel" Command="{Binding ImportExcelCommand}"
-                        ToolTip="从校对后的 Excel 导入译文"/>
+                <Button Style="{StaticResource ToolButton}" Command="{Binding ExportExcelCommand}"
+                        ToolTip="导出翻译表到 Excel 进行校对">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#x1F4CA;" Margin="0,0,4,0"/>
+                        <TextBlock Text="导出 Excel"/>
+                    </StackPanel>
+                </Button>
+                <Button Style="{StaticResource ToolButton}" Command="{Binding ImportExcelCommand}"
+                        ToolTip="从校对后的 Excel 导入译文">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#x1F4C5;" Margin="0,0,4,0"/>
+                        <TextBlock Text="导入 Excel"/>
+                    </StackPanel>
+                </Button>
                 <Separator Margin="6,0" Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}"/>
 
-                <Button Style="{StaticResource PrimaryButton}" Content="导出 DWG" Command="{Binding ExportDwgCommand}"
-                        Background="#2E7D32" ToolTip="回写译文到 DWG 文件"/>
+                <Button Style="{StaticResource PrimaryButton}" Command="{Binding ExportDwgCommand}"
+                        Background="#2E7D32" ToolTip="回写译文到 DWG 文件">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#x1F4BE;" Margin="0,0,4,0"/>
+                        <TextBlock Text="导出 DWG"/>
+                    </StackPanel>
+                </Button>
                 <Separator Margin="6,0" Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}"/>
 
-                <Button Style="{StaticResource ToolButton}" Content="全部审阅" Command="{Binding MarkAllReviewedCommand}"
-                        ToolTip="标记所有已翻译条目为已审阅"/>
-                <Button Style="{StaticResource ToolButton}" Content="重试失败" Command="{Binding RetryFailedCommand}"/>
+                <Button Style="{StaticResource ToolButton}" Command="{Binding MarkAllReviewedCommand}"
+                        ToolTip="标记所有已翻译条目为已审阅">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#x2714;" Margin="0,0,4,0" Foreground="#4CAF50"/>
+                        <TextBlock Text="全部审阅"/>
+                    </StackPanel>
+                </Button>
+                <Button Style="{StaticResource ToolButton}" Command="{Binding RetryFailedCommand}"
+                        ToolTip="重试翻译失败的条目">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#x21BB;" Margin="0,0,4,0" Foreground="#FF9800"/>
+                        <TextBlock Text="重试失败"/>
+                    </StackPanel>
+                </Button>
                 <Separator Margin="6,0" Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}"/>
 
-                <Button Style="{StaticResource ToolButton}" Content="术语库" Command="{Binding OpenGlossaryManagerCommand}"
-                        ToolTip="查看和编辑术语库"/>
-                <Button Style="{StaticResource ToolButton}" Content="导入术语" Command="{Binding ImportGlossaryCommand}"/>
+                <Button Style="{StaticResource ToolButton}" Command="{Binding OpenGlossaryManagerCommand}"
+                        ToolTip="查看和编辑术语库">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#x1F4D6;" Margin="0,0,4,0"/>
+                        <TextBlock Text="术语库"/>
+                    </StackPanel>
+                </Button>
+                <Button Style="{StaticResource ToolButton}" Command="{Binding ImportGlossaryCommand}"
+                        ToolTip="导入外部术语库文件">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#x1F4E5;" Margin="0,0,4,0"/>
+                        <TextBlock Text="导入术语"/>
+                    </StackPanel>
+                </Button>
                 <Separator Margin="6,0" Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}"/>
 
-                <Button Style="{StaticResource ToolButton}" Content="授权" Command="{Binding OpenLicenseDialogCommand}"
-                        ToolTip="查看授权状态或输入激活码" BorderBrush="#FF9800" BorderThickness="1"/>
-                <Button Style="{StaticResource ToolButton}" Content="设置" Command="{Binding SettingsCommand}"/>
-                <Button Style="{StaticResource ToolButton}" Content="帮助" Command="{Binding ShowHelpCommand}"
-                        ToolTip="查看使用帮助和配置说明"/>
-                <Button Style="{StaticResource ToolButton}" Content="清空" Command="{Binding ClearAllCommand}"/>
+                <Button Style="{StaticResource ToolButton}" Command="{Binding OpenLicenseDialogCommand}"
+                        ToolTip="查看授权状态或输入激活码" BorderBrush="#FF9800" BorderThickness="1">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#x1F511;" Margin="0,0,4,0"/>
+                        <TextBlock Text="授权"/>
+                    </StackPanel>
+                </Button>
+                <Button Style="{StaticResource ToolButton}" Command="{Binding SettingsCommand}"
+                        ToolTip="配置 API 和 AutoCAD 路径">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#x2699;" Margin="0,0,4,0"/>
+                        <TextBlock Text="设置"/>
+                    </StackPanel>
+                </Button>
+                <Button Style="{StaticResource ToolButton}" Command="{Binding ShowHelpCommand}"
+                        ToolTip="查看使用帮助和配置说明">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#x2753;" Margin="0,0,4,0"/>
+                        <TextBlock Text="帮助"/>
+                    </StackPanel>
+                </Button>
+                <Button Style="{StaticResource ToolButton}" Command="{Binding ClearAllCommand}"
+                        ToolTip="清空当前所有数据">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#x1F5D1;" Margin="0,0,4,0"/>
+                        <TextBlock Text="清空"/>
+                    </StackPanel>
+                </Button>
             </WrapPanel>
         </Border>
 
         <!-- Toolbar Row 2: Filter + Stats -->
-        <Border Grid.Row="2" Background="White" Padding="10,6">
+        <Border Grid.Row="2" Background="White" Padding="10,6" BorderBrush="#EEEEEE" BorderThickness="0,0,0,1">
             <StackPanel Orientation="Horizontal">
-                <TextBlock Text="筛选:" VerticalAlignment="Center" Margin="0,0,5,0" FontSize="12" Foreground="#607D8B"/>
+                <TextBlock Text="筛选:" VerticalAlignment="Center" Margin="0,0,6,0" FontSize="12" Foreground="#78909C"/>
                 <ComboBox ItemsSource="{Binding FilterOptions}"
                           SelectedItem="{Binding FilterStatusText, UpdateSourceTrigger=PropertyChanged}"
-                          Width="95" Height="26" Margin="0,0,15,0"/>
-                <TextBlock Text="搜索:" VerticalAlignment="Center" Margin="0,0,5,0" FontSize="12" Foreground="#607D8B"/>
-                <TextBox Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" Width="180" Height="26"
-                         ToolTip="搜索原文/译文/类型"/>
-                <Button Content="查找" Command="{Binding ApplySearchCommand}" Padding="8,3" Margin="5,0,15,0"
-                        Style="{StaticResource ToolButton}"/>
+                          Width="95" Height="28" Margin="0,0,15,0" FontSize="12"/>
+                <TextBlock Text="搜索:" VerticalAlignment="Center" Margin="0,0,6,0" FontSize="12" Foreground="#78909C"/>
+                <TextBox Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" Width="180" Height="28"
+                         ToolTip="搜索原文/译文/类型" FontSize="12" VerticalContentAlignment="Center"
+                         Padding="6,0"/>
+                <Button Content="查找" Command="{Binding ApplySearchCommand}" Padding="10,4" Margin="5,0,20,0"
+                        Style="{StaticResource ToolButton}" FontSize="12"/>
 
-                <Border Background="#E3F2FD" CornerRadius="4" Padding="10,4" Margin="0,0,10,0">
+                <!-- Stats Badge Row -->
+                <Border Background="#E3F2FD" CornerRadius="6" Padding="12,5" Margin="0,0,8,0"
+                        Effect="{StaticResource CardShadow}">
                     <StackPanel Orientation="Horizontal">
-                        <TextBlock FontSize="12">
-                            <Run Text="总数:" FontWeight="Bold" Foreground="#37474F"/><Run Text="{Binding TotalCount}" Foreground="#37474F"/>
+                        <TextBlock FontSize="12" VerticalAlignment="Center">
+                            <Run Text="总数 " Foreground="#78909C"/><Run Text="{Binding TotalCount}" FontWeight="SemiBold" Foreground="#37474F"/>
                         </TextBlock>
-                        <TextBlock Margin="12,0,0,0" FontSize="12">
-                            <Run Text="已翻译:" FontWeight="Bold" Foreground="#1976D2"/>
-                            <Run Text="{Binding TranslatedCount}" Foreground="#1976D2"/>
+                        <Border Width="1" Height="14" Background="#BBDEFB" Margin="10,0"/>
+                        <TextBlock FontSize="12" VerticalAlignment="Center" Margin="10,0,0,0">
+                            <Run Text="已翻译 " Foreground="#78909C"/><Run Text="{Binding TranslatedCount}" FontWeight="SemiBold" Foreground="#1976D2"/>
                         </TextBlock>
-                        <TextBlock Margin="12,0,0,0" FontSize="12">
-                            <Run Text="失败:" FontWeight="Bold" Foreground="#E53935"/>
-                            <Run Text="{Binding FailedCount}" Foreground="#E53935"/>
+                        <Border Width="1" Height="14" Background="#BBDEFB" Margin="10,0"/>
+                        <TextBlock FontSize="12" VerticalAlignment="Center" Margin="10,0,0,0">
+                            <Run Text="失败 " Foreground="#78909C"/><Run Text="{Binding FailedCount}" FontWeight="SemiBold" Foreground="#E53935"/>
                         </TextBlock>
-                        <TextBlock Margin="12,0,0,0" FontSize="12">
-                            <Run Text="术语:" FontWeight="Bold" Foreground="#E65100"/>
-                            <Run Text="{Binding GlossaryHitCount}" Foreground="#E65100"/>
+                        <Border Width="1" Height="14" Background="#BBDEFB" Margin="10,0"/>
+                        <TextBlock FontSize="12" VerticalAlignment="Center" Margin="10,0,0,0">
+                            <Run Text="术语 " Foreground="#78909C"/><Run Text="{Binding GlossaryHitCount}" FontWeight="SemiBold" Foreground="#E65100"/>
                         </TextBlock>
-                        <TextBlock Margin="12,0,0,0" FontSize="12">
-                            <Run Text="缓存:" FontWeight="Bold" Foreground="#78909C"/>
-                            <Run Text="{Binding CacheHitCount}" Foreground="#78909C"/>
+                        <Border Width="1" Height="14" Background="#BBDEFB" Margin="10,0"/>
+                        <TextBlock FontSize="12" VerticalAlignment="Center" Margin="10,0,0,0">
+                            <Run Text="缓存 " Foreground="#78909C"/><Run Text="{Binding CacheHitCount}" FontWeight="SemiBold" Foreground="#78909C"/>
                         </TextBlock>
-                        <TextBlock Margin="12,0,0,0" FontSize="12">
-                            <Run Text="显示:" FontWeight="Bold" Foreground="#37474F"/>
-                            <Run Text="{Binding VisibleCount}" Foreground="#37474F"/>
+                        <Border Width="1" Height="14" Background="#BBDEFB" Margin="10,0"/>
+                        <TextBlock FontSize="12" VerticalAlignment="Center" Margin="10,0,0,0">
+                            <Run Text="显示 " Foreground="#78909C"/><Run Text="{Binding VisibleCount}" FontWeight="SemiBold" Foreground="#37474F"/>
                         </TextBlock>
                     </StackPanel>
                 </Border>
 
                 <!-- License Status Badge -->
-                <Border Background="#FFF3E0" CornerRadius="4" Padding="10,4" BorderBrush="#FF9800" BorderThickness="1">
-                    <TextBlock FontSize="11" FontWeight="Bold" Foreground="#E65100">
-                        <Run Text="授权: "/><Run Text="{Binding LicenseStatusText}"/>
-                    </TextBlock>
+                <Border Background="#FFF3E0" CornerRadius="6" Padding="12,5" BorderBrush="#FFE0B2" BorderThickness="1">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#x1F511;" FontSize="11" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                        <TextBlock FontSize="11" FontWeight="SemiBold" Foreground="#E65100" VerticalAlignment="Center">
+                            <Run Text="{Binding LicenseStatusText}"/>
+                        </TextBlock>
+                    </StackPanel>
                 </Border>
             </StackPanel>
         </Border>
 
         <!-- Progress Bar -->
-        <ProgressBar Grid.Row="3" Height="4" Margin="10,2"
+        <ProgressBar Grid.Row="3" Height="3" Margin="0"
                      Value="{Binding ProgressValue}" Maximum="100"
                      Visibility="{Binding IsProcessing, Converter={StaticResource BoolToVis}}"
-                     Foreground="#4CAF50" Background="#E8E8E8"/>
+                     Foreground="#4CAF50" Background="Transparent"/>
 
         <!-- Data Grid -->
         <DataGrid Grid.Row="4" Margin="10,5,10,5"
@@ -293,16 +447,17 @@
                   RowHeight="32"
                   FontSize="12"
                   HeadersVisibility="Column"
-                  HorizontalGridLinesBrush="#E0E0E0">
+                  HorizontalGridLinesBrush="#ECEFF1"
+                  BorderBrush="#E0E0E0" BorderThickness="1">
             <DataGrid.Resources>
                 <Style TargetType="DataGridColumnHeader">
                     <Setter Property="Background" Value="#37474F"/>
                     <Setter Property="Foreground" Value="White"/>
-                    <Setter Property="FontWeight" Value="Bold"/>
+                    <Setter Property="FontWeight" Value="SemiBold"/>
                     <Setter Property="FontSize" Value="12"/>
                     <Setter Property="Height" Value="34"/>
                     <Setter Property="HorizontalContentAlignment" Value="Center"/>
-                    <Setter Property="Padding" Value="4,0"/>
+                    <Setter Property="Padding" Value="6,0"/>
                 </Style>
                 <Style TargetType="DataGridCell">
                     <Setter Property="VerticalAlignment" Value="Center"/>
@@ -319,6 +474,7 @@
                         <Style TargetType="TextBlock" BasedOn="{StaticResource CenteredCellStyle}">
                             <Setter Property="FontFamily" Value="Consolas"/>
                             <Setter Property="FontSize" Value="10"/>
+                            <Setter Property="Foreground" Value="#78909C"/>
                         </Style>
                     </DataGridTextColumn.ElementStyle>
                 </DataGridTextColumn>
@@ -336,8 +492,9 @@
                         <DataTemplate>
                             <TextBox Text="{Binding TranslatedText, UpdateSourceTrigger=LostFocus}"
                                      TextWrapping="Wrap" AcceptsReturn="True" MinHeight="24"
-                                     BorderBrush="#BDBDBD" Background="Transparent"
+                                     BorderBrush="#E0E0E0" Background="Transparent"
                                      FontSize="12" VerticalContentAlignment="Center"
+                                     Padding="4,2"
                                      ToolTip="双击直接编辑翻译"/>
                         </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>
@@ -367,10 +524,11 @@
                 <DataGridTemplateColumn Header="状态" Width="90" SortMemberPath="Status" CanUserSort="True">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
-                            <Border CornerRadius="3" Padding="4,2"
+                            <Border CornerRadius="4" Padding="6,2" Margin="2,0"
                                     Background="{Binding Status, Converter={StaticResource StatusBrush}}"
                                     ToolTip="{Binding Status}">
-                                <TextBlock Text="{Binding Status}" FontSize="11" FontWeight="Bold"
+                                <TextBlock Text="{Binding Status}" FontSize="11" FontWeight="SemiBold"
+                                           Foreground="White"
                                            HorizontalAlignment="Center" VerticalAlignment="Center"/>
                             </Border>
                         </DataTemplate>
@@ -388,31 +546,33 @@
         </DataGrid>
 
         <!-- Status Bar -->
-        <StatusBar Grid.Row="5" Background="#ECEFF1" Margin="0,0,0,0">
-            <StatusBar.ItemsPanel>
-                <ItemsPanelTemplate>
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                    </Grid>
-                </ItemsPanelTemplate>
-            </StatusBar.ItemsPanel>
-            <StatusBarItem Grid.Column="0">
-                <TextBlock Text="{Binding StatusMessage}" TextTrimming="CharacterEllipsis" FontSize="12"/>
-            </StatusBarItem>
-            <StatusBarItem Grid.Column="1">
-                <TextBlock Text="{Binding GlossaryStatsText}" Foreground="#78909C" FontSize="11" Margin="0,0,15,0"/>
-            </StatusBarItem>
-            <StatusBarItem Grid.Column="2">
-                <TextBlock Text="{Binding LicenseStatusText}" Foreground="#E65100" FontSize="11" Margin="0,0,15,0" FontWeight="Bold"/>
-            </StatusBarItem>
-            <StatusBarItem Grid.Column="3">
-                <TextBlock Text="DWG Translator v2.0" Foreground="#90A4AE" FontSize="10"/>
-            </StatusBarItem>
-        </StatusBar>
+        <Border Grid.Row="5" Background="#ECEFF1" BorderBrush="#CFD8DC" BorderThickness="0,1,0,0" Padding="0">
+            <StatusBar Background="Transparent" Margin="0">
+                <StatusBar.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                        </Grid>
+                    </ItemsPanelTemplate>
+                </StatusBar.ItemsPanel>
+                <StatusBarItem Grid.Column="0">
+                    <TextBlock Text="{Binding StatusMessage}" TextTrimming="CharacterEllipsis" FontSize="12" Foreground="#546E7A"/>
+                </StatusBarItem>
+                <StatusBarItem Grid.Column="1">
+                    <TextBlock Text="{Binding GlossaryStatsText}" Foreground="#90A4AE" FontSize="11" Margin="0,0,15,0"/>
+                </StatusBarItem>
+                <StatusBarItem Grid.Column="2">
+                    <TextBlock Text="{Binding LicenseStatusText}" Foreground="#E65100" FontSize="11" Margin="0,0,15,0" FontWeight="SemiBold"/>
+                </StatusBarItem>
+                <StatusBarItem Grid.Column="3">
+                    <TextBlock Text="DWG Translator v2.1" Foreground="#B0BEC5" FontSize="10"/>
+                </StatusBarItem>
+            </StatusBar>
+        </Border>
     </Grid>
 </Window>

@@ -192,16 +192,31 @@ public class TextReplacer
         // Map font if needed
         MapTextStyle(mText.TextStyleId, db);
 
-        // Fix: prevent excessively wide rectangle that destroys word spacing readability
+        // Adapt rectangle width to translated text to prevent sparse word spacing.
         if (entity.MTextRectangleWidth > 0)
         {
-            // Designer-set fixed width: respect it, only scale height if needed
-            mText.Width = entity.MTextRectangleWidth;
+            double translatedEstWidth = EstimateTextWidth(entity.TranslatedText, mText.TextHeight);
+            double widthRatio = translatedEstWidth / entity.MTextRectangleWidth;
+
+            if (widthRatio < 0.55)
+            {
+                // Text is much narrower than rectangle — shrink to prevent stretched gaps
+                double targetWidth = Math.Max(translatedEstWidth * 1.20, entity.MTextRectangleWidth * 0.45);
+                mText.Width = targetWidth;
+            }
+            else if (widthRatio < 0.75)
+            {
+                double targetWidth = Math.Max(translatedEstWidth * 1.12, entity.MTextRectangleWidth * 0.6);
+                mText.Width = targetWidth;
+            }
+            else
+            {
+                mText.Width = entity.MTextRectangleWidth;
+            }
         }
         else
         {
-            // FREE width: never set a huge rectangle width.
-            // Keep Width = 0 for natural tight spacing unless text overflows.
+            // FREE width: keep Width = 0 for natural tight spacing
             mText.Width = 0;
         }
 
@@ -416,10 +431,7 @@ public class TextReplacer
         }
     }
 
-    private static double EstimateTextWidth(string text, double height)
-    {
-        return (text?.Length ?? 0) * height * 0.6;
-    }
+    private static double EstimateTextWidth(string text, double height) => Core.Services.TextWidthEstimator.EstimateTextWidth(text, height);
 }
 
 /// <summary>

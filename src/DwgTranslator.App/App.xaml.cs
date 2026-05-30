@@ -108,9 +108,10 @@ public partial class App : Application
                 if (config != null && string.IsNullOrEmpty(config.DeepSeekApiKey))
                 {
                     MessageBox.Show(
-                        "欢迎使用 DWG Translator!\n\n" +
+                        "欢迎使用 DWG Translator v2.1!\n\n" +
                         "首次使用需要配置 DeepSeek API Key。\n" +
-                        "请点击「设置」按钮进行配置。",
+                        "请点击「设置」按钮进行配置。\n\n" +
+                        "体验版提供 3 次免费翻译导出，可随时激活升级。",
                         "首次配置",
                         MessageBoxButton.OK,
                         MessageBoxImage.Information);
