@@ -194,7 +194,7 @@ public class DwgWriterService : IDwgWriterService
         {
             if (cadEntity == null) continue;
 
-            var handleStr = cadEntity.Handle.ToString();
+            var handleStr = FormatHandle(cadEntity.Handle);
 
             if (translationMap.TryGetValue(handleStr, out var translatedEntity))
             {
@@ -235,7 +235,7 @@ public class DwgWriterService : IDwgWriterService
         {
             if (att is not CadAttribute attEntity) continue;
 
-            var compoundHandle = $"{insert.Handle}/{attEntity.Tag}";
+            var compoundHandle = $"{FormatHandle(insert.Handle)}/{attEntity.Tag}";
 
             if (translationMap.TryGetValue(compoundHandle, out var translatedEntity))
             {
@@ -420,10 +420,12 @@ public class DwgWriterService : IDwgWriterService
     /// <summary>
     /// Adaptive layout for MText:
     /// 1. Preserves original line spacing.
-    /// 2. FIXED-RECTANGLE MText: never expands width (designer already set it).
-    ///    Only scales down height when translated text needs more lines.
-    /// 3. FREE-WIDTH MText: sets a conservative rectangle width based on
-    ///    under-estimated text width to avoid over-wide sparse layout.
+    /// 2. FIXED-RECTANGLE MText: shrinks rectangle to match actual text width,
+    ///    preventing stretched word spacing in justified/fit modes.
+    /// 3. FREE-WIDTH MText: sets a tight rectangle width that respects per-line
+    ///    widths (not concatenated) to avoid over-wide sparse layout.
+    /// 4. Conservative height cap: never exceeds original total height to reduce
+    ///    collision risk with nearby geometry.
     /// </summary>
     private static void ApplyScaling(CadMText mtext, string translatedText, OurTextEntity ourEntity)
     {
@@ -442,38 +444,77 @@ public class DwgWriterService : IDwgWriterService
             if (ourEntity.MTextLineSpacingStyle > 0)
                 mtext.LineSpacingStyle = (LineSpacingStyleType)ourEntity.MTextLineSpacingStyle;
 
+            // Split into logical lines (by \P) for per-line width estimation.
+            // Using the longest line width avoids over-estimating multi-line text width
+            // which would cause excessive RectangleWidth and stretched word spacing.
+            var logicalLines = SplitMTextLines(translatedText);
+            double maxLineWidth = 0;
+            int lineCount = logicalLines.Count;
+            foreach (var line in logicalLines)
+            {
+                double lineW = EstimateTextWidth(line, currentHeight);
+                if (lineW > maxLineWidth) maxLineWidth = lineW;
+            }
+
+            // Also compute concatenated width for overflow detection (single-line fallback)
             string textForEstimation = translatedText.Replace("\\P", " ");
+            double concatenatedWidth = EstimateTextWidth(textForEstimation, currentHeight);
+
+            // Original line count for height budgeting
+            var originalLogicalLines = SplitMTextLines(ourEntity.RawText ?? string.Empty);
+            int originalLineCount = Math.Max(1, originalLogicalLines.Count);
 
             if (mtext.RectangleWidth > 0)
             {
-                // FIXED rectangle width: adapt to translated text width to prevent sparse word spacing.
+                // FIXED rectangle width: shrink to match actual longest-line width
                 double rectWidth = mtext.RectangleWidth;
-                double translatedEstWidth = EstimateTextWidth(textForEstimation, currentHeight);
-                double widthRatio = translatedEstWidth / rectWidth;
 
-                if (widthRatio < 0.55)
+                // Use per-line max width (not concatenated) for accurate width ratio
+                double effectiveWidth = lineCount > 1 ? maxLineWidth : concatenatedWidth;
+                double widthRatio = effectiveWidth / rectWidth;
+
+                if (widthRatio < 0.40)
+                {
+                    // Very short translation — shrink aggressively
+                    double targetWidth = Math.Max(effectiveWidth * 1.10, rectWidth * 0.30);
+                    mtext.RectangleWidth = targetWidth;
+                    rectWidth = targetWidth;
+                }
+                else if (widthRatio < 0.55)
                 {
                     // Text is much narrower — shrink rectangle to prevent stretched gaps
-                    double targetWidth = Math.Max(translatedEstWidth * 1.20, rectWidth * 0.45);
+                    double targetWidth = Math.Max(effectiveWidth * 1.15, rectWidth * 0.40);
                     mtext.RectangleWidth = targetWidth;
                     rectWidth = targetWidth;
                 }
                 else if (widthRatio < 0.75)
                 {
-                    double targetWidth = Math.Max(translatedEstWidth * 1.12, rectWidth * 0.6);
+                    double targetWidth = Math.Max(effectiveWidth * 1.10, rectWidth * 0.55);
                     mtext.RectangleWidth = targetWidth;
                     rectWidth = targetWidth;
                 }
-                // else: keep original fixed width
-
-                string originalText = (ourEntity.RawText ?? string.Empty).Replace("\\P", " ");
-                int originalLines = EstimateLineCount(originalText, originalHeight, rectWidth);
-                int translatedLines = EstimateLineCount(textForEstimation, currentHeight, rectWidth);
-
-                if (translatedLines > originalLines)
+                else if (widthRatio < 0.90)
                 {
-                    double originalTotalHeight = originalLines * originalHeight * originalLineSpacing;
-                    double translatedTotalHeight = translatedLines * currentHeight * originalLineSpacing;
+                    // Slightly narrower: tighten a bit
+                    double targetWidth = Math.Max(effectiveWidth * 1.08, rectWidth * 0.75);
+                    mtext.RectangleWidth = targetWidth;
+                    rectWidth = targetWidth;
+                }
+                // else: keep original fixed width (text fills it well)
+
+                // Estimate line count in the (possibly shrunken) rectangle, per-line
+                int estimatedLines = 0;
+                foreach (var line in logicalLines)
+                {
+                    double lineW = EstimateTextWidth(line, currentHeight);
+                    estimatedLines += Math.Max(1, (int)Math.Ceiling(lineW / rectWidth));
+                }
+                estimatedLines = Math.Max(1, estimatedLines);
+
+                if (estimatedLines > originalLineCount)
+                {
+                    double originalTotalHeight = originalLineCount * originalHeight * originalLineSpacing;
+                    double translatedTotalHeight = estimatedLines * currentHeight * originalLineSpacing;
 
                     if (translatedTotalHeight > originalTotalHeight && originalTotalHeight > 0)
                     {
@@ -486,48 +527,78 @@ public class DwgWriterService : IDwgWriterService
                         {
                             mtext.Height = newHeight;
                             currentHeight = newHeight;
-                            translatedLines = EstimateLineCount(textForEstimation, currentHeight, rectWidth);
-                            translatedTotalHeight = translatedLines * currentHeight * originalLineSpacing;
                         }
                     }
 
                     // Fine-tune line spacing only if still slightly overflowing
+                    translatedTotalHeight = estimatedLines * currentHeight * originalLineSpacing;
                     if (translatedTotalHeight > originalTotalHeight * 1.05 && originalTotalHeight > 0)
                     {
-                        double spacing = originalTotalHeight / (translatedLines * currentHeight);
+                        double spacing = originalTotalHeight / (estimatedLines * currentHeight);
                         if (spacing < 0.6) spacing = 0.6;
                         if (spacing > originalLineSpacing) spacing = originalLineSpacing;
                         mtext.LineSpacing = spacing;
                     }
                 }
+                else if (estimatedLines < originalLineCount)
+                {
+                    // Translation fits in fewer lines — scale height UP slightly
+                    // but cap at original height to prevent collision
+                    double originalTotalHeight = originalLineCount * originalHeight * originalLineSpacing;
+                    double newTotalHeight = estimatedLines * currentHeight * originalLineSpacing;
+                    if (newTotalHeight < originalTotalHeight * 0.5 && originalTotalHeight > 0)
+                    {
+                        double scale = Math.Min(1.0, (originalTotalHeight * 0.85) / newTotalHeight);
+                        if (scale > 1.0 && scale <= 1.3)
+                        {
+                            mtext.Height = Math.Min(currentHeight * scale, originalHeight * 1.05);
+                        }
+                    }
+                }
             }
             else
             {
-                // FREE width: NEVER create an over-wide rectangle.
-                // Excessive RectangleWidth causes AutoCAD to stretch word spacing
-                // (especially in justified/Fit modes), destroying readability.
-                double translatedWidth = EstimateTextWidth(textForEstimation, currentHeight);
-                if (translatedWidth > originalWidth * 1.3)
+                // FREE width: set a tight rectangle matching the actual text.
+                // Using per-line max width (not concatenated) is critical for
+                // multi-line text — otherwise the rectangle is way too wide.
+                double effectiveWidth = lineCount > 1 ? maxLineWidth : concatenatedWidth;
+
+                if (effectiveWidth > originalWidth * 1.3)
                 {
-                    // Significantly longer: cap width expansion to prevent sparse layout.
+                    // Significantly longer: cap width to prevent sparse layout
                     double maxAllowable = originalWidth * 1.3;
-                    double preferred = translatedWidth * 0.65; // underestimate for compact lines
+                    double preferred = effectiveWidth * 0.70; // underestimate for compact wrapping
                     double targetWidth = Math.Min(maxAllowable, Math.Max(originalWidth * 1.05, preferred));
                     mtext.RectangleWidth = targetWidth;
 
-                    double scale = originalWidth / translatedWidth;
-                    if (scale < 0.6) scale = 0.6;
+                    double scale = originalWidth / effectiveWidth;
+                    if (scale < 0.55) scale = 0.55;
                     double newHeight = originalHeight * scale;
                     if (newHeight < currentHeight)
                         mtext.Height = newHeight;
                 }
-                else if (translatedWidth > originalWidth * 1.05)
+                else if (effectiveWidth > originalWidth * 1.05)
                 {
                     // Moderate growth: snug fit only
-                    double targetWidth = Math.Min(translatedWidth * 1.05, originalWidth * 1.25);
+                    double targetWidth = Math.Min(effectiveWidth * 1.05, originalWidth * 1.20);
                     mtext.RectangleWidth = targetWidth;
                 }
-                // else: keep RectangleWidth = 0 (true free-width) for natural tight spacing
+                else
+                {
+                    // Text fits within original width: set a tight rectangle
+                    // to prevent AutoCAD from using an over-wide default.
+                    double targetWidth = effectiveWidth * 1.08;
+                    if (targetWidth < originalWidth && targetWidth > 0)
+                        mtext.RectangleWidth = targetWidth;
+                }
+            }
+
+            // Conservative collision-avoidance cap: never let height grow beyond
+            // original height + 5%. This reduces risk of overlapping nearby geometry
+            // in the offline path where we cannot do real collision detection.
+            if (mtext.Height > originalHeight * 1.05)
+            {
+                mtext.Height = originalHeight * 1.05;
             }
         }
         catch (Exception ex)
@@ -536,9 +607,26 @@ public class DwgWriterService : IDwgWriterService
         }
     }
 
+    /// <summary>
+    /// Splits MText content into logical lines by \P (hard paragraph break).
+    /// Empty lines are preserved as empty strings.
+    /// </summary>
+    private static List<string> SplitMTextLines(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return new List<string> { string.Empty };
+        return text.Split(new[] { "\\P" }, StringSplitOptions.None).ToList();
+    }
+
     private static double EstimateTextWidth(string text, double height) => TextWidthEstimator.EstimateTextWidth(text, height);
 
     private static int EstimateLineCount(string text, double height, double rectWidth) => TextWidthEstimator.EstimateLineCount(text, height, rectWidth);
+
+    /// <summary>
+    /// Formats a numeric (ulong) handle to its canonical string representation (uppercase hexadecimal).
+    /// This MUST match how handles are stored in TextEntity.Handle by DwgReaderService,
+    /// otherwise lookup will silently fail and no text will be replaced.
+    /// </summary>
+    private static string FormatHandle(ulong handle) => handle.ToString("X");
 
     /// <summary>
     /// Clean a handle string for comparison.
