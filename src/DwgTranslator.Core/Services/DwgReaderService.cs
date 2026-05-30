@@ -117,9 +117,12 @@ public class DwgReaderService : IDwgReaderService
     private static bool IsExternalReference(CadBlockRecord block) =>
         block.Flags.HasFlag(BlockTypeFlags.XRef) || block.Flags.HasFlag(BlockTypeFlags.XRefOverlay);
 
+    // All Handle.ToString() calls use "X" format (uppercase hex) to match
+    // AutoCAD's native Handle.ToString() output so that entity lookups work.
+
     private static OurTextEntity CreateTextEntity(CadTextEntity text, string entityType, string blockName) => new()
     {
-        Handle = text.Handle.ToString(),
+        Handle = text.Handle.ToString("X"),
         RawText = text.Value ?? string.Empty,
         PlainText = StripFormatCodes(text.Value ?? string.Empty),
         FormatTemplate = text.Value ?? string.Empty,
@@ -140,7 +143,7 @@ public class DwgReaderService : IDwgReaderService
 
         return new OurTextEntity
         {
-            Handle = mtext.Handle.ToString(),
+            Handle = mtext.Handle.ToString("X"),
             RawText = rawValue,
             PlainText = plainText,
             FormatTemplate = rawValue,
@@ -163,7 +166,7 @@ public class DwgReaderService : IDwgReaderService
 
     private static OurTextEntity CreateDimensionEntity(CadDimension dim, string blockName) => new()
     {
-        Handle = dim.Handle.ToString(),
+        Handle = dim.Handle.ToString("X"),
         RawText = dim.Text ?? string.Empty,
         PlainText = StripFormatCodes(dim.Text ?? string.Empty),
         FormatTemplate = dim.Text ?? string.Empty,
@@ -187,7 +190,7 @@ public class DwgReaderService : IDwgReaderService
         var textHeight = ctx.TextHeight > 0 ? ctx.TextHeight : 2.5;
         entities.Add(new OurTextEntity
         {
-            Handle = mleader.Handle.ToString(), RawText = textContent, PlainText = plainText,
+            Handle = mleader.Handle.ToString("X"), RawText = textContent, PlainText = plainText,
             FormatTemplate = textContent, EntityType = "MLeader", Height = textHeight,
             Rotation = ctx.TextRotation, TextStyleName = ctx.TextStyle?.Name ?? "Standard",
             BlockName = blockName, IsXref = false,
@@ -199,7 +202,7 @@ public class DwgReaderService : IDwgReaderService
 
     private static OurTextEntity CreateAttributeEntity(CadAttributeEntity att, string blockName) => new()
     {
-        Handle = att.Owner != null ? $"{att.Owner.Handle}/{att.Tag}" : $"{att.Handle}/{att.Tag}",
+        Handle = att.Owner != null ? $"{att.Owner.Handle:X}/{att.Tag}" : $"{att.Handle:X}/{att.Tag}",
         RawText = att.Value ?? string.Empty,
         PlainText = StripFormatCodes(att.Value ?? string.Empty),
         FormatTemplate = att.Value ?? string.Empty,

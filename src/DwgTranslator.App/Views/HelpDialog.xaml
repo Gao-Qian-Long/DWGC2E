@@ -138,8 +138,24 @@
                 <Border Background="#FFF8E1" CornerRadius="6" Padding="12,8" Margin="0,0,0,4">
                     <StackPanel>
                         <TextBlock Text="Q: AutoCAD 弹出「是否加载来自非信任路径的程序集」？" FontWeight="Bold" Margin="0,0,0,3"/>
+                        <TextBlock TextWrapping="Wrap" Foreground="#616161" Margin="0,0,0,4"
+                                   Text="A: 这是 AutoCAD 的安全提示，首次加载 .NET 插件时会出现。请按以下步骤操作："/>
+                        <TextBlock TextWrapping="Wrap" Foreground="#D32F2F" FontWeight="Bold" Margin="8,0,0,4"
+                                   Text="1. 该对话框可能在 AutoCAD 窗口后面！请点击任务栏的 AutoCAD 图标切换到 AutoCAD 窗口"/>
+                        <TextBlock TextWrapping="Wrap" Foreground="#616161" Margin="8,0,0,4"
+                                   Text="2. 在安全对话框中，点击「始终加载」(Always Load) 按钮"/>
+                        <TextBlock TextWrapping="Wrap" Foreground="#616161" Margin="8,0,0,4"
+                                   Text="3. 如果只点击「加载」(Load)，下次使用仍会弹出此对话框"/>
+                        <TextBlock TextWrapping="Wrap" Foreground="#78909C" Margin="8,0,0,0" FontSize="11"
+                                   Text="提示：DWG Translator 会在发送命令前弹窗提醒您注意此对话框"/>
+                    </StackPanel>
+                </Border>
+
+                <Border Background="#FFF8E1" CornerRadius="6" Padding="12,8" Margin="0,0,0,4">
+                    <StackPanel>
+                        <TextBlock Text="Q: 导出 DWG 时如何取消？" FontWeight="Bold" Margin="0,0,0,3"/>
                         <TextBlock TextWrapping="Wrap" Foreground="#616161"
-                                   Text="A: 请点击「始终加载」。这是 AutoCAD 的安全提示，首次加载 .NET 插件时会出现。"/>
+                                   Text="A: 导出过程中，工具栏会出现红色的「取消导出」按钮，点击即可取消。如果 AutoCAD 正在处理命令，取消可能需要等当前操作完成。"/>
                     </StackPanel>
                 </Border>
             </StackPanel>

@@ -1,8 +1,8 @@
 using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.Geometry;
+using DwgTranslator.Cad;
 using DwgTranslator.Core.Models;
-using Serilog;
 using System.Text.RegularExpressions;
 using Point3dCad = Autodesk.AutoCAD.Geometry.Point3d;
 
@@ -175,6 +175,8 @@ public class TextExtractor
     {
         var rawText = mText.Contents ?? string.Empty;
         var plainText = StripMTextFormatCodes(rawText);
+        int lineCount = CountMTextHardLines(rawText);
+        bool hasHardBreaks = rawText.Contains("\\P");
 
         return new TextEntity
         {
@@ -189,7 +191,13 @@ public class TextExtractor
             BlockName = blockName,
             IsXref = false,
             Position = new DwgTranslator.Core.Models.Point3d(mText.Location.X, mText.Location.Y, mText.Location.Z),
-            OriginalWidth = mText.ActualWidth
+            OriginalWidth = mText.ActualWidth,
+            OriginalHeight = mText.TextHeight,
+            MTextRectangleWidth = mText.Width,
+            MTextLineSpacing = mText.LineSpacingFactor,
+            MTextLineSpacingStyle = (int)mText.LineSpacingStyle,
+            MTextLineCount = lineCount,
+            MTextHasHardBreaks = hasHardBreaks
         };
     }
 
@@ -361,5 +369,23 @@ public class TextExtractor
     {
         var text = attRef.TextString ?? string.Empty;
         return text.Length * attRef.Height * 0.6;
+    }
+
+    /// <summary>
+    /// Counts the number of hard line breaks (\P) in MText content.
+    /// Returns at least 1 (single line).
+    /// </summary>
+    private static int CountMTextHardLines(string rawText)
+    {
+        if (string.IsNullOrEmpty(rawText)) return 1;
+
+        int count = 1;
+        int index = 0;
+        while ((index = rawText.IndexOf("\\P", index, StringComparison.Ordinal)) >= 0)
+        {
+            count++;
+            index += 2;
+        }
+        return count;
     }
 }

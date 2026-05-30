@@ -10,6 +10,7 @@
   <PropertyGroup>
     <!-- Try environment variable first, then common default paths -->
     <AutoCadDir Condition="'$(AutoCadDir)' == ''">$(AUTO_CAD_DIR)</AutoCadDir>
+    <AutoCadDir Condition="'$(AutoCadDir)' == '' And Exists('D:\autocad 2026\AutoCAD 2026')">D:\autocad 2026\AutoCAD 2026</AutoCadDir>
     <AutoCadDir Condition="'$(AutoCadDir)' == '' And Exists('C:\Program Files\Autodesk\AutoCAD 2026')">C:\Program Files\Autodesk\AutoCAD 2026</AutoCadDir>
     <AutoCadDir Condition="'$(AutoCadDir)' == '' And Exists('C:\Program Files\Autodesk\AutoCAD 2025')">C:\Program Files\Autodesk\AutoCAD 2025</AutoCadDir>
     <AutoCadDir Condition="'$(AutoCadDir)' == '' And Exists('D:\autocad2021\AutoCAD 2021')">D:\autocad2021\AutoCAD 2021</AutoCadDir>

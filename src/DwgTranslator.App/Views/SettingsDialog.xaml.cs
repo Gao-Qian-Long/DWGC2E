@@ -110,28 +110,42 @@ public partial class SettingsDialog : Window
             return;
         }
 
+        // Disable button to prevent double-click
+        if (sender is Button testButton)
+            testButton.IsEnabled = false;
+
         ResultText.Text = "正在测试连接...";
         ResultText.Foreground = Brushes.Gray;
 
+        using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(15));
         try
         {
-            var response = await System.Threading.Tasks.Task.Run(() =>
-            {
-                using var httpClient = new HttpClient { BaseAddress = new Uri(baseUrl) };
-                httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {apiKey}");
-                httpClient.Timeout = TimeSpan.FromSeconds(15);
+            using var httpClient = new HttpClient { BaseAddress = new Uri(baseUrl) };
+            httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {apiKey}");
+            httpClient.Timeout = TimeSpan.FromSeconds(15);
 
-                var client = new DeepSeekClient(httpClient, model);
-                return client.ChatCompletionAsync("You are a test assistant.", "Say OK").GetAwaiter().GetResult();
-            });
+            var client = new DeepSeekClient(httpClient, model);
+            var response = await System.Threading.Tasks.Task.Run(
+                () => client.ChatCompletionAsync("You are a test assistant.", "Say OK", cts.Token),
+                cts.Token);
 
             ResultText.Text = $"连接成功! 模型响应: {Truncate(response, 50)}";
             ResultText.Foreground = Brushes.Green;
+        }
+        catch (System.OperationCanceledException)
+        {
+            ResultText.Text = "连接超时（15秒）";
+            ResultText.Foreground = Brushes.Red;
         }
         catch (Exception ex)
         {
             ResultText.Text = $"连接失败: {Truncate(ex.Message, 80)}";
             ResultText.Foreground = Brushes.Red;
+        }
+        finally
+        {
+            if (sender is Button tb)
+                tb.IsEnabled = true;
         }
     }
 

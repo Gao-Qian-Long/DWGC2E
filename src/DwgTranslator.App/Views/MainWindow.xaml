@@ -298,10 +298,19 @@
                 <Separator Margin="6,0" Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}"/>
 
                 <Button Style="{StaticResource PrimaryButton}" Command="{Binding ExportDwgCommand}"
-                        Background="#2E7D32" ToolTip="回写译文到 DWG 文件">
+                        Background="#2E7D32" ToolTip="回写译文到 DWG 文件"
+                        Visibility="{Binding IsProcessing, Converter={StaticResource BoolToVis}, ConverterParameter=false}">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="&#x1F4BE;" Margin="0,0,4,0"/>
                         <TextBlock Text="导出 DWG"/>
+                    </StackPanel>
+                </Button>
+                <Button Style="{StaticResource PrimaryButton}" Command="{Binding CancelExportCommand}"
+                        Background="#E53935" ToolTip="取消正在进行的导出操作"
+                        Visibility="{Binding IsProcessing, Converter={StaticResource BoolToVis}}">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#x25A0;" Margin="0,0,4,0" FontSize="11"/>
+                        <TextBlock Text="取消导出"/>
                     </StackPanel>
                 </Button>
                 <Separator Margin="6,0" Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}"/>

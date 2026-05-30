@@ -34,6 +34,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private string? _lastSourceFilePath;
     private string? _settingsPath;
     private CancellationTokenSource? _cts;
+    private CancellationTokenSource? _exportCts;
 
     #region Bindable Properties
 
@@ -580,6 +581,13 @@ public partial class MainViewModel : ObservableObject, IDisposable
     }
 
     [RelayCommand]
+    private void CancelExport()
+    {
+        _exportCts?.Cancel();
+        StatusMessage = "正在取消导出...";
+    }
+
+    [RelayCommand]
     private async Task RetryFailedAsync()
     {
         var failedEntities = Entities.Where(e => e.Status == TranslationStatus.TranslationFailed).ToList();
@@ -712,6 +720,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         if (dialog2.ShowDialog() != true) return;
 
         IsProcessing = true;
+        _exportCts = new CancellationTokenSource();
         StatusMessage = "正在导出翻译后的 DWG...";
         ProgressValue = 0;
 
@@ -735,8 +744,22 @@ public partial class MainViewModel : ObservableObject, IDisposable
             if (modeDialog.SelectedMode == Views.ExportModeDialog.ExportMode.AutoCAD)
             {
                 usedAcadInterop = true;
+
+                // Pre-alert user about security dialog
+                MessageBox.Show(
+                    "即将通过 AutoCAD COM 进行精确回写。\n\n" +
+                    "重要提示：\n" +
+                    "AutoCAD 可能会弹出「是否加载来自非信任路径的程序集」安全对话框。\n" +
+                    "该对话框可能在 AutoCAD 窗口后面，请切换到 AutoCAD 窗口查看。\n\n" +
+                    "请点击「始终加载」或「加载」以允许插件运行。\n" +
+                    "如果不点击，回写将无法完成。",
+                    "AutoCAD 安全提示",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+
                 result = await Task.Run(() =>
-                    ExecuteAutoCADWriteback(sourceFilePath, dialog2.FileName, entitiesToWrite));
+                    ExecuteAutoCADWriteback(sourceFilePath, dialog2.FileName, entitiesToWrite),
+                    _exportCts?.Token ?? CancellationToken.None);
             }
             else
             {
@@ -766,12 +789,16 @@ public partial class MainViewModel : ObservableObject, IDisposable
                 MessageBox.Show($"DWG 导出失败:\n{errorMsg}", "导出错误", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
+        catch (OperationCanceledException)
+        {
+            StatusMessage = "导出已取消";
+        }
         catch (Exception ex)
         {
             StatusMessage = $"DWG 导出失败: {ex.Message}";
             MessageBox.Show($"导出 DWG 失败: {ex.Message}\n\n提示: ACadSharp 写入功能仍为实验性，可能产生需修复的文件。", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
         }
-        finally { IsProcessing = false; }
+        finally { IsProcessing = false; _exportCts?.Dispose(); _exportCts = null; }
     }
 
     #region AutoCAD COM Interop
@@ -845,9 +872,17 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
         try
         {
-            // Serialize entities to temporary JSON
+            // Serialize a config JSON that contains source/output paths + entities
+            // This way WritebackCommand only needs ONE argument (the config path)
             jsonPath = Path.Combine(Path.GetTempPath(), $"dwgtranslate_{Guid.NewGuid():N}.json");
-            var json = System.Text.Json.JsonSerializer.Serialize(entities, new System.Text.Json.JsonSerializerOptions
+            var configObj = new
+            {
+                SourceDwgPath = sourceFilePath,
+                OutputDwgPath = outputFilePath,
+                Entities = entities,
+                CnToEn = IsCnToEn
+            };
+            var json = System.Text.Json.JsonSerializer.Serialize(configObj, new System.Text.Json.JsonSerializerOptions
             {
                 WriteIndented = false,
                 PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase
@@ -891,6 +926,10 @@ public partial class MainViewModel : ObservableObject, IDisposable
             dynamic acad = Activator.CreateInstance(acadType)!;
             acad.Visible = true;
 
+            // Detect AutoCAD version from ProgID for compatibility check
+            string acadVersion = triedProgID ?? "unknown";
+            Log.Information("Connected to AutoCAD via ProgID: {ProgID}", acadVersion);
+
             var doc = acad.ActiveDocument;
             if (doc == null)
             {
@@ -909,14 +948,124 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
             Log.Information("Using Cad plugin: {Path}", cadDllPath);
 
-            // Send NETLOAD command (space at end is required for AutoCAD command termination)
-            doc.SendCommand($"(command \"_.NETLOAD\" \"{cadDllPath}\") ");
+            // Step 1: Write config JSON to a fixed known path (no env vars, no cross-process issues)
+            var configDir = Path.Combine(Path.GetTempPath(), "DwgTranslator");
+            Directory.CreateDirectory(configDir);
+            var fixedConfigPath = Path.Combine(configDir, "writeback_config.json");
+            var doneSignalPath = Path.Combine(configDir, "writeback_done.txt");
 
-            // Send the writeback command
-            doc.SendCommand($"(DwgTranslateWrite \"{jsonPath}\" \"{sourceFilePath}\" \"{outputFilePath}\") ");
+            // Clean up previous signal files
+            try { if (File.Exists(doneSignalPath)) File.Delete(doneSignalPath); } catch { }
 
-            result.SuccessCount = entities.Count; // Optimistic; actual result comes from AutoCAD command output
-            StatusMessage = "已通过 AutoCAD COM 发送回写命令，请在 AutoCAD 命令行查看结果。";
+            // Write config to fixed path (WritebackCommand reads from here)
+            File.WriteAllText(fixedConfigPath, json);
+            jsonPath = fixedConfigPath; // Track for cleanup
+            Log.Information("Config written to fixed path: {Path}", fixedConfigPath);
+
+            // Step 2: Add DLL directory to AutoCAD Trusted Paths (permanent, avoids security dialog)
+            try
+            {
+                AddTrustedPath(acad, cadDllPath);
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Failed to add trusted path (security dialog may still appear)");
+            }
+
+            // Step 3: Create a LISP file that loads the DLL and runs the writeback command
+            // LISP (command ...) is synchronous — it waits for each command to complete before continuing
+            var lspPath = Path.Combine(configDir, "dwgtranslate_exec.lsp");
+            var lispDllPath = cadDllPath.Replace("\\", "\\\\");
+
+            // Build LISP script:
+            // - Print diagnostic messages to command line
+            // - NETLOAD the plugin DLL
+            // - Execute DwgTranslateWrite command (no args — reads config from fixed path)
+            // - (princ) suppresses the nil return value
+            // NOTE: Do NOT add "" args after no-arg commands — they interfere with execution
+            var lspContent = $@"(princ ""\nDwgTranslator: loading plugin..."")
+(command ""_.NETLOAD"" ""{lispDllPath}"" )
+(princ ""\nDwgTranslator: executing writeback..."")
+(command ""_.DwgTranslateWrite"" )
+(princ ""\nDwgTranslator: done."")
+(princ)
+";
+            File.WriteAllText(lspPath, lspContent);
+            Log.Information("Created LISP file: {Path}", lspPath);
+
+            // Step 4: Load and execute the LISP file via SendCommand
+            var lispLspPath = lspPath.Replace("\\", "\\\\");
+            doc.SendCommand($"(load \"{lispLspPath}\") ");
+
+            // Step 5: Wait for the command to complete (monitor the done signal file)
+            // WritebackCommand creates writeback_done.txt when finished
+            Log.Information("Waiting for WritebackCommand to complete...");
+            int maxWaitSeconds = 120;
+            int waited = 0;
+            while (waited < maxWaitSeconds)
+            {
+                System.Threading.Thread.Sleep(2000);
+                waited += 2;
+
+                // Check if the done signal file has been created by WritebackCommand
+                if (File.Exists(doneSignalPath))
+                {
+                    Log.Information("WritebackCommand completed (done signal detected)");
+                    try
+                    {
+                        var doneContent = File.ReadAllText(doneSignalPath);
+                        if (!doneContent.StartsWith("success|", StringComparison.OrdinalIgnoreCase))
+                        {
+                            result.SuccessCount = 0;
+                            result.Errors.Add($"AutoCAD 回写失败。信号: {doneContent}");
+                            StatusMessage = "AutoCAD 回写失败，请检查 AutoCAD 命令行。";
+                        }
+                        else
+                        {
+                            result.SuccessCount = entities.Count;
+                            StatusMessage = "AutoCAD 精确回写已完成。";
+                        }
+                    }
+                    catch
+                    {
+                        // Can't read file, assume failure
+                        result.SuccessCount = 0;
+                        result.Errors.Add("无法读取 AutoCAD 完成信号文件。");
+                    }
+                    break;
+                }
+
+                // Also check if the output DWG file has been created recently
+                if (File.Exists(outputFilePath))
+                {
+                    try
+                    {
+                        var fi = new FileInfo(outputFilePath);
+                        if (fi.Length > 1000 && fi.LastWriteTime > DateTime.Now.AddSeconds(-10))
+                        {
+                            Log.Information("Output DWG detected, writeback likely complete");
+                            result.SuccessCount = entities.Count;
+                            StatusMessage = "AutoCAD 精确回写已完成。";
+                            break;
+                        }
+                    }
+                    catch { }
+                }
+            }
+
+            if (result.SuccessCount == 0 && waited >= maxWaitSeconds)
+            {
+                Log.Warning("WritebackCommand timed out after {Sec}s", maxWaitSeconds);
+                result.Errors.Add("AutoCAD 回写超时。可能原因：\n" +
+                                  "1. 安全对话框未点击「始终加载」\n" +
+                                  "2. AutoCAD 正在处理大型文件\n" +
+                                  "3. 命令未成功执行\n" +
+                                  $"4. 请检查 AutoCAD 命令行是否有错误提示\n" +
+                                  $"配置文件位置: {fixedConfigPath}");
+            }
+
+            // Cleanup signal file
+            try { if (File.Exists(doneSignalPath)) File.Delete(doneSignalPath); } catch { }
         }
         catch (Exception ex)
         {
@@ -925,22 +1074,49 @@ public partial class MainViewModel : ObservableObject, IDisposable
         }
         finally
         {
-            // Cleanup temp file after a delay (give AutoCAD time to read it)
-            if (jsonPath != null)
-            {
-                _ = Task.Run(async () =>
-                {
-                    await Task.Delay(TimeSpan.FromMinutes(5));
-                    try { File.Delete(jsonPath); } catch { /* ignore */ }
-                });
-            }
+            // Config file at fixed path is cleaned up by WritebackCommand on success.
+            // On failure, it's overwritten on next run anyway (Directory.CreateDirectory + WriteAllText).
         }
 
         return result;
     }
 
     /// <summary>
-    /// Resolve DwgTranslator.Cad.dll path using priority: config > auto-detect > fallback.
+    /// Adds the DLL directory to AutoCAD's Trusted Paths so the security dialog is suppressed.
+    /// This is a one-time permanent setting that persists across AutoCAD sessions.
+    /// </summary>
+    private static void AddTrustedPath(dynamic acad, string dllPath)
+    {
+        try
+        {
+            var dllDir = Path.GetDirectoryName(dllPath);
+            if (string.IsNullOrEmpty(dllDir)) return;
+
+            // Ensure trailing backslash for AutoCAD trusted path format
+            if (!dllDir.EndsWith("\\")) dllDir += "\\";
+
+            dynamic prefs = acad.Preferences;
+            dynamic files = prefs.Files;
+            string? currentTrusted = files.TrustedPath;
+
+            if (currentTrusted != null && currentTrusted.Contains(dllDir, StringComparison.OrdinalIgnoreCase))
+            {
+                Log.Information("Trusted path already contains: {Dir}", dllDir);
+                return;
+            }
+
+            string newTrusted = string.IsNullOrEmpty(currentTrusted)
+                ? dllDir
+                : currentTrusted + ";" + dllDir;
+
+            files.TrustedPath = newTrusted;
+            Log.Information("Added trusted path: {Dir}", dllDir);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Failed to add trusted path");
+        }
+    }
     /// </summary>
     private string? ResolveCadPluginPath()
     {

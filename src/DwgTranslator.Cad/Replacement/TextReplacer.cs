@@ -2,8 +2,8 @@ using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.Geometry;
 using Autodesk.AutoCAD.GraphicsInterface;
+using DwgTranslator.Cad;
 using DwgTranslator.Core.Models;
-using Serilog;
 
 namespace DwgTranslator.Cad.Replacement;
 
@@ -198,7 +198,13 @@ public class TextReplacer
             double translatedEstWidth = EstimateTextWidth(entity.TranslatedText, mText.TextHeight);
             double widthRatio = translatedEstWidth / entity.MTextRectangleWidth;
 
-            if (widthRatio < 0.55)
+            if (widthRatio < 0.40)
+            {
+                // Very short translation (e.g. 2-3 English words for 4-5 Chinese chars)
+                double targetWidth = Math.Max(translatedEstWidth * 1.15, entity.MTextRectangleWidth * 0.35);
+                mText.Width = targetWidth;
+            }
+            else if (widthRatio < 0.55)
             {
                 // Text is much narrower than rectangle — shrink to prevent stretched gaps
                 double targetWidth = Math.Max(translatedEstWidth * 1.20, entity.MTextRectangleWidth * 0.45);
@@ -229,6 +235,9 @@ public class TextReplacer
                 mText.TextHeight *= entity.OriginalWidth / newWidth * _autoScaleFactor;
             }
         }
+
+        // Force geometry refresh so collision detection sees accurate bounds
+        mText.RecordGraphicsModified(true);
 
         return new EntityReplaceResult 
         { 

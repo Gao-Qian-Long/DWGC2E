@@ -296,8 +296,12 @@ public class TranslationService : ITranslationService
         }
         var withPlaceholders = sb.ToString();
         var result = _formatCodeParser.Restore(withPlaceholders, codes);
-        // Ensure MText line breaks use \P
-        result = result.Replace("\r\n", "\\P").Replace("\n", "\\P").Replace("\r", "\\P");
+        // Only replace newlines with \P if the original text contained \P hard line breaks.
+        // This prevents adding unwanted line breaks for text that originally had none.
+        if (rawText.Contains("\\P"))
+        {
+            result = result.Replace("\r\n", "\\P").Replace("\n", "\\P").Replace("\r", "\\P");
+        }
         return result;
     }
 

@@ -1,21 +1,17 @@
 # ===== .NET Build Output =====
 [Bb]in/
 [Oo]bj/
-*.exe
-*.dll
 *.pdb
 *.ilk
 
 # ===== NuGet =====
 packages/
 *.nupkg
-# NuGet packages are restored via `dotnet restore`
 
 # ===== Visual Studio =====
 .vs/
 *.suo
 *.user
-# Per-user AutoCAD path override (create this file to set your AutoCAD path)
 Directory.Build.props.user
 *.userosscache
 *.sln.docstates
@@ -25,6 +21,9 @@ Directory.Build.props.user
 .vscode/
 !.vscode/tasks.json
 !.vscode/launch.json
+
+# ===== CodeBuddy =====
+.codebuddy/
 
 # ===== Rider =====
 .idea/
@@ -51,19 +50,19 @@ exports/
 # ===== DWG Files =====
 *.dwg
 *.bak
-!glossaries/
-!prompts/
 
 # ===== OS Files =====
 Thumbs.db
 .DS_Store
 Desktop.ini
 
-# ===== Publish =====
+# ===== Publish / Backup / Build Artifacts =====
 publish/
+publish_backup/
+build_out/
 *.zip
 
-# ===== Installer =====
+# ===== Installer Output =====
 installer/Output/
 *.exe
 !DwgTranslator.iss
@@ -72,8 +71,9 @@ installer/Output/
 TestResults/
 *.trx
 *.coverage
-.codebuddy/
 
-# ===== Development Notes =====
+# ===== Development Notes & Temp Files =====
 debug.md
+notes.md
+dll_inspect.txt
 notes.md

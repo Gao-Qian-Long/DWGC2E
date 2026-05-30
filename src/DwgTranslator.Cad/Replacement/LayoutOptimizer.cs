@@ -1,12 +1,15 @@
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.Geometry;
-using Serilog;
+using DwgTranslator.Cad;
 
 namespace DwgTranslator.Cad.Replacement;
 
 /// <summary>
 /// Optimizes MText layout using AutoCAD's precise GeometricExtents.
-/// Employs binary search to find the largest height that fits within the frame.
+/// Key improvements for translation quality:
+/// 1. More aggressive width reduction for fixed-rectangle MText (prevents sparse word spacing)
+/// 2. Width=0 (free-width) as primary strategy to let AutoCAD auto-size the rectangle
+/// 3. Binary search for optimal height when frame is detected
 /// </summary>
 public static class LayoutOptimizer
 {
@@ -16,8 +19,7 @@ public static class LayoutOptimizer
     /// <summary>
     /// Optimizes MText layout:
     /// 1. Preserves original line spacing.
-    /// 2. FIXED-RECTANGLE MText: never expands width (designer already set it).
-    ///    Only scales down height when translated text needs more lines.
+    /// 2. FIXED-RECTANGLE MText: tries free-width (Width=0) first, then reduces rectangle width aggressively.
     /// 3. FREE-WIDTH MText: sets a conservative rectangle width.
     /// 4. If a frame is present, uses binary search to find the optimal height that fits.
     /// </summary>
@@ -31,6 +33,7 @@ public static class LayoutOptimizer
         double originalHeight = ourEntity.OriginalHeight > 0 ? ourEntity.OriginalHeight : mtext.TextHeight;
         double originalWidth = ourEntity.OriginalWidth;
         double originalLineSpacing = ourEntity.MTextLineSpacing > 0 ? ourEntity.MTextLineSpacing : 1.0;
+        double originalRectWidth = ourEntity.MTextRectangleWidth;
 
         // Step 1: Preserve original line spacing
         if (ourEntity.MTextLineSpacing > 0)
@@ -38,31 +41,75 @@ public static class LayoutOptimizer
         if (ourEntity.MTextLineSpacingStyle > 0)
             mtext.LineSpacingStyle = (LineSpacingStyle)ourEntity.MTextLineSpacingStyle;
 
-        // Step 2: Handle rectangle width
-        double originalRectWidth = ourEntity.MTextRectangleWidth;
+        // Step 2: Force graphics update so GeometricExtents is accurate
+        mtext.RecordGraphicsModified(true);
+
+        // Step 3: Handle rectangle width
         string textForEstimation = translatedText.Replace("\\P", " ");
         double translatedWidth = EstimateTextWidth(textForEstimation, mtext.TextHeight);
 
         if (originalRectWidth > 0)
         {
-            // FIXED rectangle width: adapt to translated text width to prevent sparse word spacing.
-            // The original width was tuned for the source language; after translation the text
-            // may be much narrower (CN→EN) or wider (EN→CN), causing AutoCAD to stretch gaps.
+            // FIXED rectangle width: the original was tuned for the source language.
+            // After translation (especially CN→EN), text is usually narrower, causing
+            // AutoCAD to stretch gaps between words to fill the fixed width.
             double widthRatio = translatedWidth / originalRectWidth;
 
-            if (widthRatio < 0.55)
+            // Strategy A: Try free-width (Width=0) first — AutoCAD auto-sizes to content
+            // This is the most effective fix for sparse word spacing.
+            // We save the original width in case we need to revert.
+            double savedWidth = mtext.Width;
+
+            if (widthRatio < 0.85)
             {
-                // Translated text is much narrower than the fixed rectangle.
-                // Shrink rectangle to fit the text with a small margin, preventing
-                // AutoCAD from distributing words across excessive whitespace.
-                double targetWidth = Math.Max(translatedWidth * 1.20, originalRectWidth * 0.45);
-                mtext.Width = targetWidth;
+                // Text is significantly narrower than the fixed rectangle.
+                // Try free-width mode — let AutoCAD auto-size the rectangle.
+                mtext.Width = 0;
+                mtext.RecordGraphicsModified(true);
+
+                try
+                {
+                    // Check if free-width result is acceptable
+                    var testBounds = mtext.GeometricExtents;
+                    double freeWidth = testBounds.MaxPoint.X - testBounds.MinPoint.X;
+                    double freeHeight = testBounds.MaxPoint.Y - testBounds.MinPoint.Y;
+                    double originalTotalHeight = EstimateLineCount(
+                        (ourEntity.RawText ?? "").Replace("\\P", " "), originalHeight, originalRectWidth)
+                        * originalHeight * originalLineSpacing;
+
+                    // If free-width doesn't cause excessive height increase, keep it
+                    if (freeHeight <= originalTotalHeight * 1.5 || widthRatio < 0.4)
+                    {
+                        Log.Debug("MText {Handle}: using free-width (Width=0), freeW={W:F1}, ratio={R:F2}",
+                            mtext.Handle, freeWidth, widthRatio);
+                        // Width=0 succeeded — continue to height optimization
+                    }
+                    else
+                    {
+                        // Free-width caused too many lines — fall back to reduced fixed width
+                        double targetWidth = Math.Max(translatedWidth * 1.06, originalRectWidth * 0.4);
+                        mtext.Width = Math.Min(targetWidth, originalRectWidth * 0.9);
+                        mtext.RecordGraphicsModified(true);
+                        Log.Debug("MText {Handle}: reduced width to {W:F1} (ratio={R:F2})",
+                            mtext.Handle, mtext.Width, widthRatio);
+                    }
+                }
+                catch
+                {
+                    // GeometricExtents failed — use heuristic reduced width
+                    double targetWidth = Math.Max(translatedWidth * 1.06, originalRectWidth * 0.4);
+                    mtext.Width = Math.Min(targetWidth, originalRectWidth * 0.9);
+                    mtext.RecordGraphicsModified(true);
+                }
             }
-            else if (widthRatio < 0.75)
+            else if (widthRatio < 0.95)
             {
-                // Moderately narrower — reduce width proportionally
-                double targetWidth = Math.Max(translatedWidth * 1.12, originalRectWidth * 0.6);
-                mtext.Width = targetWidth;
+                // Slightly narrower — small reduction
+                double targetWidth = Math.Max(translatedWidth * 1.06, originalRectWidth * 0.7);
+                mtext.Width = Math.Min(targetWidth, originalRectWidth);
+                mtext.RecordGraphicsModified(true);
+                Log.Debug("MText {Handle}: slightly reduced width to {W:F1} (ratio={R:F2})",
+                    mtext.Handle, mtext.Width, widthRatio);
             }
             else
             {
@@ -88,7 +135,7 @@ public static class LayoutOptimizer
             // else: keep Width = 0 (true free-width) for natural, tight spacing
         }
 
-        // Step 3: If frame detected, use binary search for optimal height
+        // Step 4: If frame detected, use binary search for optimal height
         if (frame.HasValue)
         {
             BinarySearchOptimalHeight(mtext, frame.Value, originalHeight);
@@ -117,6 +164,9 @@ public static class LayoutOptimizer
                 }
             }
         }
+
+        // Final graphics refresh
+        mtext.RecordGraphicsModified(true);
     }
 
     private static void BinarySearchOptimalHeight(MText mtext, Extents3d frame, double originalHeight)
@@ -129,6 +179,7 @@ public static class LayoutOptimizer
         {
             double midHeight = (minHeight + maxHeight) / 2.0;
             mtext.TextHeight = midHeight;
+            mtext.RecordGraphicsModified(true);
 
             // Force boundary recalculation
             try
@@ -154,23 +205,8 @@ public static class LayoutOptimizer
         }
 
         mtext.TextHeight = bestHeight;
+        mtext.RecordGraphicsModified(true);
         Log.Debug("MText {Handle} optimized: height {H:F2} fits frame", mtext.Handle, bestHeight);
-    }
-
-    private static void HeuristicScaling(MText mtext, string translatedText, Core.Models.TextEntity ourEntity)
-    {
-        double originalWidth = ourEntity.OriginalWidth;
-        double originalHeight = ourEntity.OriginalHeight > 0 ? ourEntity.OriginalHeight : mtext.TextHeight;
-
-        double newWidth = EstimateTextWidth(translatedText, mtext.TextHeight);
-        if (newWidth > originalWidth)
-        {
-            double scale = originalWidth / newWidth;
-            if (scale < 0.6) scale = 0.6;
-            double newHeight = originalHeight * scale;
-            if (newHeight < mtext.TextHeight)
-                mtext.TextHeight = newHeight;
-        }
     }
 
     /// <summary>
@@ -192,6 +228,8 @@ public static class LayoutOptimizer
             if (scale < 0.6) scale = 0.6;
             dbText.Height = originalHeight * scale;
         }
+
+        dbText.RecordGraphicsModified(true);
     }
 
     private static double EstimateTextWidth(string text, double height) => Core.Services.TextWidthEstimator.EstimateTextWidth(text, height);

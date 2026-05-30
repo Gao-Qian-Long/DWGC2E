@@ -1,8 +1,8 @@
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.Geometry;
 using DwgTranslator.Core.Models;
+using DwgTranslator.Cad;
 using DwgTranslator.Core.Services;
-using Serilog;
 
 namespace DwgTranslator.Cad.Replacement;
 
@@ -14,7 +14,8 @@ public class AcadWriterEngine
 {
     /// <summary>
     /// Writes translated text back into a DWG file using AutoCAD's native Database API.
-    /// Automatically detects drawing frames and optimizes text layout to prevent overflow.
+    /// This overload opens the file from disk (side database) — avoid using when the file
+    /// is already open in AutoCAD, as it may cause eFilerError due to file locks.
     /// </summary>
     public DwgWriteResult WriteTranslations(
         string sourceFilePath,
@@ -37,55 +38,7 @@ public class AcadWriterEngine
             {
                 db.ReadDwgFile(sourceFilePath, FileOpenMode.OpenForReadAndAllShare, false, null);
 
-                // Detect frame boundaries before modifications
-                var frames = FrameDetector.DetectFrames(db);
-                Log.Information("AcadWriter: detected {Count} frame(s) in {File}", frames.Count, sourceFilePath);
-
-                using (var tr = db.TransactionManager.StartTransaction())
-                {
-                    var entityMap = entities
-                        .Where(e => e.Status == TranslationStatus.Translated ||
-                                    e.Status == TranslationStatus.Reviewed)
-                        .ToDictionary(e => e.Handle, StringComparer.OrdinalIgnoreCase);
-
-                    int successCount = 0;
-                    var unprocessed = new HashSet<string>(entityMap.Keys, StringComparer.OrdinalIgnoreCase);
-
-                    // Model space
-                    var modelSpaceId = SymbolUtilityServices.GetBlockModelSpaceId(db);
-                    var modelSpace = (BlockTableRecord)tr.GetObject(modelSpaceId, OpenMode.ForWrite);
-                    successCount += ProcessBlockTableRecord(modelSpace, tr, entityMap, unprocessed, frames, cnToEn);
-
-                    // Paper space layouts and user blocks
-                    var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
-                    foreach (ObjectId btrId in bt)
-                    {
-                        var btr = (BlockTableRecord)tr.GetObject(btrId, OpenMode.ForWrite);
-                        string name = btr.Name;
-
-                        bool isModelSpace = name.StartsWith("*Model_Space", StringComparison.OrdinalIgnoreCase);
-                        bool isPaperSpace = name.StartsWith("*Paper_Space", StringComparison.OrdinalIgnoreCase);
-
-                        if (!isModelSpace)
-                        {
-                            // Process both paper space layouts and user-defined blocks
-                            if (isPaperSpace || (!btr.IsAnonymous && !name.StartsWith("*")))
-                            {
-                                successCount += ProcessBlockTableRecord(btr, tr, entityMap, unprocessed, frames, cnToEn);
-                            }
-                        }
-                    }
-
-                    tr.Commit();
-
-                    result.SuccessCount = successCount;
-                    result.FailCount = unprocessed.Count;
-
-                    if (unprocessed.Count > 0)
-                    {
-                        Log.Warning("AcadWriter: skipped {Count} unmatched entities", unprocessed.Count);
-                    }
-                }
+                WriteTranslationsToDatabase(db, entities, cnToEn, result);
 
                 var outputDir = Path.GetDirectoryName(outputFilePath);
                 if (!string.IsNullOrEmpty(outputDir) && !Directory.Exists(outputDir))
@@ -104,13 +57,101 @@ public class AcadWriterEngine
         return result;
     }
 
+    /// <summary>
+    /// Writes translated text directly into an already-open AutoCAD database.
+    /// Use this overload when running from inside AutoCAD (e.g. from DWGTRANSLATEWRITE command)
+    /// to avoid file-lock conflicts that cause eFilerError.
+    /// The caller is responsible for saving the database afterward.
+    /// </summary>
+    public DwgWriteResult WriteTranslations(
+        Database db,
+        List<TextEntity> entities,
+        bool cnToEn = true)
+    {
+        var result = new DwgWriteResult();
+        try
+        {
+            WriteTranslationsToDatabase(db, entities, cnToEn, result);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "AcadWriterEngine failed on active database");
+            result.Errors.Add($"Writeback error: {ex.Message}");
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// Core writeback logic shared by both overloads.
+    /// Modifies entities in-place within the given database.
+    /// </summary>
+    private void WriteTranslationsToDatabase(
+        Database db,
+        List<TextEntity> entities,
+        bool cnToEn,
+        DwgWriteResult result)
+    {
+        // Detect frame boundaries before modifications
+        var frames = FrameDetector.DetectFrames(db);
+        Log.Information("AcadWriter: detected {Count} frame(s)", frames.Count);
+
+        using (var tr = db.TransactionManager.StartTransaction())
+        {
+            var entityMap = entities
+                .Where(e => e.Status == TranslationStatus.Translated ||
+                            e.Status == TranslationStatus.Reviewed)
+                .ToDictionary(e => e.Handle, StringComparer.OrdinalIgnoreCase);
+
+            int successCount = 0;
+            var unprocessed = new HashSet<string>(entityMap.Keys, StringComparer.OrdinalIgnoreCase);
+
+            // Model space
+            var modelSpaceId = SymbolUtilityServices.GetBlockModelSpaceId(db);
+            var modelSpace = (BlockTableRecord)tr.GetObject(modelSpaceId, OpenMode.ForWrite);
+            var errors = new List<string>();
+            successCount += ProcessBlockTableRecord(modelSpace, tr, entityMap, unprocessed, frames, cnToEn, errors);
+            result.Errors.AddRange(errors);
+
+            // Paper space layouts and user blocks
+            var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
+            foreach (ObjectId btrId in bt)
+            {
+                var btr = (BlockTableRecord)tr.GetObject(btrId, OpenMode.ForWrite);
+                string name = btr.Name;
+
+                bool isModelSpace = name.StartsWith("*Model_Space", StringComparison.OrdinalIgnoreCase);
+                bool isPaperSpace = name.StartsWith("*Paper_Space", StringComparison.OrdinalIgnoreCase);
+
+                if (!isModelSpace)
+                {
+                    // Process both paper space layouts and user-defined blocks
+                    if (isPaperSpace || (!btr.IsAnonymous && !name.StartsWith("*")))
+                    {
+                                successCount += ProcessBlockTableRecord(btr, tr, entityMap, unprocessed, frames, cnToEn, errors);
+                    }
+                }
+            }
+
+            tr.Commit();
+
+            result.SuccessCount = successCount;
+            result.FailCount = unprocessed.Count;
+
+            if (unprocessed.Count > 0)
+            {
+                Log.Warning("AcadWriter: skipped {Count} unmatched entities", unprocessed.Count);
+            }
+        }
+    }
+
     private int ProcessBlockTableRecord(
         BlockTableRecord btr,
         Transaction tr,
         Dictionary<string, TextEntity> entityMap,
         HashSet<string> unprocessed,
         List<Extents3d> frames,
-        bool cnToEn)
+        bool cnToEn,
+        List<string> errors)
     {
         int count = 0;
         foreach (ObjectId id in btr)
@@ -122,8 +163,11 @@ public class AcadWriterEngine
             {
                 entity = tr.GetObject(id, OpenMode.ForWrite, false) as Entity;
             }
-            catch
+            catch (Exception ex)
             {
+                // Only log errors for entities with an expected Handle match
+                if (entityMap.ContainsKey(id.Handle.ToString()))
+                    errors.Add($"GetObject failed for Handle={id.Handle}: {ex.Message}");
                 continue;
             }
 
@@ -185,6 +229,7 @@ public class AcadWriterEngine
             {
                 case DBText dbText:
                     dbText.TextString = translatedText;
+                    dbText.RecordGraphicsModified(true); // Force refresh for accurate GeometricExtents
                     MapFont(dbText, ourEntity.TextStyleName, cnToEn, tr);
                     LayoutOptimizer.OptimizeDBText(dbText, translatedText, ourEntity);
 
@@ -210,12 +255,14 @@ public class AcadWriterEngine
                         .Replace("\n", "\\P")
                         .Replace("\r", "\\P");
 
+                    mtext.RecordGraphicsModified(true); // Force refresh for accurate GeometricExtents
+
                     MapFont(mtext, ourEntity.TextStyleName, cnToEn, tr);
 
                     var closestFrame = CollisionDetector.FindClosestFrame(mtext.Location, frames);
                     LayoutOptimizer.OptimizeMText(mtext, translatedText, ourEntity, closestFrame, tr);
 
-                    // Collision avoidance: scale down if translated text overlaps nearby geometry
+                    // Collision avoidance: scale down or displace if translated text overlaps nearby geometry
                     var mtOriginalHeight = ourEntity.OriginalHeight > 0 ? ourEntity.OriginalHeight : mtext.TextHeight;
                     CollisionDetector.TryResolveCollisionByScaling(mtext, btr, tr, mtOriginalHeight);
                     return true;

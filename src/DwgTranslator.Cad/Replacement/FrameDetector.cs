@@ -1,6 +1,6 @@
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.Geometry;
-using Serilog;
+using DwgTranslator.Cad;
 
 namespace DwgTranslator.Cad.Replacement;
 
