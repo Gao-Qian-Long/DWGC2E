@@ -245,6 +245,9 @@ public class TextExtractor
         if (!string.IsNullOrEmpty(textContent))
         {
             var plainText = StripMTextFormatCodes(textContent);
+            var mtext = mLeader.MText;
+            if (mtext == null) return entities;
+
             entities.Add(new TextEntity
             {
                 Handle = mLeader.Handle.ToString(),
@@ -252,13 +255,13 @@ public class TextExtractor
                 PlainText = plainText,
                 FormatTemplate = textContent,
                 EntityType = "MLeader",
-                Height = mLeader.MText.TextHeight,
-                Rotation = mLeader.MText.Rotation,
-                TextStyleName = GetTextStyleName(mLeader.MText.TextStyleId),
+                Height = mtext.TextHeight,
+                Rotation = mtext.Rotation,
+                TextStyleName = GetTextStyleName(mtext.TextStyleId),
                 BlockName = blockName,
                 IsXref = false,
-                Position = new DwgTranslator.Core.Models.Point3d(mLeader.MText.Location.X, mLeader.MText.Location.Y, mLeader.MText.Location.Z),
-                OriginalWidth = mLeader.MText.ActualWidth
+                Position = new DwgTranslator.Core.Models.Point3d(mtext.Location.X, mtext.Location.Y, mtext.Location.Z),
+                OriginalWidth = mtext.ActualWidth
             });
         }
 

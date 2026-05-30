@@ -25,6 +25,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private readonly IExcelService _excelService;
     private readonly IDwgReaderService _dwgReaderService;
     private readonly IDwgWriterService _dwgWriterService;
+    private readonly ILicenseService _licenseService;
     private readonly FormatCodeParser _formatCodeParser;
     private TranslationConsistencyService _consistencyService;
     private HttpClient? _httpClient;
@@ -65,6 +66,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
     /// <summary>Glossary entries for display/editing.</summary>
     [ObservableProperty] private string _glossaryStatsText = "术语库: 0 条";
 
+    /// <summary>License status display text.</summary>
+    [ObservableProperty] private string _licenseStatusText = "未激活";
+
     #endregion
 
     public ObservableCollection<TextEntity> Entities { get; } = new();
@@ -80,10 +84,17 @@ public partial class MainViewModel : ObservableObject, IDisposable
         _excelService = new ExcelService();
         _dwgReaderService = new DwgReaderService();
         _dwgWriterService = new DwgWriterService();
+        _licenseService = App.LicenseService;
         _formatCodeParser = new FormatCodeParser();
         _consistencyService = new TranslationConsistencyService();
 
         LoadConfig();
+        RefreshLicenseStatus();
+    }
+
+    private void RefreshLicenseStatus()
+    {
+        LicenseStatusText = _licenseService.CurrentLicense.GetDisplayStatus();
     }
 
     #region Config
@@ -447,6 +458,13 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private async Task TranslateAsync()
     {
+        if (!_licenseService.CanExecuteOperation())
+        {
+            StatusMessage = "授权无效或体验次数已用完，请先激活";
+            PromptForActivation();
+            return;
+        }
+
         var entitiesToTranslate = Entities
             .Where(e => !e.IsXref && e.Status == TranslationStatus.Pending)
             .ToList();
@@ -654,6 +672,13 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private async Task ExportDwgAsync()
     {
+        if (!_licenseService.CanExecuteOperation())
+        {
+            StatusMessage = "授权无效或体验次数已用完，请先激活";
+            PromptForActivation();
+            return;
+        }
+
         var entitiesToWrite = Entities
             .Where(e => e.Status == TranslationStatus.Translated || e.Status == TranslationStatus.Reviewed)
             .ToList();
@@ -723,10 +748,13 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
             if (result.SuccessCount > 0)
             {
+                // Consume license use for successful export
+                ConsumeLicenseForExport();
+
                 string modeText = usedAcadInterop ? "AutoCAD 精确回写" : "离线回写";
-                StatusMessage = $"DWG 导出完成 ({modeText}): ✅ {result.SuccessCount} 条已替换 → {Path.GetFileName(dialog2.FileName)}";
+                StatusMessage = $"DWG 导出完成 ({modeText}): {result.SuccessCount} 条已替换 → {Path.GetFileName(dialog2.FileName)}";
                 MessageBox.Show(
-                    $"DWG 导出完成!\n\n模式: {modeText}\n✅ 已替换: {result.SuccessCount} 条文本\n❌ 失败: {result.FailCount} 条\n\n📁 文件: {dialog2.FileName}",
+                    $"DWG 导出完成!\n\n模式: {modeText}\n已替换: {result.SuccessCount} 条文本\n失败: {result.FailCount} 条\n\n文件: {dialog2.FileName}",
                     "导出成功",
                     MessageBoxButton.OK,
                     result.Errors.Count > 0 ? MessageBoxImage.Warning : MessageBoxImage.Information);
@@ -1077,6 +1105,54 @@ public partial class MainViewModel : ObservableObject, IDisposable
             Owner = Application.Current.MainWindow
         };
         dialog.ShowDialog();
+    }
+
+    #endregion
+
+    #region License
+
+    [RelayCommand]
+    private void OpenLicenseDialog()
+    {
+        var dialog = new Views.LicenseDialog(_licenseService)
+        {
+            Owner = Application.Current.MainWindow
+        };
+        dialog.ShowDialog();
+        RefreshLicenseStatus();
+    }
+
+    private void PromptForActivation()
+    {
+        var result = MessageBox.Show(
+            "您的体验次数已用完或授权已过期。\n\n" +
+            "点击「是」打开授权管理窗口进行激活。\n" +
+            "点击「否」继续使用受限功能（仅可查看和编辑，不可导出）。",
+            "需要激活",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Information);
+
+        if (result == MessageBoxResult.Yes)
+        {
+            OpenLicenseDialog();
+        }
+    }
+
+    private bool ConsumeLicenseForExport()
+    {
+        if (!_licenseService.CanExecuteOperation())
+        {
+            PromptForActivation();
+            return false;
+        }
+
+        // Trial licenses consume one use on successful DWG export
+        if (_licenseService.CurrentLicense.Type == LicenseType.Trial)
+        {
+            _licenseService.ConsumeTrialUse();
+            RefreshLicenseStatus();
+        }
+        return true;
     }
 
     #endregion

@@ -383,6 +383,7 @@ public class DwgWriterService : IDwgWriterService
     /// <summary>
     /// Auto-scale text height when translated text is significantly wider than original.
     /// Uses improved per-character width estimation (CJK vs ASCII).
+    /// Also applies a conservative cap to reduce collision risk with nearby geometry.
     /// </summary>
     private static void ApplyScaling(CadText textEntity, string translatedText, OurTextEntity ourEntity)
     {
@@ -401,6 +402,13 @@ public class DwgWriterService : IDwgWriterService
                 double oldHeight = textEntity.Height;
                 textEntity.Height = newHeight;
                 Log.Debug("Scaled text {Handle}: {OldH:F2} -> {NewH:F2}", textEntity.Handle, oldHeight, newHeight);
+            }
+
+            // Conservative safety cap: never allow height to grow beyond original
+            // (translation usually makes text longer, not taller)
+            if (textEntity.Height > originalHeight * 1.05)
+            {
+                textEntity.Height = originalHeight * 1.05;
             }
         }
         catch (Exception ex)
@@ -479,17 +487,16 @@ public class DwgWriterService : IDwgWriterService
             }
             else
             {
-                // FREE width: set a conservative rectangle width.
-                // Use a slightly under-estimated width so MText never creates
-                // an over-wide sparse layout.
+                // FREE width: NEVER create an over-wide rectangle.
+                // Excessive RectangleWidth causes AutoCAD to stretch word spacing
+                // (especially in justified/Fit modes), destroying readability.
                 double translatedWidth = EstimateTextWidth(textForEstimation, currentHeight);
-                if (translatedWidth > originalWidth * 1.05)
+                if (translatedWidth > originalWidth * 1.3)
                 {
-                    // Conservative: target width = min(original*1.2, max(original, translated*0.55))
-                    // The 0.55 factor under-estimates so the actual rendered text
-                    // comfortably fills the width without excessive whitespace.
-                    double targetWidth = Math.Min(originalWidth * 1.2,
-                        Math.Max(originalWidth, translatedWidth * 0.55));
+                    // Significantly longer: cap width expansion to prevent sparse layout.
+                    double maxAllowable = originalWidth * 1.3;
+                    double preferred = translatedWidth * 0.65; // underestimate for compact lines
+                    double targetWidth = Math.Min(maxAllowable, Math.Max(originalWidth * 1.05, preferred));
                     mtext.RectangleWidth = targetWidth;
 
                     double scale = originalWidth / translatedWidth;
@@ -498,10 +505,13 @@ public class DwgWriterService : IDwgWriterService
                     if (newHeight < currentHeight)
                         mtext.Height = newHeight;
                 }
-                else if (translatedWidth > 0)
+                else if (translatedWidth > originalWidth * 1.05)
                 {
-                    mtext.RectangleWidth = Math.Min(translatedWidth * 1.02, originalWidth * 1.2);
+                    // Moderate growth: snug fit only
+                    double targetWidth = Math.Min(translatedWidth * 1.05, originalWidth * 1.25);
+                    mtext.RectangleWidth = targetWidth;
                 }
+                // else: keep RectangleWidth = 0 (true free-width) for natural tight spacing
             }
         }
         catch (Exception ex)

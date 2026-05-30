@@ -1,3 +1,4 @@
+using DwgTranslator.Core.Services;
 using Serilog;
 using System.IO;
 using System.Windows;
@@ -13,6 +14,8 @@ public partial class App : Application
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
         "DwgTranslator");
 
+    public static ILicenseService LicenseService { get; private set; } = null!;
+
     public App()
     {
         DispatcherUnhandledException += OnDispatcherUnhandledException;
@@ -22,20 +25,37 @@ public partial class App : Application
 
     private void OnDispatcherUnhandledException(object sender, System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e)
     {
-        MessageBox.Show($"UI线程异常: {e.Exception}\n\n{e.Exception.StackTrace}", "启动错误", MessageBoxButton.OK, MessageBoxImage.Error);
+        Log.Fatal(e.Exception, "Unhandled UI exception");
+        // Graceful degradation: show non-blocking warning instead of crashing
+        try
+        {
+            MessageBox.Show(
+                $"程序遇到一个错误，但已自动恢复。\n\n错误: {e.Exception.Message}\n\n如果问题持续出现，请查看日志或联系技术支持。",
+                "运行警告", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+        catch { /* last resort: ignore if even MessageBox fails */ }
         e.Handled = true;
-        Shutdown(1);
     }
 
     private void OnUnhandledException(object sender, UnhandledExceptionEventArgs e)
     {
         var ex = e.ExceptionObject as Exception;
-        MessageBox.Show($"未处理异常: {ex?.Message ?? "未知错误"}\n\n{ex?.StackTrace}", "致命错误", MessageBoxButton.OK, MessageBoxImage.Error);
+        Log.Fatal(ex, "Unhandled domain exception. IsTerminating: {Terminating}", e.IsTerminating);
+        if (e.IsTerminating)
+        {
+            try
+            {
+                MessageBox.Show(
+                    $"程序遇到致命错误即将关闭。\n\n{ex?.Message}\n\n日志位置: {Path.Combine(AppDataDir, "logs")}",
+                    "致命错误", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            catch { /* ignore */ }
+        }
     }
 
     private void OnUnobservedTaskException(object? sender, UnobservedTaskExceptionEventArgs e)
     {
-        MessageBox.Show($"任务异常: {e.Exception.Message}\n\n{e.Exception.StackTrace}", "任务错误", MessageBoxButton.OK, MessageBoxImage.Error);
+        Log.Error(e.Exception, "Unobserved task exception");
         e.SetObserved();
     }
 
@@ -61,6 +81,11 @@ public partial class App : Application
 
         Log.Information("Application started. App data: {Dir}", AppDataDir);
 
+        // Initialize license service
+        LicenseService = new LicenseService(AppDataDir);
+        LicenseService.LoadLicense();
+        Log.Information("License status: {Status}", LicenseService.CurrentLicense.GetDisplayStatus());
+
         // First-launch: copy default settings if not present
         var settingsPath = Path.Combine(AppDataDir, "settings.json");
         if (!File.Exists(settingsPath))
@@ -76,18 +101,24 @@ public partial class App : Application
         // First-launch: prompt for API key if not configured
         if (File.Exists(settingsPath))
         {
-            var json = File.ReadAllText(settingsPath);
-            var config = System.Text.Json.JsonSerializer.Deserialize<DwgTranslator.Core.Models.AppConfig>(json);
-            if (config != null && string.IsNullOrEmpty(config.DeepSeekApiKey))
+            try
             {
-                var result = MessageBox.Show(
-                    "欢迎使用 DWG Translator!\n\n" +
-                    "首次使用需要配置 DeepSeek API Key。\n" +
-                    "请在设置文件中填入您的 API Key：\n\n" +
-                    settingsPath,
-                    "首次配置",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Information);
+                var json = File.ReadAllText(settingsPath);
+                var config = System.Text.Json.JsonSerializer.Deserialize<DwgTranslator.Core.Models.AppConfig>(json);
+                if (config != null && string.IsNullOrEmpty(config.DeepSeekApiKey))
+                {
+                    MessageBox.Show(
+                        "欢迎使用 DWG Translator!\n\n" +
+                        "首次使用需要配置 DeepSeek API Key。\n" +
+                        "请点击「设置」按钮进行配置。",
+                        "首次配置",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Information);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Failed to check first-launch settings");
             }
         }
     }

@@ -54,6 +54,11 @@ public class TextReplacer
         using var transaction = db.TransactionManager.StartTransaction();
         try
         {
+            // Pre-load model space and paper space block records for collision detection
+            var modelSpaceId = SymbolUtilityServices.GetBlockModelSpaceId(db);
+            var modelSpace = (BlockTableRecord)transaction.GetObject(modelSpaceId, OpenMode.ForRead);
+            var blockTable = (BlockTable)transaction.GetObject(db.BlockTableId, OpenMode.ForRead);
+
             foreach (var entity in entities)
             {
                 if (entity.Status != TranslationStatus.Reviewed &&
@@ -66,6 +71,15 @@ public class TextReplacer
                 var replaceResult = ReplaceSingleEntity(transaction, db, entity);
                 if (replaceResult.Success)
                 {
+                    // Post-replacement collision avoidance for the modified entity
+                    if (replaceResult.ModifiedEntity != null)
+                    {
+                        var btr = replaceResult.OwningBlock ?? modelSpace;
+                        CollisionDetector.TryResolveCollisionByScaling(
+                            replaceResult.ModifiedEntity, btr, transaction,
+                            replaceResult.OriginalHeight);
+                    }
+
                     result.SuccessCount++;
                     entity.Status = TranslationStatus.WritebackSuccess;
                 }
@@ -109,19 +123,28 @@ public class TextReplacer
             var objectId = db.GetObjectId(false, handle, 0);
             var dbObject = tr.GetObject(objectId, OpenMode.ForWrite);
 
+            // Determine owning block for collision detection
+            BlockTableRecord? owningBtr = null;
+            try
+            {
+                if (dbObject.OwnerId.IsValid)
+                    owningBtr = tr.GetObject(dbObject.OwnerId, OpenMode.ForRead) as BlockTableRecord;
+            }
+            catch { /* ignore */ }
+
             switch (dbObject)
             {
                 case DBText dbText:
-                    return ReplaceDBText(dbText, entity);
+                    return ReplaceDBText(dbText, entity, owningBtr);
 
                 case MText mText:
-                    return ReplaceMText(mText, entity, db);
+                    return ReplaceMText(mText, entity, db, owningBtr);
 
                 case Dimension dim:
-                    return ReplaceDimension(dim, entity);
+                    return ReplaceDimension(dim, entity, owningBtr);
 
                 case MLeader mLeader:
-                    return ReplaceMLeader(mLeader, entity, db);
+                    return ReplaceMLeader(mLeader, entity, db, owningBtr);
 
                 default:
                     return new EntityReplaceResult { Success = false, Error = "Unsupported entity type" };
@@ -133,8 +156,9 @@ public class TextReplacer
         }
     }
 
-    private EntityReplaceResult ReplaceDBText(DBText dbText, TextEntity entity)
+    private EntityReplaceResult ReplaceDBText(DBText dbText, TextEntity entity, BlockTableRecord? owningBtr)
     {
+        var originalHeight = dbText.Height;
         dbText.TextString = entity.TranslatedText;
 
         // Auto-scale if needed
@@ -144,17 +168,44 @@ public class TextReplacer
             dbText.Height *= entity.OriginalWidth / newWidth * _autoScaleFactor;
         }
 
-        return new EntityReplaceResult { Success = true };
+        return new EntityReplaceResult 
+        { 
+            Success = true, 
+            ModifiedEntity = dbText, 
+            OwningBlock = owningBtr,
+            OriginalHeight = originalHeight 
+        };
     }
 
-    private EntityReplaceResult ReplaceMText(MText mText, TextEntity entity, Database db)
+    private EntityReplaceResult ReplaceMText(MText mText, TextEntity entity, Database db, BlockTableRecord? owningBtr)
     {
+        var originalHeight = mText.TextHeight;
+
+        // Preserve original line spacing
+        if (entity.MTextLineSpacing > 0)
+            mText.LineSpacingFactor = entity.MTextLineSpacing;
+        if (entity.MTextLineSpacingStyle > 0)
+            mText.LineSpacingStyle = (LineSpacingStyle)entity.MTextLineSpacingStyle;
+
         mText.Contents = entity.TranslatedText;
 
         // Map font if needed
         MapTextStyle(mText.TextStyleId, db);
 
-        // Auto-scale
+        // Fix: prevent excessively wide rectangle that destroys word spacing readability
+        if (entity.MTextRectangleWidth > 0)
+        {
+            // Designer-set fixed width: respect it, only scale height if needed
+            mText.Width = entity.MTextRectangleWidth;
+        }
+        else
+        {
+            // FREE width: never set a huge rectangle width.
+            // Keep Width = 0 for natural tight spacing unless text overflows.
+            mText.Width = 0;
+        }
+
+        // Auto-scale height if translated text is significantly wider
         if (entity.OriginalWidth > 0)
         {
             var newWidth = mText.ActualWidth;
@@ -164,23 +215,42 @@ public class TextReplacer
             }
         }
 
-        return new EntityReplaceResult { Success = true };
+        return new EntityReplaceResult 
+        { 
+            Success = true, 
+            ModifiedEntity = mText, 
+            OwningBlock = owningBtr,
+            OriginalHeight = originalHeight 
+        };
     }
 
-    private EntityReplaceResult ReplaceDimension(Dimension dim, TextEntity entity)
+    private EntityReplaceResult ReplaceDimension(Dimension dim, TextEntity entity, BlockTableRecord? owningBtr)
     {
         dim.DimensionText = entity.TranslatedText;
-        return new EntityReplaceResult { Success = true };
+        return new EntityReplaceResult 
+        { 
+            Success = true, 
+            ModifiedEntity = dim, 
+            OwningBlock = owningBtr,
+            OriginalHeight = 2.5 
+        };
     }
 
-    private EntityReplaceResult ReplaceMLeader(MLeader mLeader, TextEntity entity, Database db)
+    private EntityReplaceResult ReplaceMLeader(MLeader mLeader, TextEntity entity, Database db, BlockTableRecord? owningBtr)
     {
+        var originalHeight = mLeader.MText?.TextHeight ?? 2.5;
         if (mLeader.MText != null)
         {
             mLeader.MText.Contents = entity.TranslatedText;
             MapTextStyle(mLeader.MText.TextStyleId, db);
         }
-        return new EntityReplaceResult { Success = true };
+        return new EntityReplaceResult 
+        { 
+            Success = true, 
+            ModifiedEntity = mLeader.MText, 
+            OwningBlock = owningBtr,
+            OriginalHeight = originalHeight 
+        };
     }
 
     private EntityReplaceResult ReplaceAttribute(Transaction tr, Database db, TextEntity entity)
@@ -195,11 +265,20 @@ public class TextReplacer
         var objectId = db.GetObjectId(false, blockRefHandle, 0);
         var blockRef = (BlockReference)tr.GetObject(objectId, OpenMode.ForWrite);
 
+        BlockTableRecord? owningBtr = null;
+        try
+        {
+            if (blockRef.OwnerId.IsValid)
+                owningBtr = tr.GetObject(blockRef.OwnerId, OpenMode.ForRead) as BlockTableRecord;
+        }
+        catch { /* ignore */ }
+
         foreach (ObjectId attId in blockRef.AttributeCollection)
         {
             var attRef = (AttributeReference)tr.GetObject(attId, OpenMode.ForWrite);
             if (attRef.Tag == attTag)
             {
+                var originalHeight = attRef.Height;
                 attRef.TextString = entity.TranslatedText;
 
                 // Auto-scale
@@ -211,7 +290,13 @@ public class TextReplacer
 
                 // Sync attributes
                 blockRef.RecordGraphicsModified(true);
-                return new EntityReplaceResult { Success = true };
+                return new EntityReplaceResult 
+                { 
+                    Success = true, 
+                    ModifiedEntity = attRef, 
+                    OwningBlock = owningBtr,
+                    OriginalHeight = originalHeight 
+                };
             }
         }
 
@@ -231,12 +316,25 @@ public class TextReplacer
         var objectId = db.GetObjectId(false, tableHandle, 0);
         var table = (Table)tr.GetObject(objectId, OpenMode.ForWrite);
 
+        BlockTableRecord? owningBtr = null;
+        try
+        {
+            if (table.OwnerId.IsValid)
+                owningBtr = tr.GetObject(table.OwnerId, OpenMode.ForRead) as BlockTableRecord;
+        }
+        catch { /* ignore */ }
+
         if (row < table.Rows.Count && col < table.Columns.Count)
         {
             var cell = table.Cells[row, col];
-            // In AutoCAD 2021, set text via Value property
             cell.Value = entity.TranslatedText;
-            return new EntityReplaceResult { Success = true };
+            return new EntityReplaceResult 
+            { 
+                Success = true, 
+                ModifiedEntity = null, // Table cells don't have a direct entity for collision
+                OwningBlock = owningBtr,
+                OriginalHeight = 2.5 
+            };
         }
 
         return new EntityReplaceResult { Success = false, Error = "Table cell out of range" };
@@ -343,4 +441,7 @@ internal class EntityReplaceResult
 {
     public bool Success { get; set; }
     public string Error { get; set; } = string.Empty;
+    public Entity? ModifiedEntity { get; set; }
+    public BlockTableRecord? OwningBlock { get; set; }
+    public double OriginalHeight { get; set; }
 }

@@ -132,7 +132,7 @@ public class AcadWriterEngine
             var handleStr = entity.Handle.ToString();
             if (entityMap.TryGetValue(handleStr, out var textEntity))
             {
-                if (ReplaceEntity(entity, textEntity, frames, cnToEn, tr))
+                if (ReplaceEntity(entity, textEntity, frames, cnToEn, tr, btr))
                 {
                     count++;
                     unprocessed.Remove(handleStr);
@@ -174,7 +174,7 @@ public class AcadWriterEngine
         return count;
     }
 
-    private bool ReplaceEntity(Entity entity, TextEntity ourEntity, List<Extents3d> frames, bool cnToEn, Transaction tr)
+    private bool ReplaceEntity(Entity entity, TextEntity ourEntity, List<Extents3d> frames, bool cnToEn, Transaction tr, BlockTableRecord btr)
     {
         try
         {
@@ -187,6 +187,10 @@ public class AcadWriterEngine
                     dbText.TextString = translatedText;
                     MapFont(dbText, ourEntity.TextStyleName, cnToEn, tr);
                     LayoutOptimizer.OptimizeDBText(dbText, translatedText, ourEntity);
+
+                    // Collision avoidance: scale down if translated text overlaps nearby geometry
+                    var dbOriginalHeight = ourEntity.OriginalHeight > 0 ? ourEntity.OriginalHeight : dbText.Height;
+                    CollisionDetector.TryResolveCollisionByScaling(dbText, btr, tr, dbOriginalHeight);
                     return true;
 
                 case MText mtext:
@@ -210,6 +214,10 @@ public class AcadWriterEngine
 
                     var closestFrame = CollisionDetector.FindClosestFrame(mtext.Location, frames);
                     LayoutOptimizer.OptimizeMText(mtext, translatedText, ourEntity, closestFrame, tr);
+
+                    // Collision avoidance: scale down if translated text overlaps nearby geometry
+                    var mtOriginalHeight = ourEntity.OriginalHeight > 0 ? ourEntity.OriginalHeight : mtext.TextHeight;
+                    CollisionDetector.TryResolveCollisionByScaling(mtext, btr, tr, mtOriginalHeight);
                     return true;
 
                 case Dimension dim:

@@ -46,21 +46,29 @@ public static class LayoutOptimizer
         if (originalRectWidth > 0)
         {
             // FIXED rectangle width: keep original — designer already tuned it.
+            // Only scale down height if text overflows the fixed width.
             mtext.Width = originalRectWidth;
         }
         else if (mtext.Width <= 0 && originalWidth > 0)
         {
-            // FREE width: set a conservative rectangle width.
-            if (translatedWidth > originalWidth * 1.05)
+            // FREE width: only set rectangle width when truly necessary to prevent overflow.
+            // NEVER set an excessively wide rectangle — that causes AutoCAD to stretch
+            // word spacing (especially in justified/Fit modes) and destroys readability.
+            if (translatedWidth > originalWidth * 1.3)
             {
-                double targetWidth = Math.Min(originalWidth * 1.2,
-                    Math.Max(originalWidth, translatedWidth * 0.55));
+                // Translated text is significantly longer; cap expansion to avoid sparse layout.
+                double maxAllowable = originalWidth * 1.3;
+                double preferred = translatedWidth * 0.65; // slightly underestimate to keep lines compact
+                double targetWidth = Math.Min(maxAllowable, Math.Max(originalWidth * 1.05, preferred));
                 mtext.Width = targetWidth;
             }
-            else if (translatedWidth > 0)
+            else if (translatedWidth > originalWidth * 1.05)
             {
-                mtext.Width = Math.Min(translatedWidth * 1.02, originalWidth * 1.2);
+                // Moderate growth: snug fit, no excessive whitespace
+                double targetWidth = Math.Min(translatedWidth * 1.05, originalWidth * 1.25);
+                mtext.Width = targetWidth;
             }
+            // else: keep Width = 0 (true free-width) for natural, tight spacing
         }
 
         // Step 3: If frame detected, use binary search for optimal height

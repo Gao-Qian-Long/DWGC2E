@@ -1,4 +1,5 @@
 using Microsoft.Win32;
+using System.Runtime.Versioning;
 using Serilog;
 
 namespace DwgTranslator.Core.Services;
@@ -6,6 +7,7 @@ namespace DwgTranslator.Core.Services;
 /// <summary>
 /// AutoCAD installation detector — searches Windows registry for installed AutoCAD versions.
 /// </summary>
+[SupportedOSPlatform("windows")]
 public static class AutoCadDetector
 {
     /// <summary>Result of an AutoCAD detection attempt.</summary>
