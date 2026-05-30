@@ -13,6 +13,32 @@ public partial class App : Application
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
         "DwgTranslator");
 
+    public App()
+    {
+        DispatcherUnhandledException += OnDispatcherUnhandledException;
+        AppDomain.CurrentDomain.UnhandledException += OnUnhandledException;
+        TaskScheduler.UnobservedTaskException += OnUnobservedTaskException;
+    }
+
+    private void OnDispatcherUnhandledException(object sender, System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e)
+    {
+        MessageBox.Show($"UI线程异常: {e.Exception}\n\n{e.Exception.StackTrace}", "启动错误", MessageBoxButton.OK, MessageBoxImage.Error);
+        e.Handled = true;
+        Shutdown(1);
+    }
+
+    private void OnUnhandledException(object sender, UnhandledExceptionEventArgs e)
+    {
+        var ex = e.ExceptionObject as Exception;
+        MessageBox.Show($"未处理异常: {ex?.Message ?? "未知错误"}\n\n{ex?.StackTrace}", "致命错误", MessageBoxButton.OK, MessageBoxImage.Error);
+    }
+
+    private void OnUnobservedTaskException(object? sender, UnobservedTaskExceptionEventArgs e)
+    {
+        MessageBox.Show($"任务异常: {e.Exception.Message}\n\n{e.Exception.StackTrace}", "任务错误", MessageBoxButton.OK, MessageBoxImage.Error);
+        e.SetObserved();
+    }
+
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);

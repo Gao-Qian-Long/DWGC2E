@@ -1,0 +1,17 @@
+<Project>
+  <!--
+    AutoCAD .NET API directory — adjust to your AutoCAD installation.
+    
+    Options (pick one):
+    1. Set environment variable: set AutoCadDir=C:\Program Files\Autodesk\AutoCAD 2026
+    2. Create Directory.Build.props.user (git-ignored) and override <AutoCadDir>
+    3. Pass on command line: dotnet build -p:AutoCadDir="C:\Program Files\Autodesk\AutoCAD 2026"
+  -->
+  <PropertyGroup>
+    <!-- Try environment variable first, then common default paths -->
+    <AutoCadDir Condition="'$(AutoCadDir)' == ''">$(AUTO_CAD_DIR)</AutoCadDir>
+    <AutoCadDir Condition="'$(AutoCadDir)' == '' And Exists('C:\Program Files\Autodesk\AutoCAD 2026')">C:\Program Files\Autodesk\AutoCAD 2026</AutoCadDir>
+    <AutoCadDir Condition="'$(AutoCadDir)' == '' And Exists('C:\Program Files\Autodesk\AutoCAD 2025')">C:\Program Files\Autodesk\AutoCAD 2025</AutoCadDir>
+    <AutoCadDir Condition="'$(AutoCadDir)' == '' And Exists('D:\autocad2021\AutoCAD 2021')">D:\autocad2021\AutoCAD 2021</AutoCadDir>
+  </PropertyGroup>
+</Project>

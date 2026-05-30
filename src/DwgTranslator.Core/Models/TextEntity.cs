@@ -60,6 +60,28 @@ public partial class TextEntity : ObservableObject
     [ObservableProperty]
     private double _originalHeight;
 
+    // ---- MText-specific layout properties (preserved from source for accurate writeback) ----
+
+    /// <summary>Original MText rectangle width (0 = free-width).</summary>
+    [ObservableProperty]
+    private double _mTextRectangleWidth;
+
+    /// <summary>Original MText line-spacing factor.</summary>
+    [ObservableProperty]
+    private double _mTextLineSpacing = 1.0;
+
+    /// <summary>Original MText line-spacing style: 1=AtLeast, 2=Exact.</summary>
+    [ObservableProperty]
+    private int _mTextLineSpacingStyle = 1;
+
+    /// <summary>Original line count inferred from \P breaks in RawText.</summary>
+    [ObservableProperty]
+    private int _mTextLineCount = 1;
+
+    /// <summary>Whether the original MText had explicit \P line breaks.</summary>
+    [ObservableProperty]
+    private bool _mTextHasHardBreaks;
+
     /// <summary>Translation status.</summary>
     [ObservableProperty]
     private TranslationStatus _status = TranslationStatus.Pending;

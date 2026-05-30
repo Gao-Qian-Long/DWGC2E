@@ -1,0 +1,179 @@
+<Window x:Class="DwgTranslator.App.Views.HelpDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="DWG Translator 使用帮助" Height="620" Width="640"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        Background="White">
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Title -->
+        <TextBlock Grid.Row="0" Text="DWG Translator 使用帮助" FontWeight="Bold" FontSize="18"
+                   Foreground="#1976D2" Margin="0,0,0,15"/>
+
+        <!-- Content -->
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+                <!-- Section 1: Basic Workflow -->
+                <TextBlock Text="一、基本使用流程" FontWeight="Bold" FontSize="14" Foreground="#37474F" Margin="0,0,0,8"/>
+
+                <Border Background="#F5F5F5" CornerRadius="4" Padding="12,8" Margin="0,0,0,12">
+                    <StackPanel>
+                        <TextBlock Text="1. 导入 DWG" FontWeight="Bold" Margin="0,0,0,4"/>
+                        <TextBlock Text="点击「导入 DWG」按钮，选择一个或多个 DWG 文件。程序会自动提取其中的文本实体。"
+                                   TextWrapping="Wrap" Foreground="#616161" Margin="8,0,0,8"/>
+
+                        <TextBlock Text="2. 翻译" FontWeight="Bold" Margin="0,0,0,4"/>
+                        <TextBlock Text="点击「翻译」按钮，使用 AI 进行批量翻译。可通过 ⇄ 按钮切换翻译方向（中文→英文 / 英文→中文）。"
+                                   TextWrapping="Wrap" Foreground="#616161" Margin="8,0,0,8"/>
+
+                        <TextBlock Text="3. 校对" FontWeight="Bold" Margin="0,0,0,4"/>
+                        <TextBlock Text="在译文列双击可直接编辑翻译。也可「导出 Excel」在 Excel 中校对后「导入 Excel」回传。"
+                                   TextWrapping="Wrap" Foreground="#616161" Margin="8,0,0,8"/>
+
+                        <TextBlock Text="4. 导出 DWG" FontWeight="Bold" Margin="0,0,0,4"/>
+                        <TextBlock Text="点击「导出 DWG」，选择回写模式（见下方说明），生成翻译后的图纸文件。"
+                                   TextWrapping="Wrap" Foreground="#616161" Margin="8,0,0,0"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Section 2: Writeback Modes -->
+                <TextBlock Text="二、回写模式说明" FontWeight="Bold" FontSize="14" Foreground="#37474F" Margin="0,5,0,8"/>
+
+                <Border Background="#E8F5E9" CornerRadius="4" Padding="12,8" Margin="0,0,0,8">
+                    <StackPanel>
+                        <TextBlock Text="AutoCAD 精确回写（推荐）" FontWeight="Bold" Foreground="#2E7D32" Margin="0,0,0,4"/>
+                        <TextBlock TextWrapping="Wrap" Foreground="#616161"
+                                   Text="在 AutoCAD 进程内完成精确的文字替换，支持图框检测、几何防溢出、自动缩放排版等高级功能。"/>
+                        <TextBlock TextWrapping="Wrap" Foreground="#D32F2F" Margin="0,8,0,0" FontWeight="Bold" FontSize="13">
+                            <Run Text="⚠ 重要：AutoCAD 必须提前启动！"/>
+                        </TextBlock>
+                        <TextBlock TextWrapping="Wrap" Foreground="#616161" Margin="0,4,0,0"
+                                   Text="程序通过 COM 控制正在运行的 AutoCAD 进程。如果 AutoCAD 没有启动，此功能将显示为「不可用」。"/>
+                        <TextBlock TextWrapping="Wrap" Foreground="#E65100" Margin="0,8,0,0">
+                            <Run Text="前置条件：" FontWeight="Bold"/>
+                            <LineBreak/>
+                            <Run Text="1) AutoCAD 提前启动并打开至少一个 DWG 文档"/>
+                            <LineBreak/>
+                            <Run Text="2) 在「设置」中配置 AutoCAD 安装路径和插件路径"/>
+                            <LineBreak/>
+                            <Run Text="3) 首次 NETLOAD 时若弹出安全提示，请点击「始终加载」"/>
+                        </TextBlock>
+                    </StackPanel>
+                </Border>
+
+                <Border Background="#FFF3E0" CornerRadius="4" Padding="12,8" Margin="0,0,0,12">
+                    <StackPanel>
+                        <TextBlock Text="离线回写" FontWeight="Bold" Foreground="#E65100" Margin="0,0,0,4"/>
+                        <TextBlock TextWrapping="Wrap" Foreground="#616161"
+                                   Text="不需要 AutoCAD。使用 ACadSharp 库直接修改 DWG 文件。排版为估算值，可能需要微调。适用于没有安装 AutoCAD 的电脑。"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Section 3: AutoCAD Configuration -->
+                <TextBlock Text="三、AutoCAD 配置（精确回写）" FontWeight="Bold" FontSize="14" Foreground="#37474F" Margin="0,5,0,8"/>
+
+                <Border Background="#E3F2FD" CornerRadius="4" Padding="12,8" Margin="0,0,0,12">
+                    <StackPanel>
+                        <TextBlock TextWrapping="Wrap" Foreground="#616161" Margin="0,0,0,6"
+                                   Text="如果需要使用 AutoCAD 精确回写，请按以下步骤配置："/>
+                        <TextBlock TextWrapping="Wrap" Foreground="#616161" Margin="0,0,0,4"
+                                   Text="1. 点击「设置」→ 在 AutoCAD 配置区域点击「自动检测」按钮"/>
+                        <TextBlock TextWrapping="Wrap" Foreground="#616161" Margin="0,0,0,4"
+                                   Text="2. 如果自动检测失败，手动点击「浏览」选择 AutoCAD 安装目录（包含 acad.exe 的文件夹）"/>
+                        <TextBlock TextWrapping="Wrap" Foreground="#616161" Margin="0,0,0,4"
+                                   Text="3. 在「插件路径」中指定 DwgTranslator.Cad.dll 的完整路径"/>
+                        <TextBlock TextWrapping="Wrap" Foreground="#616161" Margin="0,0,0,0"
+                                   Text="4. 保存设置后即可使用精确回写功能"/>
+
+                        <TextBlock TextWrapping="Wrap" FontWeight="Bold" Foreground="#37474F" Margin="0,8,0,4"
+                                   Text="DwgTranslator.Cad.dll 常见位置："/>
+                        <TextBlock TextWrapping="Wrap" FontFamily="Consolas" FontSize="11" Foreground="#1565C0" Margin="8,0,0,2"
+                                   Text="发布后：publish\DwgTranslator.Cad.dll"/>
+                        <TextBlock TextWrapping="Wrap" FontFamily="Consolas" FontSize="11" Foreground="#1565C0" Margin="8,0,0,2"
+                                   Text="Release：src\DwgTranslator.Cad\bin\Release\net8.0\DwgTranslator.Cad.dll"/>
+                        <TextBlock TextWrapping="Wrap" FontFamily="Consolas" FontSize="11" Foreground="#1565C0" Margin="8,0,0,0"
+                                   Text="Debug：src\DwgTranslator.Cad\bin\Debug\net8.0\DwgTranslator.Cad.dll"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Section 4: Developer Notes -->
+                <TextBlock Text="四、开发者编译配置" FontWeight="Bold" FontSize="14" Foreground="#37474F" Margin="0,5,0,8"/>
+
+                <Border Background="#F5F5F5" CornerRadius="4" Padding="12,8" Margin="0,0,0,12">
+                    <StackPanel>
+                        <TextBlock TextWrapping="Wrap" Foreground="#616161" Margin="0,0,0,6"
+                                   Text="DwgTranslator.Cad 项目编译时需要引用 AutoCAD 托管 DLL。通过以下方式之一配置路径："/>
+                        <TextBlock TextWrapping="Wrap" FontFamily="Consolas" FontSize="11" Foreground="#37474F" Margin="0,0,0,4"
+                                   Text="方式1: 设置环境变量"/>
+                        <TextBlock TextWrapping="Wrap" FontFamily="Consolas" FontSize="11" Foreground="#1565C0" Margin="8,0,0,6"
+                                   Text="set AUTO_CAD_DIR=C:\Program Files\Autodesk\AutoCAD 2026&#x0a;dotnet build"/>
+                        <TextBlock TextWrapping="Wrap" FontFamily="Consolas" FontSize="11" Foreground="#37474F" Margin="0,0,0,4"
+                                   Text="方式2: 命令行参数"/>
+                        <TextBlock TextWrapping="Wrap" FontFamily="Consolas" FontSize="11" Foreground="#1565C0" Margin="8,0,0,6"
+                                   Text="dotnet build -p:AutoCadDir=&quot;C:\Program Files\Autodesk\AutoCAD 2026&quot;"/>
+                        <TextBlock TextWrapping="Wrap" FontFamily="Consolas" FontSize="11" Foreground="#37474F" Margin="0,0,0,4"
+                                   Text="方式3: 创建 Directory.Build.props.user（已 git-ignored）"/>
+                        <TextBlock TextWrapping="Wrap" FontFamily="Consolas" FontSize="11" Foreground="#1565C0" Margin="8,0,0,0"
+                                   Text="&lt;Project&gt;&#x0a;  &lt;PropertyGroup&gt;&#x0a;    &lt;AutoCadDir&gt;C:\Program Files\Autodesk\AutoCAD 2026&lt;/AutoCadDir&gt;&#x0a;  &lt;/PropertyGroup&gt;&#x0a;&lt;/Project&gt;"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Section 5: FAQ -->
+                <TextBlock Text="五、常见问题" FontWeight="Bold" FontSize="14" Foreground="#37474F" Margin="0,5,0,8"/>
+
+                <Border Background="#FFF8E1" CornerRadius="4" Padding="12,8" Margin="0,0,0,4">
+                    <StackPanel>
+                        <TextBlock Text="Q: 导出 DWG 时提示「找不到 DwgTranslator.Cad.dll」？" FontWeight="Bold" Margin="0,0,0,3"/>
+                        <TextBlock TextWrapping="Wrap" Foreground="#616161"
+                                   Text="A: 在「设置」→「AutoCAD 配置」→「插件路径」中指定 DwgTranslator.Cad.dll 的完整路径。"/>
+                        <TextBlock TextWrapping="Wrap" FontFamily="Consolas" FontSize="11" Foreground="#1565C0" Margin="8,4,0,0"
+                                   Text="发布后：publish\DwgTranslator.Cad.dll&#x0a;Release编译：src\DwgTranslator.Cad\bin\Release\net8.0\DwgTranslator.Cad.dll&#x0a;Debug编译：src\DwgTranslator.Cad\bin\Debug\net8.0\DwgTranslator.Cad.dll"/>
+                    </StackPanel>
+                </Border>
+
+                <Border Background="#FFF8E1" CornerRadius="4" Padding="12,8" Margin="0,0,0,4">
+                    <StackPanel>
+                        <TextBlock Text="Q: AutoCAD 没有弹出「是否加载」的安全提示，是不是失败了？" FontWeight="Bold" Margin="0,0,0,3"/>
+                        <TextBlock TextWrapping="Wrap" Foreground="#616161"
+                                   Text="A: 不一定。以下情况不会弹出提示，均属正常："/>
+                        <TextBlock TextWrapping="Wrap" Foreground="#616161" Margin="8,4,0,0"
+                                   Text="• AutoCAD SECURELOAD 设为 0（不检查插件安全性）"/>
+                        <TextBlock TextWrapping="Wrap" Foreground="#616161" Margin="8,0,0,0"
+                                   Text="• DLL 所在目录已加入 AutoCAD 信任路径"/>
+                        <TextBlock TextWrapping="Wrap" Foreground="#616161" Margin="8,0,0,0"
+                                   Text="• 之前已对该 DLL 点击过「始终加载」"/>
+                        <TextBlock TextWrapping="Wrap" Foreground="#616161" Margin="0,4,0,0"
+                                   Text="只要导出 DWG 能正常完成，就说明插件已成功加载。可通过 AutoCAD 命令行查看执行结果。"/>
+                    </StackPanel>
+                </Border>
+
+                <Border Background="#FFF8E1" CornerRadius="4" Padding="12,8" Margin="0,0,0,4">
+                    <StackPanel>
+                        <TextBlock Text="Q: AutoCAD 弹出「是否加载来自非信任路径的程序集」？" FontWeight="Bold" Margin="0,0,0,3"/>
+                        <TextBlock TextWrapping="Wrap" Foreground="#616161"
+                                   Text="A: 请点击「始终加载」。这是 AutoCAD 的安全提示，首次加载 .NET 插件时会出现。"/>
+                    </StackPanel>
+                </Border>
+
+                <Border Background="#FFF8E1" CornerRadius="4" Padding="12,8" Margin="0,0,0,4">
+                    <StackPanel>
+                        <TextBlock Text="Q: 编译报错「AutoCAD directory not found」？" FontWeight="Bold" Margin="0,0,0,3"/>
+                        <TextBlock TextWrapping="Wrap" Foreground="#616161"
+                                   Text="A: 需要配置 AutoCAD DLL 引用路径。参见上方「开发者编译配置」部分，通过环境变量或 Directory.Build.props.user 指定。"/>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- Close Button -->
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+            <Button Content="关闭" Width="75" Height="28" Click="Close_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>

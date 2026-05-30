@@ -4,6 +4,7 @@
         xmlns:vm="clr-namespace:DwgTranslator.App.ViewModels"
         xmlns:conv="clr-namespace:DwgTranslator.App.Converters"
         Title="DWG Translator - 图纸中英文互译" Height="750" Width="1200"
+        Icon="/icon.ico"
         WindowStartupLocation="CenterScreen"
         Topmost="False"
         WindowStyle="None"
@@ -185,6 +186,8 @@
 
                 <Button Content="🗑 清空" Command="{Binding ClearAllCommand}" Padding="10,6" Margin="2"/>
                 <Button Content="⚙ 设置" Command="{Binding SettingsCommand}" Padding="10,6" Margin="2"/>
+                <Button Content="❓ 帮助" Command="{Binding ShowHelpCommand}" Padding="10,6" Margin="2"
+                        ToolTip="查看使用帮助和配置说明"/>
             </WrapPanel>
         </Border>
 

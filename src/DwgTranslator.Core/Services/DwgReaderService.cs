@@ -130,21 +130,36 @@ public class DwgReaderService : IDwgReaderService
         OriginalHeight = text.Height
     };
 
-    private static OurTextEntity CreateMTextEntity(CadMText mtext, string blockName) => new()
+    private static OurTextEntity CreateMTextEntity(CadMText mtext, string blockName)
     {
-        Handle = mtext.Handle.ToString(),
-        RawText = mtext.Value ?? string.Empty,
-        PlainText = !string.IsNullOrWhiteSpace(mtext.PlainText)
+        string rawValue = mtext.Value ?? string.Empty;
+        string plainText = !string.IsNullOrWhiteSpace(mtext.PlainText)
             ? mtext.PlainText
-            : StripMTextFormatCodes(mtext.Value ?? string.Empty),
-        FormatTemplate = mtext.Value ?? string.Empty,
-        EntityType = "MText", Height = mtext.Height, Rotation = mtext.Rotation,
-        TextStyleName = mtext.Style?.Name ?? "Standard", BlockName = blockName, IsXref = false,
-        Position = new Point3d(mtext.InsertPoint.X, mtext.InsertPoint.Y, mtext.InsertPoint.Z),
-        OriginalWidth = mtext.RectangleWidth > 0 ? mtext.RectangleWidth : EstimateTextWidth(
-            !string.IsNullOrWhiteSpace(mtext.PlainText) ? mtext.PlainText : StripMTextFormatCodes(mtext.Value ?? string.Empty), mtext.Height),
-        OriginalHeight = mtext.Height
-    };
+            : StripMTextFormatCodes(rawValue);
+        int lineCount = CountMTextHardLines(rawValue);
+
+        return new OurTextEntity
+        {
+            Handle = mtext.Handle.ToString(),
+            RawText = rawValue,
+            PlainText = plainText,
+            FormatTemplate = rawValue,
+            EntityType = "MText",
+            Height = mtext.Height,
+            Rotation = mtext.Rotation,
+            TextStyleName = mtext.Style?.Name ?? "Standard",
+            BlockName = blockName,
+            IsXref = false,
+            Position = new Point3d(mtext.InsertPoint.X, mtext.InsertPoint.Y, mtext.InsertPoint.Z),
+            OriginalWidth = mtext.RectangleWidth > 0 ? mtext.RectangleWidth : EstimateTextWidth(plainText, mtext.Height),
+            OriginalHeight = mtext.Height,
+            MTextRectangleWidth = mtext.RectangleWidth,
+            MTextLineSpacing = mtext.LineSpacing,
+            MTextLineSpacingStyle = (int)mtext.LineSpacingStyle,
+            MTextLineCount = lineCount,
+            MTextHasHardBreaks = lineCount > 1
+        };
+    }
 
     private static OurTextEntity CreateDimensionEntity(CadDimension dim, string blockName) => new()
     {
@@ -217,7 +232,7 @@ public class DwgReaderService : IDwgReaderService
         foreach (char c in text)
         {
             if (c == ' ')
-                width += height * 0.25;
+                width += height * 0.20;
             else if (c >= 0x4E00 && c <= 0x9FFF)      // CJK Unified Ideographs
                 width += height * 1.0;
             else if (c >= 0x3000 && c <= 0x303F)      // CJK Symbols and Punctuation
@@ -229,13 +244,13 @@ public class DwgReaderService : IDwgReaderService
             else if (c >= 0x30A0 && c <= 0x30FF)      // Katakana
                 width += height * 1.0;
             else if (char.IsUpper(c))
-                width += height * 0.6;
-            else if (char.IsLower(c))
-                width += height * 0.5;
-            else if (char.IsDigit(c))
                 width += height * 0.55;
+            else if (char.IsLower(c))
+                width += height * 0.45;
+            else if (char.IsDigit(c))
+                width += height * 0.50;
             else
-                width += height * 0.5;                // punctuation, symbols
+                width += height * 0.45;                // punctuation, symbols
         }
         return width;
     }
@@ -256,5 +271,16 @@ public class DwgReaderService : IDwgReaderService
             totalLines += Math.Max(1, (int)Math.Ceiling(lineWidth / rectWidth));
         }
         return Math.Max(1, totalLines);
+    }
+
+    /// <summary>
+    /// Counts hard line breaks (\P) in an MText raw value to determine original line count.
+    /// </summary>
+    private static int CountMTextHardLines(string rawValue)
+    {
+        if (string.IsNullOrEmpty(rawValue)) return 1;
+        // \P is the AutoCAD MText paragraph break
+        int count = rawValue.Split("\\P", StringSplitOptions.None).Length;
+        return Math.Max(1, count);
     }
 }

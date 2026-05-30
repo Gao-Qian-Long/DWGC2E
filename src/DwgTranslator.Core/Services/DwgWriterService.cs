@@ -410,8 +410,12 @@ public class DwgWriterService : IDwgWriterService
     }
 
     /// <summary>
-    /// Adaptive layout for MText: optimizes rectangle width, text height, and line spacing
-    /// to prevent overflow and keep best readability. Handles both fixed-width and free-width MText.
+    /// Adaptive layout for MText:
+    /// 1. Preserves original line spacing.
+    /// 2. FIXED-RECTANGLE MText: never expands width (designer already set it).
+    ///    Only scales down height when translated text needs more lines.
+    /// 3. FREE-WIDTH MText: sets a conservative rectangle width based on
+    ///    under-estimated text width to avoid over-wide sparse layout.
     /// </summary>
     private static void ApplyScaling(CadMText mtext, string translatedText, OurTextEntity ourEntity)
     {
@@ -422,40 +426,30 @@ public class DwgWriterService : IDwgWriterService
             double originalWidth = ourEntity.OriginalWidth;
             double originalHeight = ourEntity.OriginalHeight > 0 ? ourEntity.OriginalHeight : mtext.Height;
             double currentHeight = mtext.Height;
+            double originalLineSpacing = ourEntity.MTextLineSpacing > 0 ? ourEntity.MTextLineSpacing : 1.0;
 
-            // Always use compact line spacing for better readability
-            mtext.LineSpacing = 0.85;
-            mtext.LineSpacingStyle = LineSpacingStyleType.Exact;
+            // Preserve original line spacing from source drawing
+            if (ourEntity.MTextLineSpacing > 0)
+                mtext.LineSpacing = ourEntity.MTextLineSpacing;
+            if (ourEntity.MTextLineSpacingStyle > 0)
+                mtext.LineSpacingStyle = (LineSpacingStyleType)ourEntity.MTextLineSpacingStyle;
 
             string textForEstimation = translatedText.Replace("\\P", " ");
-            double translatedWidth = EstimateTextWidth(textForEstimation, currentHeight);
 
             if (mtext.RectangleWidth > 0)
             {
+                // FIXED rectangle width: do NOT expand — designer already tuned it.
+                // Only scale down height if more lines are needed.
                 double rectWidth = mtext.RectangleWidth;
 
-                // Estimate original and translated line counts
                 string originalText = (ourEntity.RawText ?? string.Empty).Replace("\\P", " ");
                 int originalLines = EstimateLineCount(originalText, originalHeight, rectWidth);
                 int translatedLines = EstimateLineCount(textForEstimation, currentHeight, rectWidth);
 
-                // If translated text needs more lines, apply adaptive optimizations
                 if (translatedLines > originalLines)
                 {
-                    double widthRatio = translatedWidth / Math.Max(originalWidth, 1.0);
-
-                    // 1. Moderately expand rectangle width (up to 1.4x) to reduce line count
-                    if (widthRatio > 1.2)
-                    {
-                        double newRectWidth = rectWidth * Math.Min(widthRatio, 1.4);
-                        mtext.RectangleWidth = newRectWidth;
-                        rectWidth = newRectWidth;
-                        translatedLines = EstimateLineCount(textForEstimation, currentHeight, rectWidth);
-                    }
-
-                    // 2. Scale down height to fit within approximate original total height
-                    double originalTotalHeight = originalLines * originalHeight; // default spacing ~1.0
-                    double translatedTotalHeight = translatedLines * currentHeight * 0.85;
+                    double originalTotalHeight = originalLines * originalHeight * originalLineSpacing;
+                    double translatedTotalHeight = translatedLines * currentHeight * originalLineSpacing;
 
                     if (translatedTotalHeight > originalTotalHeight && originalTotalHeight > 0)
                     {
@@ -469,30 +463,35 @@ public class DwgWriterService : IDwgWriterService
                             mtext.Height = newHeight;
                             currentHeight = newHeight;
                             translatedLines = EstimateLineCount(textForEstimation, currentHeight, rectWidth);
-                            translatedTotalHeight = translatedLines * currentHeight * 0.85;
+                            translatedTotalHeight = translatedLines * currentHeight * originalLineSpacing;
                         }
                     }
 
-                    // 3. Fine-tune line spacing if still slightly overflowing
+                    // Fine-tune line spacing only if still slightly overflowing
                     if (translatedTotalHeight > originalTotalHeight * 1.05 && originalTotalHeight > 0)
                     {
                         double spacing = originalTotalHeight / (translatedLines * currentHeight);
                         if (spacing < 0.6) spacing = 0.6;
-                        if (spacing > 1.0) spacing = 1.0;
+                        if (spacing > originalLineSpacing) spacing = originalLineSpacing;
                         mtext.LineSpacing = spacing;
                     }
                 }
             }
             else
             {
-                // No rectangle width defined - set one to control layout
-                if (translatedWidth > originalWidth * 1.1)
+                // FREE width: set a conservative rectangle width.
+                // Use a slightly under-estimated width so MText never creates
+                // an over-wide sparse layout.
+                double translatedWidth = EstimateTextWidth(textForEstimation, currentHeight);
+                if (translatedWidth > originalWidth * 1.05)
                 {
-                    // Set rectangle width to avoid overly long single line
-                    double targetWidth = Math.Min(originalWidth * 1.3, Math.Max(originalWidth, translatedWidth * 0.6));
+                    // Conservative: target width = min(original*1.2, max(original, translated*0.55))
+                    // The 0.55 factor under-estimates so the actual rendered text
+                    // comfortably fills the width without excessive whitespace.
+                    double targetWidth = Math.Min(originalWidth * 1.2,
+                        Math.Max(originalWidth, translatedWidth * 0.55));
                     mtext.RectangleWidth = targetWidth;
 
-                    // Scale height if text is significantly wider
                     double scale = originalWidth / translatedWidth;
                     if (scale < 0.6) scale = 0.6;
                     double newHeight = originalHeight * scale;
@@ -501,8 +500,7 @@ public class DwgWriterService : IDwgWriterService
                 }
                 else if (translatedWidth > 0)
                 {
-                    // Set natural width to prevent sparse layout (words too far apart)
-                    mtext.RectangleWidth = Math.Max(translatedWidth * 1.05, originalWidth * 0.5);
+                    mtext.RectangleWidth = Math.Min(translatedWidth * 1.02, originalWidth * 1.2);
                 }
             }
         }
@@ -519,7 +517,7 @@ public class DwgWriterService : IDwgWriterService
         foreach (char c in text)
         {
             if (c == ' ')
-                width += height * 0.25;
+                width += height * 0.20;
             else if (c >= 0x4E00 && c <= 0x9FFF)      // CJK Unified Ideographs
                 width += height * 1.0;
             else if (c >= 0x3000 && c <= 0x303F)      // CJK Symbols and Punctuation
@@ -531,13 +529,13 @@ public class DwgWriterService : IDwgWriterService
             else if (c >= 0x30A0 && c <= 0x30FF)      // Katakana
                 width += height * 1.0;
             else if (char.IsUpper(c))
-                width += height * 0.6;
-            else if (char.IsLower(c))
-                width += height * 0.5;
-            else if (char.IsDigit(c))
                 width += height * 0.55;
+            else if (char.IsLower(c))
+                width += height * 0.45;
+            else if (char.IsDigit(c))
+                width += height * 0.50;
             else
-                width += height * 0.5;                // punctuation, symbols
+                width += height * 0.45;                // punctuation, symbols
         }
         return width;
     }

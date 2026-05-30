@@ -17,4 +17,10 @@ public class AppConfig
     public double AutoScaleFactor { get; set; } = 0.95;
     public string ExportDirectory { get; set; } = "exports";
     public string LogDirectory { get; set; } = "logs";
+
+    /// <summary>AutoCAD installation directory (e.g. C:\Program Files\Autodesk\AutoCAD 2026). Used for COM detection.</summary>
+    public string AutoCadInstallPath { get; set; } = string.Empty;
+
+    /// <summary>Path to DwgTranslator.Cad.dll plugin for NETLOAD. Empty = auto-detect.</summary>
+    public string CadPluginPath { get; set; } = string.Empty;
 }

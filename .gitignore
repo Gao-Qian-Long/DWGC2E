@@ -15,6 +15,8 @@ packages/
 .vs/
 *.suo
 *.user
+# Per-user AutoCAD path override (create this file to set your AutoCAD path)
+Directory.Build.props.user
 *.userosscache
 *.sln.docstates
 *.userprefs
@@ -35,6 +37,7 @@ appsettings*.json
 # ===== Logs =====
 logs/
 *.log
+*.binlog
 Serilog/
 
 # ===== Translation Cache =====
@@ -70,3 +73,7 @@ TestResults/
 *.trx
 *.coverage
 .codebuddy/
+
+# ===== Development Notes =====
+debug.md
+notes.md

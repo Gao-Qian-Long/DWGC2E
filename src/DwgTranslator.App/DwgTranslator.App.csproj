@@ -10,7 +10,14 @@
     <Version>1.0.0</Version>
     <Product>DWG Translator</Product>
     <Company>DWG Translator</Company>
+    <ApplicationIcon>icon.ico</ApplicationIcon>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Content Include="icon.ico">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
 
   <!-- Self-contained publish profile -->
   <PropertyGroup Condition="'$(Configuration)' == 'Release'">
@@ -31,4 +38,5 @@
   <ItemGroup>
     <ProjectReference Include="..\DwgTranslator.Core\DwgTranslator.Core.csproj" />
   </ItemGroup>
+
 </Project>

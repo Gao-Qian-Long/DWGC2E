@@ -6,24 +6,35 @@
     <RootNamespace>DwgTranslator.Cad</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
-    <!-- AutoCAD .NET API references - adjust paths to your AutoCAD installation -->
-    <Reference Include="AcCoreMgd">
-      <HintPath>D:\autocad2021\AutoCAD 2021\accoremgd.dll</HintPath>
+    <!--
+      AutoCAD .NET API references — uses $(AutoCadDir) from Directory.Build.props.
+      If build fails with "DLL not found", set AutoCadDir via:
+        - Environment variable: set AUTO_CAD_DIR=C:\Program Files\Autodesk\AutoCAD 2026
+        - Command line: dotnet build -p:AutoCadDir="C:\Program Files\Autodesk\AutoCAD 2026"
+        - Create Directory.Build.props.user with <AutoCadDir> override
+    -->
+    <Reference Include="AcCoreMgd" Condition="'$(AutoCadDir)' != ''">
+      <HintPath>$(AutoCadDir)\accoremgd.dll</HintPath>
       <Private>False</Private>
     </Reference>
-    <Reference Include="AcDbMgd">
-      <HintPath>D:\autocad2021\AutoCAD 2021\acdbmgd.dll</HintPath>
+    <Reference Include="AcDbMgd" Condition="'$(AutoCadDir)' != ''">
+      <HintPath>$(AutoCadDir)\acdbmgd.dll</HintPath>
       <Private>False</Private>
     </Reference>
-    <Reference Include="AcMgd">
-      <HintPath>D:\autocad2021\AutoCAD 2021\AcMgd.dll</HintPath>
+    <Reference Include="AcMgd" Condition="'$(AutoCadDir)' != ''">
+      <HintPath>$(AutoCadDir)\AcMgd.dll</HintPath>
       <Private>False</Private>
     </Reference>
-    <Reference Include="AcCui">
-      <HintPath>D:\autocad2021\AutoCAD 2021\AcCui.dll</HintPath>
+    <Reference Include="AcCui" Condition="'$(AutoCadDir)' != ''">
+      <HintPath>$(AutoCadDir)\AcCui.dll</HintPath>
       <Private>False</Private>
     </Reference>
   </ItemGroup>
+  <!-- Fail build early with a clear message if AutoCAD directory is not configured -->
+  <Target Name="CheckAutoCadDir" BeforeTargets="ResolveAssemblyReferences">
+    <Error Condition="'$(AutoCadDir)' == '' Or !Exists('$(AutoCadDir)')"
+           Text="AutoCAD directory not found. Please set AutoCadDir in Directory.Build.props, via environment variable AUTO_CAD_DIR, or command line: dotnet build -p:AutoCadDir='C:\Program Files\Autodesk\AutoCAD 2026'" />
+  </Target>
   <ItemGroup>
     <ProjectReference Include="..\DwgTranslator.Core\DwgTranslator.Core.csproj" />
   </ItemGroup>

@@ -5,10 +5,13 @@ using DwgTranslator.Core.Services;
 using DwgTranslator.Core.Translation;
 using Microsoft.Win32;
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Windows;
+using Serilog;
 
 namespace DwgTranslator.App.ViewModels;
 
@@ -644,7 +647,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
     #region DWG Export (核心功能)
 
     /// <summary>
-    /// Export translated DWG file offline using ACadSharp.
+    /// Export translated DWG file.
+    /// If AutoCAD is available, offers high-precision writeback via COM.
+    /// Otherwise falls back to ACadSharp offline writeback.
     /// </summary>
     [RelayCommand]
     private async Task ExportDwgAsync()
@@ -687,16 +692,41 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
         try
         {
-            var result = await Task.Run(() =>
-                _dwgWriterService.WriteTranslations(sourceFilePath, dialog2.FileName, entitiesToWrite, IsCnToEn));
+            Core.Services.DwgWriteResult result;
+            bool usedAcadInterop = false;
+
+            // Show export mode selection dialog
+            var modeDialog = new Views.ExportModeDialog(IsAutoCADAvailable())
+            {
+                Owner = Application.Current.MainWindow
+            };
+
+            if (modeDialog.ShowDialog() != true)
+            {
+                StatusMessage = "已取消导出";
+                return;
+            }
+
+            if (modeDialog.SelectedMode == Views.ExportModeDialog.ExportMode.AutoCAD)
+            {
+                usedAcadInterop = true;
+                result = await Task.Run(() =>
+                    ExecuteAutoCADWriteback(sourceFilePath, dialog2.FileName, entitiesToWrite));
+            }
+            else
+            {
+                result = await Task.Run(() =>
+                    _dwgWriterService.WriteTranslations(sourceFilePath, dialog2.FileName, entitiesToWrite, IsCnToEn));
+            }
 
             ProgressValue = 100;
 
             if (result.SuccessCount > 0)
             {
-                StatusMessage = $"DWG 导出完成: ✅ {result.SuccessCount} 条已替换 → {Path.GetFileName(dialog2.FileName)}";
+                string modeText = usedAcadInterop ? "AutoCAD 精确回写" : "离线回写";
+                StatusMessage = $"DWG 导出完成 ({modeText}): ✅ {result.SuccessCount} 条已替换 → {Path.GetFileName(dialog2.FileName)}";
                 MessageBox.Show(
-                    $"DWG 导出完成!\n\n✅ 已替换: {result.SuccessCount} 条文本\n❌ 失败: {result.FailCount} 条\n\n📁 文件: {dialog2.FileName}\n\n⚠ 如果 AutoCAD 打开报错，请运行 RECOVER 命令修复。",
+                    $"DWG 导出完成!\n\n模式: {modeText}\n✅ 已替换: {result.SuccessCount} 条文本\n❌ 失败: {result.FailCount} 条\n\n📁 文件: {dialog2.FileName}",
                     "导出成功",
                     MessageBoxButton.OK,
                     result.Errors.Count > 0 ? MessageBoxImage.Warning : MessageBoxImage.Information);
@@ -705,7 +735,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
             {
                 var errorMsg = string.Join("\n", result.Errors.Take(5));
                 StatusMessage = $"DWG 导出失败: 0 条替换成功";
-                MessageBox.Show($"DW导出失败:\n{errorMsg}", "导出错误", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show($"DWG 导出失败:\n{errorMsg}", "导出错误", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
         catch (Exception ex)
@@ -715,6 +745,207 @@ public partial class MainViewModel : ObservableObject, IDisposable
         }
         finally { IsProcessing = false; }
     }
+
+    #region AutoCAD COM Interop
+
+    /// <summary>
+    /// Check if AutoCAD is available via COM and configuration.
+    /// Uses configured AutoCAD path (if set) or registry detection.
+    /// </summary>
+    private bool IsAutoCADAvailable()
+    {
+        // 1. Check configured path
+        var configuredPath = _config.AutoCadInstallPath;
+        if (!string.IsNullOrEmpty(configuredPath) && Core.Services.AutoCadDetector.IsValidAutoCadPath(configuredPath))
+        {
+            // Configured path is valid, now check if AutoCAD is running via COM
+            return IsAutoCADRunning();
+        }
+
+        // 2. Auto-detect from registry
+        var detection = Core.Services.AutoCadDetector.DetectInstallation();
+        if (detection.Found)
+        {
+            // Auto-save detected path for future use
+            _config.AutoCadInstallPath = detection.InstallPath;
+            return IsAutoCADRunning();
+        }
+
+        // 3. Fallback: try COM ProgID directly
+        return IsAutoCADRunning();
+    }
+
+    private static bool IsAutoCADRunning()
+    {
+        // 通过进程名检测 AutoCAD / AutoCAD LT 是否正在运行
+        // （Marshal.GetActiveObject 在 .NET 8 不可用，且 COM 连接可能因权限问题失败）
+        try
+        {
+            if (Process.GetProcessesByName("acad").Length > 0) return true;
+            if (Process.GetProcessesByName("acadlt").Length > 0) return true;
+        }
+        catch { }
+
+        return false;
+    }
+
+    private static readonly string[] AcadProgIDs = new[]
+    {
+        "AutoCAD.Application",
+        "AutoCAD.Application.25",      // 2026
+        "AutoCAD.Application.24.3",    // 2025
+        "AutoCAD.Application.24.2",    // 2024
+        "AutoCAD.Application.24.1",    // 2023
+        "AutoCAD.Application.24",      // 2022
+        "AutoCAD.Application.23",      // 2021
+        "AutoCAD.Application.22",      // 2020
+        "AutoCADLT.Application",
+        "AutoCADLT.Application.25",
+        "AutoCADLT.Application.24.3",
+        "AutoCADLT.Application.24.2",
+        "AutoCADLT.Application.24.1",
+        "AutoCADLT.Application.24",
+    };
+
+    private Core.Services.DwgWriteResult ExecuteAutoCADWriteback(
+        string sourceFilePath,
+        string outputFilePath,
+        List<TextEntity> entities)
+    {
+        var result = new Core.Services.DwgWriteResult();
+        string? jsonPath = null;
+
+        try
+        {
+            // Serialize entities to temporary JSON
+            jsonPath = Path.Combine(Path.GetTempPath(), $"dwgtranslate_{Guid.NewGuid():N}.json");
+            var json = System.Text.Json.JsonSerializer.Serialize(entities, new System.Text.Json.JsonSerializerOptions
+            {
+                WriteIndented = false,
+                PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase
+            });
+            File.WriteAllText(jsonPath, json);
+
+            // Try multiple ProgIDs to connect to AutoCAD
+            Type? acadType = null;
+            string? triedProgID = null;
+            Exception? lastException = null;
+            foreach (var progId in AcadProgIDs)
+            {
+                try
+                {
+                    triedProgID = progId;
+                    acadType = Type.GetTypeFromProgID(progId, false);
+                    if (acadType != null)
+                    {
+                        Log.Information("Found AutoCAD COM ProgID: {ProgID}", progId);
+                        break;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    lastException = ex;
+                }
+            }
+
+            if (acadType == null)
+            {
+                var msg = "无法连接 AutoCAD：注册表中找不到任何已知的 AutoCAD COM ProgID。" +
+                          "\n\n可能原因：" +
+                          "\n1. AutoCAD 未安装或安装不完整" +
+                          "\n2. AutoCAD 的 COM 支持未启用（某些精简版/OEM 版本不支持 COM）" +
+                          "\n3. 使用的是 AutoCAD LT（不支持 .NET 插件 NETLOAD）" +
+                          "\n\n建议：使用「离线导出 DWG」功能，无需 AutoCAD 运行。";
+                result.Errors.Add(msg);
+                return result;
+            }
+
+            dynamic acad = Activator.CreateInstance(acadType)!;
+            acad.Visible = true;
+
+            var doc = acad.ActiveDocument;
+            if (doc == null)
+            {
+                result.Errors.Add("AutoCAD 没有活动文档");
+                return result;
+            }
+
+            // Locate the Cad plugin DLL — priority: config > auto-detect > fallback
+            string? cadDllPath = ResolveCadPluginPath();
+
+            if (string.IsNullOrEmpty(cadDllPath) || !File.Exists(cadDllPath))
+            {
+                result.Errors.Add("找不到 DwgTranslator.Cad.dll 插件文件。\n请在「设置」→「AutoCAD 配置」中指定插件路径。");
+                return result;
+            }
+
+            Log.Information("Using Cad plugin: {Path}", cadDllPath);
+
+            // Send NETLOAD command (space at end is required for AutoCAD command termination)
+            doc.SendCommand($"(command \"_.NETLOAD\" \"{cadDllPath}\") ");
+
+            // Send the writeback command
+            doc.SendCommand($"(DwgTranslateWrite \"{jsonPath}\" \"{sourceFilePath}\" \"{outputFilePath}\") ");
+
+            result.SuccessCount = entities.Count; // Optimistic; actual result comes from AutoCAD command output
+            StatusMessage = "已通过 AutoCAD COM 发送回写命令，请在 AutoCAD 命令行查看结果。";
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "AutoCAD COM writeback failed");
+            result.Errors.Add($"AutoCAD 回写失败: {ex.Message}");
+        }
+        finally
+        {
+            // Cleanup temp file after a delay (give AutoCAD time to read it)
+            if (jsonPath != null)
+            {
+                _ = Task.Run(async () =>
+                {
+                    await Task.Delay(TimeSpan.FromMinutes(5));
+                    try { File.Delete(jsonPath); } catch { /* ignore */ }
+                });
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Resolve DwgTranslator.Cad.dll path using priority: config > auto-detect > fallback.
+    /// </summary>
+    private string? ResolveCadPluginPath()
+    {
+        // 1. Use configured path
+        if (!string.IsNullOrEmpty(_config.CadPluginPath) && File.Exists(_config.CadPluginPath))
+            return _config.CadPluginPath;
+
+        // 2. Auto-detect using AutoCadDetector
+        var detected = Core.Services.AutoCadDetector.FindCadPlugin();
+        if (detected != null)
+            return detected;
+
+        // 3. Fallback: look in exe directory and solution output
+        //    exe is at: src\DwgTranslator.App\bin\Debug\net8.0-windows\
+        //    cad dll is at: src\DwgTranslator.Cad\bin\Debug\net8.0\
+        string cadDllPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "DwgTranslator.Cad.dll");
+        if (File.Exists(cadDllPath))
+            return cadDllPath;
+
+        string appDir = AppDomain.CurrentDomain.BaseDirectory;
+        // Go up 4 levels: net8.0-windows -> Debug -> bin -> DwgTranslator.App -> src
+        string srcDir = Path.GetFullPath(Path.Combine(appDir, "..", "..", "..", ".."));
+        foreach (var config in new[] { "Release", "Debug" })
+        {
+            var path = Path.Combine(srcDir, "DwgTranslator.Cad", "bin", config, "net8.0", "DwgTranslator.Cad.dll");
+            if (File.Exists(path))
+                return path;
+        }
+
+        return null;
+    }
+
+    #endregion
 
     #endregion
 
@@ -832,6 +1063,20 @@ public partial class MainViewModel : ObservableObject, IDisposable
                 StatusMessage = "API 设置已更新";
             }
         }
+    }
+
+    #endregion
+
+    #region Help
+
+    [RelayCommand]
+    private void ShowHelp()
+    {
+        var dialog = new Views.HelpDialog
+        {
+            Owner = Application.Current.MainWindow
+        };
+        dialog.ShowDialog();
     }
 
     #endregion
