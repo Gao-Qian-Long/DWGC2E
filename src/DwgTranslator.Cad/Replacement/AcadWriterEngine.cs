@@ -289,40 +289,44 @@ public class AcadWriterEngine
                     if (ourEntity.MTextLineSpacingStyle > 0)
                         mtext.LineSpacingStyle = (LineSpacingStyle)ourEntity.MTextLineSpacingStyle;
 
-                    // Prepare translated content with appropriate line breaks
+                    // Prepare translated content.
+                    // Only rebuild for hard \P breaks (preserve intentional line structure).
+                    // For ALL other cases, use raw translated text — LayoutOptimizer will
+                    // set the correct Width, and AutoCAD auto-wraps at that boundary.
+                    // Do NOT pre-insert \P breaks: LayoutOptimizer changes Width afterward,
+                    // making pre-computed break positions incorrect.
                     string contents;
                     if (ourEntity.MTextHasHardBreaks && ourEntity.MTextLineCount > 1)
                     {
-                        // Hard line breaks: rebuild to match original line count
                         contents = Core.Services.TextWidthEstimator.RebuildMTextWithLineBreaks(
                             translatedText, ourEntity.MTextLineCount, mtext.TextHeight);
-                    }
-                    else if (ourEntity.OriginalWidth > 0)
-                    {
-                        // Fixed-width wrap (no hard \P): reflow within original width
-                        // so text doesn't become a single overflowing line.
-                        contents = Core.Services.TextWidthEstimator.ReflowTextToWidth(
-                            translatedText, ourEntity.OriginalWidth, mtext.TextHeight);
                     }
                     else
                     {
                         contents = translatedText;
                     }
 
-                    // Set Contents so LayoutOptimizer analyzes translated text (not original Chinese)
+                    // Set Contents so LayoutOptimizer analyzes translated text
                     mtext.Contents = contents
                         .Replace("\r\n", "\\P")
                         .Replace("\n", "\\P")
                         .Replace("\r", "\\P");
 
                     MapFont(mtext, ourEntity.TextStyleName, cnToEn, tr);
-                    // Disable column mode to prevent AutoCAD from stretching
-                    // text to fill column width (causes excessive word spacing).
-                    mtext.ColumnType = ColumnType.NoColumns;
+
+                    // LayoutOptimizer determines final Width and TextHeight
                     closestFrame = CollisionDetector.FindClosestFrame(mtext.Location, frames);
                     LayoutOptimizer.OptimizeMText(mtext, contents, ourEntity, closestFrame, tr);
 
-                    // Re-assert Contents after Width/TextHeight changes
+                    // CRITICAL: disable dynamic columns AFTER Width is set.
+                    // AutoCAD docs: "You MUST set Width > 0 before calling ColumnType.
+                    // If Width=0, DynamicColumns stretches text to fill column width,
+                    // causing excessive word spacing."
+                    if (mtext.Width <= 0)
+                        mtext.Width = Math.Max(ourEntity.OriginalWidth, 50.0);
+                    mtext.ColumnType = ColumnType.NoColumns;
+
+                    // Re-assert Contents after all Width/ColumnType changes
                     mtext.Contents = contents
                         .Replace("\r\n", "\\P")
                         .Replace("\n", "\\P")
