@@ -238,9 +238,9 @@ public class AcadWriterEngine
                         try
                         {
                             att.TextString = attEntity.TranslatedText;
-                            double attOrigHt = attEntity.OriginalHeight > 0 ? attEntity.OriginalHeight : att.Height;
-                            var attFrame = CollisionDetector.FindClosestFrame(att.Position, frames);
-                            writtenEntities.Add(new WrittenEntity(att, btr, attOrigHt, attFrame));
+                            // AttributeReference is NOT tracked for collision resolution —
+                            // attributes are part of block inserts and don't need independent
+                            // geometry collision checking.
                             count++;
                             unprocessed.Remove(compoundHandle);
                         }
@@ -289,12 +289,20 @@ public class AcadWriterEngine
                     if (ourEntity.MTextLineSpacingStyle > 0)
                         mtext.LineSpacingStyle = (LineSpacingStyle)ourEntity.MTextLineSpacingStyle;
 
-                    // Prepare translated content
+                    // Prepare translated content with appropriate line breaks
                     string contents;
                     if (ourEntity.MTextHasHardBreaks && ourEntity.MTextLineCount > 1)
                     {
+                        // Hard line breaks: rebuild to match original line count
                         contents = Core.Services.TextWidthEstimator.RebuildMTextWithLineBreaks(
                             translatedText, ourEntity.MTextLineCount, mtext.TextHeight);
+                    }
+                    else if (ourEntity.OriginalWidth > 0)
+                    {
+                        // Fixed-width wrap (no hard \P): reflow within original width
+                        // so text doesn't become a single overflowing line.
+                        contents = Core.Services.TextWidthEstimator.ReflowTextToWidth(
+                            translatedText, ourEntity.OriginalWidth, mtext.TextHeight);
                     }
                     else
                     {
@@ -308,6 +316,9 @@ public class AcadWriterEngine
                         .Replace("\r", "\\P");
 
                     MapFont(mtext, ourEntity.TextStyleName, cnToEn, tr);
+                    // Disable column mode to prevent AutoCAD from stretching
+                    // text to fill column width (causes excessive word spacing).
+                    mtext.ColumnType = ColumnType.NoColumns;
                     closestFrame = CollisionDetector.FindClosestFrame(mtext.Location, frames);
                     LayoutOptimizer.OptimizeMText(mtext, contents, ourEntity, closestFrame, tr);
 
@@ -371,9 +382,9 @@ public class AcadWriterEngine
         List<WrittenEntity> written, Transaction tr, Database db)
     {
         const int maxIterations = 3;
-        const double frameMinRatio = 0.50;   // Frame: allow down to 50% of original
-        const double geoMinRatio = 0.65;      // Geometry: allow down to 65% (better readability)
-        const double overlapMinRatio = 0.65;  // Overlap: allow down to 65%
+        const double frameMinRatio = 0.80;   // Frame: allow down to 80% of original
+        const double geoMinRatio = 0.80;      // Geometry: 80% floor — background mask handles remainder
+        const double overlapMinRatio = 0.80;  // Overlap: 80% floor — background mask prevents visual clash
 
         if (written.Count == 0) return;
 
@@ -389,12 +400,13 @@ public class AcadWriterEngine
                 double curHeight;
                 if (we.Entity is MText mt) curHeight = mt.TextHeight;
                 else if (we.Entity is DBText dbt) curHeight = dbt.Height;
+                else if (we.Entity is AttributeReference att) curHeight = att.Height;
                 else continue;
 
                 double trueOriginalHeight = we.OriginalHeight;
 
                 // (a) FRAME BOUNDARY: scale if entity extends outside drawing frame.
-                //     Uses frameMinRatio for floor (50% of TRUE original).
+                //     Uses frameMinRatio for floor (65% of TRUE original).
                 if (we.Frame.HasValue)
                 {
                     if (EnsureEntityFitsFrame(we.Entity, we.Frame.Value, curHeight, frameMinRatio))
@@ -403,12 +415,17 @@ public class AcadWriterEngine
                         // Re-read height after scaling
                         if (we.Entity is MText mt2) curHeight = mt2.TextHeight;
                         else if (we.Entity is DBText dbt2) curHeight = dbt2.Height;
+                        else if (we.Entity is AttributeReference att2) curHeight = att2.Height;
                     }
                 }
 
-                // (b) CROSS-LAYER: scale if collides with existing geometry (lines, polylines, etc.)
-                //     Uses geoMinRatio for floor (65% of TRUE original) for readability.
-                if (curHeight > trueOriginalHeight * geoMinRatio)
+                // (b) CROSS-LAYER: resolve interference with existing geometry.
+                //     CRITICAL: run when text is BELOW original height (was over-scaled
+                //     by LayoutOptimizer in Phase 1). The method can RESTORE text to
+                //     the min floor (geoMinRatio * trueOriginalHeight) when no collisions exist.
+                //     Old condition "curHeight > floor" SKIPPED restoration, trapping text
+                //     at LayoutOptimizer's aggressive scale (40-50%).
+                if (curHeight < trueOriginalHeight)
                 {
                     bool resolved = CollisionDetector.TryResolveCrossLayerCollisions(
                         we.Entity, we.Block, tr, curHeight, trueOriginalHeight, geoMinRatio, db);
@@ -417,12 +434,38 @@ public class AcadWriterEngine
                         crossLayerResolved++;
                         if (we.Entity is MText mt3) curHeight = mt3.TextHeight;
                         else if (we.Entity is DBText dbt3) curHeight = dbt3.Height;
+                        else if (we.Entity is AttributeReference att3) curHeight = att3.Height;
                     }
                 }
 
-                // (c) ENTITY OVERLAPS: scale if translated texts overlap each other.
-                //     Uses overlapMinRatio for floor (65% of TRUE original).
-                if (curHeight > trueOriginalHeight * overlapMinRatio)
+                // (c) MText WIDTH ADJUSTMENT: if scaling hit the floor, try changing
+                //     the wrapping width to alter text aspect ratio without shrinking further.
+                if (we.Entity is MText mtw && curHeight <= trueOriginalHeight * geoMinRatio + 0.01)
+                {
+                    var geoColliders = CollisionDetector.CollectEntityColliders(
+                        mtw, we.Block, tr, trueOriginalHeight, db);
+                    if (geoColliders.Count > 0)
+                    {
+                        // Compute actual geometric width for accurate test-width derivation.
+                        // When mtext.Width <= 0 (free-width), TryResolveMTextByWidthAdjustment
+                        // uses originalRectWidth as fallback. Passing 0 forces a 100-unit fallback
+                        // which produces irrelevant test widths (e.g. 55, 75, 140 units).
+                        double actualRectWidth;
+                        try
+                        {
+                            mtw.RecordGraphicsModified(true);
+                            var mtwBounds = CollisionDetector.GetCorrectedBounds(mtw);
+                            actualRectWidth = mtwBounds.MaxPoint.X - mtwBounds.MinPoint.X;
+                        }
+                        catch { actualRectWidth = 0; }
+                        if (CollisionDetector.TryResolveMTextByWidthAdjustment(
+                            mtw, geoColliders, curHeight, trueOriginalHeight, actualRectWidth))
+                            crossLayerResolved++; // Width adjustment resolved interference
+                    }
+                }
+
+                // (d) ENTITY OVERLAPS: restore to floor if text was over-scaled in Phase 1.
+                if (curHeight < trueOriginalHeight)
                 {
                     var otherEntities = written
                         .Where(o => !ReferenceEquals(o, we))
@@ -473,9 +516,22 @@ public class AcadWriterEngine
 
             if (styleId == ObjectId.Null)
             {
-                // Create new style
+                // Create new style with proper font file name
                 textStyleTable.UpgradeOpen();
                 var newStyle = new TextStyleTableRecord { Name = targetFont };
+                bool isShx = targetFont.EndsWith(".shx", StringComparison.OrdinalIgnoreCase);
+                if (isShx)
+                {
+                    newStyle.FileName = targetFont;
+                    newStyle.BigFontFileName = string.Empty;
+                }
+                else
+                {
+                    // TrueType font — set via Font property so AutoCAD uses the
+                    // correct system font instead of defaulting to txt.shx.
+                    newStyle.Font = new Autodesk.AutoCAD.GraphicsInterface.FontDescriptor(
+                        targetFont, /*bold*/false, /*italic*/false, 0, 0);
+                }
                 styleId = textStyleTable.Add(newStyle);
                 tr.AddNewlyCreatedDBObject(newStyle, true);
             }
@@ -516,6 +572,17 @@ public class AcadWriterEngine
             {
                 textStyleTable.UpgradeOpen();
                 var newStyle = new TextStyleTableRecord { Name = targetFont };
+                bool isShx = targetFont.EndsWith(".shx", StringComparison.OrdinalIgnoreCase);
+                if (isShx)
+                {
+                    newStyle.FileName = targetFont;
+                    newStyle.BigFontFileName = string.Empty;
+                }
+                else
+                {
+                    newStyle.Font = new Autodesk.AutoCAD.GraphicsInterface.FontDescriptor(
+                        targetFont, /*bold*/false, /*italic*/false, 0, 0);
+                }
                 styleId = textStyleTable.Add(newStyle);
                 tr.AddNewlyCreatedDBObject(newStyle, true);
             }
@@ -541,7 +608,7 @@ public class AcadWriterEngine
     ///
     /// Returns true if the entity was modified (scaled to fit frame).
     /// </summary>
-    private static bool EnsureEntityFitsFrame(Entity textEntity, Extents3d frame, double originalHeight, double minHeightRatio = 0.4)
+    private static bool EnsureEntityFitsFrame(Entity textEntity, Extents3d frame, double originalHeight, double minHeightRatio = 0.50)
     {
         try
         {
@@ -579,6 +646,13 @@ public class AcadWriterEngine
                 if (newHeight < originalHeight * minHeightRatio)
                     newHeight = originalHeight * minHeightRatio;
                 dbText.Height = newHeight;
+            }
+            else if (textEntity is AttributeReference attrRef)
+            {
+                double newHeight = attrRef.Height * scale;
+                if (newHeight < originalHeight * minHeightRatio)
+                    newHeight = originalHeight * minHeightRatio;
+                attrRef.Height = newHeight;
             }
 
             textEntity.RecordGraphicsModified(true);

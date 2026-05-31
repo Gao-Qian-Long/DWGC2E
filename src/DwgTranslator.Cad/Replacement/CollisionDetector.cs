@@ -15,8 +15,6 @@ public static class CollisionDetector
 {
     public const double MinCollisionAvoidanceScale = 0.5;
     private const int BinarySearchIterations = 8;
-    private const int MaxDisplacementSteps = 10;
-    private const double DisplacementStepSize = 1.2; // multiple of text height
 
     public static Extents3d? FindClosestFrame(Point3d point, List<Extents3d> frames)
     {
@@ -101,10 +99,10 @@ public static class CollisionDetector
             textEntity.RecordGraphicsModified(true);
 
             Extents3d textBounds;
-            try { textBounds = textEntity.GeometricExtents; }
+            try { textBounds = GetCorrectedBounds(textEntity); }
             catch { return true; } // degenerate text
 
-            double padding = originalHeight * 0.40; // safety margin
+            double padding = originalHeight * 0.45; // safety margin (aligned with cross-layer path)
             double minHeight = originalHeight * minHeightRatio;
 
             var colliders = new List<Extents3d>();
@@ -120,15 +118,7 @@ public static class CollisionDetector
             if (colliders.Count == 0)
                 return true;
 
-            // Strategy 1: Smart displacement — push AWAY from collider center-of-mass
-            if (SmartDisplace(textEntity, textBounds, colliders, colliderPositions, originalHeight, padding, frame))
-            {
-                Log.Information("Entity {Handle} displaced to avoid collision with {Count} entities",
-                    textEntity.Handle, colliders.Count);
-                return true;
-            }
-
-            // Strategy 2: MText width shrinking
+            // Strategy 1: MText width shrinking (displacement removed per design principle: NEVER displace text)
             if (textEntity is MText mText)
             {
                 if (mText.Width > 0)
@@ -152,7 +142,7 @@ public static class CollisionDetector
                 }
             }
 
-            // Strategy 3: Binary-search the largest height that avoids all collisions
+            // Strategy 2: Binary-search the largest height that avoids all collisions
             double lowHeight = minHeight;
             double highHeight = originalHeight;
             double bestHeight = originalHeight;
@@ -166,7 +156,7 @@ public static class CollisionDetector
 
                 try
                 {
-                    var testBounds = textEntity.GeometricExtents;
+                    var testBounds = GetCorrectedBounds(textEntity);
                     bool stillCollides = false;
                     foreach (var c in colliders)
                     {
@@ -246,7 +236,7 @@ public static class CollisionDetector
 
             double collisionPadding;
             if (isTextLike)      collisionPadding = padding * 0.3;  // text can coexist closely
-            else if (isLineLike) collisionPadding = padding * 1.3;  // extra for visually disruptive lines
+            else if (isLineLike) collisionPadding = padding * 0.65; // reduced — avoid false positives on table lines
             else if (isSolidLike) collisionPadding = padding * 0.8; // moderate for filled areas
             else                 collisionPadding = padding;        // default
 
@@ -290,35 +280,6 @@ public static class CollisionDetector
             CollectPotentialColliders(tr, btr, skipId, textBounds, padding,
                 colliders, colliderPositions, 0);
         }
-    }
-
-    /// <summary>
-    /// Adjusts a text entity's position so its bounding box stays within the given frame boundary.
-    /// Displaces the text by the minimum amount needed to bring it fully inside the frame.
-    /// </summary>
-    public static void AdjustTextStartPosition(Entity textEntity, Extents3d frame)
-    {
-        try
-        {
-            var bounds = textEntity.GeometricExtents;
-            var displacement = new Vector3d(0, 0, 0);
-
-            if (bounds.MinPoint.X < frame.MinPoint.X)
-                displacement += new Vector3d(frame.MinPoint.X - bounds.MinPoint.X, 0, 0);
-            if (bounds.MaxPoint.X > frame.MaxPoint.X)
-                displacement += new Vector3d(frame.MaxPoint.X - bounds.MaxPoint.X, 0, 0);
-            if (bounds.MinPoint.Y < frame.MinPoint.Y)
-                displacement += new Vector3d(0, frame.MinPoint.Y - bounds.MinPoint.Y, 0);
-            if (bounds.MaxPoint.Y > frame.MaxPoint.Y)
-                displacement += new Vector3d(0, frame.MaxPoint.Y - bounds.MaxPoint.Y, 0);
-
-            if (displacement.Length > 0.01)
-            {
-                DisplaceText(textEntity, displacement);
-                textEntity.RecordGraphicsModified(true);
-            }
-        }
-        catch { }
     }
 
     /// <summary>
@@ -408,144 +369,104 @@ public static class CollisionDetector
     }
 
     /// <summary>
-    /// Smart displacement: computes the direction AWAY from the center-of-mass
-    /// of all colliding entities, then searches for a displacement that avoids
-    /// all collisions while staying within the frame (if provided).
-    /// 
-    /// The search explores a cone around the ideal "push-away" direction with
-    /// increasing distance, falling back to full 360-degree scan if needed.
+    /// Collects collider bounds WITH per-type paddings for accurate verification.
+    /// Returns tuples of (bounds, typeSpecificPadding).
     /// </summary>
-    private static bool SmartDisplace(
-        Entity textEntity, Extents3d textBounds,
-        List<Extents3d> colliders, List<Point3d> colliderPositions,
-        double originalHeight, double padding, Extents3d? frame)
+    public static List<(Extents3d Bounds, double Padding)> CollectEntityColliders(
+        Entity textEntity, BlockTableRecord btr, Transaction tr,
+        double trueOriginalHeight, Database? db = null)
     {
-        double textCenterX = (textBounds.MinPoint.X + textBounds.MaxPoint.X) / 2.0;
-        double textCenterY = (textBounds.MinPoint.Y + textBounds.MaxPoint.Y) / 2.0;
-        double textW = textBounds.MaxPoint.X - textBounds.MinPoint.X;
-        double textH = textBounds.MaxPoint.Y - textBounds.MinPoint.Y;
-
-        // Compute "center of pressure" — the average position of all colliders
-        double colliderCx = 0, colliderCy = 0;
-        foreach (var p in colliderPositions)
-        {
-            colliderCx += p.X;
-            colliderCy += p.Y;
-        }
-        colliderCx /= colliderPositions.Count;
-        colliderCy /= colliderPositions.Count;
-
-        // Push AWAY from the collider center-of-mass
-        double pushDx = textCenterX - colliderCx;
-        double pushDy = textCenterY - colliderCy;
-        double pushLen = Math.Sqrt(pushDx * pushDx + pushDy * pushDy);
-        if (pushLen < 0.01)
-        {
-            pushDx = 1; pushDy = 0; pushLen = 1; // default: push right
-        }
-        pushDx /= pushLen;
-        pushDy /= pushLen;
-
-        // Generate search directions: start from the ideal push direction,
-        // then fan out to ±45°, ±90°, ±135°, 180°
-        double[] angles = { 0, 30, -30, 60, -60, 90, -90, 135, -135, 180 };
-        double baseAngle = Math.Atan2(pushDy, pushDx) * 180.0 / Math.PI;
-
-        double bestDistance = double.MaxValue;
-        Vector3d bestDisplacement = new(0, 0, 0);
-        bool found = false;
-
-        foreach (double angleOffset in angles)
-        {
-            double rad = (baseAngle + angleOffset) * Math.PI / 180.0;
-            double dx = Math.Cos(rad);
-            double dy = Math.Sin(rad);
-
-            double stepSize = originalHeight * DisplacementStepSize;
-
-            for (int step = 1; step <= MaxDisplacementSteps; step++)
-            {
-                double dist = stepSize * step;
-                double newX = textCenterX + dx * dist;
-                double newY = textCenterY + dy * dist;
-
-                var displacedBounds = new Extents3d(
-                    new Point3d(newX - textW / 2, newY - textH / 2, 0),
-                    new Point3d(newX + textW / 2, newY + textH / 2, 0));
-
-                if (frame.HasValue && ExceedsFrame(displacedBounds, frame.Value))
-                    continue;
-
-                bool avoidsAll = true;
-                foreach (var c in colliders)
-                {
-                    if (BoundsIntersect2D(displacedBounds, c, padding))
-                    { avoidsAll = false; break; }
-                }
-
-                if (avoidsAll && dist < bestDistance)
-                {
-                    bestDistance = dist;
-                    bestDisplacement = new Vector3d(dx * dist, dy * dist, 0);
-                    found = true;
-                    break;
-                }
-            }
-        }
-
-        if (!found) return false;
-
-        // Reject unreasonably large displacements (more than 3x the text height)
-        double maxReasonableDist = originalHeight * 3.0;
-        if (bestDisplacement.Length > maxReasonableDist)
-            return false;
-
-        // Apply and verify
-        DisplaceText(textEntity, bestDisplacement);
-        textEntity.RecordGraphicsModified(true);
+        var result = new List<(Extents3d, double)>();
+        var colliders = new List<Extents3d>();
+        var positions = new List<Point3d>();
+        var types = new List<string>();
+        var paddings = new List<double>();
 
         try
         {
-            var newBounds = textEntity.GeometricExtents;
-            if (frame.HasValue && ExceedsFrame(newBounds, frame.Value))
-            {
-                DisplaceText(textEntity, -bestDisplacement);
-                textEntity.RecordGraphicsModified(true);
-                return false;
-            }
-            foreach (var c in colliders)
-            {
-                if (BoundsIntersect2D(newBounds, c, padding))
-                {
-                    DisplaceText(textEntity, -bestDisplacement);
-                    textEntity.RecordGraphicsModified(true);
-                    return false;
-                }
-            }
+            textEntity.RecordGraphicsModified(true);
+            Extents3d textBounds;
+            try { textBounds = GetCorrectedBounds(textEntity); }
+            catch { return result; }
+
+            double padding = trueOriginalHeight * 0.45;
+            CollectPotentialCollidersWithTypes(tr, btr, textEntity.ObjectId, textBounds, padding,
+                colliders, positions, types, paddings, 0);
+
+            if (db != null)
+                CollectCrossBlockCollidersWithTypes(tr, db, textEntity.ObjectId, textBounds, padding,
+                    colliders, positions, types, paddings);
+
+            for (int i = 0; i < colliders.Count; i++)
+                result.Add((colliders[i], paddings[i]));
         }
         catch { }
-
-        return true;
+        return result;
     }
 
-    private static Point3d GetTextLocation(Entity entity)
+    /// <summary>
+    /// Smart MText width adjustment to resolve interference without sacrificing text size.
+    ///
+    /// Strategy: changing MText Width alters the text's aspect ratio via line wrapping:
+    ///   - NARROWER width → more lines → narrower but taller
+    ///   - WIDER width → fewer lines → wider but shorter
+    ///
+    /// Tries 3 width values and returns the first that avoids ALL collisions while
+    /// keeping text height at or above minHeightRatio × originalHeight.
+    /// </summary>
+    /// <returns>true if width adjustment resolved collisions</returns>
+    public static bool TryResolveMTextByWidthAdjustment(
+        MText mtext,
+        List<(Extents3d Bounds, double Padding)> colliders,
+        double currentHeight,
+        double trueOriginalHeight,
+        double originalRectWidth)
     {
-        return entity switch
+        try
         {
-            AttributeReference att => att.Position,
-            DBText dbText => dbText.Position,
-            MText mText => mText.Location,
-            _ => Point3d.Origin
-        };
-    }
+            mtext.RecordGraphicsModified(true);
+            double origWidth = mtext.Width > 0 ? mtext.Width : originalRectWidth;
+            if (origWidth <= 0) origWidth = 100; // fallback
 
-    private static void DisplaceText(Entity entity, Vector3d displacement)
-    {
-        switch (entity)
+            // Try width ratios to change text aspect ratio via reflow
+            double[] widthRatios = { 0.55, 0.75, 1.40 };
+
+            foreach (double ratio in widthRatios)
+            {
+                double testWidth = Math.Max(origWidth * ratio, 10.0);
+                if (Math.Abs(testWidth - origWidth) < 1.0) continue;
+
+                mtext.Width = testWidth;
+                mtext.RecordGraphicsModified(true);
+
+                try
+                {
+                    var testBounds = mtext.GeometricExtents;
+                    bool collides = false;
+                    for (int ci = 0; ci < colliders.Count; ci++)
+                    {
+                        double cPadding = colliders[ci].Padding;
+                        if (BoundsIntersect2D(testBounds, colliders[ci].Bounds, cPadding))
+                        { collides = true; break; }
+                    }
+                    if (!collides)
+                    {
+                        Log.Information("MText {Handle}: width={Orig:F1}→{New:F1} (ratio={R:F2}) resolved {Count} collisions",
+                            mtext.Handle, origWidth, testWidth, ratio, colliders.Count);
+                        return true;
+                    }
+                }
+                catch { }
+            }
+
+            mtext.Width = origWidth;
+            mtext.RecordGraphicsModified(true);
+            return false;
+        }
+        catch (Exception ex)
         {
-            case AttributeReference att: att.Position += displacement; break;
-            case DBText dbText: dbText.Position += displacement; break;
-            case MText mText: mText.Location += displacement; break;
+            Log.Debug("MText width adjustment failed for {Handle}: {Error}", mtext.Handle, ex.Message);
+            return false;
         }
     }
 
@@ -567,20 +488,43 @@ public static class CollisionDetector
     ///   currentHeight  — the entity's CURRENT height (upper bound for binary search)
     ///   trueOriginalHeight — the TRUE un-scaled original height (floor = ratio * this)
     /// </summary>
+    /// <summary>
+    /// Returns the corrected bounding box for the given entity.
+    /// For MText entities with a non-zero column Width, GeometricExtents may report
+    /// the full column rectangle. This correction uses ActualWidth for the X-axis
+    /// to avoid false-positive collisions near the column edge.
+    /// </summary>
+    public static Extents3d GetCorrectedBounds(Entity entity)
+    {
+        var rawBounds = entity.GeometricExtents;
+        if (entity is MText mt && mt.Width > 0)
+        {
+            double aw = mt.ActualWidth;
+            if (aw > 0 && aw < rawBounds.MaxPoint.X - rawBounds.MinPoint.X)
+            {
+                double cx = (rawBounds.MinPoint.X + rawBounds.MaxPoint.X) / 2.0;
+                return new Extents3d(
+                    new Point3d(cx - aw / 2.0, rawBounds.MinPoint.Y, 0),
+                    new Point3d(cx + aw / 2.0, rawBounds.MaxPoint.Y, 0));
+            }
+        }
+        return rawBounds;
+    }
+
     /// <returns>true if the entity was scaled</returns>
     public static bool ResolveEntityOverlaps(
         Entity textEntity,
         List<Entity> otherEntities,
         double currentHeight,
         double trueOriginalHeight,
-        double minHeightRatio = 0.65,
+        double minHeightRatio = 0.80,
         double paddingRatio = 0.12)
     {
         try
         {
             textEntity.RecordGraphicsModified(true);
             Extents3d myBounds;
-            try { myBounds = textEntity.GeometricExtents; }
+            try { myBounds = GetCorrectedBounds(textEntity); }
             catch { return false; }
 
             double padding = trueOriginalHeight * paddingRatio;
@@ -595,7 +539,7 @@ public static class CollisionDetector
                 other.RecordGraphicsModified(true);
                 try
                 {
-                    var otherBounds = other.GeometricExtents;
+                    var otherBounds = GetCorrectedBounds(other);
                     if (BoundsIntersect2D(myBounds, otherBounds, padding))
                         overlappingHandles.Add(other.Handle.ToString());
                 }
@@ -621,7 +565,7 @@ public static class CollisionDetector
 
                 try
                 {
-                    var testBounds = textEntity.GeometricExtents;
+                    var testBounds = GetCorrectedBounds(textEntity);
                     bool stillOverlaps = false;
                     foreach (var other in otherEntities)
                     {
@@ -629,7 +573,7 @@ public static class CollisionDetector
                         other.RecordGraphicsModified(true);
                         try
                         {
-                            if (BoundsIntersect2D(testBounds, other.GeometricExtents, padding))
+                            if (BoundsIntersect2D(testBounds, GetCorrectedBounds(other), padding))
                             { stillOverlaps = true; break; }
                         }
                         catch { }
@@ -674,7 +618,7 @@ public static class CollisionDetector
         Transaction tr,
         double currentHeight,
         double trueOriginalHeight,
-        double minHeightRatio = 0.65,
+        double minHeightRatio = 0.80,
         Database? db = null)
     {
         try
@@ -682,24 +626,33 @@ public static class CollisionDetector
             textEntity.RecordGraphicsModified(true);
 
             Extents3d textBounds;
-            try { textBounds = textEntity.GeometricExtents; }
+            try { textBounds = GetCorrectedBounds(textEntity); }
             catch { return true; } // Degenerate — skip
 
-            double padding = trueOriginalHeight * 0.15;
+            // Base padding proportional to original text height (raised to 0.45 per investigation).
+            // For a 2.5-unit text with Line multiplier: 0.45 * 2.5 * 1.3 = 1.46 units detection radius.
+            double padding = trueOriginalHeight * 0.45;
             double minHeight = trueOriginalHeight * minHeightRatio;
             double searchMax = Math.Max(currentHeight, minHeight);
 
             var colliders = new List<Extents3d>();
             var colliderPositions = new List<Point3d>();
             var colliderTypes = new List<string>();
-            CollectPotentialCollidersWithTypes(tr, btr, textEntity.ObjectId, textBounds, padding,
-                colliders, colliderPositions, colliderTypes, 0);
+            var colliderPaddings = new List<double>(); // Per-collider type-specific paddings
 
-            // Cross-block scan
-            if (colliders.Count == 0 && db != null)
+            // Scan entity's OWN block for colliders (with per-type multipliers + paddings)
+            CollectPotentialCollidersWithTypes(tr, btr, textEntity.ObjectId, textBounds, padding,
+                colliders, colliderPositions, colliderTypes, colliderPaddings, 0);
+
+            // ALWAYS scan cross-block
+            if (db != null)
             {
+                var crossCount = colliders.Count;
                 CollectCrossBlockCollidersWithTypes(tr, db, textEntity.ObjectId, textBounds, padding,
-                    colliders, colliderPositions, colliderTypes);
+                    colliders, colliderPositions, colliderTypes, colliderPaddings);
+                if (colliders.Count > crossCount)
+                    Log.Debug("Entity {Handle}: found {Count} additional cross-block colliders",
+                        textEntity.Handle, colliders.Count - crossCount);
             }
 
             if (colliders.Count == 0)
@@ -730,11 +683,17 @@ public static class CollisionDetector
 
                 try
                 {
-                    var testBounds = textEntity.GeometricExtents;
+                    // Use corrected bounds (ActualWidth for MText) to avoid false-positive
+                    // collisions with geometry near the column edge.
+                    Extents3d testBounds = GetCorrectedBounds(textEntity);
+
                     bool stillCollides = false;
-                    foreach (var c in colliders)
+                    for (int cIdx = 0; cIdx < colliders.Count; cIdx++)
                     {
-                        if (BoundsIntersect2D(testBounds, c, padding))
+                        // Use the PER-COLLIDER type-specific padding, not uniform padding.
+                        // A Line was detected with 1.3× clearance; verify with same clearance.
+                        double cPadding = cIdx < colliderPaddings.Count ? colliderPaddings[cIdx] : padding;
+                        if (BoundsIntersect2D(testBounds, colliders[cIdx], cPadding))
                         { stillCollides = true; break; }
                     }
                     if (stillCollides) high = mid;
@@ -763,12 +722,17 @@ public static class CollisionDetector
     }
 
     /// <summary>
-    /// Like CollectPotentialColliders but also tracks entity type names for diagnostic logging.
+    /// Collects potential collision geometry from a block table record.
+    /// Includes per-type multipliers AND per-collider paddings for accurate verification.
+    ///   - Lines/polylines/arcs: 1.3x padding (visually disruptive, need more clearance)
+    ///   - Solids/hatches: 0.8x padding (filled areas, moderate)
+    ///   - Text: 0.3x padding (text can coexist closely)
     /// </summary>
     private static void CollectPotentialCollidersWithTypes(
         Transaction tr, BlockTableRecord btr, ObjectId skipId,
         Extents3d textBounds, double padding,
-        List<Extents3d> colliders, List<Point3d> positions, List<string> types, int depth)
+        List<Extents3d> colliders, List<Point3d> positions, List<string> types,
+        List<double> paddings, int depth)
     {
         const int maxDepth = 5;
         if (depth > maxDepth) return;
@@ -788,7 +752,7 @@ public static class CollisionDetector
                 {
                     var nestedBtr = (BlockTableRecord)tr.GetObject(nestedBr.BlockTableRecord, OpenMode.ForRead);
                     CollectPotentialCollidersWithTypes(tr, nestedBtr, skipId, textBounds, padding,
-                        colliders, positions, types, depth + 1);
+                        colliders, positions, types, paddings, depth + 1);
                 }
                 catch { }
                 continue;
@@ -797,16 +761,28 @@ public static class CollisionDetector
             if (other is Dimension) continue;
             if (other is Viewport) continue;
 
+            bool isLineLike = other is Line or Polyline or Arc or Circle or Spline
+                              or Polyline2d or Polyline3d or MLeader;
+            bool isSolidLike = other is Solid or Solid3d or Region or Hatch;
+            bool isTextLike = other is DBText or MText or AttributeReference;
+
+            double collisionPadding;
+            if (isLineLike)      collisionPadding = padding * 0.65;
+            else if (isSolidLike) collisionPadding = padding * 0.8;
+            else if (isTextLike)  collisionPadding = padding * 0.3;
+            else                  collisionPadding = padding;
+
             try
             {
                 var otherBounds = other.GeometricExtents;
-                if (BoundsIntersect2D(textBounds, otherBounds, padding))
+                if (BoundsIntersect2D(textBounds, otherBounds, collisionPadding))
                 {
                     colliders.Add(otherBounds);
                     positions.Add(new Point3d(
                         (otherBounds.MinPoint.X + otherBounds.MaxPoint.X) / 2,
                         (otherBounds.MinPoint.Y + otherBounds.MaxPoint.Y) / 2, 0));
                     types.Add(other.GetType().Name);
+                    paddings.Add(collisionPadding); // Store per-collider type-specific padding
                 }
             }
             catch { }
@@ -819,7 +795,8 @@ public static class CollisionDetector
     private static void CollectCrossBlockCollidersWithTypes(
         Transaction tr, Database db, ObjectId skipId,
         Extents3d textBounds, double padding,
-        List<Extents3d> colliders, List<Point3d> positions, List<string> types)
+        List<Extents3d> colliders, List<Point3d> positions, List<string> types,
+        List<double> paddings)
     {
         var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
         foreach (ObjectId btrId in bt)
@@ -833,7 +810,7 @@ public static class CollisionDetector
             if (btr.Name.StartsWith("*Paper_Space", StringComparison.OrdinalIgnoreCase)) continue;
 
             CollectPotentialCollidersWithTypes(tr, btr, skipId, textBounds, padding,
-                colliders, positions, types, 0);
+                colliders, positions, types, paddings, 0);
         }
     }
 }

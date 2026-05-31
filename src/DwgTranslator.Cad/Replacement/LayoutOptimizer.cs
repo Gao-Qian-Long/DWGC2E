@@ -21,7 +21,7 @@ namespace DwgTranslator.Cad.Replacement;
 /// </summary>
 public static class LayoutOptimizer
 {
-    private const double MinHeightRatio = 0.4;
+    private const double MinHeightRatio = 0.80;  // 80% floor — text readability first
 
     public static void OptimizeMText(
         MText mtext,
@@ -67,34 +67,32 @@ public static class LayoutOptimizer
         double concatenatedWidth = EstimateTextWidth(textForEstimation, mtext.TextHeight);
         double effectiveWidth = lineCount > 1 ? maxLineWidth : concatenatedWidth;
 
-        // ===== WIDTH: preserve original rectangle width for visual consistency =====
+        // ===== WIDTH: scale proportionally for fixed-width MText =====
         if (originalRectWidth > 0)
         {
-            // Original had FIXED rectangle width — ALWAYS keep it.
-            // The drawing author chose this width for a reason (visual structure).
-            // Reducing it destroys layout and may turn multi-line text into single-line.
-            // WARNING: never set Width=0 — AutoCAD docs confirm this DISABLES word wrap.
-            // Instead, let AutoCAD auto-wrap at the original width.
-            // Height will be adjusted below if the translation wraps to more lines.
-            Log.Information("MText {Handle}: keeping original width {W:F1} (eff={Eff:F1}, ratio={R:F2})",
-                mtext.Handle, originalRectWidth, effectiveWidth, effectiveWidth / originalRectWidth);
+            // Adjust rectangle width proportionally to match translated text.
+            // Clamp between 60% and 150% of original to avoid extremes
+            // while still adapting to the new language's width.
+            double widthRatio = effectiveWidth / Math.Max(originalWidth, 1.0);
+            double clampedRatio = Math.Clamp(widthRatio, 0.40, 1.20);
+            double targetWidth = originalRectWidth * clampedRatio;
+            if (targetWidth < 10.0) targetWidth = 10.0;  // minimum usable width
+            mtext.Width = targetWidth;
+            Log.Information("MText {Handle}: scaled width {OrigW:F1}→{NewW:F1} (ratio={R:F2})",
+                mtext.Handle, originalRectWidth, targetWidth, clampedRatio);
         }
         else
         {
-            // Original was FREE width (Width=0). Set a wrapping width if the
-            // translation is significantly longer (would create an excessively
-            // long single line that overflows the frame or looks unbalanced).
-            // Use a low threshold to avoid single-line text that should wrap.
-            double minWrapWidth = Math.Max(originalWidth * 1.1, 50.0);
-            if (effectiveWidth > minWrapWidth)
+            // FREE width (Width=0): set a wrapping width only when the
+            // translation is significantly wider than the original to avoid
+            // excessively long single lines.
+            if (effectiveWidth > Math.Max(originalWidth * 1.05, 50.0))
             {
-                // Set wrapping width to ~2x the original for balanced multi-line display
                 double targetWidth = Math.Max(originalWidth * 1.1, effectiveWidth * 0.55);
                 mtext.Width = targetWidth;
                 Log.Information("MText {Handle}: free-width now {W:F1} to wrap (orig={Orig:F1}, eff={Eff:F1})",
                     mtext.Handle, targetWidth, originalWidth, effectiveWidth);
             }
-            // else: keep free width (translation is short, single line is correct)
         }
 
         mtext.RecordGraphicsModified(true);
@@ -207,7 +205,7 @@ public static class LayoutOptimizer
         if (newWidth > originalWidth)
         {
             double scale = originalWidth / newWidth;
-            if (scale < 0.5) scale = 0.5;
+            if (scale < 0.80) scale = 0.80;  // Consistent with MText MinHeightRatio
             dbText.Height = originalHeight * scale;
         }
 

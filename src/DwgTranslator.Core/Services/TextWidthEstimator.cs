@@ -153,6 +153,7 @@ public static class TextWidthEstimator
     {
         var segments = new List<string>();
         var currentWord = new System.Text.StringBuilder();
+        bool lastWasWord = false;
         foreach (char c in text)
         {
             if (c == ' ')
@@ -161,7 +162,12 @@ public static class TextWidthEstimator
                 {
                     segments.Add(currentWord.ToString());
                     currentWord.Clear();
+                    lastWasWord = true;
                 }
+                // Insert space as its own segment so line rebuilders
+                // correctly restore word boundaries.
+                segments.Add(" ");
+                lastWasWord = false;
             }
             else if (IsCjk(c))
             {
@@ -169,17 +175,25 @@ public static class TextWidthEstimator
                 {
                     segments.Add(currentWord.ToString());
                     currentWord.Clear();
+                    lastWasWord = true;
                 }
                 if (currentWord.Length > 0)
                 {
                     segments.Add(currentWord.ToString());
                     currentWord.Clear();
                 }
+                // Insert an implicit space before CJK when previous
+                // segment was a Latin word, so CJK and Latin don't
+                // run together visually.
+                if (lastWasWord)
+                    segments.Add(" ");
                 segments.Add(c.ToString());
+                lastWasWord = false;
             }
             else
             {
                 currentWord.Append(c);
+                lastWasWord = false;
             }
         }
         if (currentWord.Length > 0)

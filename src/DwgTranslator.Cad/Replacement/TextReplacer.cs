@@ -227,6 +227,10 @@ public class TextReplacer
         // Map font if needed
         MapTextStyle(mText.TextStyleId, db);
 
+        // Disable column mode to prevent AutoCAD from stretching
+        // text to fill column width (causes excessive word spacing).
+        mText.ColumnType = ColumnType.NoColumns;
+
         // Delegate all layout optimization (width, height, frame fitting) to LayoutOptimizer
         var frames = FrameDetector.DetectFrames(db);
         var closestFrame = CollisionDetector.FindClosestFrame(mText.Location, frames);
