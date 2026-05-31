@@ -16,7 +16,7 @@ public class TextExtractor
 {
     private readonly int _maxNestingDepth;
     private static readonly Regex MTextFormatRegex = new(
-        @"(?:\{[^}]*\}|\\[A-Za-z][0-9]*;?|\\[~%%|{}])",
+        @"(?:\{[^}]*\}|\\[A-Za-z][0-9]*;?|\\[~%%|{}]|\\U\+[0-9A-Fa-f]{4}|%%[a-zA-Z])",
         RegexOptions.Compiled);
 
     public TextExtractor(int maxNestingDepth = 10)
@@ -94,19 +94,19 @@ public class TextExtractor
             switch (dbObject)
             {
                 case DBText dbText:
-                    entities.Add(CreateTextEntity(dbText, "DBText", parentBlockName));
+                    entities.Add(CreateTextEntity(tr, dbText, "DBText", parentBlockName));
                     break;
 
                 case MText mText:
-                    entities.Add(CreateTextEntity(mText, "MText", parentBlockName));
+                    entities.Add(CreateTextEntity(tr, mText, "MText", parentBlockName));
                     break;
 
                 case Dimension dim:
-                    entities.Add(CreateTextEntity(dim, "Dimension", parentBlockName));
+                    entities.Add(CreateTextEntity(tr, dim, "Dimension", parentBlockName));
                     break;
 
                 case MLeader mLeader:
-                    entities.AddRange(ExtractFromMLeader(mLeader, parentBlockName));
+                    entities.AddRange(ExtractFromMLeader(tr, mLeader, parentBlockName));
                     break;
 
                 case Table table:
@@ -127,7 +127,7 @@ public class TextExtractor
                         foreach (ObjectId attId in blockRef.AttributeCollection)
                         {
                             var attRef = (AttributeReference)tr.GetObject(attId, OpenMode.ForRead);
-                            var entity = CreateTextEntity(attRef, "AttributeReference",
+                            var entity = CreateTextEntity(tr, attRef, "AttributeReference",
                                 string.IsNullOrEmpty(parentBlockName) ? nestedBtr.Name : parentBlockName);
                             entity.IsXref = isXref;
                             entities.Add(entity);
@@ -149,7 +149,7 @@ public class TextExtractor
         return entities;
     }
 
-    private TextEntity CreateTextEntity(DBText dbText, string entityType, string blockName)
+    private TextEntity CreateTextEntity(Transaction tr, DBText dbText, string entityType, string blockName)
     {
         var rawText = dbText.TextString ?? string.Empty;
         var plainText = StripFormatCodes(rawText);
@@ -163,7 +163,7 @@ public class TextExtractor
             EntityType = entityType,
             Height = dbText.Height,
             Rotation = dbText.Rotation,
-            TextStyleName = GetTextStyleName(dbText.TextStyleId),
+            TextStyleName = GetTextStyleName(tr, dbText.TextStyleId),
             BlockName = blockName,
             IsXref = false,
             Position = new DwgTranslator.Core.Models.Point3d(dbText.Position.X, dbText.Position.Y, dbText.Position.Z),
@@ -171,7 +171,7 @@ public class TextExtractor
         };
     }
 
-    private TextEntity CreateTextEntity(MText mText, string entityType, string blockName)
+    private TextEntity CreateTextEntity(Transaction tr, MText mText, string entityType, string blockName)
     {
         var rawText = mText.Contents ?? string.Empty;
         var plainText = StripMTextFormatCodes(rawText);
@@ -187,7 +187,7 @@ public class TextExtractor
             EntityType = entityType,
             Height = mText.TextHeight,
             Rotation = mText.Rotation,
-            TextStyleName = GetTextStyleName(mText.TextStyleId),
+            TextStyleName = GetTextStyleName(tr, mText.TextStyleId),
             BlockName = blockName,
             IsXref = false,
             Position = new DwgTranslator.Core.Models.Point3d(mText.Location.X, mText.Location.Y, mText.Location.Z),
@@ -201,7 +201,7 @@ public class TextExtractor
         };
     }
 
-    private TextEntity CreateTextEntity(Dimension dim, string entityType, string blockName)
+    private TextEntity CreateTextEntity(Transaction tr, Dimension dim, string entityType, string blockName)
     {
         var rawText = dim.DimensionText ?? string.Empty;
         var plainText = StripFormatCodes(rawText);
@@ -215,7 +215,7 @@ public class TextExtractor
             EntityType = entityType,
             Height = 2.5, // Default dimension text height
             Rotation = 0,
-            TextStyleName = GetTextStyleName(dim.TextStyleId),
+            TextStyleName = GetTextStyleName(tr, dim.TextStyleId),
             BlockName = blockName,
             IsXref = false,
             Position = new DwgTranslator.Core.Models.Point3d(dim.TextPosition.X, dim.TextPosition.Y, dim.TextPosition.Z),
@@ -223,7 +223,7 @@ public class TextExtractor
         };
     }
 
-    private TextEntity CreateTextEntity(AttributeReference attRef, string entityType, string blockName)
+    private TextEntity CreateTextEntity(Transaction tr, AttributeReference attRef, string entityType, string blockName)
     {
         var rawText = attRef.TextString ?? string.Empty;
         var plainText = StripFormatCodes(rawText);
@@ -237,7 +237,7 @@ public class TextExtractor
             EntityType = entityType,
             Height = attRef.Height,
             Rotation = attRef.Rotation,
-            TextStyleName = GetTextStyleName(attRef.TextStyleId),
+            TextStyleName = GetTextStyleName(tr, attRef.TextStyleId),
             BlockName = blockName,
             IsXref = false,
             Position = new DwgTranslator.Core.Models.Point3d(attRef.Position.X, attRef.Position.Y, attRef.Position.Z),
@@ -245,7 +245,7 @@ public class TextExtractor
         };
     }
 
-    private List<TextEntity> ExtractFromMLeader(MLeader mLeader, string blockName)
+    private List<TextEntity> ExtractFromMLeader(Transaction tr, MLeader mLeader, string blockName)
     {
         var entities = new List<TextEntity>();
 
@@ -265,7 +265,7 @@ public class TextExtractor
                 EntityType = "MLeader",
                 Height = mtext.TextHeight,
                 Rotation = mtext.Rotation,
-                TextStyleName = GetTextStyleName(mtext.TextStyleId),
+                TextStyleName = GetTextStyleName(tr, mtext.TextStyleId),
                 BlockName = blockName,
                 IsXref = false,
                 Position = new DwgTranslator.Core.Models.Point3d(mtext.Location.X, mtext.Location.Y, mtext.Location.Z),
@@ -335,11 +335,18 @@ public class TextExtractor
         }
     }
 
-    private static string GetTextStyleName(ObjectId styleId)
+    private static string GetTextStyleName(Transaction tr, ObjectId styleId)
     {
         if (!styleId.IsValid) return "Standard";
-        // The TextStyleTableRecord name will be resolved when used in context
-        return styleId.Handle.ToString();
+        try
+        {
+            var style = tr.GetObject(styleId, OpenMode.ForRead) as TextStyleTableRecord;
+            return style?.Name ?? "Standard";
+        }
+        catch
+        {
+            return "Standard";
+        }
     }
 
     private static string StripFormatCodes(string text)
@@ -360,15 +367,14 @@ public class TextExtractor
 
     private static double EstimateTextWidth(DBText dbText)
     {
-        // Rough estimation based on character count and height
-        var text = dbText.TextString ?? string.Empty;
-        return text.Length * dbText.Height * 0.6;
+        var text = StripFormatCodes(dbText.TextString ?? string.Empty);
+        return Core.Services.TextWidthEstimator.EstimateTextWidth(text, dbText.Height);
     }
 
     private static double EstimateTextWidth(AttributeReference attRef)
     {
-        var text = attRef.TextString ?? string.Empty;
-        return text.Length * attRef.Height * 0.6;
+        var text = StripFormatCodes(attRef.TextString ?? string.Empty);
+        return Core.Services.TextWidthEstimator.EstimateTextWidth(text, attRef.Height);
     }
 
     /// <summary>

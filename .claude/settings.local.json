@@ -4,7 +4,11 @@
       "Bash(dotnet restore *)",
       "Bash(dotnet build *)",
       "Bash(dotnet test *)",
-      "Bash(dotnet run *)"
+      "Bash(dotnet run *)",
+      "WebSearch",
+      "WebFetch(domain:help.autodesk.com)",
+      "WebFetch(domain:forums.autodesk.com)",
+      "WebFetch(domain:www.keanw.com)"
     ]
   }
 }

@@ -3,15 +3,22 @@ using CommunityToolkit.Mvvm.Input;
 using DwgTranslator.Core.Models;
 using DwgTranslator.Core.Services;
 using DwgTranslator.Core.Translation;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Win32;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
-using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Windows;
 using Serilog;
+
+// TODO(future): Extract DeepSeekClient/HttpClient creation into IDeepSeekClientFactory
+//               to support DI and testability. Currently created inline in EnsureDeepSeekClient().
+// TODO(future): Extract TranslationConsistencyService creation into DI with a factory
+//               (needs cache file path from AppConfig, which is loaded at runtime).
+// TODO(future): Extract TranslationService creation into DI with a factory
+//               (depends on runtime config: systemPrompt, batchSize, maxRetry, maxConcurrency).
 
 namespace DwgTranslator.App.ViewModels;
 
@@ -26,6 +33,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private readonly IDwgReaderService _dwgReaderService;
     private readonly IDwgWriterService _dwgWriterService;
     private readonly ILicenseService _licenseService;
+    private readonly IAutoCadInteropService _autoCadInteropService;
     private readonly FormatCodeParser _formatCodeParser;
     private TranslationConsistencyService _consistencyService;
     private HttpClient? _httpClient;
@@ -79,14 +87,34 @@ public partial class MainViewModel : ObservableObject, IDisposable
     public string[] FilterOptions { get; } = { "全部", "待翻译", "已翻译", "审阅完成", "翻译失败", "术语命中", "已跳过" };
 
     public MainViewModel()
+        : this(
+            App.Services?.GetService<IGlossaryService>() ?? new GlossaryService(),
+            App.Services?.GetService<IExcelService>() ?? new ExcelService(),
+            App.Services?.GetService<IDwgReaderService>() ?? new DwgReaderService(),
+            App.Services?.GetService<IDwgWriterService>() ?? new DwgWriterService(),
+            App.Services?.GetService<ILicenseService>() ?? App.LicenseService,
+            App.Services?.GetService<IAutoCadInteropService>() ?? new DwgTranslator.App.Services.AutoCadInteropService(),
+            App.Services?.GetService<FormatCodeParser>() ?? new FormatCodeParser())
+    {
+    }
+
+    public MainViewModel(
+        IGlossaryService glossaryService,
+        IExcelService excelService,
+        IDwgReaderService dwgReaderService,
+        IDwgWriterService dwgWriterService,
+        ILicenseService licenseService,
+        IAutoCadInteropService autoCadInteropService,
+        FormatCodeParser formatCodeParser)
     {
         _config = new AppConfig();
-        _glossaryService = new GlossaryService();
-        _excelService = new ExcelService();
-        _dwgReaderService = new DwgReaderService();
-        _dwgWriterService = new DwgWriterService();
-        _licenseService = App.LicenseService;
-        _formatCodeParser = new FormatCodeParser();
+        _glossaryService = glossaryService;
+        _excelService = excelService;
+        _dwgReaderService = dwgReaderService;
+        _dwgWriterService = dwgWriterService;
+        _licenseService = licenseService;
+        _autoCadInteropService = autoCadInteropService;
+        _formatCodeParser = formatCodeParser;
         _consistencyService = new TranslationConsistencyService();
 
         LoadConfig();
@@ -266,95 +294,17 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void OpenGlossaryManager()
     {
-        // Create a simple management window
-        var window = new Window
+        var titleSuffix = $"{LanguageDirection} ({GlossaryEntries.Count} 条)";
+        var dialog = new Views.GlossaryManagerDialog(_glossaryService, GlossaryEntries, titleSuffix)
         {
-            Title = $"术语库管理 — {LanguageDirection} ({GlossaryEntries.Count} 条)",
-            Width = 600,
-            Height = 500,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            Owner = Application.Current.MainWindow,
-            WindowStyle = WindowStyle.ToolWindow
+            Owner = Application.Current.MainWindow
         };
 
-        var grid = new System.Windows.Controls.Grid();
-        grid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-        grid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = GridLength.Auto });
-
-        var dataGrid = new System.Windows.Controls.DataGrid
+        if (dialog.ShowDialog() == true && dialog.SavedEntries != null)
         {
-            AutoGenerateColumns = false,
-            CanUserAddRows = true,
-            CanUserDeleteRows = true,
-            Margin = new Thickness(5, 5, 5, 5)
-        };
-
-        dataGrid.Columns.Add(new System.Windows.Controls.DataGridTextColumn
-        { Header = "源语言", Binding = new System.Windows.Data.Binding("Source"), Width = 200 });
-        dataGrid.Columns.Add(new System.Windows.Controls.DataGridTextColumn
-        { Header = "目标语言", Binding = new System.Windows.Data.Binding("Target"), Width = 200 });
-        dataGrid.Columns.Add(new System.Windows.Controls.DataGridTextColumn
-        { Header = "分类", Binding = new System.Windows.Data.Binding("Category"), Width = 100 });
-
-        // Clone glossary entries for editing
-        var editableEntries = new ObservableCollection<GlossaryEntry>();
-        foreach (var e in GlossaryEntries)
-            editableEntries.Add(new GlossaryEntry { Source = e.Source, Target = e.Target, Category = e.Category });
-
-        dataGrid.ItemsSource = editableEntries;
-        System.Windows.Controls.Grid.SetRow(dataGrid, 0);
-
-        var buttonPanel = new System.Windows.Controls.StackPanel
-        {
-            Orientation = System.Windows.Controls.Orientation.Horizontal,
-            HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
-            Margin = new Thickness(5, 5, 5, 5)
-        };
-
-        var saveButton = new System.Windows.Controls.Button
-        {
-            Content = "💾 保存术语库",
-            Padding = new Thickness(10, 5, 10, 5),
-            Margin = new Thickness(0, 0, 5, 0)
-        };
-        saveButton.Click += async (s, e) =>
-        {
-            // Save to AppData glossary file
-            var targetPath = Path.Combine(App.AppDataDir, "glossaries", "mechanical_zh_en.json");
-            var dir = Path.GetDirectoryName(targetPath);
-            if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
-
-            var list = editableEntries.Where(x => !string.IsNullOrWhiteSpace(x.Source) && !string.IsNullOrWhiteSpace(x.Target)).ToList();
-            var json = JsonSerializer.Serialize(list, new JsonSerializerOptions
-            {
-                WriteIndented = true,
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-            });
-            await File.WriteAllTextAsync(targetPath, json);
-
-            // Reload into service
-            await _glossaryService.LoadGlossaryAsync(targetPath);
-            RefreshGlossaryDataFromList(list);
-
-            window.Close();
-            StatusMessage = $"术语库已保存: {list.Count} 条";
-        };
-
-        var cancelButton = new System.Windows.Controls.Button
-        {
-            Content = "取消",
-            Padding = new Thickness(10, 5, 10, 5)
-        };
-        cancelButton.Click += (s, e) => window.Close();
-
-        buttonPanel.Children.Add(saveButton);
-        buttonPanel.Children.Add(cancelButton);
-        System.Windows.Controls.Grid.SetRow(buttonPanel, 1);
-
-        grid.Children.Add(dataGrid);
-        grid.Children.Add(buttonPanel);
-        window.Content = grid;
-        window.ShowDialog();
+            RefreshGlossaryDataFromList(dialog.SavedEntries);
+            StatusMessage = $"术语库已保存: {dialog.SavedEntries.Count} 条";
+        }
     }
 
     private void RefreshGlossaryDataFromList(List<GlossaryEntry> entries)
@@ -459,6 +409,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private async Task TranslateAsync()
     {
+        if (IsProcessing) return;
+
         if (!_licenseService.CanExecuteOperation())
         {
             StatusMessage = "授权无效或体验次数已用完，请先激活";
@@ -730,7 +682,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
             bool usedAcadInterop = false;
 
             // Show export mode selection dialog
-            var modeDialog = new Views.ExportModeDialog(IsAutoCADAvailable())
+            var modeDialog = new Views.ExportModeDialog(_autoCadInteropService.IsAutoCADAvailable(_config))
             {
                 Owner = Application.Current.MainWindow
             };
@@ -757,9 +709,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
                     MessageBoxButton.OK,
                     MessageBoxImage.Information);
 
-                result = await Task.Run(() =>
-                    ExecuteAutoCADWriteback(sourceFilePath, dialog2.FileName, entitiesToWrite),
-                    _exportCts?.Token ?? CancellationToken.None);
+                result = await _autoCadInteropService.WritebackViaAutoCadAsync(sourceFilePath, dialog2.FileName, entitiesToWrite, IsCnToEn, _config);
             }
             else
             {
@@ -801,355 +751,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
         finally { IsProcessing = false; _exportCts?.Dispose(); _exportCts = null; }
     }
 
-    #region AutoCAD COM Interop
-
-    /// <summary>
-    /// Check if AutoCAD is available via COM and configuration.
-    /// Uses configured AutoCAD path (if set) or registry detection.
-    /// </summary>
-    private bool IsAutoCADAvailable()
-    {
-        // 1. Check configured path
-        var configuredPath = _config.AutoCadInstallPath;
-        if (!string.IsNullOrEmpty(configuredPath) && Core.Services.AutoCadDetector.IsValidAutoCadPath(configuredPath))
-        {
-            // Configured path is valid, now check if AutoCAD is running via COM
-            return IsAutoCADRunning();
-        }
-
-        // 2. Auto-detect from registry
-        var detection = Core.Services.AutoCadDetector.DetectInstallation();
-        if (detection.Found)
-        {
-            // Auto-save detected path for future use
-            _config.AutoCadInstallPath = detection.InstallPath;
-            return IsAutoCADRunning();
-        }
-
-        // 3. Fallback: try COM ProgID directly
-        return IsAutoCADRunning();
-    }
-
-    private static bool IsAutoCADRunning()
-    {
-        // 通过进程名检测 AutoCAD / AutoCAD LT 是否正在运行
-        // （Marshal.GetActiveObject 在 .NET 8 不可用，且 COM 连接可能因权限问题失败）
-        try
-        {
-            if (Process.GetProcessesByName("acad").Length > 0) return true;
-            if (Process.GetProcessesByName("acadlt").Length > 0) return true;
-        }
-        catch { }
-
-        return false;
-    }
-
-    private static readonly string[] AcadProgIDs = new[]
-    {
-        "AutoCAD.Application",
-        "AutoCAD.Application.25",      // 2026
-        "AutoCAD.Application.24.3",    // 2025
-        "AutoCAD.Application.24.2",    // 2024
-        "AutoCAD.Application.24.1",    // 2023
-        "AutoCAD.Application.24",      // 2022
-        "AutoCAD.Application.23",      // 2021
-        "AutoCAD.Application.22",      // 2020
-        "AutoCADLT.Application",
-        "AutoCADLT.Application.25",
-        "AutoCADLT.Application.24.3",
-        "AutoCADLT.Application.24.2",
-        "AutoCADLT.Application.24.1",
-        "AutoCADLT.Application.24",
-    };
-
-    private Core.Services.DwgWriteResult ExecuteAutoCADWriteback(
-        string sourceFilePath,
-        string outputFilePath,
-        List<TextEntity> entities)
-    {
-        var result = new Core.Services.DwgWriteResult();
-        string? jsonPath = null;
-
-        try
-        {
-            // Serialize a config JSON that contains source/output paths + entities
-            // This way WritebackCommand only needs ONE argument (the config path)
-            jsonPath = Path.Combine(Path.GetTempPath(), $"dwgtranslate_{Guid.NewGuid():N}.json");
-            var configObj = new
-            {
-                SourceDwgPath = sourceFilePath,
-                OutputDwgPath = outputFilePath,
-                Entities = entities,
-                CnToEn = IsCnToEn
-            };
-            var json = System.Text.Json.JsonSerializer.Serialize(configObj, new System.Text.Json.JsonSerializerOptions
-            {
-                WriteIndented = false,
-                PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase
-            });
-            File.WriteAllText(jsonPath, json);
-
-            // Try multiple ProgIDs to connect to AutoCAD
-            Type? acadType = null;
-            string? triedProgID = null;
-            Exception? lastException = null;
-            foreach (var progId in AcadProgIDs)
-            {
-                try
-                {
-                    triedProgID = progId;
-                    acadType = Type.GetTypeFromProgID(progId, false);
-                    if (acadType != null)
-                    {
-                        Log.Information("Found AutoCAD COM ProgID: {ProgID}", progId);
-                        break;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    lastException = ex;
-                }
-            }
-
-            if (acadType == null)
-            {
-                var msg = "无法连接 AutoCAD：注册表中找不到任何已知的 AutoCAD COM ProgID。" +
-                          "\n\n可能原因：" +
-                          "\n1. AutoCAD 未安装或安装不完整" +
-                          "\n2. AutoCAD 的 COM 支持未启用（某些精简版/OEM 版本不支持 COM）" +
-                          "\n3. 使用的是 AutoCAD LT（不支持 .NET 插件 NETLOAD）" +
-                          "\n\n建议：使用「离线导出 DWG」功能，无需 AutoCAD 运行。";
-                result.Errors.Add(msg);
-                return result;
-            }
-
-            dynamic acad = Activator.CreateInstance(acadType)!;
-            acad.Visible = true;
-
-            // Detect AutoCAD version from ProgID for compatibility check
-            string acadVersion = triedProgID ?? "unknown";
-            Log.Information("Connected to AutoCAD via ProgID: {ProgID}", acadVersion);
-
-            var doc = acad.ActiveDocument;
-            if (doc == null)
-            {
-                result.Errors.Add("AutoCAD 没有活动文档");
-                return result;
-            }
-
-            // Locate the Cad plugin DLL — priority: config > auto-detect > fallback
-            string? cadDllPath = ResolveCadPluginPath();
-
-            if (string.IsNullOrEmpty(cadDllPath) || !File.Exists(cadDllPath))
-            {
-                result.Errors.Add("找不到 DwgTranslator.Cad.dll 插件文件。\n请在「设置」→「AutoCAD 配置」中指定插件路径。");
-                return result;
-            }
-
-            Log.Information("Using Cad plugin: {Path}", cadDllPath);
-
-            // Step 1: Write config JSON to a fixed known path (no env vars, no cross-process issues)
-            var configDir = Path.Combine(Path.GetTempPath(), "DwgTranslator");
-            Directory.CreateDirectory(configDir);
-            var fixedConfigPath = Path.Combine(configDir, "writeback_config.json");
-            var doneSignalPath = Path.Combine(configDir, "writeback_done.txt");
-
-            // Clean up previous signal files
-            try { if (File.Exists(doneSignalPath)) File.Delete(doneSignalPath); } catch { }
-
-            // Write config to fixed path (WritebackCommand reads from here)
-            File.WriteAllText(fixedConfigPath, json);
-            jsonPath = fixedConfigPath; // Track for cleanup
-            Log.Information("Config written to fixed path: {Path}", fixedConfigPath);
-
-            // Step 2: Add DLL directory to AutoCAD Trusted Paths (permanent, avoids security dialog)
-            try
-            {
-                AddTrustedPath(acad, cadDllPath);
-            }
-            catch (Exception ex)
-            {
-                Log.Warning(ex, "Failed to add trusted path (security dialog may still appear)");
-            }
-
-            // Step 3: Create a LISP file that loads the DLL and runs the writeback command
-            // LISP (command ...) is synchronous — it waits for each command to complete before continuing
-            var lspPath = Path.Combine(configDir, "dwgtranslate_exec.lsp");
-            var lispDllPath = cadDllPath.Replace("\\", "\\\\");
-
-            // Build LISP script:
-            // - Print diagnostic messages to command line
-            // - NETLOAD the plugin DLL
-            // - Execute DwgTranslateWrite command (no args — reads config from fixed path)
-            // - (princ) suppresses the nil return value
-            // NOTE: Do NOT add "" args after no-arg commands — they interfere with execution
-            var lspContent = $@"(princ ""\nDwgTranslator: loading plugin..."")
-(command ""_.NETLOAD"" ""{lispDllPath}"" )
-(princ ""\nDwgTranslator: executing writeback..."")
-(command ""_.DwgTranslateWrite"" )
-(princ ""\nDwgTranslator: done."")
-(princ)
-";
-            File.WriteAllText(lspPath, lspContent);
-            Log.Information("Created LISP file: {Path}", lspPath);
-
-            // Step 4: Load and execute the LISP file via SendCommand
-            var lispLspPath = lspPath.Replace("\\", "\\\\");
-            doc.SendCommand($"(load \"{lispLspPath}\") ");
-
-            // Step 5: Wait for the command to complete (monitor the done signal file)
-            // WritebackCommand creates writeback_done.txt when finished
-            Log.Information("Waiting for WritebackCommand to complete...");
-            int maxWaitSeconds = 120;
-            int waited = 0;
-            while (waited < maxWaitSeconds)
-            {
-                System.Threading.Thread.Sleep(2000);
-                waited += 2;
-
-                // Check if the done signal file has been created by WritebackCommand
-                if (File.Exists(doneSignalPath))
-                {
-                    Log.Information("WritebackCommand completed (done signal detected)");
-                    try
-                    {
-                        var doneContent = File.ReadAllText(doneSignalPath);
-                        if (!doneContent.StartsWith("success|", StringComparison.OrdinalIgnoreCase))
-                        {
-                            result.SuccessCount = 0;
-                            result.Errors.Add($"AutoCAD 回写失败。信号: {doneContent}");
-                            StatusMessage = "AutoCAD 回写失败，请检查 AutoCAD 命令行。";
-                        }
-                        else
-                        {
-                            result.SuccessCount = entities.Count;
-                            StatusMessage = "AutoCAD 精确回写已完成。";
-                        }
-                    }
-                    catch
-                    {
-                        // Can't read file, assume failure
-                        result.SuccessCount = 0;
-                        result.Errors.Add("无法读取 AutoCAD 完成信号文件。");
-                    }
-                    break;
-                }
-
-                // Also check if the output DWG file has been created recently
-                if (File.Exists(outputFilePath))
-                {
-                    try
-                    {
-                        var fi = new FileInfo(outputFilePath);
-                        if (fi.Length > 1000 && fi.LastWriteTime > DateTime.Now.AddSeconds(-10))
-                        {
-                            Log.Information("Output DWG detected, writeback likely complete");
-                            result.SuccessCount = entities.Count;
-                            StatusMessage = "AutoCAD 精确回写已完成。";
-                            break;
-                        }
-                    }
-                    catch { }
-                }
-            }
-
-            if (result.SuccessCount == 0 && waited >= maxWaitSeconds)
-            {
-                Log.Warning("WritebackCommand timed out after {Sec}s", maxWaitSeconds);
-                result.Errors.Add("AutoCAD 回写超时。可能原因：\n" +
-                                  "1. 安全对话框未点击「始终加载」\n" +
-                                  "2. AutoCAD 正在处理大型文件\n" +
-                                  "3. 命令未成功执行\n" +
-                                  $"4. 请检查 AutoCAD 命令行是否有错误提示\n" +
-                                  $"配置文件位置: {fixedConfigPath}");
-            }
-
-            // Cleanup signal file
-            try { if (File.Exists(doneSignalPath)) File.Delete(doneSignalPath); } catch { }
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "AutoCAD COM writeback failed");
-            result.Errors.Add($"AutoCAD 回写失败: {ex.Message}");
-        }
-        finally
-        {
-            // Config file at fixed path is cleaned up by WritebackCommand on success.
-            // On failure, it's overwritten on next run anyway (Directory.CreateDirectory + WriteAllText).
-        }
-
-        return result;
-    }
-
-    /// <summary>
-    /// Adds the DLL directory to AutoCAD's Trusted Paths so the security dialog is suppressed.
-    /// This is a one-time permanent setting that persists across AutoCAD sessions.
-    /// </summary>
-    private static void AddTrustedPath(dynamic acad, string dllPath)
-    {
-        try
-        {
-            var dllDir = Path.GetDirectoryName(dllPath);
-            if (string.IsNullOrEmpty(dllDir)) return;
-
-            // Ensure trailing backslash for AutoCAD trusted path format
-            if (!dllDir.EndsWith("\\")) dllDir += "\\";
-
-            dynamic prefs = acad.Preferences;
-            dynamic files = prefs.Files;
-            string? currentTrusted = files.TrustedPath;
-
-            if (currentTrusted != null && currentTrusted.Contains(dllDir, StringComparison.OrdinalIgnoreCase))
-            {
-                Log.Information("Trusted path already contains: {Dir}", dllDir);
-                return;
-            }
-
-            string newTrusted = string.IsNullOrEmpty(currentTrusted)
-                ? dllDir
-                : currentTrusted + ";" + dllDir;
-
-            files.TrustedPath = newTrusted;
-            Log.Information("Added trusted path: {Dir}", dllDir);
-        }
-        catch (Exception ex)
-        {
-            Log.Warning(ex, "Failed to add trusted path");
-        }
-    }
-    /// </summary>
-    private string? ResolveCadPluginPath()
-    {
-        // 1. Use configured path
-        if (!string.IsNullOrEmpty(_config.CadPluginPath) && File.Exists(_config.CadPluginPath))
-            return _config.CadPluginPath;
-
-        // 2. Auto-detect using AutoCadDetector
-        var detected = Core.Services.AutoCadDetector.FindCadPlugin();
-        if (detected != null)
-            return detected;
-
-        // 3. Fallback: look in exe directory and solution output
-        //    exe is at: src\DwgTranslator.App\bin\Debug\net8.0-windows\
-        //    cad dll is at: src\DwgTranslator.Cad\bin\Debug\net8.0\
-        string cadDllPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "DwgTranslator.Cad.dll");
-        if (File.Exists(cadDllPath))
-            return cadDllPath;
-
-        string appDir = AppDomain.CurrentDomain.BaseDirectory;
-        // Go up 4 levels: net8.0-windows -> Debug -> bin -> DwgTranslator.App -> src
-        string srcDir = Path.GetFullPath(Path.Combine(appDir, "..", "..", "..", ".."));
-        foreach (var config in new[] { "Release", "Debug" })
-        {
-            var path = Path.Combine(srcDir, "DwgTranslator.Cad", "bin", config, "net8.0", "DwgTranslator.Cad.dll");
-            if (File.Exists(path))
-                return path;
-        }
-
-        return null;
-    }
-
-    #endregion
+    // NOTE: AutoCAD COM interop logic has been extracted to IAutoCadInteropService / AutoCadInteropService.
+    // See: src/DwgTranslator.App/Services/AutoCadInteropService.cs
 
     #endregion
 

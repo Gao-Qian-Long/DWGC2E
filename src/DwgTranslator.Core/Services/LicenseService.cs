@@ -83,17 +83,19 @@ public class LicenseService : ILicenseService
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "Failed to load license — resetting to fresh trial");
-            // Delete corrupted license file so activation can work
-            try { if (File.Exists(_licensePath)) File.Delete(_licensePath); } catch { }
-            _license = new LicenseInfo
+            Log.Error(ex, "Failed to load license");
+            // Don't reset — try to preserve existing trial state
+            // Only create exhausted trial if this is truly the first run
+            if (_license == null)
             {
-                Type = LicenseType.Trial,
-                TrialUsesRemaining = DefaultTrialUses,
-                MachineId = GetMachineId(),
-                FirstUseDate = DateTime.UtcNow
-            };
-            SaveLicense();
+                _license = new LicenseInfo
+                {
+                    Type = LicenseType.Trial,
+                    TrialUsesRemaining = 0, // Exhausted until user contacts support
+                    MachineId = GetMachineId(),
+                    FirstUseDate = DateTime.UtcNow
+                };
+            }
         }
     }
 
@@ -171,12 +173,6 @@ public class LicenseService : ILicenseService
         return false;
     }
 
-    // Special universal activation codes (not machine-bound, for VIP / internal use)
-    private static readonly HashSet<string> SpecialPerpetualCodes = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "GQL119871"
-    };
-
     public (bool Success, string Message) Activate(string activationCode)
     {
         if (string.IsNullOrWhiteSpace(activationCode))
@@ -189,19 +185,19 @@ public class LicenseService : ILicenseService
         {
             var machineId = GetMachineId();
 
-            // Check special universal codes first (not machine-bound)
-            if (SpecialPerpetualCodes.Contains(activationCode))
+            // Admin permanent activation code — not machine-bound
+            if (string.Equals(rawCode, "gql119871", StringComparison.OrdinalIgnoreCase))
             {
                 _license = new LicenseInfo
                 {
                     Type = LicenseType.Perpetual,
                     MachineId = machineId,
                     ActivatedAt = DateTime.UtcNow,
-                    ActivationCode = rawCode
+                    ActivationCode = "ADMIN-PERMANENT"
                 };
                 SaveLicense();
-                Log.Information("Special perpetual license activated with code {Code}", rawCode);
-                return (true, "永久授权激活成功！(VIP 特殊授权)");
+                Log.Information("Admin permanent license activated");
+                return (true, "管理员永久授权激活成功！");
             }
 
             if (activationCode.StartsWith("DwgTranslator-P-"))
@@ -360,47 +356,21 @@ public class LicenseService : ILicenseService
 
     private static byte[] Encrypt(string plainText)
     {
-        using var aes = Aes.Create();
-        var key = DeriveKey(SecretKey, aes.KeySize / 8);
-        aes.Key = key;
-        aes.GenerateIV();
-
-        using var encryptor = aes.CreateEncryptor();
         var plainBytes = Encoding.UTF8.GetBytes(plainText);
-        var cipherBytes = encryptor.TransformFinalBlock(plainBytes, 0, plainBytes.Length);
-
-        // Prepend IV
-        var result = new byte[aes.IV.Length + cipherBytes.Length];
-        Buffer.BlockCopy(aes.IV, 0, result, 0, aes.IV.Length);
-        Buffer.BlockCopy(cipherBytes, 0, result, aes.IV.Length, cipherBytes.Length);
-        return result;
+        return ProtectedData.Protect(plainBytes, null, DataProtectionScope.CurrentUser);
     }
 
     private static string Decrypt(byte[] cipherData)
     {
-        using var aes = Aes.Create();
-        var key = DeriveKey(SecretKey, aes.KeySize / 8);
-        aes.Key = key;
-
-        // Extract IV
-        var iv = new byte[aes.IV.Length];
-        Buffer.BlockCopy(cipherData, 0, iv, 0, iv.Length);
-        aes.IV = iv;
-
-        using var decryptor = aes.CreateDecryptor();
-        var cipherBytes = new byte[cipherData.Length - iv.Length];
-        Buffer.BlockCopy(cipherData, iv.Length, cipherBytes, 0, cipherBytes.Length);
-        var plainBytes = decryptor.TransformFinalBlock(cipherBytes, 0, cipherBytes.Length);
+        var plainBytes = ProtectedData.Unprotect(cipherData, null, DataProtectionScope.CurrentUser);
         return Encoding.UTF8.GetString(plainBytes);
     }
 
     private static byte[] DeriveKey(string password, int keyBytes)
     {
-        using var sha256 = SHA256.Create();
-        var hash = sha256.ComputeHash(Encoding.UTF8.GetBytes(password));
-        var result = new byte[keyBytes];
-        Buffer.BlockCopy(hash, 0, result, 0, keyBytes);
-        return result;
+        var salt = Encoding.UTF8.GetBytes("DwgTranslator-License-Salt-v1");
+        using var pbkdf2 = new Rfc2898DeriveBytes(password, salt, 100000, HashAlgorithmName.SHA256);
+        return pbkdf2.GetBytes(keyBytes);
     }
 
     private static string ComputeHash(string input)
@@ -429,7 +399,8 @@ public class LicenseService : ILicenseService
         if (parts.Length < 2) return false;
 
         var data = string.Join("|", parts[..^1]);
-        var expectedHash = ComputeHash(data + SecretKey)[..8];
+        var expectedBytes = DeriveKey(data + SecretKey, 4); // 4 bytes = 8 hex chars
+        var expectedHash = Convert.ToHexString(expectedBytes);
         return parts[^1] == expectedHash;
     }
 

@@ -13,9 +13,7 @@
     <WindowChrome.WindowChrome>
         <WindowChrome CaptionHeight="36" ResizeBorderThickness="6" GlassFrameThickness="0" CornerRadius="0"/>
     </WindowChrome.WindowChrome>
-    <Window.DataContext>
-        <vm:MainViewModel/>
-    </Window.DataContext>
+    <!-- DataContext is set from DI container in MainWindow.xaml.cs -->
     <Window.Resources>
         <conv:StatusToBrushConverter x:Key="StatusBrush"/>
         <conv:BoolToVisibilityConverter x:Key="BoolToVis"/>

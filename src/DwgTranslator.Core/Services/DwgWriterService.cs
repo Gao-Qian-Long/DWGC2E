@@ -13,6 +13,7 @@ using CadDimension = ACadSharp.Entities.Dimension;
 using CadMultiLeader = ACadSharp.Entities.MultiLeader;
 using CadInsert = ACadSharp.Entities.Insert;
 using CadAttribute = ACadSharp.Entities.AttributeEntity;
+using CadLwPolyline = ACadSharp.Entities.LwPolyline;
 using OurTextEntity = DwgTranslator.Core.Models.TextEntity;
 
 namespace DwgTranslator.Core.Services;
@@ -72,6 +73,11 @@ public class DwgWriterService : IDwgWriterService
             // Ensure output font styles exist in document
             EnsureFontStyles(doc, cnToEn);
 
+            // Detect frame boundaries for collision-aware scaling
+            var frames = DetectFrames(doc);
+            if (frames.Count > 0)
+                Log.Information("Detected {Count} frame boundary rectangles", frames.Count);
+
             // Build lookup: handle -> translated text
             var translationMap = new Dictionary<string, OurTextEntity>(StringComparer.OrdinalIgnoreCase);
             foreach (var entity in entities)
@@ -88,7 +94,7 @@ public class DwgWriterService : IDwgWriterService
             Log.Information("Translation map: {Count} entities to replace", translationMap.Count);
 
             // Process model space (directly - NOT via BlockRecords)
-            int modelSpaceCount = ProcessEntityCollection(doc.ModelSpace.Entities, translationMap, result, cnToEn, doc);
+            int modelSpaceCount = ProcessEntityCollection(doc.ModelSpace.Entities, translationMap, result, cnToEn, doc, frames);
             Log.Information("ModelSpace: {Count} replacements", modelSpaceCount);
 
             // Process all layouts (paper space) directly
@@ -98,7 +104,7 @@ public class DwgWriterService : IDwgWriterService
                 if (layout.AssociatedBlock == null) continue;
 
                 int layoutCount = ProcessEntityCollection(
-                    layout.AssociatedBlock.Entities, translationMap, result, cnToEn, doc);
+                    layout.AssociatedBlock.Entities, translationMap, result, cnToEn, doc, frames);
                 if (layoutCount > 0)
                     Log.Debug("Layout '{Name}': {Count} replacements", layout.Name, layoutCount);
             }
@@ -110,7 +116,7 @@ public class DwgWriterService : IDwgWriterService
                 if (blockRecord.Name.StartsWith("*Model_Space", StringComparison.OrdinalIgnoreCase)) continue;
                 if (blockRecord.Name.StartsWith("*Paper_Space", StringComparison.OrdinalIgnoreCase)) continue;
 
-                int blockCount = ProcessEntityCollection(blockRecord.Entities, translationMap, result, cnToEn, doc);
+                int blockCount = ProcessEntityCollection(blockRecord.Entities, translationMap, result, cnToEn, doc, frames);
                 if (blockCount > 0)
                     Log.Debug("Block '{Name}': {Count} replacements", blockRecord.Name, blockCount);
             }
@@ -186,7 +192,8 @@ public class DwgWriterService : IDwgWriterService
         Dictionary<string, OurTextEntity> translationMap,
         DwgWriteResult result,
         bool cnToEn,
-        CadDocument doc)
+        CadDocument doc,
+        List<(double minX, double minY, double maxX, double maxY)> frames)
     {
         int replacedCount = 0;
 
@@ -198,7 +205,7 @@ public class DwgWriterService : IDwgWriterService
 
             if (translationMap.TryGetValue(handleStr, out var translatedEntity))
             {
-                var success = ReplaceEntityText(cadEntity, translatedEntity, cnToEn, doc);
+                var success = ReplaceEntityText(cadEntity, translatedEntity, cnToEn, doc, frames);
                 if (success)
                 {
                     result.SuccessCount++;
@@ -250,12 +257,15 @@ public class DwgWriterService : IDwgWriterService
     /// <summary>
     /// Replace text content of a CAD entity with translated text, applying font mapping and scaling.
     /// </summary>
-    private static bool ReplaceEntityText(CadEntity entity, OurTextEntity ourEntity, bool cnToEn, CadDocument doc)
+    private static bool ReplaceEntityText(CadEntity entity, OurTextEntity ourEntity, bool cnToEn, CadDocument doc,
+        List<(double minX, double minY, double maxX, double maxY)> frames)
     {
         try
         {
             var translatedText = ourEntity.TranslatedText;
             if (string.IsNullOrEmpty(translatedText)) return false;
+
+            double originalHeight = ourEntity.OriginalHeight > 0 ? ourEntity.OriginalHeight : 0;
 
             switch (entity)
             {
@@ -263,12 +273,16 @@ public class DwgWriterService : IDwgWriterService
                     textEntity.Value = translatedText;
                     ApplyFontMapping(textEntity, ourEntity.TextStyleName, cnToEn, doc);
                     ApplyScaling(textEntity, translatedText, ourEntity);
+                    if (frames.Count > 0 && originalHeight > 0)
+                        CheckAndScaleToFitFrame(textEntity, frames, originalHeight);
                     return true;
 
                 case CadMText mtext:
                     mtext.Value = translatedText.Replace("\r\n", "\\P").Replace("\n", "\\P").Replace("\r", "\\P");
                     ApplyFontMapping(mtext, ourEntity.TextStyleName, cnToEn, doc);
                     ApplyScaling(mtext, translatedText, ourEntity);
+                    if (frames.Count > 0 && originalHeight > 0)
+                        CheckAndScaleToFitFrame(mtext, frames, originalHeight);
                     return true;
 
                 case CadDimension dim:
@@ -303,7 +317,7 @@ public class DwgWriterService : IDwgWriterService
     {
         try
         {
-            var targetFont = MapFontName(originalStyleName, cnToEn);
+            var targetFont = FontMapper.MapFontName(originalStyleName, cnToEn);
             if (string.IsNullOrEmpty(targetFont)) return;
 
             // Find or create target style safely (do NOT modify existing style.Name)
@@ -334,7 +348,7 @@ public class DwgWriterService : IDwgWriterService
     {
         try
         {
-            var targetFont = MapFontName(originalStyleName, cnToEn);
+            var targetFont = FontMapper.MapFontName(originalStyleName, cnToEn);
             if (string.IsNullOrEmpty(targetFont)) return;
 
             TextStyle? targetStyle = null;
@@ -360,26 +374,6 @@ public class DwgWriterService : IDwgWriterService
         }
     }
 
-    private static string? MapFontName(string currentStyleName, bool cnToEn)
-    {
-        if (cnToEn)
-        {
-            if (currentStyleName.Contains("SimHei", StringComparison.OrdinalIgnoreCase) ||
-                currentStyleName.Contains("SimSun", StringComparison.OrdinalIgnoreCase) ||
-                currentStyleName.Contains("宋体", StringComparison.OrdinalIgnoreCase) ||
-                currentStyleName.Contains("黑体", StringComparison.OrdinalIgnoreCase))
-                return "Arial";
-        }
-        else
-        {
-            if (currentStyleName.Contains("Arial", StringComparison.OrdinalIgnoreCase) ||
-                currentStyleName.Contains("Helvetica", StringComparison.OrdinalIgnoreCase) ||
-                currentStyleName.Contains("Times", StringComparison.OrdinalIgnoreCase))
-                return "SimHei";
-        }
-        return null;
-    }
-
     /// <summary>
     /// Auto-scale text height when translated text is significantly wider than original.
     /// Uses improved per-character width estimation (CJK vs ASCII).
@@ -397,7 +391,7 @@ public class DwgWriterService : IDwgWriterService
             if (newWidth > originalWidth)
             {
                 double scale = originalWidth / newWidth;
-                if (scale < 0.6) scale = 0.6; // keep at least 60% of original height
+                if (scale < 0.5) scale = 0.5; // keep at least 50% of original height (lowered from 0.6 for collision avoidance)
                 double newHeight = originalHeight * scale;
                 double oldHeight = textEntity.Height;
                 textEntity.Height = newHeight;
@@ -445,8 +439,6 @@ public class DwgWriterService : IDwgWriterService
                 mtext.LineSpacingStyle = (LineSpacingStyleType)ourEntity.MTextLineSpacingStyle;
 
             // Split into logical lines (by \P) for per-line width estimation.
-            // Using the longest line width avoids over-estimating multi-line text width
-            // which would cause excessive RectangleWidth and stretched word spacing.
             var logicalLines = SplitMTextLines(translatedText);
             double maxLineWidth = 0;
             int lineCount = logicalLines.Count;
@@ -456,7 +448,7 @@ public class DwgWriterService : IDwgWriterService
                 if (lineW > maxLineWidth) maxLineWidth = lineW;
             }
 
-            // Also compute concatenated width for overflow detection (single-line fallback)
+            // Also compute concatenated width for overflow detection
             string textForEstimation = translatedText.Replace("\\P", " ");
             double concatenatedWidth = EstimateTextWidth(textForEstimation, currentHeight);
 
@@ -464,45 +456,40 @@ public class DwgWriterService : IDwgWriterService
             var originalLogicalLines = SplitMTextLines(ourEntity.RawText ?? string.Empty);
             int originalLineCount = Math.Max(1, originalLogicalLines.Count);
 
+            // Use per-line max width (not concatenated) for multi-line text
+            double effectiveWidth = lineCount > 1 ? maxLineWidth : concatenatedWidth;
+
             if (mtext.RectangleWidth > 0)
             {
-                // FIXED rectangle width: shrink to match actual longest-line width
-                double rectWidth = mtext.RectangleWidth;
+                // FIXED rectangle width: the original was tuned for the source language.
+                double originalRectWidth = mtext.RectangleWidth;
+                double widthRatio = effectiveWidth / originalRectWidth;
 
-                // Use per-line max width (not concatenated) for accurate width ratio
-                double effectiveWidth = lineCount > 1 ? maxLineWidth : concatenatedWidth;
-                double widthRatio = effectiveWidth / rectWidth;
+                // RADICAL FIX: When translated text is significantly narrower than the
+                // original fixed rectangle width, use free-width mode (Width=0).
+                // This lets the viewer auto-size the rectangle to fit content,
+                // which is the only reliable way to prevent word-stretching in MText.
+                // ACadSharp may not reliably serialize RectangleWidth changes, but
+                // setting it to 0 (free width) is a well-supported operation.
+                if (widthRatio < 0.75)
+                {
+                    // Text much narrower — use free-width for natural tight spacing
+                    mtext.RectangleWidth = 0;
+                    Log.Debug("MText {Handle}: set free-width (was {Orig:F1}, text={Eff:F1}, ratio={R:F2})",
+                        mtext.Handle, originalRectWidth, effectiveWidth, widthRatio);
+                }
+                else if (widthRatio < 0.95)
+                {
+                    // Slightly narrower — reduce width proportionally
+                    double targetWidth = Math.Max(effectiveWidth * 1.08, originalRectWidth * 0.50);
+                    mtext.RectangleWidth = targetWidth;
+                    Log.Debug("MText {Handle}: reduced width {Orig:F1} -> {New:F1} (ratio={R:F2})",
+                        mtext.Handle, originalRectWidth, targetWidth, widthRatio);
+                }
+                // else: text fills the rectangle well — keep original width
 
-                if (widthRatio < 0.40)
-                {
-                    // Very short translation — shrink aggressively
-                    double targetWidth = Math.Max(effectiveWidth * 1.10, rectWidth * 0.30);
-                    mtext.RectangleWidth = targetWidth;
-                    rectWidth = targetWidth;
-                }
-                else if (widthRatio < 0.55)
-                {
-                    // Text is much narrower — shrink rectangle to prevent stretched gaps
-                    double targetWidth = Math.Max(effectiveWidth * 1.15, rectWidth * 0.40);
-                    mtext.RectangleWidth = targetWidth;
-                    rectWidth = targetWidth;
-                }
-                else if (widthRatio < 0.75)
-                {
-                    double targetWidth = Math.Max(effectiveWidth * 1.10, rectWidth * 0.55);
-                    mtext.RectangleWidth = targetWidth;
-                    rectWidth = targetWidth;
-                }
-                else if (widthRatio < 0.90)
-                {
-                    // Slightly narrower: tighten a bit
-                    double targetWidth = Math.Max(effectiveWidth * 1.08, rectWidth * 0.75);
-                    mtext.RectangleWidth = targetWidth;
-                    rectWidth = targetWidth;
-                }
-                // else: keep original fixed width (text fills it well)
-
-                // Estimate line count in the (possibly shrunken) rectangle, per-line
+                // Estimate line count in the effective rectangle width
+                double rectWidth = mtext.RectangleWidth > 0 ? mtext.RectangleWidth : effectiveWidth * 1.1;
                 int estimatedLines = 0;
                 foreach (var line in logicalLines)
                 {
@@ -520,77 +507,27 @@ public class DwgWriterService : IDwgWriterService
                     {
                         double scale = originalTotalHeight / translatedTotalHeight;
                         double newHeight = currentHeight * scale;
-                        double minHeight = originalHeight * 0.5;
+                        double minHeight = originalHeight * 0.4;
                         if (newHeight < minHeight) newHeight = minHeight;
-
                         if (newHeight < currentHeight)
                         {
                             mtext.Height = newHeight;
                             currentHeight = newHeight;
                         }
                     }
-
-                    // Fine-tune line spacing only if still slightly overflowing
-                    translatedTotalHeight = estimatedLines * currentHeight * originalLineSpacing;
-                    if (translatedTotalHeight > originalTotalHeight * 1.05 && originalTotalHeight > 0)
-                    {
-                        double spacing = originalTotalHeight / (estimatedLines * currentHeight);
-                        if (spacing < 0.6) spacing = 0.6;
-                        if (spacing > originalLineSpacing) spacing = originalLineSpacing;
-                        mtext.LineSpacing = spacing;
-                    }
-                }
-                else if (estimatedLines < originalLineCount)
-                {
-                    // Translation fits in fewer lines — scale height UP slightly
-                    // but cap at original height to prevent collision
-                    double originalTotalHeight = originalLineCount * originalHeight * originalLineSpacing;
-                    double newTotalHeight = estimatedLines * currentHeight * originalLineSpacing;
-                    if (newTotalHeight < originalTotalHeight * 0.5 && originalTotalHeight > 0)
-                    {
-                        double scale = Math.Min(1.0, (originalTotalHeight * 0.85) / newTotalHeight);
-                        if (scale > 1.0 && scale <= 1.3)
-                        {
-                            mtext.Height = Math.Min(currentHeight * scale, originalHeight * 1.05);
-                        }
-                    }
                 }
             }
             else
             {
-                // FREE width: set a tight rectangle matching the actual text.
-                // Using per-line max width (not concatenated) is critical for
-                // multi-line text — otherwise the rectangle is way too wide.
-                double effectiveWidth = lineCount > 1 ? maxLineWidth : concatenatedWidth;
-
+                // Original was FREE width: only set a rectangle width when truly necessary
+                // to prevent extremely long single lines from spanning the entire drawing.
                 if (effectiveWidth > originalWidth * 1.3)
                 {
-                    // Significantly longer: cap width to prevent sparse layout
                     double maxAllowable = originalWidth * 1.3;
-                    double preferred = effectiveWidth * 0.70; // underestimate for compact wrapping
-                    double targetWidth = Math.Min(maxAllowable, Math.Max(originalWidth * 1.05, preferred));
-                    mtext.RectangleWidth = targetWidth;
-
-                    double scale = originalWidth / effectiveWidth;
-                    if (scale < 0.55) scale = 0.55;
-                    double newHeight = originalHeight * scale;
-                    if (newHeight < currentHeight)
-                        mtext.Height = newHeight;
-                }
-                else if (effectiveWidth > originalWidth * 1.05)
-                {
-                    // Moderate growth: snug fit only
-                    double targetWidth = Math.Min(effectiveWidth * 1.05, originalWidth * 1.20);
+                    double targetWidth = Math.Min(maxAllowable, Math.Max(originalWidth * 1.05, effectiveWidth * 0.65));
                     mtext.RectangleWidth = targetWidth;
                 }
-                else
-                {
-                    // Text fits within original width: set a tight rectangle
-                    // to prevent AutoCAD from using an over-wide default.
-                    double targetWidth = effectiveWidth * 1.08;
-                    if (targetWidth < originalWidth && targetWidth > 0)
-                        mtext.RectangleWidth = targetWidth;
-                }
+                // else: keep free width (RectangleWidth = 0) for natural tight spacing
             }
 
             // Conservative collision-avoidance cap: never let height grow beyond
@@ -621,6 +558,206 @@ public class DwgWriterService : IDwgWriterService
 
     private static int EstimateLineCount(string text, double height, double rectWidth) => TextWidthEstimator.EstimateLineCount(text, height, rectWidth);
 
+    // ───────────────────────── Frame detection and boundary checking ─────────────────────────
+
+    /// <summary>
+    /// Detects rectangular frame boundaries in model space by scanning for closed LwPolylines
+    /// with exactly 4 vertices and a large area. These frames are used as soft boundaries to
+    /// prevent translated text from overflowing.
+    /// </summary>
+    private static List<(double minX, double minY, double maxX, double maxY)> DetectFrames(CadDocument doc)
+    {
+        var frames = new List<(double, double, double, double)>();
+        try
+        {
+            foreach (var entity in doc.ModelSpace.Entities)
+            {
+                if (entity is CadLwPolyline poly && poly.IsClosed)
+                {
+                    if (poly.Vertices.Count == 4)
+                    {
+                        double minX = poly.Vertices.Min(v => v.Location.X);
+                        double minY = poly.Vertices.Min(v => v.Location.Y);
+                        double maxX = poly.Vertices.Max(v => v.Location.X);
+                        double maxY = poly.Vertices.Max(v => v.Location.Y);
+                        double area = (maxX - minX) * (maxY - minY);
+                        // Only consider large rectangles as frames (not small detail boxes)
+                        if (area > 10000)
+                            frames.Add((minX, minY, maxX, maxY));
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Debug(ex, "Frame detection encountered an error (non-fatal)");
+        }
+        return frames;
+    }
+
+    /// <summary>
+    /// Finds the frame whose center is closest to the given point.
+    /// Returns null if no frames are available.
+    /// </summary>
+    private static (double minX, double minY, double maxX, double maxY)? FindClosestFrame(
+        double px, double py,
+        List<(double minX, double minY, double maxX, double maxY)> frames)
+    {
+        if (frames.Count == 0) return null;
+        return frames.OrderBy(f =>
+            Math.Pow((f.minX + f.maxX) / 2 - px, 2) +
+            Math.Pow((f.minY + f.maxY) / 2 - py, 2)).First();
+    }
+
+    /// <summary>
+    /// Estimates the bounding box of a CadText entity based on its insertion point,
+    /// text width, and height. The insertion point is at the left baseline.
+    /// </summary>
+    private static (double minX, double minY, double maxX, double maxY) EstimateTextBounds(CadText textEntity)
+    {
+        double w = EstimateTextWidth(textEntity.Value ?? string.Empty, textEntity.Height);
+        double h = textEntity.Height;
+        double x = textEntity.InsertPoint.X;
+        double y = textEntity.InsertPoint.Y;
+        // Text extends right from insert point, and roughly from y to y+height
+        return (x, y, x + w, y + h);
+    }
+
+    /// <summary>
+    /// Estimates the bounding box of a CadMText entity based on its insertion point,
+    /// rectangle width (or estimated width for free-width text), and estimated height.
+    /// The insertion point is the top-left corner for default (top-left) attachment.
+    /// </summary>
+    private static (double minX, double minY, double maxX, double maxY) EstimateMTextBounds(CadMText mtext)
+    {
+        double w;
+        if (mtext.RectangleWidth > 0)
+        {
+            w = mtext.RectangleWidth;
+        }
+        else
+        {
+            // Free-width: estimate from content
+            string plain = mtext.Value?.Replace("\\P", " ") ?? "";
+            w = EstimateTextWidth(plain, mtext.Height);
+        }
+
+        // Estimate total height from line count
+        int lineCount = EstimateLineCount(mtext.Value ?? "", mtext.Height, Math.Max(w, 1.0));
+        double lineSpacing = mtext.LineSpacing > 0 ? mtext.LineSpacing : 1.0;
+        double totalHeight = lineCount * mtext.Height * lineSpacing;
+
+        double x = mtext.InsertPoint.X;
+        double y = mtext.InsertPoint.Y;
+        // Default attachment is top-left: text extends right and downward
+        return (x, y - totalHeight, x + w, y);
+    }
+
+    /// <summary>
+    /// Checks whether a CadText entity's estimated bounds exceed its closest frame boundary.
+    /// If so, scales down the text height to fit within the frame (down to 40% of original height).
+    /// </summary>
+    private static void CheckAndScaleToFitFrame(
+        CadText textEntity,
+        List<(double minX, double minY, double maxX, double maxY)> frames,
+        double originalHeight)
+    {
+        try
+        {
+            double px = textEntity.InsertPoint.X;
+            double py = textEntity.InsertPoint.Y;
+            var frame = FindClosestFrame(px, py, frames);
+            if (!frame.HasValue) return;
+
+            var bounds = EstimateTextBounds(textEntity);
+            if (!ExceedsFrame(bounds, frame.Value)) return;
+
+            // Compute scale factor needed to fit within frame
+            double frameW = frame.Value.maxX - frame.Value.minX;
+            double frameH = frame.Value.maxY - frame.Value.minY;
+            double textW = bounds.maxX - bounds.minX;
+            double textH = bounds.maxY - bounds.minY;
+
+            double scaleW = textW > 0 ? Math.Max(0.4, (frameW * 0.95) / textW) : 1.0;
+            double scaleH = textH > 0 ? Math.Max(0.4, (frameH * 0.95) / textH) : 1.0;
+            double scale = Math.Min(1.0, Math.Min(scaleW, scaleH));
+
+            if (scale < 1.0)
+            {
+                double newHeight = textEntity.Height * scale;
+                double minHeight = originalHeight * 0.4;
+                if (newHeight < minHeight) newHeight = minHeight;
+                textEntity.Height = newHeight;
+                Log.Debug("Frame-boundary scaling: Text {Handle} scaled by {Scale:F2} (height {Old:F2} -> {New:F2})",
+                    textEntity.Handle, scale, originalHeight, newHeight);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Debug(ex, "Frame boundary check failed for text {Handle} (non-fatal)", textEntity.Handle);
+        }
+    }
+
+    /// <summary>
+    /// Checks whether an MText entity's estimated bounds exceed its closest frame boundary.
+    /// If so, scales down the text height to fit within the frame (down to 40% of original height).
+    /// </summary>
+    private static void CheckAndScaleToFitFrame(
+        CadMText mtext,
+        List<(double minX, double minY, double maxX, double maxY)> frames,
+        double originalHeight)
+    {
+        try
+        {
+            double px = mtext.InsertPoint.X;
+            double py = mtext.InsertPoint.Y;
+            var frame = FindClosestFrame(px, py, frames);
+            if (!frame.HasValue) return;
+
+            var bounds = EstimateMTextBounds(mtext);
+            if (!ExceedsFrame(bounds, frame.Value)) return;
+
+            double frameW = frame.Value.maxX - frame.Value.minX;
+            double frameH = frame.Value.maxY - frame.Value.minY;
+            double textW = bounds.maxX - bounds.minX;
+            double textH = bounds.maxY - bounds.minY;
+
+            double scaleW = textW > 0 ? Math.Max(0.4, (frameW * 0.95) / textW) : 1.0;
+            double scaleH = textH > 0 ? Math.Max(0.4, (frameH * 0.95) / textH) : 1.0;
+            double scale = Math.Min(1.0, Math.Min(scaleW, scaleH));
+
+            if (scale < 1.0)
+            {
+                double newHeight = mtext.Height * scale;
+                double minHeight = originalHeight * 0.4;
+                if (newHeight < minHeight) newHeight = minHeight;
+                mtext.Height = newHeight;
+                Log.Debug("Frame-boundary scaling: MText {Handle} scaled by {Scale:F2} (height {Old:F2} -> {New:F2})",
+                    mtext.Handle, scale, originalHeight, newHeight);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Debug(ex, "Frame boundary check failed for MText {Handle} (non-fatal)", mtext.Handle);
+        }
+    }
+
+    /// <summary>
+    /// Returns true if the text bounding box exceeds the frame boundaries.
+    /// Uses a small tolerance (1% of frame dimensions) to avoid false positives.
+    /// </summary>
+    private static bool ExceedsFrame(
+        (double minX, double minY, double maxX, double maxY) bounds,
+        (double minX, double minY, double maxX, double maxY) frame)
+    {
+        double tolX = (frame.maxX - frame.minX) * 0.01;
+        double tolY = (frame.maxY - frame.minY) * 0.01;
+        return bounds.minX < frame.minX - tolX
+            || bounds.maxX > frame.maxX + tolX
+            || bounds.minY < frame.minY - tolY
+            || bounds.maxY > frame.maxY + tolY;
+    }
+
     /// <summary>
     /// Formats a numeric (ulong) handle to its canonical string representation (uppercase hexadecimal).
     /// This MUST match how handles are stored in TextEntity.Handle by DwgReaderService,
@@ -634,8 +771,10 @@ public class DwgWriterService : IDwgWriterService
     private static string CleanHandle(string handle)
     {
         if (string.IsNullOrEmpty(handle)) return string.Empty;
+        // Preserve compound handles (attributes: "handle/tag", table cells: "handle:row:col")
         if (handle.Contains('/') || handle.Contains(':')) return handle;
-        return handle;
+        // Remove any non-hex characters and normalize to uppercase
+        return handle.Trim().ToUpperInvariant();
     }
 }
 

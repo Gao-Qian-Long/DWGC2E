@@ -5,12 +5,23 @@
     <Nullable>enable</Nullable>
     <RootNamespace>DwgTranslator.Core</RootNamespace>
   </PropertyGroup>
+  <!--
+    TODO(architecture): This Core project references infrastructure packages (ACadSharp, ClosedXML)
+    and a UI framework (CommunityToolkit.Mvvm). In clean architecture Core should only contain
+    interfaces, models, and domain logic — with infrastructure and UI concerns in separate projects.
+    Recommended refactoring:
+      - Move DwgReaderService/DwgWriterService to a new DwgTranslator.Infrastructure project
+      - Move Excel import/export to DwgTranslator.Infrastructure (ClosedXML dependency)
+      - Make TextEntity a POCO and wrap it with an observable proxy in the UI layer
+    Deferred because the move would require touching nearly every project in the solution.
+  -->
   <ItemGroup>
     <PackageReference Include="ACadSharp" Version="3.6.12" />
     <PackageReference Include="System.Net.Http.Json" Version="8.0.0" />
     <PackageReference Include="ClosedXML" Version="0.104.2" />
     <PackageReference Include="Serilog" Version="4.2.0" />
     <PackageReference Include="Serilog.Sinks.File" Version="6.0.0" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
     <PackageReference Include="System.Text.Json" Version="8.0.0" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.2" />
   </ItemGroup>

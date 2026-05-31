@@ -122,8 +122,8 @@ class Program
 
     static string ComputeChecksum(string data)
     {
-        using var sha256 = SHA256.Create();
-        var bytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(data + SecretKey));
-        return Convert.ToHexString(bytes)[..8];
+        var salt = Encoding.UTF8.GetBytes("DwgTranslator-License-Salt-v1");
+        using var pbkdf2 = new Rfc2898DeriveBytes(data + SecretKey, salt, 100000, HashAlgorithmName.SHA256);
+        return Convert.ToHexString(pbkdf2.GetBytes(4));
     }
 }

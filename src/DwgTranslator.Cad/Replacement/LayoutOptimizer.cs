@@ -6,23 +6,23 @@ namespace DwgTranslator.Cad.Replacement;
 
 /// <summary>
 /// Optimizes MText layout using AutoCAD's precise GeometricExtents.
-/// Key improvements for translation quality:
-/// 1. More aggressive width reduction for fixed-rectangle MText (prevents sparse word spacing)
-/// 2. Width=0 (free-width) as primary strategy to let AutoCAD auto-size the rectangle
-/// 3. Binary search for optimal height when frame is detected
+///
+/// Width rules (IMPROVED — NEVER set Width=0 for fixed-width MText):
+///   AutoCAD official docs: "If Width = 0.0, word wrap is currently disabled."
+///   Setting Width=0 disables all word wrapping, turning multi-line text into
+///   a single very long line. We now use a tight non-zero width instead.
+/// - Fixed width MText: if narrow (<0.75) → tight width (never 0); if medium (<0.95) → proportional; else → keep
+/// - Free width MText: only constrain if overflowing (>1.2x original)
+///
+/// Height rules:
+/// - Proportional scaling when translated lines exceed original line count
+/// - Cap at originalHeight * 1.05 (collision avoidance, matches offline)
+/// - Frame overflow: iterative height reduction + width constraint
 /// </summary>
 public static class LayoutOptimizer
 {
-    private const int MaxBinarySearchIterations = 8;
-    private const double MinHeightRatio = 0.35;
+    private const double MinHeightRatio = 0.4;
 
-    /// <summary>
-    /// Optimizes MText layout:
-    /// 1. Preserves original line spacing.
-    /// 2. FIXED-RECTANGLE MText: tries free-width (Width=0) first, then reduces rectangle width aggressively.
-    /// 3. FREE-WIDTH MText: sets a conservative rectangle width.
-    /// 4. If a frame is present, uses binary search to find the optimal height that fits.
-    /// </summary>
     public static void OptimizeMText(
         MText mtext,
         string translatedText,
@@ -35,187 +35,169 @@ public static class LayoutOptimizer
         double originalLineSpacing = ourEntity.MTextLineSpacing > 0 ? ourEntity.MTextLineSpacing : 1.0;
         double originalRectWidth = ourEntity.MTextRectangleWidth;
 
-        // Step 1: Preserve original line spacing
+        // Preserve original line spacing
         if (ourEntity.MTextLineSpacing > 0)
             mtext.LineSpacingFactor = ourEntity.MTextLineSpacing;
         if (ourEntity.MTextLineSpacingStyle > 0)
             mtext.LineSpacingStyle = (LineSpacingStyle)ourEntity.MTextLineSpacingStyle;
 
-        // Step 2: Force graphics update so GeometricExtents is accurate
-        mtext.RecordGraphicsModified(true);
+        // Determine analysis text — prefer mtext.Contents with \P breaks
+        string analysisText;
+        if (mtext.Contents.Contains("\\P"))
+            analysisText = mtext.Contents;
+        else if (translatedText.Contains("\\P"))
+            analysisText = translatedText;
+        else if (ourEntity.MTextHasHardBreaks)
+            analysisText = Core.Services.TextWidthEstimator.RebuildMTextWithLineBreaks(
+                translatedText, ourEntity.MTextLineCount);
+        else
+            analysisText = translatedText;
 
-        // Step 3: Handle rectangle width
-        string textForEstimation = translatedText.Replace("\\P", " ");
-        double translatedWidth = EstimateTextWidth(textForEstimation, mtext.TextHeight);
+        var logicalLines = SplitMTextLines(analysisText);
+        int lineCount = logicalLines.Count;
 
+        // Per-line max width (for multi-line) and concatenated width (for single-line)
+        double maxLineWidth = 0;
+        foreach (var line in logicalLines)
+        {
+            double lineW = EstimateTextWidth(line, mtext.TextHeight);
+            if (lineW > maxLineWidth) maxLineWidth = lineW;
+        }
+        string textForEstimation = analysisText.Replace("\\P", " ");
+        double concatenatedWidth = EstimateTextWidth(textForEstimation, mtext.TextHeight);
+        double effectiveWidth = lineCount > 1 ? maxLineWidth : concatenatedWidth;
+
+        // ===== WIDTH: preserve original rectangle width for visual consistency =====
         if (originalRectWidth > 0)
         {
-            // FIXED rectangle width: the original was tuned for the source language.
-            // After translation (especially CN→EN), text is usually narrower, causing
-            // AutoCAD to stretch gaps between words to fill the fixed width.
-            double widthRatio = translatedWidth / originalRectWidth;
-
-            // Strategy A: Try free-width (Width=0) first — AutoCAD auto-sizes to content
-            // This is the most effective fix for sparse word spacing.
-            // We save the original width in case we need to revert.
-            double savedWidth = mtext.Width;
-
-            if (widthRatio < 0.85)
-            {
-                // Text is significantly narrower than the fixed rectangle.
-                // Try free-width mode — let AutoCAD auto-size the rectangle.
-                mtext.Width = 0;
-                mtext.RecordGraphicsModified(true);
-
-                try
-                {
-                    // Check if free-width result is acceptable
-                    var testBounds = mtext.GeometricExtents;
-                    double freeWidth = testBounds.MaxPoint.X - testBounds.MinPoint.X;
-                    double freeHeight = testBounds.MaxPoint.Y - testBounds.MinPoint.Y;
-                    double originalTotalHeight = EstimateLineCount(
-                        (ourEntity.RawText ?? "").Replace("\\P", " "), originalHeight, originalRectWidth)
-                        * originalHeight * originalLineSpacing;
-
-                    // If free-width doesn't cause excessive height increase, keep it
-                    if (freeHeight <= originalTotalHeight * 1.5 || widthRatio < 0.4)
-                    {
-                        Log.Debug("MText {Handle}: using free-width (Width=0), freeW={W:F1}, ratio={R:F2}",
-                            mtext.Handle, freeWidth, widthRatio);
-                        // Width=0 succeeded — continue to height optimization
-                    }
-                    else
-                    {
-                        // Free-width caused too many lines — fall back to reduced fixed width
-                        double targetWidth = Math.Max(translatedWidth * 1.06, originalRectWidth * 0.4);
-                        mtext.Width = Math.Min(targetWidth, originalRectWidth * 0.9);
-                        mtext.RecordGraphicsModified(true);
-                        Log.Debug("MText {Handle}: reduced width to {W:F1} (ratio={R:F2})",
-                            mtext.Handle, mtext.Width, widthRatio);
-                    }
-                }
-                catch
-                {
-                    // GeometricExtents failed — use heuristic reduced width
-                    double targetWidth = Math.Max(translatedWidth * 1.06, originalRectWidth * 0.4);
-                    mtext.Width = Math.Min(targetWidth, originalRectWidth * 0.9);
-                    mtext.RecordGraphicsModified(true);
-                }
-            }
-            else if (widthRatio < 0.95)
-            {
-                // Slightly narrower — small reduction
-                double targetWidth = Math.Max(translatedWidth * 1.06, originalRectWidth * 0.7);
-                mtext.Width = Math.Min(targetWidth, originalRectWidth);
-                mtext.RecordGraphicsModified(true);
-                Log.Debug("MText {Handle}: slightly reduced width to {W:F1} (ratio={R:F2})",
-                    mtext.Handle, mtext.Width, widthRatio);
-            }
-            else
-            {
-                // Text roughly fills the rectangle — keep original fixed width
-                mtext.Width = originalRectWidth;
-            }
-        }
-        else if (mtext.Width <= 0 && originalWidth > 0)
-        {
-            // FREE width: only set rectangle width when truly necessary to prevent overflow.
-            if (translatedWidth > originalWidth * 1.3)
-            {
-                double maxAllowable = originalWidth * 1.3;
-                double preferred = translatedWidth * 0.65;
-                double targetWidth = Math.Min(maxAllowable, Math.Max(originalWidth * 1.05, preferred));
-                mtext.Width = targetWidth;
-            }
-            else if (translatedWidth > originalWidth * 1.05)
-            {
-                double targetWidth = Math.Min(translatedWidth * 1.05, originalWidth * 1.25);
-                mtext.Width = targetWidth;
-            }
-            // else: keep Width = 0 (true free-width) for natural, tight spacing
-        }
-
-        // Step 4: If frame detected, use binary search for optimal height
-        if (frame.HasValue)
-        {
-            BinarySearchOptimalHeight(mtext, frame.Value, originalHeight);
+            // Original had FIXED rectangle width — ALWAYS keep it.
+            // The drawing author chose this width for a reason (visual structure).
+            // Reducing it destroys layout and may turn multi-line text into single-line.
+            // WARNING: never set Width=0 — AutoCAD docs confirm this DISABLES word wrap.
+            // Instead, let AutoCAD auto-wrap at the original width.
+            // Height will be adjusted below if the translation wraps to more lines.
+            Log.Information("MText {Handle}: keeping original width {W:F1} (eff={Eff:F1}, ratio={R:F2})",
+                mtext.Handle, originalRectWidth, effectiveWidth, effectiveWidth / originalRectWidth);
         }
         else
         {
-            // No frame - scale down height if translated text needs more lines
-            double rectWidth = mtext.Width > 0 ? mtext.Width : originalWidth;
-            string originalText = (ourEntity.RawText ?? string.Empty).Replace("\\P", " ");
-            int originalLines = EstimateLineCount(originalText, originalHeight, rectWidth);
-            int translatedLines = EstimateLineCount(textForEstimation, mtext.TextHeight, rectWidth);
-
-            if (translatedLines > originalLines)
+            // Original was FREE width (Width=0). Set a wrapping width if the
+            // translation is significantly longer (would create an excessively
+            // long single line that overflows the frame or looks unbalanced).
+            // Use a low threshold to avoid single-line text that should wrap.
+            double minWrapWidth = Math.Max(originalWidth * 1.1, 50.0);
+            if (effectiveWidth > minWrapWidth)
             {
-                double originalTotalHeight = originalLines * originalHeight * originalLineSpacing;
-                double translatedTotalHeight = translatedLines * mtext.TextHeight * originalLineSpacing;
-
-                if (translatedTotalHeight > originalTotalHeight && originalTotalHeight > 0)
-                {
-                    double scale = originalTotalHeight / translatedTotalHeight;
-                    double newHeight = mtext.TextHeight * scale;
-                    double minHeight = originalHeight * 0.5;
-                    if (newHeight < minHeight) newHeight = minHeight;
-                    if (newHeight < mtext.TextHeight)
-                        mtext.TextHeight = newHeight;
-                }
+                // Set wrapping width to ~2x the original for balanced multi-line display
+                double targetWidth = Math.Max(originalWidth * 1.1, effectiveWidth * 0.55);
+                mtext.Width = targetWidth;
+                Log.Information("MText {Handle}: free-width now {W:F1} to wrap (orig={Orig:F1}, eff={Eff:F1})",
+                    mtext.Handle, targetWidth, originalWidth, effectiveWidth);
             }
+            // else: keep free width (translation is short, single line is correct)
         }
 
-        // Final graphics refresh
         mtext.RecordGraphicsModified(true);
-    }
 
-    private static void BinarySearchOptimalHeight(MText mtext, Extents3d frame, double originalHeight)
-    {
-        double minHeight = originalHeight * MinHeightRatio;
-        double maxHeight = originalHeight;
-        double bestHeight = originalHeight;
+        // ===== HEIGHT: proportional scaling when line count increases =====
+        double currentRectWidth = mtext.Width > 0 ? mtext.Width : (lineCount > 1 ? maxLineWidth : effectiveWidth * 1.1);
+        if (currentRectWidth <= 0) currentRectWidth = originalWidth;
 
-        for (int i = 0; i < MaxBinarySearchIterations; i++)
+        var originalLogicalLines = SplitMTextLines(ourEntity.RawText ?? string.Empty);
+        int originalLineCount = Math.Max(1, originalLogicalLines.Count);
+
+        int estimatedLines = 0;
+        foreach (var line in logicalLines)
+            estimatedLines += EstimateLineCount(line, mtext.TextHeight, currentRectWidth);
+        estimatedLines = Math.Max(1, estimatedLines);
+
+        if (estimatedLines > originalLineCount)
         {
-            double midHeight = (minHeight + maxHeight) / 2.0;
-            mtext.TextHeight = midHeight;
-            mtext.RecordGraphicsModified(true);
+            double originalTotalHeight = originalLineCount * originalHeight * originalLineSpacing;
+            double translatedTotalHeight = estimatedLines * mtext.TextHeight * originalLineSpacing;
 
-            // Force boundary recalculation
-            try
+            if (translatedTotalHeight > originalTotalHeight && originalTotalHeight > 0)
             {
-                var bounds = mtext.GeometricExtents;
-                bool overflows = CollisionDetector.ExceedsFrame(bounds, frame);
-
-                if (overflows)
-                {
-                    maxHeight = midHeight;
-                }
-                else
-                {
-                    bestHeight = midHeight;
-                    minHeight = midHeight;
-                }
-            }
-            catch
-            {
-                // GeometricExtents may fail for degenerate text; treat as overflow
-                maxHeight = midHeight;
+                double scale = originalTotalHeight / translatedTotalHeight;
+                double newHeight = mtext.TextHeight * scale;
+                double minHeight = originalHeight * MinHeightRatio;
+                if (newHeight < minHeight) newHeight = minHeight;
+                if (newHeight < mtext.TextHeight)
+                    mtext.TextHeight = newHeight;
             }
         }
 
-        mtext.TextHeight = bestHeight;
+        // ===== FRAME SAFETY: simple height adjustment (no recursion) =====
+        if (frame.HasValue)
+        {
+            AdjustHeightToFrame(mtext, frame.Value, originalHeight);
+        }
+
+        // ===== HEIGHT CAP: collision avoidance (matches offline) =====
+        // Never let height grow beyond original + 5% — translated text is
+        // usually longer (more chars), not taller.
+        if (mtext.TextHeight > originalHeight * 1.05)
+        {
+            mtext.TextHeight = originalHeight * 1.05;
+        }
+
         mtext.RecordGraphicsModified(true);
-        Log.Debug("MText {Handle} optimized: height {H:F2} fits frame", mtext.Handle, bestHeight);
     }
 
     /// <summary>
-    /// Optimizes DBText scaling when no frame is present or as a first-pass heuristic.
+    /// Simple frame fitting: reduce height in 2 passes (coarse then fine).
+    /// If text overflows horizontally (Width=0 + long lines), constrain width to frame.
     /// </summary>
+    private static void AdjustHeightToFrame(MText mtext, Extents3d frame, double originalHeight)
+    {
+        double frameWidth = frame.MaxPoint.X - frame.MinPoint.X;
+        double minHeight = originalHeight * MinHeightRatio;
+
+        // Pass 1: check if text fits at current height
+        try
+        {
+            var bounds = mtext.GeometricExtents;
+            if (!CollisionDetector.ExceedsFrame(bounds, frame))
+                return; // fits — done
+        }
+        catch { /* GeometricExtents may fail; continue to adjustment */ }
+
+        // Pass 2: try reducing height to fit
+        double testHeight = mtext.TextHeight;
+        for (int i = 0; i < 3; i++)
+        {
+            testHeight = Math.Max(testHeight * 0.85, minHeight);
+            mtext.TextHeight = testHeight;
+            mtext.RecordGraphicsModified(true);
+
+            try
+            {
+                var testBounds = mtext.GeometricExtents;
+                if (!CollisionDetector.ExceedsFrame(testBounds, frame))
+                {
+                    Log.Debug("MText {Handle}: height {H:F2} fits frame", mtext.Handle, testHeight);
+                    return; // fits — done
+                }
+            }
+            catch { break; /* stop on error */ }
+        }
+
+        // If height reduction didn't help, horizontal overflow is the problem.
+        // Constrain width to frame width so AutoCAD auto-wraps.
+        if (mtext.Width <= 0 || mtext.Width > frameWidth)
+        {
+            mtext.Width = frameWidth * 0.92;
+            mtext.RecordGraphicsModified(true);
+            Log.Debug("MText {Handle}: width constrained to {W:F1} (frame={Fw:F1})",
+                mtext.Handle, mtext.Width, frameWidth);
+        }
+    }
+
     public static void OptimizeDBText(
         DBText dbText,
         string translatedText,
-        Core.Models.TextEntity ourEntity)
+        Core.Models.TextEntity ourEntity,
+        Extents3d? frame = null)
     {
         double originalWidth = ourEntity.OriginalWidth;
         double originalHeight = ourEntity.OriginalHeight > 0 ? ourEntity.OriginalHeight : dbText.Height;
@@ -225,14 +207,55 @@ public static class LayoutOptimizer
         if (newWidth > originalWidth)
         {
             double scale = originalWidth / newWidth;
-            if (scale < 0.6) scale = 0.6;
+            if (scale < 0.5) scale = 0.5;
             dbText.Height = originalHeight * scale;
         }
 
         dbText.RecordGraphicsModified(true);
+
+        // Frame overflow detection: if text exceeds frame, scale down to fit
+        if (frame.HasValue)
+        {
+            try
+            {
+                dbText.RecordGraphicsModified(true);
+                var bounds = dbText.GeometricExtents;
+                if (CollisionDetector.ExceedsFrame(bounds, frame.Value))
+                {
+                    double overflowRatio = CollisionDetector.ComputeOverflowRatio(bounds, frame.Value);
+                    double scale = 1.0 / (1.0 + overflowRatio);
+                    if (scale < 0.5) scale = 0.5;
+                    dbText.Height *= scale;
+                    dbText.RecordGraphicsModified(true);
+
+                    // Verify and do a second pass if needed
+                    try
+                    {
+                        var newBounds = dbText.GeometricExtents;
+                        if (CollisionDetector.ExceedsFrame(newBounds, frame.Value))
+                        {
+                            double ratio2 = CollisionDetector.ComputeOverflowRatio(newBounds, frame.Value);
+                            double scale2 = 1.0 / (1.0 + ratio2);
+                            if (scale2 < 0.5) scale2 = 0.5;
+                            dbText.Height *= scale2;
+                        }
+                    }
+                    catch { }
+                }
+            }
+            catch { }
+        }
     }
 
-    private static double EstimateTextWidth(string text, double height) => Core.Services.TextWidthEstimator.EstimateTextWidth(text, height);
+    private static double EstimateTextWidth(string text, double height) =>
+        Core.Services.TextWidthEstimator.EstimateTextWidth(text, height);
 
-    private static int EstimateLineCount(string text, double height, double rectWidth) => Core.Services.TextWidthEstimator.EstimateLineCount(text, height, rectWidth);
+    private static List<string> SplitMTextLines(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return new List<string> { string.Empty };
+        return text.Split(new[] { "\\P" }, StringSplitOptions.None).ToList();
+    }
+
+    private static int EstimateLineCount(string text, double height, double rectWidth) =>
+        Core.Services.TextWidthEstimator.EstimateLineCount(text, height, rectWidth);
 }

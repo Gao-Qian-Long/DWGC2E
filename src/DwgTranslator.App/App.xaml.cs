@@ -1,4 +1,8 @@
+using DwgTranslator.App.Services;
+using DwgTranslator.App.ViewModels;
 using DwgTranslator.Core.Services;
+using DwgTranslator.Core.Translation;
+using Microsoft.Extensions.DependencyInjection;
 using Serilog;
 using System.IO;
 using System.Windows;
@@ -15,6 +19,7 @@ public partial class App : Application
         "DwgTranslator");
 
     public static ILicenseService LicenseService { get; private set; } = null!;
+    public static IServiceProvider Services { get; private set; } = null!;
 
     public App()
     {
@@ -122,6 +127,30 @@ public partial class App : Application
                 Log.Warning(ex, "Failed to check first-launch settings");
             }
         }
+
+        // Configure Dependency Injection
+        var serviceCollection = new ServiceCollection();
+        ConfigureServices(serviceCollection);
+        Services = serviceCollection.BuildServiceProvider();
+    }
+
+    private static void ConfigureServices(IServiceCollection services)
+    {
+        // Core services (concrete types map 1:1 to their interfaces)
+        services.AddSingleton<IGlossaryService, GlossaryService>();
+        services.AddSingleton<IExcelService, ExcelService>();
+        services.AddSingleton<IDwgReaderService, DwgReaderService>();
+        services.AddSingleton<IDwgWriterService, DwgWriterService>();
+        services.AddSingleton<IAutoCadInteropService, AutoCadInteropService>();
+
+        // LicenseService needs the AppDataDir parameter
+        services.AddSingleton<ILicenseService>(sp => LicenseService);
+
+        // Translation helpers (stateless, safe to share)
+        services.AddSingleton<FormatCodeParser>();
+
+        // ViewModel
+        services.AddTransient<MainViewModel>();
     }
 
     protected override void OnExit(ExitEventArgs e)

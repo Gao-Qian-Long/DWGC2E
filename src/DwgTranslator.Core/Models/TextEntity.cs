@@ -6,6 +6,10 @@ namespace DwgTranslator.Core.Models;
 /// Represents a text entity extracted from a DWG file.
 /// Observable for WPF MVVM data binding.
 /// </summary>
+// TODO(architecture): TextEntity inherits from CommunityToolkit.Mvvm.ObservableObject,
+// which is a UI framework dependency. In a clean architecture this Core model should be
+// POCO-only, with the observable wrapper living in the UI/Presentation layer.
+// Deferred because changing the base class would break data-binding across the entire app.
 public partial class TextEntity : ObservableObject
 {
     /// <summary>Unique handle for writeback定位.</summary>

@@ -4,6 +4,7 @@ using Autodesk.AutoCAD.Geometry;
 using Autodesk.AutoCAD.GraphicsInterface;
 using DwgTranslator.Cad;
 using DwgTranslator.Core.Models;
+using DwgTranslator.Core.Services;
 
 namespace DwgTranslator.Cad.Replacement;
 
@@ -15,23 +16,6 @@ public class TextReplacer
 {
     private readonly double _autoScaleThreshold;
     private readonly double _autoScaleFactor;
-
-    // Font mapping rules
-    private static readonly Dictionary<string, string> CnToEnFonts = new(StringComparer.OrdinalIgnoreCase)
-    {
-        { "SimHei", "Arial" },
-        { "SimSun", "Arial" },
-        { "宋体", "Arial" },
-        { "黑体", "Arial" },
-        { "gbcbig.shx", "simplex.shx" }
-    };
-
-    private static readonly Dictionary<string, string> EnToCnFonts = new(StringComparer.OrdinalIgnoreCase)
-    {
-        { "Arial", "SimHei" },
-        { "Helvetica", "SimHei" },
-        { "simplex.shx", "gbcbig.shx" }
-    };
 
     public TextReplacer(double autoScaleThreshold = 1.5, double autoScaleFactor = 0.95)
     {
@@ -77,7 +61,7 @@ public class TextReplacer
                         var btr = replaceResult.OwningBlock ?? modelSpace;
                         CollisionDetector.TryResolveCollisionByScaling(
                             replaceResult.ModifiedEntity, btr, transaction,
-                            replaceResult.OriginalHeight);
+                            replaceResult.OriginalHeight, db: db);
                     }
 
                     result.SuccessCount++;
@@ -135,7 +119,7 @@ public class TextReplacer
             switch (dbObject)
             {
                 case DBText dbText:
-                    return ReplaceDBText(dbText, entity, owningBtr);
+                    return ReplaceDBText(dbText, entity, db, owningBtr);
 
                 case MText mText:
                     return ReplaceMText(mText, entity, db, owningBtr);
@@ -156,24 +140,52 @@ public class TextReplacer
         }
     }
 
-    private EntityReplaceResult ReplaceDBText(DBText dbText, TextEntity entity, BlockTableRecord? owningBtr)
+    private EntityReplaceResult ReplaceDBText(DBText dbText, TextEntity entity, Database db, BlockTableRecord? owningBtr)
     {
         var originalHeight = dbText.Height;
         dbText.TextString = entity.TranslatedText;
 
-        // Auto-scale if needed
+        // Auto-scale if translated text is significantly wider
         var newWidth = EstimateTextWidth(entity.TranslatedText, dbText.Height);
         if (entity.OriginalWidth > 0 && newWidth > entity.OriginalWidth * _autoScaleThreshold)
         {
-            dbText.Height *= entity.OriginalWidth / newWidth * _autoScaleFactor;
+            double scale = entity.OriginalWidth / newWidth * _autoScaleFactor;
+            if (scale < 0.5) scale = 0.5;
+            dbText.Height *= scale;
         }
 
-        return new EntityReplaceResult 
-        { 
-            Success = true, 
-            ModifiedEntity = dbText, 
+        // Frame-aware scaling: shrink to fit closest frame if overflowing
+        var frames = FrameDetector.DetectFrames(db);
+        var closestFrame = CollisionDetector.FindClosestFrame(dbText.Position, frames);
+        if (closestFrame.HasValue)
+        {
+            dbText.RecordGraphicsModified(true);
+            try
+            {
+                var bounds = dbText.GeometricExtents;
+                if (CollisionDetector.ExceedsFrame(bounds, closestFrame.Value))
+                {
+                    double frameW = closestFrame.Value.MaxPoint.X - closestFrame.Value.MinPoint.X;
+                    double scale = frameW / (bounds.MaxPoint.X - bounds.MinPoint.X) * 0.92;
+                    if (scale < 0.5) scale = 0.5;
+                    dbText.Height *= scale;
+                }
+            }
+            catch { /* GeometricExtents may fail for degenerate text */ }
+        }
+
+        // Height cap: never grow beyond original (matches offline collision avoidance)
+        if (dbText.Height > originalHeight * 1.05)
+        {
+            dbText.Height = originalHeight * 1.05;
+        }
+
+        return new EntityReplaceResult
+        {
+            Success = true,
+            ModifiedEntity = dbText,
             OwningBlock = owningBtr,
-            OriginalHeight = originalHeight 
+            OriginalHeight = originalHeight
         };
     }
 
@@ -187,54 +199,38 @@ public class TextReplacer
         if (entity.MTextLineSpacingStyle > 0)
             mText.LineSpacingStyle = (LineSpacingStyle)entity.MTextLineSpacingStyle;
 
-        mText.Contents = entity.TranslatedText;
+        // Rebuild multi-line structure:
+        // - Hard \P breaks: use target line count from original
+        // - Fixed-width wrap (no \P): reflow to fit within original rectangle width
+        // - Free-width: keep as-is
+        string contents;
+        if (entity.MTextHasHardBreaks)
+        {
+            contents = Core.Services.TextWidthEstimator.RebuildMTextWithLineBreaks(
+                entity.TranslatedText, entity.MTextLineCount);
+        }
+        else if (entity.MTextRectangleWidth > 0)
+        {
+            contents = Core.Services.TextWidthEstimator.ReflowTextToWidth(
+                entity.TranslatedText, entity.MTextRectangleWidth, mText.TextHeight);
+        }
+        else
+        {
+            contents = entity.TranslatedText;
+        }
+
+        mText.Contents = contents
+            .Replace("\r\n", "\\P")
+            .Replace("\n", "\\P")
+            .Replace("\r", "\\P");
 
         // Map font if needed
         MapTextStyle(mText.TextStyleId, db);
 
-        // Adapt rectangle width to translated text to prevent sparse word spacing.
-        if (entity.MTextRectangleWidth > 0)
-        {
-            double translatedEstWidth = EstimateTextWidth(entity.TranslatedText, mText.TextHeight);
-            double widthRatio = translatedEstWidth / entity.MTextRectangleWidth;
-
-            if (widthRatio < 0.40)
-            {
-                // Very short translation (e.g. 2-3 English words for 4-5 Chinese chars)
-                double targetWidth = Math.Max(translatedEstWidth * 1.15, entity.MTextRectangleWidth * 0.35);
-                mText.Width = targetWidth;
-            }
-            else if (widthRatio < 0.55)
-            {
-                // Text is much narrower than rectangle — shrink to prevent stretched gaps
-                double targetWidth = Math.Max(translatedEstWidth * 1.20, entity.MTextRectangleWidth * 0.45);
-                mText.Width = targetWidth;
-            }
-            else if (widthRatio < 0.75)
-            {
-                double targetWidth = Math.Max(translatedEstWidth * 1.12, entity.MTextRectangleWidth * 0.6);
-                mText.Width = targetWidth;
-            }
-            else
-            {
-                mText.Width = entity.MTextRectangleWidth;
-            }
-        }
-        else
-        {
-            // FREE width: keep Width = 0 for natural tight spacing
-            mText.Width = 0;
-        }
-
-        // Auto-scale height if translated text is significantly wider
-        if (entity.OriginalWidth > 0)
-        {
-            var newWidth = mText.ActualWidth;
-            if (newWidth > entity.OriginalWidth * _autoScaleThreshold)
-            {
-                mText.TextHeight *= entity.OriginalWidth / newWidth * _autoScaleFactor;
-            }
-        }
+        // Delegate all layout optimization (width, height, frame fitting) to LayoutOptimizer
+        var frames = FrameDetector.DetectFrames(db);
+        var closestFrame = CollisionDetector.FindClosestFrame(mText.Location, frames);
+        LayoutOptimizer.OptimizeMText(mText, contents, entity, closestFrame, null);
 
         // Force geometry refresh so collision detection sees accurate bounds
         mText.RecordGraphicsModified(true);
@@ -372,8 +368,9 @@ public class TextReplacer
         {
             var style = (TextStyleTableRecord)styleId.GetObject(OpenMode.ForWrite);
 
-            // Check if this style name has a CJK-to-English mapping
-            if (!CnToEnFonts.TryGetValue(style.Name, out var mappedFontName))
+            // Use shared FontMapper for CJK-to-English mapping
+            var mappedFontName = FontMapper.MapFontName(style.Name, cnToEn: true);
+            if (string.IsNullOrEmpty(mappedFontName))
                 return;
 
             // Determine if the mapped font is a SHX or TrueType font
@@ -430,9 +427,10 @@ public class TextReplacer
         try
         {
             var originalPath = db.Filename;
-            // CloseForRestore not available in AutoCAD 2021, just overwrite the file
-            File.Copy(backupPath, originalPath, overwrite: true);
-            Log.Information("Backup restored from {Path}", backupPath);
+            // Cannot overwrite while database is open — restore to a .restored copy
+            var restorePath = Path.ChangeExtension(originalPath, ".restored.dwg");
+            File.Copy(backupPath, restorePath, overwrite: true);
+            Log.Warning("Backup restored to {Path} (original file is locked by AutoCAD)", restorePath);
         }
         catch (Exception ex)
         {
