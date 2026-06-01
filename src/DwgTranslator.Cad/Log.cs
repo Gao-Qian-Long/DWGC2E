@@ -51,6 +51,13 @@ public static class Log
     public static Editor? Editor { get; set; }
 
     /// <summary>
+    /// Whether to output logs to the AutoCAD command line.
+    /// Default: false (logs go to Debug output and file only).
+    /// Set to true to also display logs on the AutoCAD command line.
+    /// </summary>
+    public static bool OutputToCommandLine { get; set; } = false;
+
+    /// <summary>
     /// Initialize file logging with rotation. Call once at plugin startup.
     /// Creates structured JSON-lines log files that the App can read.
     /// </summary>
@@ -127,9 +134,8 @@ public static class Log
         if (!string.IsNullOrEmpty(exception))
             readable += $" | {exception}";
 
-        // Output to AutoCAD command line — only Warning level and above
-        // to reduce noise on the command line (Debug/Info go to file only)
-        if (level >= LogLevel.Warning)
+        // Output to AutoCAD command line — only when explicitly enabled and level >= Warning
+        if (OutputToCommandLine && level >= LogLevel.Warning)
         {
             try { Editor?.WriteMessage($"\n[DwgTranslator] {readable}"); }
             catch { System.Diagnostics.Debug.WriteLine(readable); }

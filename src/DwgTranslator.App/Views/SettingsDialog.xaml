@@ -108,26 +108,8 @@
             </StackPanel>
         </Border>
 
-        <!-- Section 3: Language Settings -->
+        <!-- Section 3: Logging Settings -->
         <Border Grid.Row="2" Background="White" CornerRadius="8" Padding="16" Margin="0,0,0,12"
-                Effect="{StaticResource CardShadow}">
-            <StackPanel>
-                <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
-                    <TextBlock Text="&#x1F30D;" FontSize="14" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                    <TextBlock Text="{conv:Localize SettingsLanguageSection}" FontWeight="Bold" FontSize="14" Foreground="#1976D2"/>
-                </StackPanel>
-
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="{conv:Localize SettingsLanguage}" Width="80" VerticalAlignment="Center" Foreground="#546E7A"/>
-                    <ComboBox x:Name="LanguageComboBox" Width="200" Height="28" FontSize="12"
-                              DisplayMemberPath="NativeName" VerticalContentAlignment="Center"/>
-                    <TextBlock Text="{conv:Localize SettingsLanguageRestart}" VerticalAlignment="Center" Foreground="#90A4AE" FontSize="11" Margin="8,0,0,0"/>
-                </StackPanel>
-            </StackPanel>
-        </Border>
-
-        <!-- Section 4: Logging Settings -->
-        <Border Grid.Row="3" Background="White" CornerRadius="8" Padding="16" Margin="0,0,0,12"
                 Effect="{StaticResource CardShadow}">
             <StackPanel>
                 <StackPanel Orientation="Horizontal" Margin="0,0,0,12">

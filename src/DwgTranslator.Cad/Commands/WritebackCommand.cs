@@ -53,10 +53,9 @@ public class WritebackCommand
 
         var ed = doc.Editor;
 
-        // Wire logging to AutoCAD command line before engine runs.
-        // All Log.Information/Warning/Error/Debug calls from the engine
-        // will now appear on the user-visible command line.
-        Cad.Log.Editor = ed;
+        // CAD command-line logging is disabled by default.
+        // Logs are written to Debug output and JSON-lines file only.
+        // To re-enable: set Cad.Log.OutputToCommandLine = true and Cad.Log.Editor = ed;
 
         try
         {

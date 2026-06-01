@@ -5,6 +5,7 @@ using System.Collections.ObjectModel;
 using System.IO;
 using System.Text.Json;
 using System.Windows;
+using System.Windows.Controls;
 
 namespace DwgTranslator.App.Views;
 
@@ -85,5 +86,49 @@ public partial class GlossaryManagerDialog : Window
     private void Cancel_Click(object sender, RoutedEventArgs e)
     {
         DialogResult = false;
+    }
+
+    /// <summary>
+    /// Add a new empty glossary entry row to the editable grid.
+    /// </summary>
+    private void AddRow_Click(object sender, RoutedEventArgs e)
+    {
+        _editableEntries.Add(new GlossaryEntry
+        {
+            Source = string.Empty,
+            Target = string.Empty,
+            Category = string.Empty
+        });
+
+        // Scroll to the new row and begin editing
+        var idx = _editableEntries.Count - 1;
+        GlossaryGrid.SelectedIndex = idx;
+        GlossaryGrid.ScrollIntoView(GlossaryGrid.SelectedItem);
+        GlossaryGrid.Focus();
+        if (idx >= 0)
+            GlossaryGrid.CurrentCell = new DataGridCellInfo(
+                GlossaryGrid.Items[idx], GlossaryGrid.Columns[0]);
+        GlossaryGrid.BeginEdit();
+    }
+
+    /// <summary>
+    /// Delete selected glossary entry rows with confirmation.
+    /// </summary>
+    private void DeleteSelected_Click(object sender, RoutedEventArgs e)
+    {
+        var selected = GlossaryGrid.SelectedItems.Cast<GlossaryEntry>().ToList();
+        if (selected.Count == 0)
+        {
+            MessageBox.Show("请先选择要删除的术语条目。", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var result = MessageBox.Show(
+            $"确定要删除选中的 {selected.Count} 条术语吗？",
+            Strings.Get("MsgTitleConfirm"), MessageBoxButton.YesNo, MessageBoxImage.Warning);
+        if (result != MessageBoxResult.Yes) return;
+
+        foreach (var item in selected.ToList())
+            _editableEntries.Remove(item);
     }
 }

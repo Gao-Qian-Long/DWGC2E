@@ -30,17 +30,11 @@ public partial class SettingsDialog : Window
     {
         try
         {
-            // Populate language ComboBox
-            var languages = _localizationService.AvailableLanguages;
-            foreach (var lang in languages)
-                LanguageComboBox.Items.Add(lang);
-
             // Populate log level ComboBox
             var logLevels = new[] { "Verbose", "Debug", "Information", "Warning", "Error", "Fatal" };
             foreach (var level in logLevels)
                 LogLevelComboBox.Items.Add(level);
 
-            var currentLang = _localizationService.CurrentLanguage;
             string currentLogLevel = "Debug";
 
             if (File.Exists(_settingsPath))
@@ -58,10 +52,6 @@ public partial class SettingsDialog : Window
                 AutoCadPathBox.Text = config.AutoCadInstallPath;
                 CadPluginPathBox.Text = config.CadPluginPath;
 
-                // Use persisted language if available
-                if (!string.IsNullOrEmpty(config.Language))
-                    currentLang = config.Language;
-
                 // Use persisted log level if available
                 if (!string.IsNullOrEmpty(config.MinimumLogLevel))
                     currentLogLevel = config.MinimumLogLevel;
@@ -71,18 +61,6 @@ public partial class SettingsDialog : Window
                 BaseUrlBox.Text = "https://api.deepseek.com";
                 ModelBox.Text = "deepseek-chat";
             }
-
-            // Select current language in ComboBox
-            for (int i = 0; i < LanguageComboBox.Items.Count; i++)
-            {
-                if (LanguageComboBox.Items[i] is LanguageInfo info && info.CultureName == currentLang)
-                {
-                    LanguageComboBox.SelectedIndex = i;
-                    break;
-                }
-            }
-            if (LanguageComboBox.SelectedIndex < 0 && LanguageComboBox.Items.Count > 0)
-                LanguageComboBox.SelectedIndex = 0;
 
             // Select current log level in ComboBox
             for (int i = 0; i < LogLevelComboBox.Items.Count; i++)
@@ -327,14 +305,6 @@ public partial class SettingsDialog : Window
             // Save log level selection
             if (LogLevelComboBox.SelectedItem is string selectedLogLevel)
                 config.MinimumLogLevel = selectedLogLevel;
-
-            // Save language selection
-            if (LanguageComboBox.SelectedItem is LanguageInfo selectedLang)
-            {
-                config.Language = selectedLang.CultureName;
-                // Apply language change for next launch
-                try { _localizationService.SetLanguage(selectedLang.CultureName); } catch { }
-            }
 
             Directory.CreateDirectory(Path.GetDirectoryName(_settingsPath)!);
             var options = new JsonSerializerOptions { WriteIndented = true };

@@ -224,6 +224,7 @@ public class DwgWriterService : IDwgWriterService, IDxfWriterService
 
     /// <summary>
     /// Process a collection of entities, replacing text for matching handles.
+    /// Uses pre-built translationMap (Handle→Entity) for O(1) lookup per entity.
     /// Returns count of successful replacements.
     /// </summary>
     private static int ProcessEntityCollection(
@@ -234,6 +235,9 @@ public class DwgWriterService : IDwgWriterService, IDxfWriterService
         CadDocument doc,
         List<(double minX, double minY, double maxX, double maxY)> frames)
     {
+        // Early exit: no more entities to replace in this collection
+        if (translationMap.Count == 0) return 0;
+
         int replacedCount = 0;
 
         foreach (var cadEntity in entities)
@@ -250,6 +254,9 @@ public class DwgWriterService : IDwgWriterService, IDxfWriterService
                     result.SuccessCount++;
                     translationMap.Remove(handleStr);
                     replacedCount++;
+
+                    // Exit loop early if all translations have been applied
+                    if (translationMap.Count == 0) break;
                 }
                 else
                 {
@@ -262,6 +269,7 @@ public class DwgWriterService : IDwgWriterService, IDxfWriterService
             if (cadEntity is CadInsert insert)
             {
                 ProcessInsertAttributes(insert, translationMap, result, ref replacedCount);
+                if (translationMap.Count == 0) break;
             }
         }
 

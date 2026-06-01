@@ -235,15 +235,14 @@ public partial class MainViewModel : ObservableObject, IDisposable
         }
     }
 
+    /// <summary>
+    /// Synchronous refresh from in-memory glossary entries only.
+    /// File loading is handled by InitializeAsync() via RefreshGlossaryDataAsync().
+    /// This avoids blocking the UI thread with file I/O.
+    /// </summary>
     private void RefreshGlossaryData()
     {
         GlossaryEntries.Clear();
-
-        var glossaryFile = ResolveGlossaryPath();
-        if (File.Exists(glossaryFile))
-        {
-            _glossaryService.LoadGlossaryAsync(glossaryFile).GetAwaiter().GetResult();
-        }
 
         foreach (var entry in _glossaryService.GetAllEntries())
             GlossaryEntries.Add(entry);

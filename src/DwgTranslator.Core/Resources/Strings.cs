@@ -6,12 +6,12 @@ namespace DwgTranslator.Core.Resources;
 
 /// <summary>
 /// Strongly-typed resource accessor for localized strings.
-/// Backed by Strings.resx (zh-CN default) and Strings.en-US.resx.
+/// Fixed to zh-CN (Chinese Simplified) only.
 /// </summary>
 public static class Strings
 {
     private static ResourceManager? _resourceManager;
-    private static CultureInfo _currentCulture = new("zh-CN");
+    private static readonly CultureInfo _zhCn = new("zh-CN");
 
     /// <summary>
     /// The ResourceManager instance, using the resource base name matching
@@ -23,17 +23,9 @@ public static class Strings
             Assembly.GetExecutingAssembly());
 
     /// <summary>
-    /// Get or set the current UI culture for string lookups.
+    /// Current UI culture (fixed to zh-CN).
     /// </summary>
-    public static CultureInfo CurrentCulture
-    {
-        get => _currentCulture;
-        set
-        {
-            _currentCulture = value;
-            CultureInfo.CurrentUICulture = value;
-        }
-    }
+    public static CultureInfo CurrentCulture { get; } = _zhCn;
 
     /// <summary>
     /// Get a localized string by key.
@@ -42,7 +34,7 @@ public static class Strings
     {
         try
         {
-            return ResourceManager.GetString(key, _currentCulture) ?? key;
+            return ResourceManager.GetString(key, CurrentCulture) ?? key;
         }
         catch (MissingManifestResourceException)
         {
@@ -57,7 +49,7 @@ public static class Strings
     {
         try
         {
-            var template = ResourceManager.GetString(key, _currentCulture) ?? key;
+            var template = ResourceManager.GetString(key, CurrentCulture) ?? key;
             return string.Format(template, args);
         }
         catch (MissingManifestResourceException)

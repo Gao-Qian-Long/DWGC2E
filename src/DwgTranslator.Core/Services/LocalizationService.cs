@@ -6,19 +6,18 @@ namespace DwgTranslator.Core.Services;
 
 /// <summary>
 /// Default implementation of <see cref="ILocalizationService"/>.
-/// Uses .resx resource files via the strongly-typed <see cref="Strings"/> accessor.
+/// Fixed to zh-CN only. Language switching is no longer supported.
 /// </summary>
 public class LocalizationService : ILocalizationService
 {
-    private string _currentLanguage = "zh-CN";
+    private const string FixedLanguage = "zh-CN";
 
     private static readonly List<LanguageInfo> SupportedLanguages = new()
     {
-        new LanguageInfo { CultureName = "zh-CN", DisplayName = "Chinese (Simplified)", NativeName = "简体中文" },
-        new LanguageInfo { CultureName = "en-US", DisplayName = "English", NativeName = "English" }
+        new LanguageInfo { CultureName = "zh-CN", DisplayName = "Chinese (Simplified)", NativeName = "简体中文" }
     };
 
-    public string CurrentLanguage => _currentLanguage;
+    public string CurrentLanguage => FixedLanguage;
 
     public IReadOnlyList<LanguageInfo> AvailableLanguages => SupportedLanguages;
 
@@ -29,15 +28,11 @@ public class LocalizationService : ILocalizationService
     }
 
     /// <summary>
-    /// Initialize with a persisted language preference (from AppConfig).
+    /// Initialize with a persisted language preference (ignored — only zh-CN is supported).
     /// </summary>
     public LocalizationService(string? persistedLanguage)
     {
-        if (!string.IsNullOrEmpty(persistedLanguage) &&
-            SupportedLanguages.Any(l => l.CultureName == persistedLanguage))
-        {
-            SetLanguageInternal(persistedLanguage);
-        }
+        // Language switching is disabled; always use zh-CN.
     }
 
     public string GetString(string key)
@@ -50,22 +45,14 @@ public class LocalizationService : ILocalizationService
         return Strings.Get(key, args);
     }
 
+    [Obsolete("Language switching is no longer supported. UI is fixed to zh-CN.", false)]
     public void SetLanguage(string cultureName)
     {
-        if (_currentLanguage == cultureName) return;
-
-        if (!SupportedLanguages.Any(l => l.CultureName == cultureName))
-        {
-            throw new ArgumentException($"Unsupported language: {cultureName}");
-        }
-
-        SetLanguageInternal(cultureName);
-        LanguageChanged?.Invoke(this, EventArgs.Empty);
+        // No-op: language is fixed to zh-CN
     }
 
     private void SetLanguageInternal(string cultureName)
     {
-        _currentLanguage = cultureName;
-        Strings.CurrentCulture = new CultureInfo(cultureName);
+        // No-op: language is fixed to zh-CN (Strings.CurrentCulture is now read-only)
     }
 }

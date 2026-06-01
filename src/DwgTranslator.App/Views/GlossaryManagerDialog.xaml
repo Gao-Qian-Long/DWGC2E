@@ -14,6 +14,7 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
         <!-- Header -->
@@ -27,6 +28,7 @@
                   AutoGenerateColumns="False"
                   CanUserAddRows="True"
                   CanUserDeleteRows="True"
+                  SelectionMode="Extended"
                   Margin="0,0,0,8"
                   FontSize="12"
                   RowHeight="28"
@@ -57,8 +59,18 @@
             </DataGrid.Columns>
         </DataGrid>
 
-        <!-- Buttons -->
-        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
+        <!-- Row buttons -->
+        <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,0,0,8">
+            <Button Content="+ 新增术语" Padding="10,5" Margin="0,0,6,0"
+                    Click="AddRow_Click" Cursor="Hand" FontSize="12"
+                    Background="#43A047" Foreground="White" BorderThickness="0" FontWeight="SemiBold"/>
+            <Button x:Name="DeleteSelectedButton" Content="删除选中" Padding="10,5"
+                    Click="DeleteSelected_Click" Cursor="Hand" FontSize="12"
+                    Background="#E53935" Foreground="White" BorderThickness="0" FontWeight="SemiBold"/>
+        </StackPanel>
+
+        <!-- Footer buttons -->
+        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right">
             <Button x:Name="SaveButton" Content="{conv:Localize BtnSaveGlossary}" Padding="14,6" Margin="0,0,8,0"
                     Background="#1976D2" Foreground="White" FontWeight="SemiBold" FontSize="12"
                     Click="Save_Click" Cursor="Hand" BorderThickness="0"/>
