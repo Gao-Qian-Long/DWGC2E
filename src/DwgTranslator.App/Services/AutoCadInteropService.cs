@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
 using DwgTranslator.Core.Models;
+using DwgTranslator.Core.Resources;
 using DwgTranslator.Core.Services;
 using Serilog;
 
@@ -53,20 +54,28 @@ public class AutoCadInteropService : IAutoCadInteropService
         return IsAutoCADRunning();
     }
 
+    /// <summary>
+    /// Execute writeback of translated entities via AutoCAD COM interop.
+    /// Heavy operations (file I/O, COM interop) run on the calling thread;
+    /// the caller is responsible for offloading to a background thread via Task.Run.
+    /// </summary>
     public async Task<DwgWriteResult> WritebackViaAutoCadAsync(
         string sourceFilePath,
         string outputFilePath,
         List<TextEntity> entities,
         bool cnToEn,
-        AppConfig config)
+        AppConfig config,
+        IProgress<string>? progress = null)
     {
         var result = new DwgWriteResult();
-        string? jsonPath = null;
+        string? initialTempPath = null;
 
         try
         {
+            progress?.Report(Strings.Get("ProgressAutoCadPreparing"));
+
             // Serialize a config JSON that contains source/output paths + entities
-            jsonPath = Path.Combine(Path.GetTempPath(), $"dwgtranslate_{Guid.NewGuid():N}.json");
+            initialTempPath = Path.Combine(Path.GetTempPath(), $"dwgtranslate_{Guid.NewGuid():N}.json");
             var configObj = new
             {
                 SourceDwgPath = sourceFilePath,
@@ -79,7 +88,9 @@ public class AutoCadInteropService : IAutoCadInteropService
                 WriteIndented = false,
                 PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase
             });
-            File.WriteAllText(jsonPath, json);
+            File.WriteAllText(initialTempPath, json);
+
+            progress?.Report(Strings.Get("ProgressAutoCadConnecting"));
 
             // Try multiple ProgIDs to connect to AutoCAD
             Type? acadType = null;
@@ -105,13 +116,7 @@ public class AutoCadInteropService : IAutoCadInteropService
 
             if (acadType == null)
             {
-                var msg = "无法连接 AutoCAD：注册表中找不到任何已知的 AutoCAD COM ProgID。" +
-                          "\n\n可能原因：" +
-                          "\n1. AutoCAD 未安装或安装不完整" +
-                          "\n2. AutoCAD 的 COM 支持未启用（某些精简版/OEM 版本不支持 COM）" +
-                          "\n3. 使用的是 AutoCAD LT（不支持 .NET 插件 NETLOAD）" +
-                          "\n\n建议：使用「离线导出 DWG」功能，无需 AutoCAD 运行。";
-                result.Errors.Add(msg);
+                result.Errors.Add(Strings.Get("AutoCadConnectFailed"));
                 return result;
             }
 
@@ -125,7 +130,7 @@ public class AutoCadInteropService : IAutoCadInteropService
             var doc = acad.ActiveDocument;
             if (doc == null)
             {
-                result.Errors.Add("AutoCAD 没有活动文档");
+                result.Errors.Add(Strings.Get("AutoCadNoActiveDoc"));
                 return result;
             }
 
@@ -134,11 +139,13 @@ public class AutoCadInteropService : IAutoCadInteropService
 
             if (string.IsNullOrEmpty(cadDllPath) || !File.Exists(cadDllPath))
             {
-                result.Errors.Add("找不到 DwgTranslator.Cad.dll 插件文件。\n请在「设置」→「AutoCAD 配置」中指定插件路径。");
+                result.Errors.Add(Strings.Get("AutoCadPluginNotFound"));
                 return result;
             }
 
             Log.Information("Using Cad plugin: {Path}", cadDllPath);
+
+            progress?.Report(Strings.Get("ProgressAutoCadPreparingFiles"));
 
             // Step 1: Write config JSON to a fixed known path
             var configDir = Path.Combine(Path.GetTempPath(), "DwgTranslator");
@@ -151,7 +158,11 @@ public class AutoCadInteropService : IAutoCadInteropService
 
             // Write config to fixed path (WritebackCommand reads from here)
             File.WriteAllText(fixedConfigPath, json);
-            jsonPath = fixedConfigPath; // Track for cleanup
+
+            // Clean up the initial random-name temp file — the fixed path is now the canonical one
+            try { if (initialTempPath != null && File.Exists(initialTempPath)) File.Delete(initialTempPath); } catch { }
+            initialTempPath = null;
+
             Log.Information("Config written to fixed path: {Path}", fixedConfigPath);
 
             // Step 2: Add DLL directory to AutoCAD Trusted Paths
@@ -178,9 +189,13 @@ public class AutoCadInteropService : IAutoCadInteropService
             File.WriteAllText(lspPath, lspContent);
             Log.Information("Created LISP file: {Path}", lspPath);
 
+            progress?.Report(Strings.Get("ProgressAutoCadSendingCommand"));
+
             // Step 4: Load and execute the LISP file via SendCommand
             var lispLspPath = lspPath.Replace("\\", "\\\\");
             doc.SendCommand($"(load \"{lispLspPath}\") ");
+
+            progress?.Report(Strings.Get("ProgressAutoCadWaiting"));
 
             // Step 5: Wait for the command to complete (monitor the done signal file)
             Log.Information("Waiting for WritebackCommand to complete...");
@@ -188,7 +203,7 @@ public class AutoCadInteropService : IAutoCadInteropService
             int waited = 0;
             while (waited < maxWaitSeconds)
             {
-                await Task.Delay(2000);
+                await Task.Delay(2000).ConfigureAwait(false);
                 waited += 2;
 
                 if (File.Exists(doneSignalPath))
@@ -200,7 +215,7 @@ public class AutoCadInteropService : IAutoCadInteropService
                         if (!doneContent.StartsWith("success|", StringComparison.OrdinalIgnoreCase))
                         {
                             result.SuccessCount = 0;
-                            result.Errors.Add($"AutoCAD 回写失败。信号: {doneContent}");
+                            result.Errors.Add(Strings.Get("AutoCadWritebackFailed", doneContent));
                         }
                         else
                         {
@@ -210,7 +225,7 @@ public class AutoCadInteropService : IAutoCadInteropService
                     catch
                     {
                         result.SuccessCount = 0;
-                        result.Errors.Add("无法读取 AutoCAD 完成信号文件。");
+                        result.Errors.Add(Strings.Get("AutoCadSignalReadError"));
                     }
                     break;
                 }
@@ -235,12 +250,12 @@ public class AutoCadInteropService : IAutoCadInteropService
             if (result.SuccessCount == 0 && waited >= maxWaitSeconds)
             {
                 Log.Warning("WritebackCommand timed out after {Sec}s", maxWaitSeconds);
-                result.Errors.Add("AutoCAD 回写超时。可能原因：\n" +
-                                  "1. 安全对话框未点击「始终加载」\n" +
-                                  "2. AutoCAD 正在处理大型文件\n" +
-                                  "3. 命令未成功执行\n" +
-                                  $"4. 请检查 AutoCAD 命令行是否有错误提示\n" +
-                                  $"配置文件位置: {fixedConfigPath}");
+                result.Errors.Add(Strings.Get("AutoCadTimeout", fixedConfigPath));
+            }
+
+            if (result.SuccessCount > 0)
+            {
+                progress?.Report(Strings.Get("ProgressAutoCadCompleted"));
             }
 
             // Cleanup signal file
@@ -249,7 +264,10 @@ public class AutoCadInteropService : IAutoCadInteropService
         catch (Exception ex)
         {
             Log.Error(ex, "AutoCAD COM writeback failed");
-            result.Errors.Add($"AutoCAD 回写失败: {ex.Message}");
+            result.Errors.Add(Strings.Get("AutoCadWritebackError", ex.Message));
+
+            // Clean up temp file on error
+            try { if (initialTempPath != null && File.Exists(initialTempPath)) File.Delete(initialTempPath); } catch { }
         }
 
         return result;

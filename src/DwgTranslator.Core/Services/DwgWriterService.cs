@@ -19,10 +19,10 @@ using OurTextEntity = DwgTranslator.Core.Models.TextEntity;
 namespace DwgTranslator.Core.Services;
 
 /// <summary>
-/// Writes translated text back into DWG files using ACadSharp library (offline, no AutoCAD required).
+/// Writes translated text back into DWG and DXF files using ACadSharp library (offline, no AutoCAD required).
 /// Includes: automatic backup, font mapping, and adaptive text scaling.
 /// </summary>
-public class DwgWriterService : IDwgWriterService
+public class DwgWriterService : IDwgWriterService, IDxfWriterService
 {
     private static readonly Regex HandleRegex = new(@"^[0-9A-Fa-f]+$", RegexOptions.Compiled);
 
@@ -34,7 +34,7 @@ public class DwgWriterService : IDwgWriterService
         if (!File.Exists(sourceFilePath))
         {
             result.Errors.Add($"Source file not found: {sourceFilePath}");
-            Log.Error("Source DWG file not found: {Path}", sourceFilePath);
+            Log.Error("Source CAD file not found: {Path}", sourceFilePath);
             return result;
         }
 
@@ -57,16 +57,37 @@ public class DwgWriterService : IDwgWriterService
             Log.Warning(ex, "Failed to create backup for {Path}", sourceFilePath);
         }
 
-        Log.Information("Writing translations to DWG: {Source} -> {Output} ({Count} entities, CnToEn={Dir})",
-            sourceFilePath, outputFilePath, entities.Count, cnToEn);
+        // Detect file format
+        var sourceExtension = Path.GetExtension(sourceFilePath).ToLowerInvariant();
+        var outputExtension = Path.GetExtension(outputFilePath).ToLowerInvariant();
+        var isDxfSource = sourceExtension == ".dxf";
+        var isDxfOutput = outputExtension == ".dxf";
+
+        if (isDxfSource)
+        {
+            bool isBinary = DxfReader.IsBinary(sourceFilePath);
+            Log.Information("Source DXF format: {Type}", isBinary ? "Binary" : "ASCII");
+        }
+
+        Log.Information("Writing translations to {Format}: {Source} -> {Output} ({Count} entities, CnToEn={Dir})",
+            isDxfOutput ? "DXF" : "DWG", sourceFilePath, outputFilePath, entities.Count, cnToEn);
 
         try
         {
-            // Read the original DWG
-            var doc = DwgReader.Read(sourceFilePath);
+            // Read the original file using appropriate reader
+            CadDocument doc;
+            if (isDxfSource)
+            {
+                using var reader = new DxfReader(sourceFilePath, OnCadNotification);
+                doc = reader.Read();
+            }
+            else
+            {
+                doc = DwgReader.Read(sourceFilePath);
+            }
             if (doc == null)
             {
-                result.Errors.Add("Failed to read DWG file");
+                result.Errors.Add($"Failed to read {(isDxfSource ? "DXF" : "DWG")} file");
                 return result;
             }
 
@@ -134,22 +155,40 @@ public class DwgWriterService : IDwgWriterService
             if (!string.IsNullOrEmpty(outputDir) && !Directory.Exists(outputDir))
                 Directory.CreateDirectory(outputDir);
 
-            Log.Information("Writing DWG output file...");
-            using (var writer = new DwgWriter(outputFilePath, doc))
+            Log.Information("Writing {Format} output file...", isDxfOutput ? "DXF" : "DWG");
+            if (isDxfOutput)
             {
+                var dxfConfig = new DxfWriterConfiguration();
+                DxfWriter.Write(outputFilePath, doc, false, dxfConfig, OnCadNotification);
+            }
+            else
+            {
+                using var writer = new DwgWriter(outputFilePath, doc);
                 writer.Write();
             }
 
-            Log.Information("DWG writeback complete: {Success} replaced, {Failed} failed",
-                result.SuccessCount, result.FailCount);
+            Log.Information("{Format} writeback complete: {Success} replaced, {Failed} failed",
+                isDxfOutput ? "DXF" : "DWG", result.SuccessCount, result.FailCount);
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "DWG writeback failed");
+            Log.Error(ex, "{Format} writeback failed", isDxfOutput ? "DXF" : "DWG");
             result.Errors.Add($"Writeback error: {ex.Message}");
         }
 
         return result;
+    }
+
+    /// <inheritdoc/>
+    DxfWriteResult IDxfWriterService.WriteTranslations(string sourceFilePath, string outputFilePath, List<OurTextEntity> entities, bool cnToEn)
+    {
+        var dwgResult = WriteTranslations(sourceFilePath, outputFilePath, entities, cnToEn);
+        return new DxfWriteResult
+        {
+            SuccessCount = dwgResult.SuccessCount,
+            FailCount = dwgResult.FailCount,
+            Errors = dwgResult.Errors
+        };
     }
 
     /// <summary>
@@ -775,6 +814,18 @@ public class DwgWriterService : IDwgWriterService
         if (handle.Contains('/') || handle.Contains(':')) return handle;
         // Remove any non-hex characters and normalize to uppercase
         return handle.Trim().ToUpperInvariant();
+    }
+
+    /// <summary>
+    /// Handles ACadSharp notification events during CAD file operations.
+    /// Captures warnings and errors from the DXF/DWG writer for structured logging.
+    /// </summary>
+    private static void OnCadNotification(object sender, ACadSharp.IO.NotificationEventArgs e)
+    {
+        if (e.Exception != null)
+            Log.Warning(e.Exception, "ACadSharp [{Type}]: {Message}", e.NotificationType, e.Message);
+        else
+            Log.Debug("ACadSharp [{Type}]: {Message}", e.NotificationType, e.Message);
     }
 }
 

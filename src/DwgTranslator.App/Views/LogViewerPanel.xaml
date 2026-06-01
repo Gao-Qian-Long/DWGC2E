@@ -1,0 +1,222 @@
+<UserControl x:Class="DwgTranslator.App.Views.LogViewerPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:DwgTranslator.App.ViewModels"
+             xmlns:local="clr-namespace:DwgTranslator.App.Views"
+             Background="#1E1E1E">
+
+    <UserControl.Resources>
+        <local:StringToVisibilityConverter x:Key="CategoryVis"/>
+        <local:StringToVisibilityConverter x:Key="ExVis"/>
+        <local:DurationToVisibilityConverter x:Key="DurationVis"/>
+        <local:SourceFilterVisibilityConverter x:Key="SourceFilterVis"/>
+
+        <!-- Log level badge style -->
+        <Style x:Key="LevelBadge" TargetType="Border">
+            <Setter Property="CornerRadius" Value="3"/>
+            <Setter Property="Padding" Value="6,1"/>
+            <Setter Property="Margin" Value="0,0,4,0"/>
+            <Setter Property="MinWidth" Value="36"/>
+        </Style>
+
+        <!-- Source badge style -->
+        <Style x:Key="SourceBadge" TargetType="Border">
+            <Setter Property="CornerRadius" Value="3"/>
+            <Setter Property="Padding" Value="4,1"/>
+            <Setter Property="Margin" Value="0,0,6,0"/>
+            <Setter Property="MinWidth" Value="28"/>
+        </Style>
+
+        <!-- Monospace text style for log entries -->
+        <Style x:Key="LogText" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="Cascadia Code, Consolas, Courier New"/>
+            <Setter Property="FontSize" Value="11.5"/>
+            <Setter Property="Foreground" Value="#D4D4D4"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+        </Style>
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- Toolbar -->
+        <Border Grid.Row="0" Background="#2D2D2D" BorderBrush="#3E3E3E" BorderThickness="0,0,0,1"
+                Padding="8,5">
+            <DockPanel>
+                <!-- Left: Controls -->
+                <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
+                    <TextBlock Text="LOG VIEWER" Foreground="#808080" FontSize="11" FontWeight="Bold"
+                               VerticalAlignment="Center" Margin="0,0,12,0"
+                               FontFamily="Cascadia Code, Consolas"/>
+
+                    <ComboBox ItemsSource="{Binding LevelFilters}"
+                              SelectedItem="{Binding SelectedLevelFilter}"
+                              Width="75" Height="24" FontSize="11" Margin="0,0,6,0"
+                              Background="#3C3C3C" Foreground="#D4D4D4"
+                              BorderBrush="#505050"
+                              ToolTip="Filter by log level"/>
+
+                    <ComboBox ItemsSource="{Binding SourceFilters}"
+                              SelectedItem="{Binding SelectedSourceFilter}"
+                              Width="65" Height="24" FontSize="11" Margin="0,0,6,0"
+                              Background="#3C3C3C" Foreground="#D4D4D4"
+                              BorderBrush="#505050"
+                              ToolTip="Filter by source (APP/CAD/Translation)"/>
+
+                    <TextBox Text="{Binding SearchFilter, UpdateSourceTrigger=PropertyChanged}"
+                             Width="180" Height="24" FontSize="11"
+                             Background="#3C3C3C" Foreground="#D4D4D4"
+                             BorderBrush="#505050" Padding="6,0"
+                             VerticalContentAlignment="Center"
+                             ToolTip="Search in log messages"/>
+
+                    <CheckBox Content="Auto-scroll" IsChecked="{Binding AutoScroll}"
+                              Foreground="#808080" FontSize="11" VerticalAlignment="Center"
+                              Margin="10,0,0,0"/>
+                </StackPanel>
+
+                <!-- Right: Actions -->
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right">
+                    <TextBlock Text="{Binding LevelSummary}" Foreground="#808080" FontSize="11"
+                               VerticalAlignment="Center" Margin="0,0,12,0"
+                               FontFamily="Cascadia Code, Consolas"/>
+                    <TextBlock Text="{Binding TotalLogCount, StringFormat='Total: {0}'}"
+                               Foreground="#606060" FontSize="10" VerticalAlignment="Center"
+                               Margin="0,0,12,0"/>
+
+                    <Button Command="{Binding TogglePauseCommand}" ToolTip="Pause/Resume log streaming"
+                            Background="Transparent" Foreground="#808080" BorderThickness="0"
+                            FontSize="12" Padding="6,2" Cursor="Hand">
+                        <Button.Style>
+                            <Style TargetType="Button">
+                                <Setter Property="Content" Value="Pause"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsPaused}" Value="True">
+                                        <Setter Property="Content" Value="Resume"/>
+                                        <Setter Property="Foreground" Value="#FF9800"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+                    <Button Command="{Binding CopyLogsCommand}" ToolTip="Copy logs to clipboard"
+                            Background="Transparent" Foreground="#808080" BorderThickness="0"
+                            FontSize="12" Padding="6,2" Cursor="Hand" Content="Copy"/>
+                    <Button Command="{Binding ExportLogsCommand}" ToolTip="Export logs to file"
+                            Background="Transparent" Foreground="#808080" BorderThickness="0"
+                            FontSize="12" Padding="6,2" Cursor="Hand" Content="Export"/>
+                    <Button Command="{Binding ClearLogsCommand}" ToolTip="Clear log entries"
+                            Background="Transparent" Foreground="#808080" BorderThickness="0"
+                            FontSize="12" Padding="6,2" Cursor="Hand" Content="Clear"/>
+                    <Button Command="{Binding OpenLogFolderCommand}" ToolTip="Open log folder"
+                            Background="Transparent" Foreground="#808080" BorderThickness="0"
+                            FontSize="12" Padding="6,2" Cursor="Hand" Content="Folder"/>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <!-- Log entries list -->
+        <ListView Grid.Row="1" ItemsSource="{Binding LogEntries}"
+                  Background="#1E1E1E" BorderThickness="0"
+                  ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                  ScrollViewer.VerticalScrollBarVisibility="Auto"
+                  x:Name="LogListView"
+                  VirtualizingPanel.IsVirtualizing="True"
+                  VirtualizingPanel.VirtualizationMode="Recycling"
+                  SelectedItem="{Binding SelectedEntry}"
+                  SelectionMode="Single">
+            <ListView.ItemTemplate>
+                <DataTemplate>
+                    <Grid Margin="1,1">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <!-- Timestamp -->
+                        <TextBlock Grid.Column="0" Text="{Binding Timestamp}"
+                                   Foreground="#606060" FontSize="11"
+                                   FontFamily="Cascadia Code, Consolas"
+                                   VerticalAlignment="Center" Margin="0,0,8,0"/>
+
+                        <!-- Level badge -->
+                        <Border Grid.Column="1" Style="{StaticResource LevelBadge}"
+                                Background="{Binding LevelColor}">
+                            <TextBlock Text="{Binding LevelTag}" FontSize="10" FontWeight="Bold"
+                                       Foreground="White" HorizontalAlignment="Center"
+                                       FontFamily="Cascadia Code, Consolas"/>
+                        </Border>
+
+                        <!-- Source badge (hidden for APP to reduce noise) -->
+                        <Border Grid.Column="2" Style="{StaticResource SourceBadge}"
+                                Background="{Binding SourceColor}"
+                                Visibility="{Binding LogSource, Converter={StaticResource SourceFilterVis}}">
+                            <TextBlock Text="{Binding SourceTag}" FontSize="9" FontWeight="Bold"
+                                       Foreground="White" HorizontalAlignment="Center"
+                                       FontFamily="Cascadia Code, Consolas"/>
+                        </Border>
+
+                        <!-- Category (if present) -->
+                        <TextBlock Grid.Column="3" Text="{Binding Category}"
+                                   Foreground="#6699CC" FontSize="11"
+                                   FontFamily="Cascadia Code, Consolas"
+                                   VerticalAlignment="Center" Margin="0,0,8,0"
+                                   Visibility="{Binding Category, Converter={StaticResource CategoryVis}}"/>
+
+                        <!-- Message + Duration + Exception -->
+                        <StackPanel Grid.Column="4" Orientation="Horizontal">
+                            <TextBlock Text="{Binding Message}" Style="{StaticResource LogText}"/>
+                            <TextBlock Foreground="#546E7A" FontSize="10"
+                                       FontFamily="Cascadia Code, Consolas" VerticalAlignment="Center"
+                                       Margin="6,0,0,0">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding DurationMs}" Value="{x:Null}">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                                <TextBlock.Text>
+                                    <Binding Path="DurationMs" StringFormat="({0:F0}ms)"/>
+                                </TextBlock.Text>
+                            </TextBlock>
+                        </StackPanel>
+
+                        <!-- Exception -->
+                        <TextBlock Grid.Column="5" Text="{Binding Exception}" Foreground="#F48771" FontSize="11"
+                                   FontFamily="Cascadia Code, Consolas" VerticalAlignment="Center"
+                                   Margin="8,0,0,0"
+                                   Visibility="{Binding Exception, Converter={StaticResource ExVis}}"/>
+                    </Grid>
+                </DataTemplate>
+            </ListView.ItemTemplate>
+            <ListView.ItemContainerStyle>
+                <Style TargetType="ListViewItem">
+                    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                    <Setter Property="Padding" Value="4,2"/>
+                    <Setter Property="BorderThickness" Value="0"/>
+                    <Setter Property="MinHeight" Value="22"/>
+                    <Style.Triggers>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter Property="Background" Value="#264F78"/>
+                        </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter Property="Background" Value="#2A2D2E"/>
+                        </Trigger>
+                    </Style.Triggers>
+                </Style>
+            </ListView.ItemContainerStyle>
+        </ListView>
+    </Grid>
+</UserControl>

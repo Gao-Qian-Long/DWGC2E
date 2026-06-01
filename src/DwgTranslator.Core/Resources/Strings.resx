@@ -1,0 +1,1146 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" />
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="assembly">
+            <xsd:complexType>
+              <xsd:attribute name="alias" type="xsd:string" />
+              <xsd:attribute name="name" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="AppTitle" xml:space="preserve">
+    <value>DWG Translator - 图纸中英文互译</value>
+  </data>
+  <data name="AppTitleShort" xml:space="preserve">
+    <value>图纸中英文互译</value>
+  </data>
+  <data name="SettingsTitle" xml:space="preserve">
+    <value>设置</value>
+  </data>
+  <data name="ExportModeTitle" xml:space="preserve">
+    <value>选择导出模式</value>
+  </data>
+  <data name="LicenseTitle" xml:space="preserve">
+    <value>授权管理</value>
+  </data>
+  <data name="HelpTitle" xml:space="preserve">
+    <value>DWG Translator 使用帮助</value>
+  </data>
+  <data name="GlossaryManagerTitle" xml:space="preserve">
+    <value>术语库管理</value>
+  </data>
+  <data name="HelpVersion" xml:space="preserve">
+    <value>v2.1 — 图纸中英文互译工具</value>
+  </data>
+  <data name="HelpTabQuickStart" xml:space="preserve">
+    <value>快速入门</value>
+  </data>
+  <data name="HelpTabFeatures" xml:space="preserve">
+    <value>功能详解</value>
+  </data>
+  <data name="HelpTabFAQ" xml:space="preserve">
+    <value>常见问题</value>
+  </data>
+  <data name="HelpTabTroubleshooting" xml:space="preserve">
+    <value>故障排除</value>
+  </data>
+  <data name="HelpTabGlossary" xml:space="preserve">
+    <value>名词解释</value>
+  </data>
+  <data name="HelpTabLicense" xml:space="preserve">
+    <value>授权说明</value>
+  </data>
+  <data name="BtnImportDwg" xml:space="preserve">
+    <value>导入 DWG</value>
+  </data>
+  <data name="BtnTranslate" xml:space="preserve">
+    <value>翻译</value>
+  </data>
+  <data name="BtnStop" xml:space="preserve">
+    <value>停止</value>
+  </data>
+  <data name="BtnExportExcel" xml:space="preserve">
+    <value>导出 Excel</value>
+  </data>
+  <data name="BtnImportExcel" xml:space="preserve">
+    <value>导入 Excel</value>
+  </data>
+  <data name="BtnExportDwg" xml:space="preserve">
+    <value>导出 DWG</value>
+  </data>
+  <data name="BtnCancelExport" xml:space="preserve">
+    <value>取消导出</value>
+  </data>
+  <data name="BtnMarkAllReviewed" xml:space="preserve">
+    <value>全部审阅</value>
+  </data>
+  <data name="BtnRetryFailed" xml:space="preserve">
+    <value>重试失败</value>
+  </data>
+  <data name="BtnGlossary" xml:space="preserve">
+    <value>术语库</value>
+  </data>
+  <data name="BtnImportGlossary" xml:space="preserve">
+    <value>导入术语</value>
+  </data>
+  <data name="BtnLicense" xml:space="preserve">
+    <value>授权</value>
+  </data>
+  <data name="BtnSettings" xml:space="preserve">
+    <value>设置</value>
+  </data>
+  <data name="BtnLog" xml:space="preserve">
+    <value>日志</value>
+  </data>
+  <data name="BtnHelp" xml:space="preserve">
+    <value>帮助</value>
+  </data>
+  <data name="BtnClear" xml:space="preserve">
+    <value>清空</value>
+  </data>
+  <data name="BtnFind" xml:space="preserve">
+    <value>查找</value>
+  </data>
+  <data name="BtnSave" xml:space="preserve">
+    <value>保存</value>
+  </data>
+  <data name="BtnCancel" xml:space="preserve">
+    <value>取消</value>
+  </data>
+  <data name="BtnClose" xml:space="preserve">
+    <value>关闭</value>
+  </data>
+  <data name="BtnCopyMachineId" xml:space="preserve">
+    <value>复制机器码</value>
+  </data>
+  <data name="BtnActivate" xml:space="preserve">
+    <value>立即激活</value>
+  </data>
+  <data name="BtnOk" xml:space="preserve">
+    <value>确定</value>
+  </data>
+  <data name="BtnSaveGlossary" xml:space="preserve">
+    <value>保存术语库</value>
+  </data>
+  <data name="BtnShow" xml:space="preserve">
+    <value>显示</value>
+  </data>
+  <data name="BtnTestConnection" xml:space="preserve">
+    <value>测试连接</value>
+  </data>
+  <data name="BtnBrowse" xml:space="preserve">
+    <value>浏览</value>
+  </data>
+  <data name="BtnAutoDetect" xml:space="preserve">
+    <value>自动检测</value>
+  </data>
+  <data name="TipImportDwg" xml:space="preserve">
+    <value>选择一个或多个 DWG 文件，提取文本实体</value>
+  </data>
+  <data name="TipToggleDirection" xml:space="preserve">
+    <value>点击切换翻译方向</value>
+  </data>
+  <data name="TipTranslate" xml:space="preserve">
+    <value>AI 并发翻译（去重 + 智能并发）</value>
+  </data>
+  <data name="TipStopTranslation" xml:space="preserve">
+    <value>停止正在进行的翻译</value>
+  </data>
+  <data name="TipExportExcel" xml:space="preserve">
+    <value>导出翻译表到 Excel 进行校对</value>
+  </data>
+  <data name="TipImportExcel" xml:space="preserve">
+    <value>从校对后的 Excel 导入译文</value>
+  </data>
+  <data name="TipExportDwg" xml:space="preserve">
+    <value>回写译文到 DWG 文件</value>
+  </data>
+  <data name="TipCancelExport" xml:space="preserve">
+    <value>取消正在进行的导出操作</value>
+  </data>
+  <data name="TipMarkReviewed" xml:space="preserve">
+    <value>标记所有已翻译条目为已审阅</value>
+  </data>
+  <data name="TipRetryFailed" xml:space="preserve">
+    <value>重试翻译失败的条目</value>
+  </data>
+  <data name="TipGlossary" xml:space="preserve">
+    <value>查看和编辑术语库</value>
+  </data>
+  <data name="TipImportGlossary" xml:space="preserve">
+    <value>导入外部术语库文件</value>
+  </data>
+  <data name="TipLicense" xml:space="preserve">
+    <value>查看授权状态或输入激活码</value>
+  </data>
+  <data name="TipSettings" xml:space="preserve">
+    <value>配置 API 和 AutoCAD 路径</value>
+  </data>
+  <data name="TipLog" xml:space="preserve">
+    <value>显示/隐藏日志查看器</value>
+  </data>
+  <data name="TipHelp" xml:space="preserve">
+    <value>查看使用帮助和配置说明</value>
+  </data>
+  <data name="TipClear" xml:space="preserve">
+    <value>清空当前所有数据</value>
+  </data>
+  <data name="TipTopmostToggle" xml:space="preserve">
+    <value>窗口置顶切换</value>
+  </data>
+  <data name="TipSearch" xml:space="preserve">
+    <value>搜索原文/译文/类型</value>
+  </data>
+  <data name="TipEditTranslation" xml:space="preserve">
+    <value>双击直接编辑翻译</value>
+  </data>
+  <data name="TipGlossaryMatch" xml:space="preserve">
+    <value>术语库自动匹配</value>
+  </data>
+  <data name="StatusReady" xml:space="preserve">
+    <value>就绪</value>
+  </data>
+  <data name="StatusReadyWithGlossary" xml:space="preserve">
+    <value>就绪 — 术语库: {0} 条</value>
+  </data>
+  <data name="StatusConfigLoadFailed" xml:space="preserve">
+    <value>配置加载失败 — 请检查设置文件</value>
+  </data>
+  <data name="StatusReadingCad" xml:space="preserve">
+    <value>正在读取 {0} 个 CAD 文件...</value>
+  </data>
+  <data name="StatusImported" xml:space="preserve">
+    <value>已导入 {0} 个文本实体 (来自 {1} 个文件)</value>
+  </data>
+  <data name="StatusCadImportFailed" xml:space="preserve">
+    <value>CAD 导入失败 — 请查看日志了解详情</value>
+  </data>
+  <data name="StatusLicenseRequired" xml:space="preserve">
+    <value>授权无效或体验次数已用完，请先激活</value>
+  </data>
+  <data name="StatusNoPendingText" xml:space="preserve">
+    <value>没有待翻译的文本。请先导入 DWG 或切换语言方向。</value>
+  </data>
+  <data name="StatusConfigureApiKey" xml:space="preserve">
+    <value>请先配置 API Key</value>
+  </data>
+  <data name="StatusTranslating" xml:space="preserve">
+    <value>🔄 翻译中 (5 并发) — {0}/{1} ...</value>
+  </data>
+  <data name="StatusTranslateComplete" xml:space="preserve">
+    <value>✅ 翻译完成: {0} 成功, {1} 失败 | {2} | 速度约 5 倍于串行</value>
+  </data>
+  <data name="StatusTranslateTimeout" xml:space="preserve">
+    <value>翻译超时 — 请检查网络连接或 API Key</value>
+  </data>
+  <data name="StatusApiFailed" xml:space="preserve">
+    <value>API 请求失败 — 请检查 API Key 和网络连接</value>
+  </data>
+  <data name="StatusTranslateCancelled" xml:space="preserve">
+    <value>翻译已取消</value>
+  </data>
+  <data name="StatusTranslateFailed" xml:space="preserve">
+    <value>翻译失败 — 请查看日志了解详情</value>
+  </data>
+  <data name="StatusStoppingTranslation" xml:space="preserve">
+    <value>正在停止翻译...</value>
+  </data>
+  <data name="StatusCancellingExport" xml:space="preserve">
+    <value>正在取消导出...</value>
+  </data>
+  <data name="StatusNoFailedRetry" xml:space="preserve">
+    <value>没有失败的翻译需要重试</value>
+  </data>
+  <data name="StatusNoExportData" xml:space="preserve">
+    <value>没有可导出的数据</value>
+  </data>
+  <data name="StatusExportingExcel" xml:space="preserve">
+    <value>正在导出 Excel...</value>
+  </data>
+  <data name="StatusExcelExported" xml:space="preserve">
+    <value>已导出 {0} 条到 {1} — 可在 Excel 中校对后重新导入</value>
+  </data>
+  <data name="StatusExcelExportFailed" xml:space="preserve">
+    <value>Excel 导出失败 — 请查看日志了解详情</value>
+  </data>
+  <data name="StatusImportingExcel" xml:space="preserve">
+    <value>正在从 Excel 导入...</value>
+  </data>
+  <data name="StatusExcelImported" xml:space="preserve">
+    <value>已从 Excel 导入并更新 {0} 条</value>
+  </data>
+  <data name="StatusExcelImportFailed" xml:space="preserve">
+    <value>Excel 导入失败 — 请查看日志了解详情</value>
+  </data>
+  <data name="StatusNoTranslatedText" xml:space="preserve">
+    <value>没有已翻译/已审阅的文本可导出。请先翻译并审核。</value>
+  </data>
+  <data name="StatusSelectCadFile" xml:space="preserve">
+    <value>请先选择原始 CAD 文件</value>
+  </data>
+  <data name="StatusExportingDwg" xml:space="preserve">
+    <value>正在导出翻译后的 DWG...</value>
+  </data>
+  <data name="StatusExportCancelled" xml:space="preserve">
+    <value>已取消导出</value>
+  </data>
+  <data name="StatusDwgExportComplete" xml:space="preserve">
+    <value>{0} 导出完成 ({1}): {2} 条已替换 → {3}</value>
+  </data>
+  <data name="StatusDwgExportFailed" xml:space="preserve">
+    <value>{0} 导出失败: 0 条替换成功</value>
+  </data>
+  <data name="StatusExportCancelled2" xml:space="preserve">
+    <value>导出已取消</value>
+  </data>
+  <data name="StatusCadExportFailed" xml:space="preserve">
+    <value>CAD 导出失败 — 请查看日志了解详情</value>
+  </data>
+  <data name="StatusReviewed" xml:space="preserve">
+    <value>已将 {0} 条标记为已审阅 — 可以导出 DWG 了</value>
+  </data>
+  <data name="StatusCleared" xml:space="preserve">
+    <value>已清空</value>
+  </data>
+  <data name="StatusDirectionSwitched" xml:space="preserve">
+    <value>语言方向已切换为: {0}。请重新点击「翻译」。</value>
+  </data>
+  <data name="StatusGlossarySaved" xml:space="preserve">
+    <value>术语库已保存: {0} 条</value>
+  </data>
+  <data name="StatusGlossaryImported" xml:space="preserve">
+    <value>术语库已导入: {0} 条</value>
+  </data>
+  <data name="StatusApiUpdated" xml:space="preserve">
+    <value>API 设置已更新</value>
+  </data>
+  <data name="StatusTopmostOn" xml:space="preserve">
+    <value>窗口已置顶 📍</value>
+  </data>
+  <data name="StatusTopmostOff" xml:space="preserve">
+    <value>窗口取消置顶</value>
+  </data>
+  <data name="StatusLanguageChanged" xml:space="preserve">
+    <value>语言已切换为 {0}，重启后生效</value>
+  </data>
+  <data name="LangCnToEn" xml:space="preserve">
+    <value>中文 → 英文</value>
+  </data>
+  <data name="LangEnToCn" xml:space="preserve">
+    <value>英文 → 中文</value>
+  </data>
+  <data name="FilterAll" xml:space="preserve">
+    <value>全部</value>
+  </data>
+  <data name="FilterPending" xml:space="preserve">
+    <value>待翻译</value>
+  </data>
+  <data name="FilterTranslated" xml:space="preserve">
+    <value>已翻译</value>
+  </data>
+  <data name="FilterReviewed" xml:space="preserve">
+    <value>审阅完成</value>
+  </data>
+  <data name="FilterFailed" xml:space="preserve">
+    <value>翻译失败</value>
+  </data>
+  <data name="FilterGlossaryHit" xml:space="preserve">
+    <value>术语命中</value>
+  </data>
+  <data name="FilterSkipped" xml:space="preserve">
+    <value>已跳过</value>
+  </data>
+  <data name="ColType" xml:space="preserve">
+    <value>类型</value>
+  </data>
+  <data name="ColOriginal" xml:space="preserve">
+    <value>原文</value>
+  </data>
+  <data name="ColTranslation" xml:space="preserve">
+    <value>译文</value>
+  </data>
+  <data name="ColGlossary" xml:space="preserve">
+    <value>术语</value>
+  </data>
+  <data name="ColStatus" xml:space="preserve">
+    <value>状态</value>
+  </data>
+  <data name="ColBlock" xml:space="preserve">
+    <value>所属块</value>
+  </data>
+  <data name="ColNotes" xml:space="preserve">
+    <value>备注</value>
+  </data>
+  <data name="StatsTotal" xml:space="preserve">
+    <value>总数 </value>
+  </data>
+  <data name="StatsTranslated" xml:space="preserve">
+    <value>已翻译 </value>
+  </data>
+  <data name="StatsFailed" xml:space="preserve">
+    <value>失败 </value>
+  </data>
+  <data name="StatsGlossary" xml:space="preserve">
+    <value>术语 </value>
+  </data>
+  <data name="StatsCache" xml:space="preserve">
+    <value>缓存 </value>
+  </data>
+  <data name="StatsVisible" xml:space="preserve">
+    <value>显示 </value>
+  </data>
+  <data name="StatsFilter" xml:space="preserve">
+    <value>筛选:</value>
+  </data>
+  <data name="StatsSearch" xml:space="preserve">
+    <value>搜索:</value>
+  </data>
+  <data name="StatsGlossaryCount" xml:space="preserve">
+    <value>术语库: {0} 条</value>
+  </data>
+  <data name="SettingsApiSection" xml:space="preserve">
+    <value>DeepSeek API 设置</value>
+  </data>
+  <data name="SettingsApiKey" xml:space="preserve">
+    <value>API Key:</value>
+  </data>
+  <data name="SettingsApiUrl" xml:space="preserve">
+    <value>API 地址:</value>
+  </data>
+  <data name="SettingsModel" xml:space="preserve">
+    <value>模型:</value>
+  </data>
+  <data name="SettingsAutoCadSection" xml:space="preserve">
+    <value>AutoCAD 配置（精确回写模式需要）</value>
+  </data>
+  <data name="SettingsInstallPath" xml:space="preserve">
+    <value>安装路径:</value>
+  </data>
+  <data name="SettingsPluginPath" xml:space="preserve">
+    <value>插件路径:</value>
+  </data>
+  <data name="SettingsTestConnecting" xml:space="preserve">
+    <value>正在测试连接...</value>
+  </data>
+  <data name="SettingsTestSuccess" xml:space="preserve">
+    <value>连接成功! 模型响应: {0}</value>
+  </data>
+  <data name="SettingsTestTimeout" xml:space="preserve">
+    <value>连接超时（15秒）</value>
+  </data>
+  <data name="SettingsTestFailed" xml:space="preserve">
+    <value>连接失败: {0}</value>
+  </data>
+  <data name="SettingsTestEnterKey" xml:space="preserve">
+    <value>请先填写 API Key</value>
+  </data>
+  <data name="SettingsDetecting" xml:space="preserve">
+    <value>正在检测 AutoCAD 安装...</value>
+  </data>
+  <data name="SettingsDetected" xml:space="preserve">
+    <value>已检测到: {0} ({1}) — {2}</value>
+  </data>
+  <data name="SettingsNotDetected" xml:space="preserve">
+    <value>未检测到 AutoCAD 安装。请手动选择安装目录，或确认 AutoCAD 已安装。</value>
+  </data>
+  <data name="SettingsPathNotConfigured" xml:space="preserve">
+    <value>未配置 AutoCAD 路径 — 精确回写模式不可用，将使用离线回写</value>
+  </data>
+  <data name="SettingsPathValid" xml:space="preserve">
+    <value>AutoCAD 路径有效 (已找到 acad.exe)</value>
+  </data>
+  <data name="SettingsPathInvalid" xml:space="preserve">
+    <value>路径无效 — 未找到 acad.exe，请确认是否为 AutoCAD 安装目录</value>
+  </data>
+  <data name="SettingsLoadFailed" xml:space="preserve">
+    <value>加载设置失败。请检查设置文件是否损坏。</value>
+  </data>
+  <data name="SettingsSaveFailed" xml:space="preserve">
+    <value>保存设置失败。请检查文件权限或磁盘空间。</value>
+  </data>
+  <data name="SettingsBrowseAutoCad" xml:space="preserve">
+    <value>选择 AutoCAD 安装目录（包含 acad.exe 的文件夹）</value>
+  </data>
+  <data name="SettingsBrowsePlugin" xml:space="preserve">
+    <value>选择 DwgTranslator.Cad.dll 插件文件</value>
+  </data>
+  <data name="SettingsLanguage" xml:space="preserve">
+    <value>界面语言:</value>
+  </data>
+  <data name="SettingsLanguageRestart" xml:space="preserve">
+    <value>(切换语言后需重启应用)</value>
+  </data>
+  <data name="ExportModeSelectTitle" xml:space="preserve">
+    <value>选择 DWG 导出模式</value>
+  </data>
+  <data name="ExportModeSelectDesc" xml:space="preserve">
+    <value>根据您的环境选择合适的回写方式</value>
+  </data>
+  <data name="ExportModeAutoCad" xml:space="preserve">
+    <value>AutoCAD 精确回写</value>
+  </data>
+  <data name="ExportModeRecommended" xml:space="preserve">
+    <value>推荐</value>
+  </data>
+  <data name="ExportModeAutoCadFeature1" xml:space="preserve">
+    <value>• 在 AutoCAD 进程内精确替换文字</value>
+  </data>
+  <data name="ExportModeAutoCadFeature2" xml:space="preserve">
+    <value>• 自动检测图框，防止文字溢出</value>
+  </data>
+  <data name="ExportModeAutoCadFeature3" xml:space="preserve">
+    <value>• 碰撞检测，避免与其他图形干涉</value>
+  </data>
+  <data name="ExportModeAutoCadFeature4" xml:space="preserve">
+    <value>• 智能调整文字宽度和字高</value>
+  </data>
+  <data name="ExportModeAutoCadWarning" xml:space="preserve">
+    <value>⚠ 需要 AutoCAD 正在运行</value>
+  </data>
+  <data name="ExportModeOffline" xml:space="preserve">
+    <value>离线回写</value>
+  </data>
+  <data name="ExportModeNoAutoCad" xml:space="preserve">
+    <value>无需 AutoCAD</value>
+  </data>
+  <data name="ExportModeOfflineFeature1" xml:space="preserve">
+    <value>• 直接修改 DWG 文件，无需 AutoCAD</value>
+  </data>
+  <data name="ExportModeOfflineFeature2" xml:space="preserve">
+    <value>• 排版为估算值，可能需要微调</value>
+  </data>
+  <data name="ExportModeOfflineFeature3" xml:space="preserve">
+    <value>• 适合没有安装 AutoCAD 的场景</value>
+  </data>
+  <data name="ExportModeOfflineFeature4" xml:space="preserve">
+    <value>• 智能宽度和字高缩放</value>
+  </data>
+  <data name="LicenseHeader" xml:space="preserve">
+    <value>DWG Translator 授权管理</value>
+  </data>
+  <data name="LicenseManageDesc" xml:space="preserve">
+    <value>管理您的软件许可，解锁全部功能</value>
+  </data>
+  <data name="LicenseCurrentStatus" xml:space="preserve">
+    <value>当前状态:</value>
+  </data>
+  <data name="LicenseLoading" xml:space="preserve">
+    <value>加载中...</value>
+  </data>
+  <data name="LicenseMachineId" xml:space="preserve">
+    <value>机器标识:</value>
+  </data>
+  <data name="LicenseTrialRemaining" xml:space="preserve">
+    <value>剩余体验:</value>
+  </data>
+  <data name="LicenseType" xml:space="preserve">
+    <value>授权类型:</value>
+  </data>
+  <data name="LicenseTrial" xml:space="preserve">
+    <value>体验版</value>
+  </data>
+  <data name="LicensePerpetual" xml:space="preserve">
+    <value>买断制 (永久)</value>
+  </data>
+  <data name="LicenseSubscription" xml:space="preserve">
+    <value>订阅制 (到期: {0})</value>
+  </data>
+  <data name="LicenseTrialUses" xml:space="preserve">
+    <value>{0} 次</value>
+  </data>
+  <data name="LicenseNaPerpetual" xml:space="preserve">
+    <value>N/A (已永久授权)</value>
+  </data>
+  <data name="LicenseNaExpiry" xml:space="preserve">
+    <value>到期: {0}</value>
+  </data>
+  <data name="LicenseNa" xml:space="preserve">
+    <value>N/A</value>
+  </data>
+  <data name="LicenseNotActivated" xml:space="preserve">
+    <value>未激活</value>
+  </data>
+  <data name="LicenseEnterCode" xml:space="preserve">
+    <value>输入激活码</value>
+  </data>
+  <data name="LicensePricing" xml:space="preserve">
+    <value>授权方案:</value>
+  </data>
+  <data name="LicenseTrialDesc" xml:space="preserve">
+    <value>- 体验版: 免费，3 次翻译导出</value>
+  </data>
+  <data name="LicensePerpetualDesc" xml:space="preserve">
+    <value>- 买断制: ¥699 一次性付费，永久使用</value>
+  </data>
+  <data name="LicenseSubscriptionDesc" xml:space="preserve">
+    <value>- 订阅制: ¥49/月 或 ¥399/年，持续更新</value>
+  </data>
+  <data name="LicenseMachineNote" xml:space="preserve">
+    <value>- 激活码绑定机器，换机联系客服</value>
+  </data>
+  <data name="LicenseAlreadyActivated" xml:space="preserve">
+    <value>已永久授权 - 感谢您的支持!</value>
+  </data>
+  <data name="LicenseEnterCodePrompt" xml:space="preserve">
+    <value>请输入激活码</value>
+  </data>
+  <data name="LicenseMachineIdCopied" xml:space="preserve">
+    <value>机器码已复制到剪贴板，请发送给客服获取激活码。</value>
+  </data>
+  <data name="LicenseActivationSuccessPerpetual" xml:space="preserve">
+    <value>永久授权激活成功！感谢您购买 DWG Translator (买断制 ¥699)。</value>
+  </data>
+  <data name="LicenseActivationSuccessSubscription" xml:space="preserve">
+    <value>订阅授权激活成功！有效期至 {0}。</value>
+  </data>
+  <data name="LicenseActivationInvalid" xml:space="preserve">
+    <value>激活码无效或已损坏</value>
+  </data>
+  <data name="LicenseActivationMachineMismatch" xml:space="preserve">
+    <value>激活码与当前机器不匹配。如已更换硬件，请联系客服重新激活。</value>
+  </data>
+  <data name="LicenseActivationInvalidFormat" xml:space="preserve">
+    <value>无法识别的激活码格式。
+正确格式: DwgTranslator-P-xxx (买断) 或 DwgTranslator-S-xxx (订阅)</value>
+  </data>
+  <data name="LicenseActivationFailed" xml:space="preserve">
+    <value>激活失败，请检查激活码是否正确或联系客服获取帮助。</value>
+  </data>
+  <data name="LicenseActivationEmpty" xml:space="preserve">
+    <value>激活码不能为空</value>
+  </data>
+  <data name="LicenseActivationDateInvalid" xml:space="preserve">
+    <value>激活码日期格式无效</value>
+  </data>
+  <data name="LicenseActivationExpired" xml:space="preserve">
+    <value>订阅授权已于 {0} 过期，请续费。月费 ¥49 / 年费 ¥399</value>
+  </data>
+  <data name="LicenseStatusTrial" xml:space="preserve">
+    <value>体验模式 (剩余 {0} 次)</value>
+  </data>
+  <data name="LicenseStatusPerpetual" xml:space="preserve">
+    <value>永久授权 (买断制)</value>
+  </data>
+  <data name="LicenseStatusSubscription" xml:space="preserve">
+    <value>订阅授权 (到期: {0})</value>
+  </data>
+  <data name="LicenseStatusExpired" xml:space="preserve">
+    <value>订阅已过期 — 请续费</value>
+  </data>
+  <data name="LicenseStatusTrialExhausted" xml:space="preserve">
+    <value>体验次数已用完 — 请购买授权</value>
+  </data>
+  <data name="LicenseStatusInvalid" xml:space="preserve">
+    <value>授权无效</value>
+  </data>
+  <data name="MsgTitleError" xml:space="preserve">
+    <value>错误</value>
+  </data>
+  <data name="MsgTitleWarning" xml:space="preserve">
+    <value>运行警告</value>
+  </data>
+  <data name="MsgTitleFatalError" xml:space="preserve">
+    <value>致命错误</value>
+  </data>
+  <data name="MsgTitleFirstSetup" xml:space="preserve">
+    <value>首次配置</value>
+  </data>
+  <data name="MsgTitleActivation" xml:space="preserve">
+    <value>需要激活</value>
+  </data>
+  <data name="MsgTitleExportSuccess" xml:space="preserve">
+    <value>导出成功</value>
+  </data>
+  <data name="MsgTitleExportError" xml:space="preserve">
+    <value>导出错误</value>
+  </data>
+  <data name="MsgTitleNoData" xml:space="preserve">
+    <value>无数据</value>
+  </data>
+  <data name="MsgTitleTimeout" xml:space="preserve">
+    <value>请求超时</value>
+  </data>
+  <data name="MsgTitleApiError" xml:space="preserve">
+    <value>API 错误</value>
+  </data>
+  <data name="MsgTitleConfigError" xml:space="preserve">
+    <value>配置错误</value>
+  </data>
+  <data name="MsgTitleAutoCadSecurity" xml:space="preserve">
+    <value>AutoCAD 安全提示</value>
+  </data>
+  <data name="MsgCadImportError" xml:space="preserve">
+    <value>导入 CAD 文件失败。
+
+请确认文件格式正确且未被其他程序占用。
+详情请查看日志文件。</value>
+  </data>
+  <data name="MsgNoApiKey" xml:space="preserve">
+    <value>请在设置中配置 DeepSeek API Key</value>
+  </data>
+  <data name="MsgTranslateTimeout" xml:space="preserve">
+    <value>翻译请求超时（5 分钟）。
+
+可能原因:
+• 网络连接不稳定
+• API Key 无效
+• DeepSeek 服务暂时不可用
+
+请打开「设置」→「测试连接」验证 API。</value>
+  </data>
+  <data name="MsgApiError" xml:space="preserve">
+    <value>API 请求失败。
+
+请检查:
+• 设置中的 API Key 是否正确
+• 网络是否可以访问 api.deepseek.com
+
+详情请查看日志文件。</value>
+  </data>
+  <data name="MsgTranslateError" xml:space="preserve">
+    <value>翻译过程中发生错误。
+
+请查看日志文件了解详情，或联系技术支持。</value>
+  </data>
+  <data name="MsgNoTranslatedData" xml:space="preserve">
+    <value>请先完成翻译或手动审核后再导出。
+
+提示：在译文列双击可直接编辑翻译。</value>
+  </data>
+  <data name="MsgAutoCadSecurity" xml:space="preserve">
+    <value>即将通过 AutoCAD COM 进行精确回写。
+
+重要提示：
+AutoCAD 可能会弹出「是否加载来自非信任路径的程序集」安全对话框。
+该对话框可能在 AutoCAD 窗口后面，请切换到 AutoCAD 窗口查看。
+
+请点击「始终加载」或「加载」以允许插件运行。
+如果不点击，回写将无法完成。</value>
+  </data>
+  <data name="MsgDwgExportSuccess" xml:space="preserve">
+    <value>{0} 导出完成!
+
+模式: {1}
+已替换: {2} 条文本
+失败: {3} 条
+
+文件: {4}</value>
+  </data>
+  <data name="MsgDwgExportError" xml:space="preserve">
+    <value>{0} 导出失败:
+{1}</value>
+  </data>
+  <data name="MsgCadExportError" xml:space="preserve">
+    <value>导出 CAD 文件失败。
+
+提示: ACadSharp 写入功能仍为实验性，可能产生需修复的文件。
+详情请查看日志文件。</value>
+  </data>
+  <data name="MsgUnhandledError" xml:space="preserve">
+    <value>程序遇到一个错误，但已自动恢复。
+
+错误: {0}
+
+如果问题持续出现，请查看日志或联系技术支持。</value>
+  </data>
+  <data name="MsgFatalError" xml:space="preserve">
+    <value>程序遇到致命错误即将关闭。
+
+{0}
+
+日志位置: {1}</value>
+  </data>
+  <data name="MsgFirstLaunch" xml:space="preserve">
+    <value>欢迎使用 DWG Translator v2.1!
+
+首次使用需要配置 DeepSeek API Key。
+请点击「设置」按钮进行配置。
+
+体验版提供 3 次免费翻译导出，可随时激活升级。</value>
+  </data>
+  <data name="MsgActivationPrompt" xml:space="preserve">
+    <value>您的体验次数已用完或授权已过期。
+
+点击「是」打开授权管理窗口进行激活。
+点击「否」继续使用受限功能（仅可查看和编辑，不可导出）。</value>
+  </data>
+  <data name="AutoCadConnectFailed" xml:space="preserve">
+    <value>无法连接 AutoCAD：注册表中找不到任何已知的 AutoCAD COM ProgID。
+
+可能原因：
+1. AutoCAD 未安装或安装不完整
+2. AutoCAD 的 COM 支持未启用（某些精简版/OEM 版本不支持 COM）
+3. 使用的是 AutoCAD LT（不支持 .NET 插件 NETLOAD）
+
+建议：使用「离线导出 DWG」功能，无需 AutoCAD 运行。</value>
+  </data>
+  <data name="AutoCadNoActiveDoc" xml:space="preserve">
+    <value>AutoCAD 没有活动文档</value>
+  </data>
+  <data name="AutoCadPluginNotFound" xml:space="preserve">
+    <value>找不到 DwgTranslator.Cad.dll 插件文件。
+请在「设置」→「AutoCAD 配置」中指定插件路径。</value>
+  </data>
+  <data name="AutoCadWritebackFailed" xml:space="preserve">
+    <value>AutoCAD 回写失败。信号: {0}</value>
+  </data>
+  <data name="AutoCadSignalReadError" xml:space="preserve">
+    <value>无法读取 AutoCAD 完成信号文件。</value>
+  </data>
+  <data name="AutoCadTimeout" xml:space="preserve">
+    <value>AutoCAD 回写超时。可能原因：
+1. 安全对话框未点击「始终加载」
+2. AutoCAD 正在处理大型文件
+3. 命令未成功执行
+4. 请检查 AutoCAD 命令行是否有错误提示
+配置文件位置: {0}</value>
+  </data>
+  <data name="AutoCadWritebackError" xml:space="preserve">
+    <value>AutoCAD 回写失败: {0}</value>
+  </data>
+  <data name="HelpSection1" xml:space="preserve">
+    <value>一、基本使用流程</value>
+  </data>
+  <data name="HelpStep1Import" xml:space="preserve">
+    <value>1. 导入 DWG</value>
+  </data>
+  <data name="HelpStep1Desc" xml:space="preserve">
+    <value>点击「导入 DWG」按钮，选择一个或多个 DWG 文件。程序会自动提取其中的文本实体。</value>
+  </data>
+  <data name="HelpStep2Translate" xml:space="preserve">
+    <value>2. 翻译</value>
+  </data>
+  <data name="HelpStep2Desc" xml:space="preserve">
+    <value>点击「翻译」按钮，使用 AI 进行批量翻译。可通过 ⇄ 按钮切换翻译方向（中文→英文 / 英文→中文）。5 路并发，速度约 5 倍于串行。</value>
+  </data>
+  <data name="HelpStep3Review" xml:space="preserve">
+    <value>3. 校对</value>
+  </data>
+  <data name="HelpStep3Desc" xml:space="preserve">
+    <value>在译文列双击可直接编辑翻译。也可「导出 Excel」在 Excel 中校对后「导入 Excel」回传。</value>
+  </data>
+  <data name="HelpStep4Export" xml:space="preserve">
+    <value>4. 导出 DWG</value>
+  </data>
+  <data name="HelpStep4Desc" xml:space="preserve">
+    <value>点击「导出 DWG」，选择回写模式（见下方说明），生成翻译后的图纸文件。程序会自动优化文字宽度和字高，避免溢出和干涉。</value>
+  </data>
+  <data name="HelpSection2" xml:space="preserve">
+    <value>二、回写模式说明</value>
+  </data>
+  <data name="HelpAutoCadMode" xml:space="preserve">
+    <value>AutoCAD 精确回写（推荐）</value>
+  </data>
+  <data name="HelpAutoCadModeDesc" xml:space="preserve">
+    <value>在 AutoCAD 进程内完成精确的文字替换，支持图框检测、几何碰撞避免、智能宽度调整和自动缩放排版。</value>
+  </data>
+  <data name="HelpAutoCadImportant" xml:space="preserve">
+    <value>⚠ 重要：AutoCAD 必须提前启动！</value>
+  </data>
+  <data name="HelpAutoCadComNote" xml:space="preserve">
+    <value>程序通过 COM 控制正在运行的 AutoCAD 进程。</value>
+  </data>
+  <data name="HelpOfflineMode" xml:space="preserve">
+    <value>离线回写</value>
+  </data>
+  <data name="HelpOfflineModeDesc" xml:space="preserve">
+    <value>不需要 AutoCAD。使用 ACadSharp 库直接修改 DWG 文件。包含智能宽度和字高缩放，但无法进行碰撞检测。适用于没有安装 AutoCAD 的电脑。</value>
+  </data>
+  <data name="HelpSection3" xml:space="preserve">
+    <value>三、文字排版优化</value>
+  </data>
+  <data name="HelpLayoutIntro" xml:space="preserve">
+    <value>DWG Translator v2.1 对文字排版进行了全面优化：</value>
+  </data>
+  <data name="HelpLayoutFixedWidth" xml:space="preserve">
+    <value>• 固定宽度 MText：翻译后自动调整矩形宽度，防止单词间距过大</value>
+  </data>
+  <data name="HelpLayoutFreeWidth" xml:space="preserve">
+    <value>• 自由宽度 MText：保守设置宽度，保持紧凑排列</value>
+  </data>
+  <data name="HelpLayoutCollision" xml:space="preserve">
+    <value>• 碰撞检测：自动检测翻译后文字与线条/图形的干涉，缩小字高避免重叠</value>
+  </data>
+  <data name="HelpLayoutFrame" xml:space="preserve">
+    <value>• 图框约束：在图框内自动寻找最佳字高，防止溢出</value>
+  </data>
+  <data name="HelpSection4" xml:space="preserve">
+    <value>四、授权方案</value>
+  </data>
+  <data name="HelpLicenseIntro" xml:space="preserve">
+    <value>DWG Translator 提供三种授权方案：</value>
+  </data>
+  <data name="HelpLicenseTrial" xml:space="preserve">
+    <value>体验版（免费）：</value>
+  </data>
+  <data name="HelpLicenseTrialDesc" xml:space="preserve">
+    <value>3 次翻译导出，完整功能体验</value>
+  </data>
+  <data name="HelpLicensePerpetual" xml:space="preserve">
+    <value>买断制（¥699）：</value>
+  </data>
+  <data name="HelpLicensePerpetualDesc" xml:space="preserve">
+    <value>一次性付费，永久使用当前大版本</value>
+  </data>
+  <data name="HelpLicenseSubscription" xml:space="preserve">
+    <value>订阅制（¥49/月，¥399/年）：</value>
+  </data>
+  <data name="HelpLicenseSubscriptionDesc" xml:space="preserve">
+    <value>持续获得更新和技术支持</value>
+  </data>
+  <data name="HelpSection5" xml:space="preserve">
+    <value>五、常见问题</value>
+  </data>
+  <data name="HelpFaq1Q" xml:space="preserve">
+    <value>Q: 翻译后文字间距太大怎么办？</value>
+  </data>
+  <data name="HelpFaq1A" xml:space="preserve">
+    <value>A: v2.1 已优化固定宽度 MText 的处理逻辑，会自动缩小过宽的矩形宽度。如果仍有问题，可以在 AutoCAD 中手动调整 MText 的定义宽度。</value>
+  </data>
+  <data name="HelpFaq2Q" xml:space="preserve">
+    <value>Q: 翻译后文字与线条重叠怎么办？</value>
+  </data>
+  <data name="HelpFaq2A" xml:space="preserve">
+    <value>A: AutoCAD 精确回写模式下，程序会自动检测碰撞并缩小字高。离线模式暂不支持碰撞检测，建议使用 AutoCAD 模式。</value>
+  </data>
+  <data name="HelpFaq3Q" xml:space="preserve">
+    <value>Q: 导出 DWG 时提示「找不到 DwgTranslator.Cad.dll」？</value>
+  </data>
+  <data name="HelpFaq3A" xml:space="preserve">
+    <value>A: 在「设置」→「AutoCAD 配置」→「插件路径」中指定 DwgTranslator.Cad.dll 的完整路径。</value>
+  </data>
+  <data name="HelpFaq4Q" xml:space="preserve">
+    <value>Q: AutoCAD 弹出「是否加载来自非信任路径的程序集」？</value>
+  </data>
+  <data name="HelpFaq4A" xml:space="preserve">
+    <value>A: 这是 AutoCAD 的安全提示，首次加载 .NET 插件时会出现。请按以下步骤操作：</value>
+  </data>
+  <data name="HelpFaq4Step1" xml:space="preserve">
+    <value>1. 该对话框可能在 AutoCAD 窗口后面！请点击任务栏的 AutoCAD 图标切换到 AutoCAD 窗口</value>
+  </data>
+  <data name="HelpFaq4Step2" xml:space="preserve">
+    <value>2. 在安全对话框中，点击「始终加载」(Always Load) 按钮</value>
+  </data>
+  <data name="HelpFaq4Step3" xml:space="preserve">
+    <value>3. 如果只点击「加载」(Load)，下次使用仍会弹出此对话框</value>
+  </data>
+  <data name="HelpFaq4Tip" xml:space="preserve">
+    <value>提示：DWG Translator 会在发送命令前弹窗提醒您注意此对话框</value>
+  </data>
+  <data name="HelpFaq5Q" xml:space="preserve">
+    <value>Q: 导出 DWG 时如何取消？</value>
+  </data>
+  <data name="HelpFaq5A" xml:space="preserve">
+    <value>A: 导出过程中，工具栏会出现红色的「取消导出」按钮，点击即可取消。如果 AutoCAD 正在处理命令，取消可能需要等当前操作完成。</value>
+  </data>
+  <data name="GlossaryDesc" xml:space="preserve">
+    <value>直接在表格中编辑术语条目，支持增删改</value>
+  </data>
+  <data name="GlossaryColSource" xml:space="preserve">
+    <value>源语言</value>
+  </data>
+  <data name="GlossaryColTarget" xml:space="preserve">
+    <value>目标语言</value>
+  </data>
+  <data name="GlossaryColCategory" xml:space="preserve">
+    <value>分类</value>
+  </data>
+  <data name="FilterCadFiles" xml:space="preserve">
+    <value>CAD 文件|*.dwg;*.dxf|DWG 文件|*.dwg|DXF 文件|*.dxf|所有文件|*.*</value>
+  </data>
+  <data name="FilterDwgFiles" xml:space="preserve">
+    <value>DWG 文件|*.dwg</value>
+  </data>
+  <data name="FilterDxfFiles" xml:space="preserve">
+    <value>DXF 文件|*.dxf</value>
+  </data>
+  <data name="FilterExcelFiles" xml:space="preserve">
+    <value>Excel 文件|*.xlsx</value>
+  </data>
+  <data name="FilterExcelAllFiles" xml:space="preserve">
+    <value>Excel 文件|*.xlsx;*.xls|所有文件|*.*</value>
+  </data>
+  <data name="FilterGlossaryFiles" xml:space="preserve">
+    <value>术语库文件|*.json;*.xlsx|JSON 文件|*.json|Excel 文件|*.xlsx</value>
+  </data>
+  <data name="FilterDllFiles" xml:space="preserve">
+    <value>DLL 文件|*.dll|所有文件|*.*</value>
+  </data>
+  <data name="FilterAutoCadExe" xml:space="preserve">
+    <value>AutoCAD|acad.exe|所有文件|*.*</value>
+  </data>
+  <data name="DialogTitleSelectDwg" xml:space="preserve">
+    <value>选择 DWG/DXF 文件</value>
+  </data>
+  <data name="DialogTitleSelectCadFile" xml:space="preserve">
+    <value>选择原始 CAD 文件</value>
+  </data>
+  <data name="DialogTitleSaveExcel" xml:space="preserve">
+    <value>保存翻译 Excel 校对表</value>
+  </data>
+  <data name="DialogTitleSelectExcel" xml:space="preserve">
+    <value>选择翻译校对后的 Excel</value>
+  </data>
+  <data name="DialogTitleSaveDwg" xml:space="preserve">
+    <value>保存翻译后的 {0}</value>
+  </data>
+  <data name="DialogTitleImportGlossary" xml:space="preserve">
+    <value>导入术语库</value>
+  </data>
+  <data name="SettingsLogSection" xml:space="preserve">
+    <value>日志设置</value>
+  </data>
+  <data name="SettingsLogLevel" xml:space="preserve">
+    <value>日志级别:</value>
+  </data>
+  <data name="SettingsLogLevelNote" xml:space="preserve">
+    <value>(降低级别可减少日志量，需重启应用)</value>
+  </data>
+  <data name="SettingsLanguageSection" xml:space="preserve">
+    <value>界面语言</value>
+  </data>
+  <data name="MsgClearConfirmTitle" xml:space="preserve">
+    <value>确认清空</value>
+  </data>
+  <data name="MsgClearConfirmBody" xml:space="preserve">
+    <value>确定要清空所有 {0} 条数据吗？
+
+此操作不可撤销。</value>
+  </data>
+  <data name="OperationImporting" xml:space="preserve">
+    <value>导入中</value>
+  </data>
+  <data name="OperationTranslating" xml:space="preserve">
+    <value>翻译中</value>
+  </data>
+  <data name="OperationExportExcel" xml:space="preserve">
+    <value>导出 Excel</value>
+  </data>
+  <data name="OperationImportExcel" xml:space="preserve">
+    <value>导入 Excel</value>
+  </data>
+  <data name="OperationExporting" xml:space="preserve">
+    <value>导出中</value>
+  </data>
+  <data name="ExportModeAutoCadAvailable" xml:space="preserve">
+    <value>状态：AutoCAD 正在运行，可用</value>
+  </data>
+  <data name="ExportModeAutoCadUnavailable" xml:space="preserve">
+    <value>状态：未检测到 AutoCAD，不可用</value>
+  </data>
+  <data name="GlossarySaveFailed" xml:space="preserve">
+    <value>保存术语库失败。请检查文件权限或磁盘空间。</value>
+  </data>
+  <data name="EmptyText" xml:space="preserve">
+    <value>[空文本]</value>
+  </data>
+  <data name="StatusSettingsSaved" xml:space="preserve">
+    <value>设置已保存</value>
+  </data>
+  <data name="StatusApiReset" xml:space="preserve">
+    <value>API 设置已更新 — HTTP 客户端已重置</value>
+  </data>
+  <data name="ProgressCancelling" xml:space="preserve">
+    <value> (正在取消)</value>
+  </data>
+  <data name="GlossaryManagerTitleSuffix" xml:space="preserve">
+    <value>术语库管理 — {0}</value>
+  </data>
+  <data name="ConnectionFailedNetwork" xml:space="preserve">
+    <value>无法连接到服务器，请检查地址和网络</value>
+  </data>
+  <data name="ConnectionFailedFormat" xml:space="preserve">
+    <value>API 地址格式不正确</value>
+  </data>
+  <data name="ConnectionFailedGeneric" xml:space="preserve">
+    <value>请检查配置和网络连接</value>
+  </data>
+  <data name="ExcelImportFormatError" xml:space="preserve">
+    <value>导入 Excel 失败。
+
+请确认文件格式正确且包含 Handle 列。
+详情请查看日志文件。</value>
+  </data>
+  <data name="ExcelExportError" xml:space="preserve">
+    <value>导出 Excel 失败。
+
+详情请查看日志文件。</value>
+  </data>
+  <data name="MsgTitleConfirm" xml:space="preserve">
+    <value>确认</value>
+  </data>
+  <data name="MsgDirectionSwitchConfirm" xml:space="preserve">
+    <value>确认切换语言方向？当前 {0} 条已翻译的译文将被重置为待翻译状态。</value>
+  </data>
+  <data name="StatusImportPartialFail" xml:space="preserve">
+    <value>已导入 {0} 个文本实体，{1} 个文件读取失败 — 请查看日志了解详情</value>
+  </data>
+  <data name="ProgressAutoCadPreparing" xml:space="preserve">
+    <value>正在准备回写配置...</value>
+  </data>
+  <data name="ProgressAutoCadConnecting" xml:space="preserve">
+    <value>正在连接 AutoCAD...</value>
+  </data>
+  <data name="ProgressAutoCadPreparingFiles" xml:space="preserve">
+    <value>正在准备回写文件...</value>
+  </data>
+  <data name="ProgressAutoCadSendingCommand" xml:space="preserve">
+    <value>正在发送回写命令至 AutoCAD...</value>
+  </data>
+  <data name="ProgressAutoCadWaiting" xml:space="preserve">
+    <value>等待 AutoCAD 完成回写...</value>
+  </data>
+  <data name="ProgressAutoCadCompleted" xml:space="preserve">
+    <value>AutoCAD 回写完成</value>
+  </data>
+</root>

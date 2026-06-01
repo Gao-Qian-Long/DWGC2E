@@ -1,3 +1,4 @@
+using DwgTranslator.Core.Resources;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -24,14 +25,14 @@ public partial class ExportModeDialog : Window
     {
         if (available)
         {
-            AutoCadStatusText.Text = "状态：AutoCAD 正在运行，可用";
+            AutoCadStatusText.Text = Strings.Get("ExportModeAutoCadAvailable");
             AutoCadStatusText.Foreground = Brushes.Green;
             AutoCadCard.IsEnabled = true;
             AutoCadCard.Opacity = 1.0;
         }
         else
         {
-            AutoCadStatusText.Text = "状态：未检测到 AutoCAD，不可用";
+            AutoCadStatusText.Text = Strings.Get("ExportModeAutoCadUnavailable");
             AutoCadStatusText.Foreground = Brushes.Red;
             AutoCadCard.IsEnabled = false;
             AutoCadCard.Opacity = 0.5;

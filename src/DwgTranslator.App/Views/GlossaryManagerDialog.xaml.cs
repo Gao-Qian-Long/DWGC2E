@@ -1,4 +1,5 @@
 using DwgTranslator.Core.Models;
+using DwgTranslator.Core.Resources;
 using DwgTranslator.Core.Services;
 using System.Collections.ObjectModel;
 using System.IO;
@@ -31,7 +32,7 @@ public partial class GlossaryManagerDialog : Window
 
         _glossaryService = glossaryService;
         _titleSuffix = titleSuffix;
-        TitleText.Text = $"术语库管理 — {titleSuffix}";
+        TitleText.Text = Strings.Get("GlossaryManagerTitleSuffix", titleSuffix);
 
         // Clone entries for editing so changes are not applied until Save
         _editableEntries = new ObservableCollection<GlossaryEntry>();
@@ -76,7 +77,8 @@ public partial class GlossaryManagerDialog : Window
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"保存术语库失败: {ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+            System.Diagnostics.Debug.WriteLine($"Failed to save glossary: {ex}");
+            MessageBox.Show(Strings.Get("GlossarySaveFailed"), Strings.Get("MsgTitleError"), MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 

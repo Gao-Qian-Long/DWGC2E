@@ -21,5 +21,6 @@ public interface IAutoCadInteropService
         string outputFilePath,
         List<TextEntity> entities,
         bool cnToEn,
-        AppConfig config);
+        AppConfig config,
+        IProgress<string>? progress = null);
 }

@@ -28,7 +28,7 @@ public static class LayoutOptimizer
         string translatedText,
         Core.Models.TextEntity ourEntity,
         Extents3d? frame,
-        Transaction tr)
+        Transaction? tr)
     {
         double originalHeight = ourEntity.OriginalHeight > 0 ? ourEntity.OriginalHeight : mtext.TextHeight;
         double originalWidth = ourEntity.OriginalWidth;

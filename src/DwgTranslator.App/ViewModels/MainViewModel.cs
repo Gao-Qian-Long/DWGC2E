@@ -1,6 +1,8 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using DwgTranslator.Core.Logging;
 using DwgTranslator.Core.Models;
+using DwgTranslator.Core.Resources;
 using DwgTranslator.Core.Services;
 using DwgTranslator.Core.Translation;
 using Microsoft.Extensions.DependencyInjection;
@@ -43,10 +45,11 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private string? _settingsPath;
     private CancellationTokenSource? _cts;
     private CancellationTokenSource? _exportCts;
+    private LogViewModel? _logViewModel;
 
     #region Bindable Properties
 
-    [ObservableProperty] private string _statusMessage = "就绪";
+    [ObservableProperty] private string _statusMessage = Strings.Get("StatusReady");
     [ObservableProperty] private double _progressValue;
     [ObservableProperty] private bool _isProcessing;
     [ObservableProperty] private string _selectedFilePath = string.Empty;
@@ -55,16 +58,25 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty] private int _failedCount;
     [ObservableProperty] private int _glossaryHitCount;
     [ObservableProperty] private int _cacheHitCount;
-    [ObservableProperty] private string _filterStatusText = "全部";
+    [ObservableProperty] private string _filterStatusText = Strings.Get("FilterAll");
     [ObservableProperty] private string _searchText = string.Empty;
     [ObservableProperty] private int _visibleCount;
     [ObservableProperty] private bool _isTopmost;
+
+    /// <summary>Descriptive text for the current long-running operation (e.g. "翻译中", "导出中").</summary>
+    [ObservableProperty] private string _operationLabel = string.Empty;
+
+    /// <summary>Whether the progress bar should show indeterminate animation (for operations without measurable progress).</summary>
+    [ObservableProperty] private bool _isIndeterminate;
+
+    /// <summary>Whether cancellation has been requested for the current operation.</summary>
+    [ObservableProperty] private bool _isCancellationRequested;
 
     /// <summary>Whether current direction is Chinese→English (true) or English→Chinese (false).</summary>
     [ObservableProperty] private bool _isCnToEn = true;
 
     /// <summary>Language direction display text.</summary>
-    [ObservableProperty] private string _languageDirection = "中文 → 英文";
+    [ObservableProperty] private string _languageDirection = Strings.Get("LangCnToEn");
 
     /// <summary>Current source language code.</summary>
     [ObservableProperty] private string _currentSourceLang = "ZH";
@@ -73,18 +85,28 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty] private string _currentTargetLang = "EN";
 
     /// <summary>Glossary entries for display/editing.</summary>
-    [ObservableProperty] private string _glossaryStatsText = "术语库: 0 条";
+    [ObservableProperty] private string _glossaryStatsText = Strings.Get("StatsGlossaryCount", 0);
 
     /// <summary>License status display text.</summary>
-    [ObservableProperty] private string _licenseStatusText = "未激活";
+    [ObservableProperty] private string _licenseStatusText = Strings.Get("LicenseNotActivated");
 
     #endregion
+
+    /// <summary>
+    /// ViewModel for the embedded log viewer panel.
+    /// </summary>
+    public LogViewModel LogViewModel => _logViewModel ??= new LogViewModel(
+        App.Services?.GetService<ILogStore>() ?? App.LogStore ?? new InMemoryLogStore());
 
     public ObservableCollection<TextEntity> Entities { get; } = new();
     public ObservableCollection<TextEntity> FilteredEntities { get; } = new();
     public ObservableCollection<GlossaryEntry> GlossaryEntries { get; } = new();
 
-    public string[] FilterOptions { get; } = { "全部", "待翻译", "已翻译", "审阅完成", "翻译失败", "术语命中", "已跳过" };
+    public string[] FilterOptions { get; } = {
+        Strings.Get("FilterAll"), Strings.Get("FilterPending"), Strings.Get("FilterTranslated"),
+        Strings.Get("FilterReviewed"), Strings.Get("FilterFailed"), Strings.Get("FilterGlossaryHit"),
+        Strings.Get("FilterSkipped")
+    };
 
     public MainViewModel()
         : this(
@@ -142,6 +164,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
                 _config = JsonSerializer.Deserialize<AppConfig>(json) ?? new AppConfig();
             }
 
+            // Decrypt API key if stored with DPAPI protection
+            _config.DeepSeekApiKey = AppConfig.DecryptApiKey(_config.DeepSeekApiKey);
+
             // Resolve paths
             if (!Path.IsPathRooted(_config.ExportDirectory))
                 _config.ExportDirectory = Path.Combine(App.AppDataDir, _config.ExportDirectory);
@@ -166,11 +191,12 @@ public partial class MainViewModel : ObservableObject, IDisposable
             // Apply initial language direction from config
             ApplyLanguageDirection();
 
-            StatusMessage = $"就绪 — 术语库: {GlossaryEntries.Count} 条";
+            StatusMessage = Strings.Get("StatusReadyWithGlossary", GlossaryEntries.Count);
         }
         catch (Exception ex)
         {
-            StatusMessage = $"配置加载错误: {ex.Message}";
+            Log.Error(ex, "Config load error");
+            StatusMessage = Strings.Get("StatusConfigLoadFailed");
         }
     }
 
@@ -179,14 +205,14 @@ public partial class MainViewModel : ObservableObject, IDisposable
         if (_config.SourceLanguage == "ZH" && _config.TargetLanguage == "EN")
         {
             IsCnToEn = true;
-            LanguageDirection = "中文 → 英文";
+            LanguageDirection = Strings.Get("LangCnToEn");
             CurrentSourceLang = "ZH";
             CurrentTargetLang = "EN";
         }
         else
         {
             IsCnToEn = false;
-            LanguageDirection = "英文 → 中文";
+            LanguageDirection = Strings.Get("LangEnToCn");
             CurrentSourceLang = "EN";
             CurrentTargetLang = "ZH";
         }
@@ -205,7 +231,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         foreach (var entry in _glossaryService.GetAllEntries())
             GlossaryEntries.Add(entry);
 
-        GlossaryStatsText = $"术语库: {GlossaryEntries.Count} 条";
+        GlossaryStatsText = Strings.Get("StatsGlossaryCount", GlossaryEntries.Count);
     }
 
     private string ResolveGlossaryPath()
@@ -235,7 +261,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
             Application.Current.MainWindow.Topmost = !Application.Current.MainWindow.Topmost;
             IsTopmost = Application.Current.MainWindow.Topmost;
         }
-        StatusMessage = IsTopmost ? "窗口已置顶 📍" : "窗口取消置顶";
+        StatusMessage = IsTopmost ? Strings.Get("StatusTopmostOn") : Strings.Get("StatusTopmostOff");
     }
 
     /// <summary>
@@ -244,11 +270,28 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void ToggleLanguageDirection()
     {
+        if (IsProcessing) return;
+
+        // Confirm before switching if there are translated items that will be reset
+        var translatedCount = Entities.Count(e =>
+            e.Status == TranslationStatus.Translated ||
+            e.Status == TranslationStatus.Reviewed ||
+            e.Status == TranslationStatus.WritebackSuccess);
+        if (translatedCount > 0)
+        {
+            var confirmResult = MessageBox.Show(
+                Strings.Get("MsgDirectionSwitchConfirm", translatedCount),
+                Strings.Get("MsgTitleConfirm"),
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question);
+            if (confirmResult != MessageBoxResult.Yes) return;
+        }
+
         IsCnToEn = !IsCnToEn;
 
         if (IsCnToEn)
         {
-            LanguageDirection = "中文 → 英文";
+            LanguageDirection = Strings.Get("LangCnToEn");
             CurrentSourceLang = "ZH";
             CurrentTargetLang = "EN";
             _config.SourceLanguage = "ZH";
@@ -256,7 +299,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         }
         else
         {
-            LanguageDirection = "英文 → 中文";
+            LanguageDirection = Strings.Get("LangEnToCn");
             CurrentSourceLang = "EN";
             CurrentTargetLang = "ZH";
             _config.SourceLanguage = "EN";
@@ -281,7 +324,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
         ApplyFilter();
         UpdateStatistics();
-        StatusMessage = $"语言方向已切换为: {LanguageDirection}。请重新点击「翻译」。";
+        StatusMessage = Strings.Get("StatusDirectionSwitched", LanguageDirection);
     }
 
     #endregion
@@ -294,7 +337,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void OpenGlossaryManager()
     {
-        var titleSuffix = $"{LanguageDirection} ({GlossaryEntries.Count} 条)";
+        var titleSuffix = $"{LanguageDirection} ({GlossaryEntries.Count})";
         var dialog = new Views.GlossaryManagerDialog(_glossaryService, GlossaryEntries, titleSuffix)
         {
             Owner = Application.Current.MainWindow
@@ -303,7 +346,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         if (dialog.ShowDialog() == true && dialog.SavedEntries != null)
         {
             RefreshGlossaryDataFromList(dialog.SavedEntries);
-            StatusMessage = $"术语库已保存: {dialog.SavedEntries.Count} 条";
+            StatusMessage = Strings.Get("StatusGlossarySaved", dialog.SavedEntries.Count);
         }
     }
 
@@ -312,7 +355,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         GlossaryEntries.Clear();
         foreach (var entry in entries)
             GlossaryEntries.Add(entry);
-        GlossaryStatsText = $"术语库: {GlossaryEntries.Count} 条";
+        GlossaryStatsText = Strings.Get("StatsGlossaryCount", GlossaryEntries.Count);
     }
 
     /// <summary>
@@ -321,10 +364,12 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private async Task ImportGlossaryAsync()
     {
+        if (IsProcessing) return;
+
         var dialog = new OpenFileDialog
         {
-            Filter = "术语库文件|*.json;*.xlsx|JSON 文件|*.json|Excel 文件|*.xlsx",
-            Title = "导入术语库"
+            Filter = Strings.Get("FilterGlossaryFiles"),
+            Title = Strings.Get("DialogTitleImportGlossary")
         };
         if (dialog.ShowDialog() != true) return;
 
@@ -339,20 +384,20 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
         await _glossaryService.LoadGlossaryAsync(targetPath);
         RefreshGlossaryData();
-        StatusMessage = $"术语库已导入: {GlossaryEntries.Count} 条";
+        StatusMessage = Strings.Get("StatusGlossaryImported", GlossaryEntries.Count);
     }
 
     #endregion
 
-    #region DWG Import
+    #region DWG/DXF Import
 
     [RelayCommand]
     private async Task ImportDwgAsync()
     {
         var dialog = new OpenFileDialog
         {
-            Filter = "DWG 文件|*.dwg|所有文件|*.*",
-            Title = "选择 DWG 文件",
+            Filter = Strings.Get("FilterCadFiles"),
+            Title = Strings.Get("DialogTitleSelectDwg"),
             Multiselect = true
         };
         if (dialog.ShowDialog() != true) return;
@@ -361,10 +406,13 @@ public partial class MainViewModel : ObservableObject, IDisposable
         if (filePaths.Length == 0) return;
 
         IsProcessing = true;
-        StatusMessage = $"正在读取 {filePaths.Length} 个 DWG 文件...";
+        IsIndeterminate = true;
+        OperationLabel = Strings.Get("OperationImporting");
+        StatusMessage = Strings.Get("StatusReadingCad", filePaths.Length);
 
         try
         {
+            var importErrors = new List<string>();
             var allEntities = await Task.Run(() =>
             {
                 var result = new List<TextEntity>();
@@ -372,13 +420,25 @@ public partial class MainViewModel : ObservableObject, IDisposable
                 {
                     try
                     {
-                        var entities = _dwgReaderService.ExtractFromFile(path);
+                        // Use appropriate reader based on file extension
+                        var extension = Path.GetExtension(path).ToLowerInvariant();
+                        List<TextEntity> entities;
+                        if (extension == ".dxf")
+                        {
+                            var dxfReader = App.Services?.GetService<IDxfReaderService>();
+                            entities = dxfReader?.ExtractFromFile(path) ?? new List<TextEntity>();
+                        }
+                        else
+                        {
+                            entities = _dwgReaderService.ExtractFromFile(path);
+                        }
                         foreach (var e in entities)
                             e.Notes = $"Source: {Path.GetFileNameWithoutExtension(path)}";
                         result.AddRange(entities);
                     }
                     catch (Exception ex)
                     {
+                        importErrors.Add($"{Path.GetFileName(path)}: {ex.Message}");
                         System.Diagnostics.Debug.WriteLine($"Failed to read {path}: {ex.Message}");
                     }
                 }
@@ -392,19 +452,35 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
             ApplyFilter();
             UpdateStatistics();
-            StatusMessage = $"已导入 {allEntities.Count} 个文本实体 (来自 {filePaths.Length} 个文件)";
+
+            if (importErrors.Count > 0 && allEntities.Count > 0)
+            {
+                StatusMessage = Strings.Get("StatusImportPartialFail", allEntities.Count, importErrors.Count);
+                Log.Warning("Import errors ({Count}): {Errors}", importErrors.Count, string.Join("; ", importErrors));
+            }
+            else if (importErrors.Count > 0 && allEntities.Count == 0)
+            {
+                StatusMessage = Strings.Get("StatusCadImportFailed");
+                MessageBox.Show(Strings.Get("MsgCadImportError"), Strings.Get("MsgTitleError"), MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            else
+            {
+                StatusMessage = Strings.Get("StatusImported", allEntities.Count, filePaths.Length);
+            }
         }
         catch (Exception ex)
         {
-            StatusMessage = $"DWG 导入错误: {ex.Message}";
-            MessageBox.Show($"导入 DWG 失败: {ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+            Log.Error(ex, "CAD import failed");
+            StatusMessage = Strings.Get("StatusCadImportFailed");
+            MessageBox.Show(Strings.Get("MsgCadImportError"), Strings.Get("MsgTitleError"), MessageBoxButton.OK, MessageBoxImage.Error);
         }
-        finally { IsProcessing = false; }
+        finally
+        {
+            IsProcessing = false;
+            IsIndeterminate = false;
+            OperationLabel = string.Empty;
+        }
     }
-
-    #endregion
-
-    #region Translation
 
     [RelayCommand]
     private async Task TranslateAsync()
@@ -413,7 +489,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
         if (!_licenseService.CanExecuteOperation())
         {
-            StatusMessage = "授权无效或体验次数已用完，请先激活";
+            StatusMessage = Strings.Get("StatusLicenseRequired");
             PromptForActivation();
             return;
         }
@@ -424,18 +500,20 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
         if (entitiesToTranslate.Count == 0)
         {
-            StatusMessage = "没有待翻译的文本。请先导入 DWG 或切换语言方向。";
+            StatusMessage = Strings.Get("StatusNoPendingText");
             return;
         }
 
         if (string.IsNullOrEmpty(_config.DeepSeekApiKey))
         {
-            StatusMessage = "请先配置 API Key";
-            MessageBox.Show("请在设置中配置 DeepSeek API Key", "配置错误", MessageBoxButton.OK, MessageBoxImage.Warning);
+            StatusMessage = Strings.Get("StatusConfigureApiKey");
+            MessageBox.Show(Strings.Get("MsgNoApiKey"), Strings.Get("MsgTitleConfigError"), MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
         IsProcessing = true;
+        OperationLabel = Strings.Get("OperationTranslating");
+        IsCancellationRequested = false;
         _cts = new CancellationTokenSource();
         TranslatedCount = 0;
         FailedCount = 0;
@@ -444,21 +522,18 @@ public partial class MainViewModel : ObservableObject, IDisposable
         var totalCount = entitiesToTranslate.Count;
         var completedCount = 0;
 
-        StatusMessage = $"🔄 翻译中 (智能并发) — 0/{totalCount} ...";
+        StatusMessage = Strings.Get("StatusTranslating", 0, totalCount);
 
         try
         {
             var systemPrompt = LoadSystemPrompt();
             EnsureDeepSeekClient();
-            var translationService = new TranslationService(
-                _glossaryService, _formatCodeParser, _deepSeekClient!, systemPrompt,
-                _config.BatchSize, _config.MaxRetryCount, _consistencyService, maxConcurrency: 5);
 
             // Use Progress<T> to receive each translation result as it completes
             var progress = new Progress<TranslationPair>(pair =>
             {
-                // Marshal to UI thread
-                Application.Current.Dispatcher.Invoke(() =>
+                // Marshal to UI thread via BeginInvoke (non-blocking) to avoid UI freeze
+                Application.Current.Dispatcher.BeginInvoke(() =>
                 {
                     var entity = Entities.FirstOrDefault(e => e.Handle == pair.Handle);
                     if (entity == null)
@@ -487,63 +562,81 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
                     CacheHitCount = _consistencyService.CacheSize;
                     ProgressValue = (double)completedCount / totalCount * 100;
-                    StatusMessage = $"🔄 翻译中 (5 并发) — {completedCount}/{totalCount} ...";
+                    StatusMessage = Strings.Get("StatusTranslating", completedCount, totalCount);
                 });
             });
 
-            await translationService.TranslateBatchWithProgressAsync(
-                entitiesToTranslate, CurrentSourceLang, CurrentTargetLang, progress, _cts.Token);
+            // Run translation service on a background thread to keep UI responsive
+            await Task.Run(async () =>
+            {
+                var translationService = new TranslationService(
+                    _glossaryService, _formatCodeParser, _deepSeekClient!, systemPrompt,
+                    _config.BatchSize, _config.MaxRetryCount, _consistencyService, maxConcurrency: 5);
+
+                await translationService.TranslateBatchWithProgressAsync(
+                    entitiesToTranslate, CurrentSourceLang, CurrentTargetLang, progress, _cts.Token);
+            }, _cts.Token);
 
             ApplyFilter();
             UpdateStatistics();
-            StatusMessage = $"✅ 翻译完成: {TranslatedCount} 成功, {FailedCount} 失败 | {LanguageDirection} | 速度约 5 倍于串行";
+            StatusMessage = Strings.Get("StatusTranslateComplete", TranslatedCount, FailedCount, LanguageDirection);
         }
         catch (TaskCanceledException)
         {
-            StatusMessage = "翻译超时 — 请检查网络连接或 API Key";
-            MessageBox.Show("翻译请求超时（5 分钟）。\n\n可能原因:\n• 网络连接不稳定\n• API Key 无效\n• DeepSeek 服务暂时不可用\n\n请打开「设置」→「测试连接」验证 API。", "请求超时", MessageBoxButton.OK, MessageBoxImage.Warning);
+            StatusMessage = Strings.Get("StatusTranslateTimeout");
+            MessageBox.Show(Strings.Get("MsgTranslateTimeout"), Strings.Get("MsgTitleTimeout"), MessageBoxButton.OK, MessageBoxImage.Warning);
         }
         catch (HttpRequestException ex)
         {
-            StatusMessage = $"API 错误: {ex.Message}";
-            MessageBox.Show($"API 请求失败:\n\n{ex.Message}\n\n请检查:\n• 设置中的 API Key 是否正确\n• 网络是否可以访问 api.deepseek.com", "API 错误", MessageBoxButton.OK, MessageBoxImage.Error);
+            // Log full details, show sanitized message to user
+            Log.Error(ex, "Translation API error");
+            StatusMessage = Strings.Get("StatusApiFailed");
+            MessageBox.Show(Strings.Get("MsgApiError"), Strings.Get("MsgTitleApiError"), MessageBoxButton.OK, MessageBoxImage.Error);
         }
         catch (OperationCanceledException)
         {
-            StatusMessage = "翻译已取消";
+            StatusMessage = Strings.Get("StatusTranslateCancelled");
         }
         catch (Exception ex)
         {
-            StatusMessage = $"翻译错误: {ex.Message}";
-            MessageBox.Show($"翻译失败: {ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+            Log.Error(ex, "Translation error");
+            StatusMessage = Strings.Get("StatusTranslateFailed");
+            MessageBox.Show(Strings.Get("MsgTranslateError"), Strings.Get("MsgTitleError"), MessageBoxButton.OK, MessageBoxImage.Error);
         }
         finally
         {
             _cts?.Dispose();
             _cts = null;
             IsProcessing = false;
+            IsIndeterminate = false;
+            OperationLabel = string.Empty;
+            IsCancellationRequested = false;
         }
     }
 
     [RelayCommand]
     private void CancelTranslate()
     {
+        IsCancellationRequested = true;
         _cts?.Cancel();
-        StatusMessage = "正在停止翻译...";
+        StatusMessage = Strings.Get("StatusStoppingTranslation");
     }
 
     [RelayCommand]
     private void CancelExport()
     {
+        IsCancellationRequested = true;
         _exportCts?.Cancel();
-        StatusMessage = "正在取消导出...";
+        StatusMessage = Strings.Get("StatusCancellingExport");
     }
 
     [RelayCommand]
     private async Task RetryFailedAsync()
     {
+        if (IsProcessing) return;
+
         var failedEntities = Entities.Where(e => e.Status == TranslationStatus.TranslationFailed).ToList();
-        if (failedEntities.Count == 0) { StatusMessage = "没有失败的翻译需要重试"; return; }
+        if (failedEntities.Count == 0) { StatusMessage = Strings.Get("StatusNoFailedRetry"); return; }
 
         foreach (var e in failedEntities) { e.Status = TranslationStatus.Pending; e.TranslatedText = string.Empty; }
         UpdateStatistics();
@@ -557,42 +650,51 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private async Task ExportExcelAsync()
     {
-        if (Entities.Count == 0) { StatusMessage = "没有可导出的数据"; return; }
+        if (IsProcessing) return;
+        if (Entities.Count == 0) { StatusMessage = Strings.Get("StatusNoExportData"); return; }
 
         var dialog = new SaveFileDialog
         {
-            Filter = "Excel 文件|*.xlsx",
-            Title = "保存翻译 Excel 校对表",
+            Filter = Strings.Get("FilterExcelFiles"),
+            Title = Strings.Get("DialogTitleSaveExcel"),
             FileName = $"translations_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx"
         };
         if (dialog.ShowDialog() != true) return;
 
         IsProcessing = true;
-        StatusMessage = "正在导出 Excel...";
+        IsIndeterminate = true;
+        OperationLabel = Strings.Get("OperationExportExcel");
+        StatusMessage = Strings.Get("StatusExportingExcel");
         try
         {
             await _excelService.ExportToExcelAsync(Entities.ToList(), dialog.FileName);
-            StatusMessage = $"已导出 {Entities.Count} 条到 {Path.GetFileName(dialog.FileName)} — 可在 Excel 中校对后重新导入";
+            StatusMessage = Strings.Get("StatusExcelExported", Entities.Count, Path.GetFileName(dialog.FileName));
         }
         catch (Exception ex)
         {
-            StatusMessage = $"导出错误: {ex.Message}";
+            Log.Error(ex, "Excel export failed");
+            StatusMessage = Strings.Get("StatusExcelExportFailed");
+            MessageBox.Show(Strings.Get("ExcelExportError"), Strings.Get("MsgTitleError"), MessageBoxButton.OK, MessageBoxImage.Error);
         }
-        finally { IsProcessing = false; }
+        finally { IsProcessing = false; IsIndeterminate = false; OperationLabel = string.Empty; }
     }
 
     [RelayCommand]
     private async Task ImportExcelAsync()
     {
+        if (IsProcessing) return;
+
         var dialog = new OpenFileDialog
         {
-            Filter = "Excel 文件|*.xlsx;*.xls|所有文件|*.*",
-            Title = "选择翻译校对后的 Excel"
+            Filter = Strings.Get("FilterExcelAllFiles"),
+            Title = Strings.Get("DialogTitleSelectExcel")
         };
         if (dialog.ShowDialog() != true) return;
 
         IsProcessing = true;
-        StatusMessage = "正在从 Excel 导入...";
+        IsIndeterminate = true;
+        OperationLabel = Strings.Get("OperationImportExcel");
+        StatusMessage = Strings.Get("StatusImportingExcel");
         try
         {
             var importedEntities = await _excelService.ImportFromExcelAsync(dialog.FileName);
@@ -611,30 +713,34 @@ public partial class MainViewModel : ObservableObject, IDisposable
             }
             ApplyFilter();
             UpdateStatistics();
-            StatusMessage = $"已从 Excel 导入并更新 {updatedCount} 条";
+            StatusMessage = Strings.Get("StatusExcelImported", updatedCount);
         }
         catch (Exception ex)
         {
-            StatusMessage = $"导入错误: {ex.Message}";
+            Log.Error(ex, "Excel import failed");
+            StatusMessage = Strings.Get("StatusExcelImportFailed");
+            MessageBox.Show(Strings.Get("ExcelImportFormatError"), Strings.Get("MsgTitleError"), MessageBoxButton.OK, MessageBoxImage.Error);
         }
-        finally { IsProcessing = false; }
+        finally { IsProcessing = false; IsIndeterminate = false; OperationLabel = string.Empty; }
     }
 
     #endregion
 
-    #region DWG Export (核心功能)
+    #region DWG/DXF Export (核心功能)
 
     /// <summary>
-    /// Export translated DWG file.
+    /// Export translated DWG/DXF file.
     /// If AutoCAD is available, offers high-precision writeback via COM.
     /// Otherwise falls back to ACadSharp offline writeback.
     /// </summary>
     [RelayCommand]
     private async Task ExportDwgAsync()
     {
+        if (IsProcessing) return;
+
         if (!_licenseService.CanExecuteOperation())
         {
-            StatusMessage = "授权无效或体验次数已用完，请先激活";
+            StatusMessage = Strings.Get("StatusLicenseRequired");
             PromptForActivation();
             return;
         }
@@ -645,9 +751,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
         if (entitiesToWrite.Count == 0)
         {
-            StatusMessage = "没有已翻译/已审阅的文本可导出 DWG。请先翻译并审核。";
-            MessageBox.Show("请先完成翻译或手动审核后再导出 DWG。\n\n提示：在译文列双击可直接编辑翻译。",
-                "无数据", MessageBoxButton.OK, MessageBoxImage.Warning);
+            StatusMessage = Strings.Get("StatusNoTranslatedText");
+            MessageBox.Show(Strings.Get("MsgNoTranslatedData"),
+                Strings.Get("MsgTitleNoData"), MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
@@ -656,24 +762,35 @@ public partial class MainViewModel : ObservableObject, IDisposable
             sourceFilePath = _lastSourceFilePath;
         else
         {
-            var dialog = new OpenFileDialog { Filter = "DWG 文件|*.dwg", Title = "选择原始 DWG 文件" };
+            var dialog = new OpenFileDialog
+            {
+                Filter = Strings.Get("FilterCadFiles"),
+                Title = Strings.Get("DialogTitleSelectCadFile")
+            };
             if (dialog.ShowDialog() == true) sourceFilePath = dialog.FileName;
         }
 
         if (string.IsNullOrEmpty(sourceFilePath) || !File.Exists(sourceFilePath))
-        { StatusMessage = "请先选择原始 DWG 文件"; return; }
+        { StatusMessage = Strings.Get("StatusSelectCadFile"); return; }
+
+        // Determine output format based on source file
+        var sourceExtension = Path.GetExtension(sourceFilePath).ToLowerInvariant();
+        var isDxfSource = sourceExtension == ".dxf";
 
         var dialog2 = new SaveFileDialog
         {
-            Filter = "DWG 文件|*.dwg",
-            Title = "保存翻译后的 DWG",
-            FileName = Path.GetFileNameWithoutExtension(sourceFilePath) + "_translated.dwg"
+            Filter = isDxfSource ? Strings.Get("FilterDxfFiles") : Strings.Get("FilterDwgFiles"),
+            Title = Strings.Get("DialogTitleSaveDwg", isDxfSource ? "DXF" : "DWG"),
+            FileName = Path.GetFileNameWithoutExtension(sourceFilePath) + "_translated" + sourceExtension
         };
         if (dialog2.ShowDialog() != true) return;
 
         IsProcessing = true;
+        IsIndeterminate = true;
+        OperationLabel = Strings.Get("OperationExporting");
+        IsCancellationRequested = false;
         _exportCts = new CancellationTokenSource();
-        StatusMessage = "正在导出翻译后的 DWG...";
+        StatusMessage = Strings.Get("StatusExportingDwg");
         ProgressValue = 0;
 
         try
@@ -689,7 +806,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
             if (modeDialog.ShowDialog() != true)
             {
-                StatusMessage = "已取消导出";
+                StatusMessage = Strings.Get("StatusExportCancelled");
                 return;
             }
 
@@ -699,17 +816,14 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
                 // Pre-alert user about security dialog
                 MessageBox.Show(
-                    "即将通过 AutoCAD COM 进行精确回写。\n\n" +
-                    "重要提示：\n" +
-                    "AutoCAD 可能会弹出「是否加载来自非信任路径的程序集」安全对话框。\n" +
-                    "该对话框可能在 AutoCAD 窗口后面，请切换到 AutoCAD 窗口查看。\n\n" +
-                    "请点击「始终加载」或「加载」以允许插件运行。\n" +
-                    "如果不点击，回写将无法完成。",
-                    "AutoCAD 安全提示",
+                    Strings.Get("MsgAutoCadSecurity"),
+                    Strings.Get("MsgTitleAutoCadSecurity"),
                     MessageBoxButton.OK,
                     MessageBoxImage.Information);
 
-                result = await _autoCadInteropService.WritebackViaAutoCadAsync(sourceFilePath, dialog2.FileName, entitiesToWrite, IsCnToEn, _config);
+                var writebackProgress = new Progress<string>(msg => StatusMessage = msg);
+                result = await Task.Run(async () =>
+                    await _autoCadInteropService.WritebackViaAutoCadAsync(sourceFilePath, dialog2.FileName, entitiesToWrite, IsCnToEn, _config, writebackProgress));
             }
             else
             {
@@ -724,31 +838,42 @@ public partial class MainViewModel : ObservableObject, IDisposable
                 // Consume license use for successful export
                 ConsumeLicenseForExport();
 
-                string modeText = usedAcadInterop ? "AutoCAD 精确回写" : "离线回写";
-                StatusMessage = $"DWG 导出完成 ({modeText}): {result.SuccessCount} 条已替换 → {Path.GetFileName(dialog2.FileName)}";
+                string modeText = usedAcadInterop ? Strings.Get("ExportModeAutoCad") : Strings.Get("ExportModeOffline");
+                string formatText = isDxfSource ? "DXF" : "DWG";
+                StatusMessage = Strings.Get("StatusDwgExportComplete", formatText, modeText, result.SuccessCount, Path.GetFileName(dialog2.FileName));
                 MessageBox.Show(
-                    $"DWG 导出完成!\n\n模式: {modeText}\n已替换: {result.SuccessCount} 条文本\n失败: {result.FailCount} 条\n\n文件: {dialog2.FileName}",
-                    "导出成功",
+                    Strings.Get("MsgDwgExportSuccess", formatText, modeText, result.SuccessCount, result.FailCount, dialog2.FileName),
+                    Strings.Get("MsgTitleExportSuccess"),
                     MessageBoxButton.OK,
                     result.Errors.Count > 0 ? MessageBoxImage.Warning : MessageBoxImage.Information);
             }
             else
             {
                 var errorMsg = string.Join("\n", result.Errors.Take(5));
-                StatusMessage = $"DWG 导出失败: 0 条替换成功";
-                MessageBox.Show($"DWG 导出失败:\n{errorMsg}", "导出错误", MessageBoxButton.OK, MessageBoxImage.Error);
+                string formatText = isDxfSource ? "DXF" : "DWG";
+                StatusMessage = Strings.Get("StatusDwgExportFailed", formatText);
+                MessageBox.Show(Strings.Get("MsgDwgExportError", formatText, errorMsg), Strings.Get("MsgTitleExportError"), MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
         catch (OperationCanceledException)
         {
-            StatusMessage = "导出已取消";
+            StatusMessage = Strings.Get("StatusExportCancelled2");
         }
         catch (Exception ex)
         {
-            StatusMessage = $"DWG 导出失败: {ex.Message}";
-            MessageBox.Show($"导出 DWG 失败: {ex.Message}\n\n提示: ACadSharp 写入功能仍为实验性，可能产生需修复的文件。", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+            Log.Error(ex, "CAD export failed");
+            StatusMessage = Strings.Get("StatusCadExportFailed");
+            MessageBox.Show(Strings.Get("MsgCadExportError"), Strings.Get("MsgTitleError"), MessageBoxButton.OK, MessageBoxImage.Error);
         }
-        finally { IsProcessing = false; _exportCts?.Dispose(); _exportCts = null; }
+        finally
+        {
+            IsProcessing = false;
+            IsIndeterminate = false;
+            OperationLabel = string.Empty;
+            IsCancellationRequested = false;
+            _exportCts?.Dispose();
+            _exportCts = null;
+        }
     }
 
     // NOTE: AutoCAD COM interop logic has been extracted to IAutoCadInteropService / AutoCadInteropService.
@@ -761,23 +886,35 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void MarkAllReviewed()
     {
+        if (IsProcessing) return;
+
         int count = 0;
         foreach (var entity in Entities.Where(e => e.Status == TranslationStatus.Translated))
         { entity.Status = TranslationStatus.Reviewed; count++; }
         UpdateStatistics();
         ApplyFilter();
-        StatusMessage = $"已将 {count} 条标记为已审阅 — 可以导出 DWG 了";
+        StatusMessage = Strings.Get("StatusReviewed", count);
     }
 
     [RelayCommand]
     private void ClearAll()
     {
+        if (IsProcessing) return;
+        if (Entities.Count == 0) return;
+
+        var result = MessageBox.Show(
+            Strings.Get("MsgClearConfirmBody", Entities.Count),
+            Strings.Get("MsgClearConfirmTitle"),
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question);
+        if (result != MessageBoxResult.Yes) return;
+
         Entities.Clear();
         FilteredEntities.Clear();
         TotalCount = 0; TranslatedCount = 0; FailedCount = 0;
         GlossaryHitCount = 0; CacheHitCount = 0; VisibleCount = 0;
         ProgressValue = 0; _lastSourceFilePath = null;
-        StatusMessage = "已清空";
+        StatusMessage = Strings.Get("StatusCleared");
     }
 
     /// <summary>
@@ -791,7 +928,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void FilterByStatus(string? status)
     {
-        FilterStatusText = status ?? "全部";
+        FilterStatusText = status ?? Strings.Get("FilterAll");
         // ApplyFilter is already called by OnFilterStatusTextChanged
     }
 
@@ -801,18 +938,28 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private void ApplyFilter()
     {
         IEnumerable<TextEntity> filtered = Entities;
-        if (FilterStatusText != "全部")
+        var filterAll = Strings.Get("FilterAll");
+        if (FilterStatusText != filterAll)
         {
-            filtered = FilterStatusText switch
-            {
-                "待翻译" => filtered.Where(e => e.Status == TranslationStatus.Pending),
-                "已翻译" => filtered.Where(e => e.Status == TranslationStatus.Translated),
-                "审阅完成" => filtered.Where(e => e.Status == TranslationStatus.Reviewed || e.Status == TranslationStatus.WritebackSuccess),
-                "翻译失败" => filtered.Where(e => e.Status == TranslationStatus.TranslationFailed),
-                "术语命中" => filtered.Where(e => e.GlossaryHit),
-                "已跳过" => filtered.Where(e => e.Status == TranslationStatus.Skipped),
-                _ => filtered
-            };
+            var filterPending = Strings.Get("FilterPending");
+            var filterTranslated = Strings.Get("FilterTranslated");
+            var filterReviewed = Strings.Get("FilterReviewed");
+            var filterFailed = Strings.Get("FilterFailed");
+            var filterGlossaryHit = Strings.Get("FilterGlossaryHit");
+            var filterSkipped = Strings.Get("FilterSkipped");
+
+            if (FilterStatusText == filterPending)
+                filtered = filtered.Where(e => e.Status == TranslationStatus.Pending);
+            else if (FilterStatusText == filterTranslated)
+                filtered = filtered.Where(e => e.Status == TranslationStatus.Translated);
+            else if (FilterStatusText == filterReviewed)
+                filtered = filtered.Where(e => e.Status == TranslationStatus.Reviewed || e.Status == TranslationStatus.WritebackSuccess);
+            else if (FilterStatusText == filterFailed)
+                filtered = filtered.Where(e => e.Status == TranslationStatus.TranslationFailed);
+            else if (FilterStatusText == filterGlossaryHit)
+                filtered = filtered.Where(e => e.GlossaryHit);
+            else if (FilterStatusText == filterSkipped)
+                filtered = filtered.Where(e => e.Status == TranslationStatus.Skipped);
         }
         if (!string.IsNullOrWhiteSpace(SearchText))
         {
@@ -843,10 +990,22 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     #region Settings
 
+    /// <summary>
+    /// Toggle the log viewer panel visibility.
+    /// </summary>
+    [RelayCommand]
+    private void ToggleLogViewer()
+    {
+        LogViewModel.ToggleVisibilityCommand.Execute(null);
+    }
+
     [RelayCommand]
     private void Settings()
     {
-        var dialog = new Views.SettingsDialog();
+        var dialog = new Views.SettingsDialog
+        {
+            Owner = Application.Current.MainWindow
+        };
         var result = dialog.ShowDialog();
 
         // Only reload config and reset HTTP client if settings were actually saved
@@ -867,7 +1026,11 @@ public partial class MainViewModel : ObservableObject, IDisposable
                 _httpClient?.Dispose();
                 _httpClient = null;
                 _deepSeekClient = null;
-                StatusMessage = "API 设置已更新";
+                StatusMessage = Strings.Get("StatusApiReset");
+            }
+            else
+            {
+                StatusMessage = Strings.Get("StatusSettingsSaved");
             }
         }
     }
@@ -904,10 +1067,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private void PromptForActivation()
     {
         var result = MessageBox.Show(
-            "您的体验次数已用完或授权已过期。\n\n" +
-            "点击「是」打开授权管理窗口进行激活。\n" +
-            "点击「否」继续使用受限功能（仅可查看和编辑，不可导出）。",
-            "需要激活",
+            Strings.Get("MsgActivationPrompt"),
+            Strings.Get("MsgTitleActivation"),
             MessageBoxButton.YesNo,
             MessageBoxImage.Information);
 
@@ -950,6 +1111,13 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private void EnsureDeepSeekClient()
     {
         if (_deepSeekClient != null) return;
+
+        if (string.IsNullOrWhiteSpace(_config.DeepSeekBaseUrl))
+            throw new InvalidOperationException(Strings.Get("SettingsTestEnterKey"));
+
+        if (string.IsNullOrWhiteSpace(_config.DeepSeekApiKey))
+            throw new InvalidOperationException(Strings.Get("SettingsTestEnterKey"));
+
         _httpClient = new HttpClient
         {
             BaseAddress = new Uri(_config.DeepSeekBaseUrl),
@@ -961,7 +1129,12 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     public void Dispose()
     {
-        _consistencyService.FlushCache();
+        // Cancel any active operations before cleanup
+        _cts?.Cancel();
+        _exportCts?.Cancel();
+
+        _logViewModel?.Dispose();
+        _consistencyService?.FlushCache();
         _httpClient?.Dispose();
     }
 

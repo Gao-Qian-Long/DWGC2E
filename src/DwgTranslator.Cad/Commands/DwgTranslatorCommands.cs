@@ -227,6 +227,9 @@ public class DwgTranslatorCommands
         {
             _config = new AppConfig();
         }
+
+        // Decrypt API key if stored with DPAPI protection
+        _config.DeepSeekApiKey = AppConfig.DecryptApiKey(_config.DeepSeekApiKey);
     }
 
     private static string LoadSystemPrompt()

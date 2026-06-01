@@ -3,6 +3,7 @@ using ACadSharp.Blocks;
 using ACadSharp.Entities;
 using ACadSharp.IO;
 using DwgTranslator.Core.Models;
+using DwgTranslator.Core.Resources;
 using DwgTranslator.Core.Translation;
 using Serilog;
 using System.Text.RegularExpressions;
@@ -18,10 +19,10 @@ using OurTextEntity = DwgTranslator.Core.Models.TextEntity;
 namespace DwgTranslator.Core.Services;
 
 /// <summary>
-/// Reads DWG files using ACadSharp library and extracts text entities.
+/// Reads DWG and DXF files using ACadSharp library and extracts text entities.
 /// Filters out empty-text entities automatically.
 /// </summary>
-public class DwgReaderService : IDwgReaderService
+public class DwgReaderService : IDwgReaderService, IDxfReaderService
 {
     private static readonly Regex MTextFormatRegex = new(
         @"\\[A-Za-z][^;{}]*;|\\U\+[0-9A-Fa-f]{4}|\\[~%%|{}]|%%[cdpuoCDPUO]|\\[A-Za-z]",
@@ -30,10 +31,24 @@ public class DwgReaderService : IDwgReaderService
     public List<OurTextEntity> ExtractFromFile(string filePath)
     {
         if (!File.Exists(filePath))
-            throw new FileNotFoundException("DWG file not found", filePath);
+            throw new FileNotFoundException("CAD file not found", filePath);
 
-        Log.Information("Reading DWG file: {Path}", filePath);
-        var doc = DwgReader.Read(filePath);
+        Log.Information("Reading CAD file: {Path}", filePath);
+
+        // Detect file format and use appropriate reader
+        CadDocument doc;
+        var extension = Path.GetExtension(filePath).ToLowerInvariant();
+        if (extension == ".dxf")
+        {
+            bool isBinary = DxfReader.IsBinary(filePath);
+            Log.Information("DXF format: {Type}", isBinary ? "Binary" : "ASCII");
+            using var reader = new DxfReader(filePath, OnCadNotification);
+            doc = reader.Read();
+        }
+        else
+        {
+            doc = DwgReader.Read(filePath);
+        }
         var rawEntities = new List<OurTextEntity>();
 
         rawEntities.AddRange(ExtractFromBlock(doc.ModelSpace, string.Empty, 0, 10));
@@ -55,7 +70,7 @@ public class DwgReaderService : IDwgReaderService
                 // Keep in list but mark as Skipped so user can see it
                 e.Status = TranslationStatus.Skipped;
                 e.TranslatedText = string.Empty;
-                e.Notes = $"Source: {fileName} [空文本]";
+                e.Notes = $"Source: {fileName} {Strings.Get("EmptyText")}";
                 entities.Add(e);
                 skipped++;
                 continue;
@@ -77,7 +92,7 @@ public class DwgReaderService : IDwgReaderService
             try { result[filePath] = ExtractFromFile(filePath); }
             catch (Exception ex)
             {
-                Log.Error(ex, "Failed to read DWG file: {Path}", filePath);
+                Log.Error(ex, "Failed to read CAD file: {Path}", filePath);
                 result[filePath] = new List<OurTextEntity>();
             }
         }
@@ -243,5 +258,17 @@ public class DwgReaderService : IDwgReaderService
         // \P is the AutoCAD MText paragraph break
         int count = rawValue.Split("\\P", StringSplitOptions.None).Length;
         return Math.Max(1, count);
+    }
+
+    /// <summary>
+    /// Handles ACadSharp notification events during CAD file parsing.
+    /// Captures warnings and errors from the DXF/DWG reader for structured logging.
+    /// </summary>
+    private static void OnCadNotification(object sender, ACadSharp.IO.NotificationEventArgs e)
+    {
+        if (e.Exception != null)
+            Log.Warning(e.Exception, "ACadSharp [{Type}]: {Message}", e.NotificationType, e.Message);
+        else
+            Log.Debug("ACadSharp [{Type}]: {Message}", e.NotificationType, e.Message);
     }
 }

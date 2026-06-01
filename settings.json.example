@@ -1,0 +1,18 @@
+{
+  "deepSeekApiKey": "",
+  "deepSeekBaseUrl": "https://api.deepseek.com",
+  "deepSeekModel": "deepseek-chat",
+  "sourceLanguage": "ZH",
+  "targetLanguage": "EN",
+  "glossaryPath": "glossaries/mechanical_zh_en.json",
+  "batchSize": 50,
+  "maxRetryCount": 3,
+  "autoScaleThreshold": 1.5,
+  "autoScaleFactor": 0.95,
+  "exportDirectory": "exports",
+  "logDirectory": "logs",
+  "minimumLogLevel": "Debug",
+  "autoCadInstallPath": "",
+  "cadPluginPath": "",
+  "language": "zh-CN"
+}

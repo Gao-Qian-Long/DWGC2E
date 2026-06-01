@@ -1,5 +1,6 @@
 using ClosedXML.Excel;
 using DwgTranslator.Core.Models;
+using DwgTranslator.Core.Resources;
 using Serilog;
 
 namespace DwgTranslator.Core.Services;
@@ -23,11 +24,11 @@ public class ExcelService : IExcelService
 
         // Headers
         worksheet.Cell(1, 1).Value = "Handle";
-        worksheet.Cell(1, 2).Value = "原文";
-        worksheet.Cell(1, 3).Value = "译文";
-        worksheet.Cell(1, 4).Value = "术语命中";
-        worksheet.Cell(1, 5).Value = "状态";
-        worksheet.Cell(1, 6).Value = "备注";
+        worksheet.Cell(1, 2).Value = Strings.Get("ColOriginal");
+        worksheet.Cell(1, 3).Value = Strings.Get("ColTranslation");
+        worksheet.Cell(1, 4).Value = Strings.Get("ColGlossary");
+        worksheet.Cell(1, 5).Value = Strings.Get("ColStatus");
+        worksheet.Cell(1, 6).Value = Strings.Get("ColNotes");
 
         // Style headers
         var headerRange = worksheet.Range(1, 1, 1, 6);

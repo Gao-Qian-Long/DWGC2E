@@ -1,3 +1,6 @@
+using System.Security.Cryptography;
+using System.Text;
+
 namespace DwgTranslator.Core.Models;
 
 /// <summary>
@@ -18,9 +21,67 @@ public class AppConfig
     public string ExportDirectory { get; set; } = "exports";
     public string LogDirectory { get; set; } = "logs";
 
+    /// <summary>
+    /// Minimum log level for file and UI output. Values: Verbose, Debug, Information, Warning, Error, Fatal.
+    /// Default is "Debug" (all levels). Set to "Information" or "Warning" in production to reduce noise.
+    /// </summary>
+    public string MinimumLogLevel { get; set; } = "Debug";
+
     /// <summary>AutoCAD installation directory (e.g. C:\Program Files\Autodesk\AutoCAD 2026). Used for COM detection.</summary>
     public string AutoCadInstallPath { get; set; } = string.Empty;
 
     /// <summary>Path to DwgTranslator.Cad.dll plugin for NETLOAD. Empty = auto-detect.</summary>
     public string CadPluginPath { get; set; } = string.Empty;
+
+    /// <summary>UI language culture code, e.g. "zh-CN" or "en-US". Default is "zh-CN".</summary>
+    public string Language { get; set; } = "zh-CN";
+
+    /// <summary>
+    /// Prefix used to identify DPAPI-encrypted API keys in settings.json.
+    /// </summary>
+    private const string DpapiPrefix = "DPAPI:";
+
+    /// <summary>
+    /// Decrypts a stored API key value. Handles both DPAPI-encrypted (prefixed with "DPAPI:")
+    /// and legacy plaintext storage. Returns empty string on decryption failure.
+    /// </summary>
+    public static string DecryptApiKey(string storedKey)
+    {
+        if (string.IsNullOrEmpty(storedKey))
+            return string.Empty;
+
+        if (!storedKey.StartsWith(DpapiPrefix, StringComparison.Ordinal))
+            return storedKey; // Legacy plaintext — return as-is
+
+        try
+        {
+            var encrypted = Convert.FromBase64String(storedKey[DpapiPrefix.Length..]);
+            return Encoding.UTF8.GetString(
+                ProtectedData.Unprotect(encrypted, null, DataProtectionScope.CurrentUser));
+        }
+        catch
+        {
+            // Decryption failed (e.g., different user profile) — treat as unconfigured
+            return string.Empty;
+        }
+    }
+
+    /// <summary>
+    /// Encrypts a plaintext API key for secure storage using DPAPI (CurrentUser scope).
+    /// Returns the encrypted value prefixed with "DPAPI:".
+    /// </summary>
+    public static string EncryptApiKey(string plainKey)
+    {
+        if (string.IsNullOrEmpty(plainKey))
+            return string.Empty;
+
+        var encrypted = ProtectedData.Protect(
+            Encoding.UTF8.GetBytes(plainKey), null, DataProtectionScope.CurrentUser);
+        return DpapiPrefix + Convert.ToBase64String(encrypted);
+    }
+
+    /// <summary>
+    /// Returns the decrypted API key from this config instance.
+    /// </summary>
+    public string GetDecryptedApiKey() => DecryptApiKey(DeepSeekApiKey);
 }

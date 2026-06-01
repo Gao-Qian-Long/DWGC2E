@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using DwgTranslator.Core.Models;
+using DwgTranslator.Core.Resources;
 using Serilog;
 
 namespace DwgTranslator.Core.Services;
@@ -25,7 +26,19 @@ public class LicenseService : ILicenseService
 {
     private const string LicenseFileName = "license.dat";
     private const int DefaultTrialUses = 3;
-    private const string SecretKey = "DWG-Translator-2026-Secret-Key-v1";
+
+    // Derived at runtime from split fragments to avoid trivial string scanning in binaries.
+    // DO NOT log or expose this value.
+    private static readonly string SecretKey = BuildKey();
+    private static string BuildKey()
+    {
+        // Fragments that assemble to the validation key
+        var a = "DWG-Trans";
+        var b = "lator-202";
+        var c = "6-Secret-";
+        var d = "Key-v1";
+        return string.Concat(a, b, c, d);
+    }
 
     private readonly string _licensePath;
     private LicenseInfo _license = new();
@@ -176,7 +189,7 @@ public class LicenseService : ILicenseService
     public (bool Success, string Message) Activate(string activationCode)
     {
         if (string.IsNullOrWhiteSpace(activationCode))
-            return (false, "激活码不能为空");
+            return (false, Strings.Get("LicenseActivationEmpty"));
 
         var rawCode = activationCode.Trim();
         activationCode = rawCode.Replace("-", "").ToUpperInvariant();
@@ -185,43 +198,28 @@ public class LicenseService : ILicenseService
         {
             var machineId = GetMachineId();
 
-            // Admin permanent activation code — not machine-bound
-            if (string.Equals(rawCode, "gql119871", StringComparison.OrdinalIgnoreCase))
-            {
-                _license = new LicenseInfo
-                {
-                    Type = LicenseType.Perpetual,
-                    MachineId = machineId,
-                    ActivatedAt = DateTime.UtcNow,
-                    ActivationCode = "ADMIN-PERMANENT"
-                };
-                SaveLicense();
-                Log.Information("Admin permanent license activated");
-                return (true, "管理员永久授权激活成功！");
-            }
-
             if (activationCode.StartsWith("DwgTranslator-P-"))
             {
                 // Perpetual license
                 var payload = activationCode["DwgTranslator-P-".Length..];
                 var decoded = DecodePayload(payload);
                 if (decoded == null || !ValidateChecksum(decoded))
-                    return (false, "激活码无效或已损坏");
+                    return (false, Strings.Get("LicenseActivationInvalid"));
 
                 var parts = decoded.Split('|');
                 if (parts.Length < 2 || !IsMachineIdMatch(parts[0]))
-                    return (false, "激活码与当前机器不匹配。如已更换硬件，请联系客服重新激活。");
+                    return (false, Strings.Get("LicenseActivationMachineMismatch"));
 
                 _license = new LicenseInfo
                 {
                     Type = LicenseType.Perpetual,
                     MachineId = machineId,
                     ActivatedAt = DateTime.UtcNow,
-                    ActivationCode = rawCode
+                    ActivationCode = "HASH:" + ComputeHash(rawCode)[..16]
                 };
                 SaveLicense();
                 Log.Information("Perpetual license activated");
-                return (true, "永久授权激活成功！感谢您购买 DWG Translator (买断制 ¥699)。");
+                return (true, Strings.Get("LicenseActivationSuccessPerpetual"));
             }
             else if (activationCode.StartsWith("DwgTranslator-S-"))
             {
@@ -229,18 +227,18 @@ public class LicenseService : ILicenseService
                 var payload = activationCode["DwgTranslator-S-".Length..];
                 var decoded = DecodePayload(payload);
                 if (decoded == null || !ValidateChecksum(decoded))
-                    return (false, "激活码无效或已损坏");
+                    return (false, Strings.Get("LicenseActivationInvalid"));
 
                 var parts = decoded.Split('|');
                 if (parts.Length < 3 || !IsMachineIdMatch(parts[0]))
-                    return (false, "激活码与当前机器不匹配。如已更换硬件，请联系客服重新激活。");
+                    return (false, Strings.Get("LicenseActivationMachineMismatch"));
 
                 if (!long.TryParse(parts[1], out var expiryTicks))
-                    return (false, "激活码日期格式无效");
+                    return (false, Strings.Get("LicenseActivationDateInvalid"));
 
                 var expiry = new DateTime(expiryTicks, DateTimeKind.Utc);
                 if (expiry <= DateTime.UtcNow)
-                    return (false, $"订阅授权已于 {expiry:yyyy-MM-dd} 过期，请续费。月费 ¥49 / 年费 ¥399");
+                    return (false, Strings.Get("LicenseActivationExpired", expiry.ToString("yyyy-MM-dd")));
 
                 _license = new LicenseInfo
                 {
@@ -248,19 +246,19 @@ public class LicenseService : ILicenseService
                     MachineId = machineId,
                     ExpiryDate = expiry,
                     ActivatedAt = DateTime.UtcNow,
-                    ActivationCode = rawCode
+                    ActivationCode = "HASH:" + ComputeHash(rawCode)[..16]
                 };
                 SaveLicense();
                 Log.Information("Subscription license activated until {Expiry}", expiry);
-                return (true, $"订阅授权激活成功！有效期至 {expiry:yyyy-MM-dd}。");
+                return (true, Strings.Get("LicenseActivationSuccessSubscription", expiry.ToString("yyyy-MM-dd")));
             }
 
-            return (false, "无法识别的激活码格式。\n正确格式: DwgTranslator-P-xxx (买断) 或 DwgTranslator-S-xxx (订阅)");
+            return (false, Strings.Get("LicenseActivationInvalidFormat"));
         }
         catch (Exception ex)
         {
             Log.Error(ex, "License activation failed");
-            return (false, $"激活失败: {ex.Message}");
+            return (false, Strings.Get("LicenseActivationFailed"));
         }
     }
 
@@ -368,7 +366,9 @@ public class LicenseService : ILicenseService
 
     private static byte[] DeriveKey(string password, int keyBytes)
     {
-        var salt = Encoding.UTF8.GetBytes("DwgTranslator-License-Salt-v1");
+        // Derived from fragments to avoid trivial string scanning in binaries
+        var saltPhrase = string.Concat("DwgTrans", "lator-Li", "cense-Sa", "lt-v1");
+        var salt = Encoding.UTF8.GetBytes(saltPhrase);
         using var pbkdf2 = new Rfc2898DeriveBytes(password, salt, 100000, HashAlgorithmName.SHA256);
         return pbkdf2.GetBytes(keyBytes);
     }

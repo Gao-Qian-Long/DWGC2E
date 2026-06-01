@@ -6,16 +6,17 @@ using DwgTranslator.Core.Translation;
 var configPath = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "..", "settings.json"));
 if (!File.Exists(configPath))
     configPath = Path.Combine(Directory.GetCurrentDirectory(), "settings.json");
-if (!File.Exists(configPath))
-    configPath = @"D:\DWGC2E\settings.json";
 
 Console.WriteLine($"Loading config from: {configPath}");
 var json = File.ReadAllText(configPath);
 var config = JsonSerializer.Deserialize<AppConfig>(json) ?? new AppConfig();
 
+// Decrypt API key if stored with DPAPI protection
+config.DeepSeekApiKey = AppConfig.DecryptApiKey(config.DeepSeekApiKey);
+
 Console.WriteLine($"DeepSeek Model: {config.DeepSeekModel}");
 Console.WriteLine($"Base URL: {config.DeepSeekBaseUrl}");
-Console.WriteLine($"API Key: {config.DeepSeekApiKey[..8]}...");
+Console.WriteLine($"API Key configured: {!string.IsNullOrEmpty(config.DeepSeekApiKey)}");
 Console.WriteLine();
 
 // Load glossary
@@ -29,7 +30,7 @@ if (File.Exists(config.GlossaryPath))
 // Load prompt
 var promptPath = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "..", "prompts", "deepl_context.txt"));
 if (!File.Exists(promptPath))
-    promptPath = @"D:\DWGC2E\prompts\deepl_context.txt";
+    promptPath = Path.Combine(Directory.GetCurrentDirectory(), "prompts", "deepl_context.txt");
 var systemPrompt = File.Exists(promptPath)
     ? File.ReadAllText(promptPath)
     : "You are a professional mechanical engineering translator. Translate the text accurately.";

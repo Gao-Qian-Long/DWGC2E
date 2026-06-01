@@ -1,3 +1,5 @@
+using DwgTranslator.Core.Resources;
+
 namespace DwgTranslator.Core.Models;
 
 /// <summary>
@@ -65,14 +67,14 @@ public class LicenseInfo
         return GetStatus() switch
         {
             LicenseStatus.Valid => Type == LicenseType.Trial
-                ? $"体验模式 (剩余 {TrialUsesRemaining} 次)"
+                ? Strings.Get("LicenseStatusTrial", TrialUsesRemaining)
                 : Type == LicenseType.Perpetual
-                    ? "永久授权 (买断制)"
-                    : $"订阅授权 (到期: {ExpiryDate:yyyy-MM-dd})",
-            LicenseStatus.Expired => "订阅已过期 — 请续费",
-            LicenseStatus.TrialExhausted => "体验次数已用完 — 请购买授权",
-            LicenseStatus.Invalid => "授权无效",
-            _ => "未激活"
+                    ? Strings.Get("LicenseStatusPerpetual")
+                    : Strings.Get("LicenseStatusSubscription", $"{ExpiryDate:yyyy-MM-dd}"),
+            LicenseStatus.Expired => Strings.Get("LicenseStatusExpired"),
+            LicenseStatus.TrialExhausted => Strings.Get("LicenseStatusTrialExhausted"),
+            LicenseStatus.Invalid => Strings.Get("LicenseStatusInvalid"),
+            _ => Strings.Get("LicenseNotActivated")
         };
     }
 }

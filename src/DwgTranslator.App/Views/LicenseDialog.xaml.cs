@@ -1,4 +1,5 @@
 using DwgTranslator.Core.Models;
+using DwgTranslator.Core.Resources;
 using DwgTranslator.Core.Services;
 using System.Windows;
 
@@ -27,20 +28,20 @@ public partial class LicenseDialog : Window
 
         TrialText.Text = license.Type switch
         {
-            LicenseType.Trial => $"{license.TrialUsesRemaining} 次",
-            LicenseType.Perpetual => "N/A (已永久授权)",
+            LicenseType.Trial => Strings.Get("LicenseTrialUses", license.TrialUsesRemaining),
+            LicenseType.Perpetual => Strings.Get("LicenseNaPerpetual"),
             LicenseType.Subscription => license.ExpiryDate.HasValue
-                ? $"到期: {license.ExpiryDate.Value:yyyy-MM-dd}"
-                : "N/A",
-            _ => "N/A"
+                ? Strings.Get("LicenseNaExpiry", license.ExpiryDate.Value.ToString("yyyy-MM-dd"))
+                : Strings.Get("LicenseNa"),
+            _ => Strings.Get("LicenseNa")
         };
 
         LicenseTypeText.Text = license.Type switch
         {
-            LicenseType.Trial => "体验版",
-            LicenseType.Perpetual => "买断制 (永久)",
-            LicenseType.Subscription => $"订阅制 (到期: {license.ExpiryDate:yyyy-MM-dd})",
-            _ => "未激活"
+            LicenseType.Trial => Strings.Get("LicenseTrial"),
+            LicenseType.Perpetual => Strings.Get("LicensePerpetual"),
+            LicenseType.Subscription => Strings.Get("LicenseSubscription", $"{license.ExpiryDate:yyyy-MM-dd}"),
+            _ => Strings.Get("LicenseNotActivated")
         };
 
         LicenseTypeText.Foreground = license.Type switch
@@ -57,7 +58,7 @@ public partial class LicenseDialog : Window
         {
             ActivationCodeBox.IsEnabled = false;
             ActivateButton.IsEnabled = false;
-            ActivationCodeBox.Text = "已永久授权 - 感谢您的支持!";
+            ActivationCodeBox.Text = Strings.Get("LicenseAlreadyActivated");
             ActivationCodeBox.Foreground = System.Windows.Media.Brushes.Green;
         }
     }
@@ -67,7 +68,7 @@ public partial class LicenseDialog : Window
         var code = ActivationCodeBox.Text.Trim();
         if (string.IsNullOrEmpty(code))
         {
-            ResultText.Text = "请输入激活码";
+            ResultText.Text = Strings.Get("LicenseEnterCodePrompt");
             ResultText.Foreground = System.Windows.Media.Brushes.Red;
             return;
         }
@@ -86,7 +87,7 @@ public partial class LicenseDialog : Window
     private void CopyMachineId_Click(object sender, RoutedEventArgs e)
     {
         Clipboard.SetText(MachineIdBox.Text);
-        ResultText.Text = "机器码已复制到剪贴板，请发送给客服获取激活码。";
+        ResultText.Text = Strings.Get("LicenseMachineIdCopied");
         ResultText.Foreground = System.Windows.Media.Brushes.Green;
     }
 

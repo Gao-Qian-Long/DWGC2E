@@ -37,9 +37,12 @@ public class DeepSeekClient : IDeepSeekClient
         if (!response.IsSuccessStatusCode)
         {
             var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
-            Log.Warning("DeepSeek API error {StatusCode}: {Body}", (int)response.StatusCode, errorBody);
+            // Log full error body only at Debug level (file-only, not user-facing)
+            Log.Debug("DeepSeek API error {StatusCode}: {Body}", (int)response.StatusCode, errorBody);
+            // Sanitize: log status code at Warning level without leaking response internals
+            Log.Warning("DeepSeek API error {StatusCode}", (int)response.StatusCode);
             throw new HttpRequestException(
-                $"DeepSeek API returned {(int)response.StatusCode}: {errorBody}",
+                $"DeepSeek API returned status {(int)response.StatusCode}",
                 null, response.StatusCode);
         }
 

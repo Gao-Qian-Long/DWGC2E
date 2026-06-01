@@ -1,5 +1,7 @@
 using DwgTranslator.Core.Models;
+using DwgTranslator.Core.Resources;
 using DwgTranslator.Core.Services;
+using Microsoft.Extensions.DependencyInjection;
 using System.IO;
 using System.Net.Http;
 using System.Text.Json;
@@ -12,12 +14,15 @@ namespace DwgTranslator.App.Views;
 public partial class SettingsDialog : Window
 {
     private readonly string _settingsPath;
+    private readonly ILocalizationService _localizationService;
     private string _apiKey = string.Empty;
 
     public SettingsDialog()
     {
         InitializeComponent();
         _settingsPath = Path.Combine(App.AppDataDir, "settings.json");
+        _localizationService = App.Services?.GetService<ILocalizationService>()
+            ?? new LocalizationService();
         LoadSettings();
     }
 
@@ -25,16 +30,41 @@ public partial class SettingsDialog : Window
     {
         try
         {
+            // Populate language ComboBox
+            var languages = _localizationService.AvailableLanguages;
+            foreach (var lang in languages)
+                LanguageComboBox.Items.Add(lang);
+
+            // Populate log level ComboBox
+            var logLevels = new[] { "Verbose", "Debug", "Information", "Warning", "Error", "Fatal" };
+            foreach (var level in logLevels)
+                LogLevelComboBox.Items.Add(level);
+
+            var currentLang = _localizationService.CurrentLanguage;
+            string currentLogLevel = "Debug";
+
             if (File.Exists(_settingsPath))
             {
                 var json = File.ReadAllText(_settingsPath);
                 var config = JsonSerializer.Deserialize<AppConfig>(json) ?? new AppConfig();
-                _apiKey = config.DeepSeekApiKey;
-                ApiKeyBox.Password = config.DeepSeekApiKey;
+
+                // Decrypt API key if stored with DPAPI protection
+                var displayApiKey = AppConfig.DecryptApiKey(config.DeepSeekApiKey);
+
+                _apiKey = displayApiKey;
+                ApiKeyBox.Password = displayApiKey;
                 BaseUrlBox.Text = config.DeepSeekBaseUrl;
                 ModelBox.Text = config.DeepSeekModel;
                 AutoCadPathBox.Text = config.AutoCadInstallPath;
                 CadPluginPathBox.Text = config.CadPluginPath;
+
+                // Use persisted language if available
+                if (!string.IsNullOrEmpty(config.Language))
+                    currentLang = config.Language;
+
+                // Use persisted log level if available
+                if (!string.IsNullOrEmpty(config.MinimumLogLevel))
+                    currentLogLevel = config.MinimumLogLevel;
             }
             else
             {
@@ -42,58 +72,69 @@ public partial class SettingsDialog : Window
                 ModelBox.Text = "deepseek-chat";
             }
 
+            // Select current language in ComboBox
+            for (int i = 0; i < LanguageComboBox.Items.Count; i++)
+            {
+                if (LanguageComboBox.Items[i] is LanguageInfo info && info.CultureName == currentLang)
+                {
+                    LanguageComboBox.SelectedIndex = i;
+                    break;
+                }
+            }
+            if (LanguageComboBox.SelectedIndex < 0 && LanguageComboBox.Items.Count > 0)
+                LanguageComboBox.SelectedIndex = 0;
+
+            // Select current log level in ComboBox
+            for (int i = 0; i < LogLevelComboBox.Items.Count; i++)
+            {
+                if (LogLevelComboBox.Items[i] is string level &&
+                    string.Equals(level, currentLogLevel, StringComparison.OrdinalIgnoreCase))
+                {
+                    LogLevelComboBox.SelectedIndex = i;
+                    break;
+                }
+            }
+            if (LogLevelComboBox.SelectedIndex < 0)
+                LogLevelComboBox.SelectedIndex = 1; // Default to "Debug"
+
             UpdateAutoCadStatus();
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"加载设置失败: {ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+            System.Diagnostics.Debug.WriteLine($"Failed to load settings: {ex}");
+            MessageBox.Show(Strings.Get("SettingsLoadFailed"), Strings.Get("MsgTitleError"), MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 
     private void ToggleApiKeyVisibility_Click(object sender, RoutedEventArgs e)
     {
-        // Simply toggle between showing and hiding the password
         if (ApiKeyBox.Visibility == Visibility.Visible)
         {
-            // Switch to visible TextBox
-            var parent = ApiKeyBox.Parent as StackPanel;
-            if (parent == null) return;
-
-            int index = parent.Children.IndexOf(ApiKeyBox);
-            parent.Children.RemoveAt(index);
-
-            var textBox = new TextBox
-            {
-                Name = "ApiKeyTextBox",
-                Width = 300,
-                Padding = new Thickness(6, 4, 6, 4),
-                VerticalContentAlignment = VerticalAlignment.Center,
-                Text = _apiKey,
-                FontFamily = new FontFamily("Consolas"),
-                FontSize = 12,
-                BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#E0E0E0"))
-            };
-            textBox.TextChanged += (s, args) => _apiKey = textBox.Text;
-
-            parent.Children.Insert(index, textBox);
-            ToggleApiKeyVisibility.Content = "隐藏";
+            // Switch to visible TextBox: hide PasswordBox, show TextBox
+            _apiKey = ApiKeyBox.Password;
+            ApiKeyBox.Visibility = Visibility.Collapsed;
+            ApiKeyTextBox.Text = _apiKey;
+            ApiKeyTextBox.Visibility = Visibility.Visible;
+            ApiKeyTextBox.Focus();
+            ToggleApiKeyVisibility.Content = Strings.Get("BtnClose");
+        }
+        else
+        {
+            // Switch back to PasswordBox: hide TextBox, show PasswordBox
+            _apiKey = ApiKeyTextBox.Text;
+            ApiKeyTextBox.Visibility = Visibility.Collapsed;
+            ApiKeyBox.Password = _apiKey;
+            ApiKeyBox.Visibility = Visibility.Visible;
+            ToggleApiKeyVisibility.Content = Strings.Get("BtnShow");
         }
     }
 
     private string GetApiKey()
     {
-        // Check for TextBox replacement first
-        var parent = ApiKeyBox?.Parent as StackPanel;
-        if (parent != null)
-        {
-            foreach (var child in parent.Children)
-            {
-                if (child is TextBox tb && tb.Name == "ApiKeyTextBox")
-                    return tb.Text;
-            }
-        }
+        // Return from whichever control is currently visible
+        if (ApiKeyTextBox.Visibility == Visibility.Visible)
+            return ApiKeyTextBox.Text;
 
-        // Fall back to PasswordBox
         try { return ApiKeyBox?.Password ?? _apiKey; } catch { return _apiKey; }
     }
 
@@ -105,7 +146,7 @@ public partial class SettingsDialog : Window
 
         if (string.IsNullOrEmpty(apiKey))
         {
-            ResultText.Text = "请先填写 API Key";
+            ResultText.Text = Strings.Get("SettingsTestEnterKey");
             ResultText.Foreground = Brushes.Red;
             return;
         }
@@ -114,7 +155,7 @@ public partial class SettingsDialog : Window
         if (sender is Button testButton)
             testButton.IsEnabled = false;
 
-        ResultText.Text = "正在测试连接...";
+        ResultText.Text = Strings.Get("SettingsTestConnecting");
         ResultText.Foreground = Brushes.Gray;
 
         using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(15));
@@ -129,17 +170,28 @@ public partial class SettingsDialog : Window
                 () => client.ChatCompletionAsync("You are a test assistant.", "Say OK", cts.Token),
                 cts.Token);
 
-            ResultText.Text = $"连接成功! 模型响应: {Truncate(response, 50)}";
+            ResultText.Text = Strings.Get("SettingsTestSuccess", Truncate(response, 50));
             ResultText.Foreground = Brushes.Green;
         }
         catch (System.OperationCanceledException)
         {
-            ResultText.Text = "连接超时（15秒）";
+            ResultText.Text = Strings.Get("SettingsTestTimeout");
+            ResultText.Foreground = Brushes.Red;
+        }
+        catch (HttpRequestException)
+        {
+            ResultText.Text = Strings.Get("SettingsTestFailed", Strings.Get("ConnectionFailedNetwork"));
+            ResultText.Foreground = Brushes.Red;
+        }
+        catch (UriFormatException)
+        {
+            ResultText.Text = Strings.Get("SettingsTestFailed", Strings.Get("ConnectionFailedFormat"));
             ResultText.Foreground = Brushes.Red;
         }
         catch (Exception ex)
         {
-            ResultText.Text = $"连接失败: {Truncate(ex.Message, 80)}";
+            System.Diagnostics.Debug.WriteLine($"Connection test failed: {ex}");
+            ResultText.Text = Strings.Get("SettingsTestFailed", Strings.Get("ConnectionFailedGeneric"));
             ResultText.Foreground = Brushes.Red;
         }
         finally
@@ -151,7 +203,7 @@ public partial class SettingsDialog : Window
 
     private void BrowseAutoCad_Click(object sender, RoutedEventArgs e)
     {
-        var selectedPath = BrowseForFolder("选择 AutoCAD 安装目录（包含 acad.exe 的文件夹）", AutoCadPathBox.Text);
+        var selectedPath = BrowseForFolder(Strings.Get("SettingsBrowseAutoCad"), AutoCadPathBox.Text);
         if (selectedPath != null)
         {
             AutoCadPathBox.Text = selectedPath;
@@ -161,7 +213,7 @@ public partial class SettingsDialog : Window
 
     private async void DetectAutoCad_Click(object sender, RoutedEventArgs e)
     {
-        AutoCadStatusText.Text = "正在检测 AutoCAD 安装...";
+        AutoCadStatusText.Text = Strings.Get("SettingsDetecting");
         AutoCadStatusText.Foreground = Brushes.Gray;
 
         var result = await System.Threading.Tasks.Task.Run(() => AutoCadDetector.DetectInstallation());
@@ -169,12 +221,12 @@ public partial class SettingsDialog : Window
         if (result.Found)
         {
             AutoCadPathBox.Text = result.InstallPath;
-            AutoCadStatusText.Text = $"已检测到: {result.ProductName} ({result.Version}) — {result.InstallPath}";
+            AutoCadStatusText.Text = Strings.Get("SettingsDetected", result.ProductName, result.Version, result.InstallPath);
             AutoCadStatusText.Foreground = Brushes.Green;
         }
         else
         {
-            AutoCadStatusText.Text = "未检测到 AutoCAD 安装。请手动选择安装目录，或确认 AutoCAD 已安装。";
+            AutoCadStatusText.Text = Strings.Get("SettingsNotDetected");
             AutoCadStatusText.Foreground = Brushes.Orange;
         }
 
@@ -192,8 +244,8 @@ public partial class SettingsDialog : Window
     {
         var dialog = new Microsoft.Win32.OpenFileDialog
         {
-            Filter = "DLL 文件|*.dll|所有文件|*.*",
-            Title = "选择 DwgTranslator.Cad.dll 插件文件",
+            Filter = Strings.Get("FilterDllFiles"),
+            Title = Strings.Get("SettingsBrowsePlugin"),
             FileName = "DwgTranslator.Cad.dll"
         };
 
@@ -231,19 +283,19 @@ public partial class SettingsDialog : Window
         var path = AutoCadPathBox.Text.Trim();
         if (string.IsNullOrEmpty(path))
         {
-            AutoCadStatusText.Text = "未配置 AutoCAD 路径 — 精确回写模式不可用，将使用离线回写";
+            AutoCadStatusText.Text = Strings.Get("SettingsPathNotConfigured");
             AutoCadStatusText.Foreground = Brushes.Gray;
             return;
         }
 
         if (AutoCadDetector.IsValidAutoCadPath(path))
         {
-            AutoCadStatusText.Text = "AutoCAD 路径有效 (已找到 acad.exe)";
+            AutoCadStatusText.Text = Strings.Get("SettingsPathValid");
             AutoCadStatusText.Foreground = Brushes.Green;
         }
         else
         {
-            AutoCadStatusText.Text = "路径无效 — 未找到 acad.exe，请确认是否为 AutoCAD 安装目录";
+            AutoCadStatusText.Text = Strings.Get("SettingsPathInvalid");
             AutoCadStatusText.Foreground = Brushes.Red;
         }
     }
@@ -263,11 +315,26 @@ public partial class SettingsDialog : Window
                 config = new AppConfig();
             }
 
-            config.DeepSeekApiKey = GetApiKey().Trim();
+            // Encrypt API key at rest using DPAPI (CurrentUser scope)
+            var plainApiKey = GetApiKey().Trim();
+            config.DeepSeekApiKey = AppConfig.EncryptApiKey(plainApiKey);
+
             config.DeepSeekBaseUrl = BaseUrlBox.Text.Trim();
             config.DeepSeekModel = ModelBox.Text.Trim();
             config.AutoCadInstallPath = AutoCadPathBox.Text.Trim();
             config.CadPluginPath = CadPluginPathBox.Text.Trim();
+
+            // Save log level selection
+            if (LogLevelComboBox.SelectedItem is string selectedLogLevel)
+                config.MinimumLogLevel = selectedLogLevel;
+
+            // Save language selection
+            if (LanguageComboBox.SelectedItem is LanguageInfo selectedLang)
+            {
+                config.Language = selectedLang.CultureName;
+                // Apply language change for next launch
+                try { _localizationService.SetLanguage(selectedLang.CultureName); } catch { }
+            }
 
             Directory.CreateDirectory(Path.GetDirectoryName(_settingsPath)!);
             var options = new JsonSerializerOptions { WriteIndented = true };
@@ -277,7 +344,8 @@ public partial class SettingsDialog : Window
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"保存设置失败: {ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+            System.Diagnostics.Debug.WriteLine($"Failed to save settings: {ex}");
+            MessageBox.Show(Strings.Get("SettingsSaveFailed"), Strings.Get("MsgTitleError"), MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 
@@ -313,7 +381,7 @@ public partial class SettingsDialog : Window
             var dialog = new Microsoft.Win32.OpenFileDialog
             {
                 Title = description,
-                Filter = "AutoCAD|acad.exe|所有文件|*.*",
+                Filter = Strings.Get("FilterAutoCadExe"),
                 FileName = "acad.exe"
             };
 
