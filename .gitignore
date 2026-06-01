@@ -73,9 +73,4 @@ TestResults/
 *.coverage
 
 # ===== Development Notes & Temp Files =====
-debug.md
-bug.md
-notes.md
-dll_inspect.txt
-notes.md
-qwen.md
+功能开发.md
