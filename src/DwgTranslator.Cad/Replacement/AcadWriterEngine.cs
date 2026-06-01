@@ -36,13 +36,13 @@ public class AcadWriterEngine
     /// This overload opens the file from disk (side database) — avoid using when the file
     /// is already open in AutoCAD, as it may cause eFilerError due to file locks.
     /// </summary>
-    public DwgWriteResult WriteTranslations(
+    public CadWriteResult WriteTranslations(
         string sourceFilePath,
         string outputFilePath,
         List<TextEntity> entities,
         bool cnToEn = true)
     {
-        var result = new DwgWriteResult();
+        var result = new CadWriteResult();
 
         if (!File.Exists(sourceFilePath))
         {
@@ -82,12 +82,12 @@ public class AcadWriterEngine
     /// to avoid file-lock conflicts that cause eFilerError.
     /// The caller is responsible for saving the database afterward.
     /// </summary>
-    public DwgWriteResult WriteTranslations(
+    public CadWriteResult WriteTranslations(
         Database db,
         List<TextEntity> entities,
         bool cnToEn = true)
     {
-        var result = new DwgWriteResult();
+        var result = new CadWriteResult();
         try
         {
             WriteTranslationsToDatabase(db, entities, cnToEn, result);
@@ -113,7 +113,7 @@ public class AcadWriterEngine
         Database db,
         List<TextEntity> entities,
         bool cnToEn,
-        DwgWriteResult result)
+        CadWriteResult result)
     {
         // Detect frame boundaries before modifications
         var frames = FrameDetector.DetectFrames(db);

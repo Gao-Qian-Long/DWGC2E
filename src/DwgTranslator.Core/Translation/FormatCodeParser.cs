@@ -7,7 +7,7 @@ namespace DwgTranslator.Core.Translation;
 /// Format codes like \P, \f..., \A1;, %%c, etc. are replaced with placeholders before translation,
 /// then restored afterward. Brace grouping characters {} are stripped but not treated as format codes.
 /// </summary>
-public partial class FormatCodeParser
+public partial class FormatCodeParser : IFormatCodeParser
 {
     // Matches format code patterns: \fArial;, \C3;, \H2x;, \P, \U+XXXX, \~, \%, %%c, etc.
     // Does NOT match literal braces {} (stripped separately) to preserve text content inside brace groups.

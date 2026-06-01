@@ -16,7 +16,7 @@ public interface IAutoCadInteropService
     /// Execute writeback of translated entities via AutoCAD COM interop.
     /// Creates a LISP script, sends it to AutoCAD, and monitors the done-signal file.
     /// </summary>
-    Task<DwgWriteResult> WritebackViaAutoCadAsync(
+    Task<CadWriteResult> WritebackViaAutoCadAsync(
         string sourceFilePath,
         string outputFilePath,
         List<TextEntity> entities,

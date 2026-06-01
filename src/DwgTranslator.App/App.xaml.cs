@@ -230,7 +230,7 @@ public partial class App : Application
         services.AddSingleton<ILicenseService>(sp => LicenseService);
 
         // Translation helpers (stateless, safe to share)
-        services.AddSingleton<FormatCodeParser>();
+        services.AddSingleton<IFormatCodeParser, FormatCodeParser>();
 
         // ViewModel
         services.AddTransient<MainViewModel>();

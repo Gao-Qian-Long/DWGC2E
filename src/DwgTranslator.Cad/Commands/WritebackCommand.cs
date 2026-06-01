@@ -104,7 +104,7 @@ public class WritebackCommand
             var tempPath = Path.Combine(ConfigDir, $"__temp_{Path.GetFileName(config.SourceDwgPath)}");
             File.Copy(config.SourceDwgPath, tempPath, overwrite: true);
 
-            DwgWriteResult result;
+            CadWriteResult result;
             try
             {
                 var engine = new AcadWriterEngine();

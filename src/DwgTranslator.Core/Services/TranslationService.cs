@@ -13,22 +13,22 @@ namespace DwgTranslator.Core.Services;
 public class TranslationService : ITranslationService
 {
     private readonly IGlossaryService _glossaryService;
-    private readonly FormatCodeParser _formatCodeParser;
+    private readonly IFormatCodeParser _formatCodeParser;
     private readonly IDeepSeekClient _deepSeekClient;
     private readonly string _systemPrompt;
     private readonly int _batchSize;
     private readonly int _maxRetryCount;
     private readonly int _maxConcurrency;
-    private readonly TranslationConsistencyService _consistencyService;
+    private readonly ITranslationConsistencyService _consistencyService;
 
     public TranslationService(
         IGlossaryService glossaryService,
-        FormatCodeParser formatCodeParser,
+        IFormatCodeParser formatCodeParser,
         IDeepSeekClient deepSeekClient,
         string systemPrompt,
         int batchSize = 50,
         int maxRetryCount = 3,
-        TranslationConsistencyService? consistencyService = null,
+        ITranslationConsistencyService? consistencyService = null,
         int maxConcurrency = 5)
     {
         _glossaryService = glossaryService;

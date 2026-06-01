@@ -5,7 +5,7 @@ using ACadSharp.Header;
 using ACadSharp.Tables;
 using DwgTranslator.Core.Models;
 using Serilog;
-using System.Text.RegularExpressions;
+using System.Threading;
 using CadEntity = ACadSharp.Entities.Entity;
 using CadText = ACadSharp.Entities.TextEntity;
 using CadMText = ACadSharp.Entities.MText;
@@ -14,7 +14,7 @@ using CadMultiLeader = ACadSharp.Entities.MultiLeader;
 using CadInsert = ACadSharp.Entities.Insert;
 using CadAttribute = ACadSharp.Entities.AttributeEntity;
 using CadLwPolyline = ACadSharp.Entities.LwPolyline;
-using OurTextEntity = DwgTranslator.Core.Models.TextEntity;
+using CoreTextEntity = DwgTranslator.Core.Models.TextEntity;
 
 namespace DwgTranslator.Core.Services;
 
@@ -24,12 +24,12 @@ namespace DwgTranslator.Core.Services;
 /// </summary>
 public class DwgWriterService : IDwgWriterService, IDxfWriterService
 {
-    private static readonly Regex HandleRegex = new(@"^[0-9A-Fa-f]+$", RegexOptions.Compiled);
+    private const double MinFrameAreaSquareUnits = 10000;
 
     /// <inheritdoc/>
-    public DwgWriteResult WriteTranslations(string sourceFilePath, string outputFilePath, List<OurTextEntity> entities, bool cnToEn = true)
+    public CadWriteResult WriteTranslations(string sourceFilePath, string outputFilePath, List<CoreTextEntity> entities, bool cnToEn = true, CancellationToken cancellationToken = default)
     {
-        var result = new DwgWriteResult();
+        var result = new CadWriteResult();
 
         if (!File.Exists(sourceFilePath))
         {
@@ -72,6 +72,8 @@ public class DwgWriterService : IDwgWriterService, IDxfWriterService
         Log.Information("Writing translations to {Format}: {Source} -> {Output} ({Count} entities, CnToEn={Dir})",
             isDxfOutput ? "DXF" : "DWG", sourceFilePath, outputFilePath, entities.Count, cnToEn);
 
+        cancellationToken.ThrowIfCancellationRequested();
+
         try
         {
             // Read the original file using appropriate reader
@@ -100,15 +102,15 @@ public class DwgWriterService : IDwgWriterService, IDxfWriterService
                 Log.Information("Detected {Count} frame boundary rectangles", frames.Count);
 
             // Build lookup: handle -> translated text
-            var translationMap = new Dictionary<string, OurTextEntity>(StringComparer.OrdinalIgnoreCase);
+            var translationMap = new Dictionary<string, CoreTextEntity>(StringComparer.OrdinalIgnoreCase);
             foreach (var entity in entities)
             {
                 if (entity.Status == TranslationStatus.Translated ||
                     entity.Status == TranslationStatus.Reviewed)
                 {
                     var handle = CleanHandle(entity.Handle);
-                    if (!string.IsNullOrEmpty(handle) && !translationMap.ContainsKey(handle))
-                        translationMap[handle] = entity;
+                    if (!string.IsNullOrEmpty(handle))
+                        translationMap.TryAdd(handle, entity);
                 }
             }
 
@@ -155,6 +157,8 @@ public class DwgWriterService : IDwgWriterService, IDxfWriterService
             if (!string.IsNullOrEmpty(outputDir) && !Directory.Exists(outputDir))
                 Directory.CreateDirectory(outputDir);
 
+            cancellationToken.ThrowIfCancellationRequested();
+
             Log.Information("Writing {Format} output file...", isDxfOutput ? "DXF" : "DWG");
             if (isDxfOutput)
             {
@@ -180,15 +184,9 @@ public class DwgWriterService : IDwgWriterService, IDxfWriterService
     }
 
     /// <inheritdoc/>
-    DxfWriteResult IDxfWriterService.WriteTranslations(string sourceFilePath, string outputFilePath, List<OurTextEntity> entities, bool cnToEn)
+    CadWriteResult IDxfWriterService.WriteTranslations(string sourceFilePath, string outputFilePath, List<CoreTextEntity> entities, bool cnToEn, CancellationToken cancellationToken)
     {
-        var dwgResult = WriteTranslations(sourceFilePath, outputFilePath, entities, cnToEn);
-        return new DxfWriteResult
-        {
-            SuccessCount = dwgResult.SuccessCount,
-            FailCount = dwgResult.FailCount,
-            Errors = dwgResult.Errors
-        };
+        return WriteTranslations(sourceFilePath, outputFilePath, entities, cnToEn, cancellationToken);
     }
 
     /// <summary>
@@ -200,12 +198,12 @@ public class DwgWriterService : IDwgWriterService, IDxfWriterService
         {
             if (cnToEn)
             {
-                EnsureStyle(doc, "Arial", null);
-                EnsureStyle(doc, "Helvetica", null);
+                EnsureStyle(doc, "Arial");
+                EnsureStyle(doc, "Helvetica");
             }
             else
             {
-                EnsureStyle(doc, "SimHei", "gbcbig.shx");
+                EnsureStyle(doc, "SimHei");
             }
         }
         catch (Exception ex)
@@ -214,7 +212,7 @@ public class DwgWriterService : IDwgWriterService, IDxfWriterService
         }
     }
 
-    private static void EnsureStyle(CadDocument doc, string styleName, string? bigFontName)
+    private static void EnsureStyle(CadDocument doc, string styleName)
     {
         if (doc.TextStyles.Contains(styleName)) return;
 
@@ -229,8 +227,8 @@ public class DwgWriterService : IDwgWriterService, IDxfWriterService
     /// </summary>
     private static int ProcessEntityCollection(
         IEnumerable<CadEntity> entities,
-        Dictionary<string, OurTextEntity> translationMap,
-        DwgWriteResult result,
+        Dictionary<string, CoreTextEntity> translationMap,
+        CadWriteResult result,
         bool cnToEn,
         CadDocument doc,
         List<(double minX, double minY, double maxX, double maxY)> frames)
@@ -238,9 +236,12 @@ public class DwgWriterService : IDwgWriterService, IDxfWriterService
         // Early exit: no more entities to replace in this collection
         if (translationMap.Count == 0) return 0;
 
+        // Materialize to list so we can iterate over all entities for collision detection
+        var entityList = entities as List<CadEntity> ?? [.. entities];
+
         int replacedCount = 0;
 
-        foreach (var cadEntity in entities)
+        foreach (var cadEntity in entityList)
         {
             if (cadEntity == null) continue;
 
@@ -254,6 +255,13 @@ public class DwgWriterService : IDwgWriterService, IDxfWriterService
                     result.SuccessCount++;
                     translationMap.Remove(handleStr);
                     replacedCount++;
+
+                    // Entity-level collision detection: after text replacement,
+                    // check whether the new text overlaps nearby geometry and scale
+                    // height down via binary search if it does.
+                    double originalHeight = translatedEntity.OriginalHeight > 0 ? translatedEntity.OriginalHeight : 0;
+                    if (originalHeight > 0)
+                        ScaleDownToAvoidCollisions(cadEntity, originalHeight, entityList);
 
                     // Exit loop early if all translations have been applied
                     if (translationMap.Count == 0) break;
@@ -281,8 +289,8 @@ public class DwgWriterService : IDwgWriterService, IDxfWriterService
     /// </summary>
     private static void ProcessInsertAttributes(
         CadInsert insert,
-        Dictionary<string, OurTextEntity> translationMap,
-        DwgWriteResult result,
+        Dictionary<string, CoreTextEntity> translationMap,
+        CadWriteResult result,
         ref int replacedCount)
     {
         foreach (var att in insert.Attributes)
@@ -304,7 +312,7 @@ public class DwgWriterService : IDwgWriterService, IDxfWriterService
     /// <summary>
     /// Replace text content of a CAD entity with translated text, applying font mapping and scaling.
     /// </summary>
-    private static bool ReplaceEntityText(CadEntity entity, OurTextEntity ourEntity, bool cnToEn, CadDocument doc,
+    private static bool ReplaceEntityText(CadEntity entity, CoreTextEntity ourEntity, bool cnToEn, CadDocument doc,
         List<(double minX, double minY, double maxX, double maxY)> frames)
     {
         try
@@ -358,32 +366,35 @@ public class DwgWriterService : IDwgWriterService, IDxfWriterService
     }
 
     /// <summary>
+    /// Resolves a TextStyle by mapped font name: looks up an existing style
+    /// or creates a new one. Returns null when the original style maps to nothing.
+    /// Shared by all ApplyFontMapping overloads to eliminate duplicated lookup logic.
+    /// </summary>
+    private static TextStyle? ResolveTextStyle(string originalStyleName, bool cnToEn, CadDocument doc)
+    {
+        var targetFont = FontMapper.MapFontName(originalStyleName, cnToEn);
+        if (string.IsNullOrEmpty(targetFont)) return null;
+
+        foreach (var ts in doc.TextStyles)
+        {
+            if (string.Equals(ts.Name, targetFont, StringComparison.OrdinalIgnoreCase))
+                return ts;
+        }
+
+        var newStyle = new TextStyle(targetFont);
+        doc.TextStyles.Add(newStyle);
+        return newStyle;
+    }
+
+    /// <summary>
     /// Map Chinese fonts to English fonts and vice versa.
     /// </summary>
     private static void ApplyFontMapping(CadText textEntity, string originalStyleName, bool cnToEn, CadDocument doc)
     {
         try
         {
-            var targetFont = FontMapper.MapFontName(originalStyleName, cnToEn);
-            if (string.IsNullOrEmpty(targetFont)) return;
-
-            // Find or create target style safely (do NOT modify existing style.Name)
-            TextStyle? targetStyle = null;
-            foreach (var ts in doc.TextStyles)
-            {
-                if (string.Equals(ts.Name, targetFont, StringComparison.OrdinalIgnoreCase))
-                {
-                    targetStyle = ts;
-                    break;
-                }
-            }
-            if (targetStyle == null)
-            {
-                targetStyle = new TextStyle(targetFont);
-                doc.TextStyles.Add(targetStyle);
-            }
-
-            textEntity.Style = targetStyle;
+            var style = ResolveTextStyle(originalStyleName, cnToEn, doc);
+            if (style != null) textEntity.Style = style;
         }
         catch (Exception ex)
         {
@@ -395,25 +406,8 @@ public class DwgWriterService : IDwgWriterService, IDxfWriterService
     {
         try
         {
-            var targetFont = FontMapper.MapFontName(originalStyleName, cnToEn);
-            if (string.IsNullOrEmpty(targetFont)) return;
-
-            TextStyle? targetStyle = null;
-            foreach (var ts in doc.TextStyles)
-            {
-                if (string.Equals(ts.Name, targetFont, StringComparison.OrdinalIgnoreCase))
-                {
-                    targetStyle = ts;
-                    break;
-                }
-            }
-            if (targetStyle == null)
-            {
-                targetStyle = new TextStyle(targetFont);
-                doc.TextStyles.Add(targetStyle);
-            }
-
-            mtext.Style = targetStyle;
+            var style = ResolveTextStyle(originalStyleName, cnToEn, doc);
+            if (style != null) mtext.Style = style;
         }
         catch (Exception ex)
         {
@@ -426,7 +420,7 @@ public class DwgWriterService : IDwgWriterService, IDxfWriterService
     /// Uses improved per-character width estimation (CJK vs ASCII).
     /// Also applies a conservative cap to reduce collision risk with nearby geometry.
     /// </summary>
-    private static void ApplyScaling(CadText textEntity, string translatedText, OurTextEntity ourEntity)
+    private static void ApplyScaling(CadText textEntity, string translatedText, CoreTextEntity ourEntity)
     {
         double originalWidth = ourEntity.OriginalWidth;
         double originalHeight = ourEntity.OriginalHeight > 0 ? ourEntity.OriginalHeight : textEntity.Height;
@@ -468,7 +462,7 @@ public class DwgWriterService : IDwgWriterService, IDxfWriterService
     /// 4. Conservative height cap: never exceeds original total height to reduce
     ///    collision risk with nearby geometry.
     /// </summary>
-    private static void ApplyScaling(CadMText mtext, string translatedText, OurTextEntity ourEntity)
+    private static void ApplyScaling(CadMText mtext, string translatedText, CoreTextEntity ourEntity)
     {
         if (string.IsNullOrEmpty(translatedText) || ourEntity.OriginalWidth <= 0) return;
 
@@ -591,14 +585,16 @@ public class DwgWriterService : IDwgWriterService, IDxfWriterService
         }
     }
 
+    private static readonly string[] MTextLineSeparator = ["\\P"];
+
     /// <summary>
     /// Splits MText content into logical lines by \P (hard paragraph break).
     /// Empty lines are preserved as empty strings.
     /// </summary>
     private static List<string> SplitMTextLines(string text)
     {
-        if (string.IsNullOrEmpty(text)) return new List<string> { string.Empty };
-        return text.Split(new[] { "\\P" }, StringSplitOptions.None).ToList();
+        if (string.IsNullOrEmpty(text)) return [string.Empty];
+        return [.. text.Split(MTextLineSeparator, StringSplitOptions.None)];
     }
 
     private static double EstimateTextWidth(string text, double height) => TextWidthEstimator.EstimateTextWidth(text, height);
@@ -629,7 +625,7 @@ public class DwgWriterService : IDwgWriterService, IDxfWriterService
                         double maxY = poly.Vertices.Max(v => v.Location.Y);
                         double area = (maxX - minX) * (maxY - minY);
                         // Only consider large rectangles as frames (not small detail boxes)
-                        if (area > 10000)
+                        if (area > MinFrameAreaSquareUnits)
                             frames.Add((minX, minY, maxX, maxY));
                     }
                 }
@@ -701,6 +697,17 @@ public class DwgWriterService : IDwgWriterService, IDxfWriterService
     }
 
     /// <summary>
+    /// Computes the scale factor required to fit text bounds within a frame boundary.
+    /// Returns a value in [0.4, 1.0]. Shared by all CheckAndScaleToFitFrame overloads.
+    /// </summary>
+    private static double ComputeFrameScale(double frameW, double frameH, double textW, double textH)
+    {
+        double scaleW = textW > 0 ? Math.Max(0.4, (frameW * 0.95) / textW) : 1.0;
+        double scaleH = textH > 0 ? Math.Max(0.4, (frameH * 0.95) / textH) : 1.0;
+        return Math.Min(1.0, Math.Min(scaleW, scaleH));
+    }
+
+    /// <summary>
     /// Checks whether a CadText entity's estimated bounds exceed its closest frame boundary.
     /// If so, scales down the text height to fit within the frame (down to 40% of original height).
     /// </summary>
@@ -719,15 +726,12 @@ public class DwgWriterService : IDwgWriterService, IDxfWriterService
             var bounds = EstimateTextBounds(textEntity);
             if (!ExceedsFrame(bounds, frame.Value)) return;
 
-            // Compute scale factor needed to fit within frame
             double frameW = frame.Value.maxX - frame.Value.minX;
             double frameH = frame.Value.maxY - frame.Value.minY;
             double textW = bounds.maxX - bounds.minX;
             double textH = bounds.maxY - bounds.minY;
 
-            double scaleW = textW > 0 ? Math.Max(0.4, (frameW * 0.95) / textW) : 1.0;
-            double scaleH = textH > 0 ? Math.Max(0.4, (frameH * 0.95) / textH) : 1.0;
-            double scale = Math.Min(1.0, Math.Min(scaleW, scaleH));
+            double scale = ComputeFrameScale(frameW, frameH, textW, textH);
 
             if (scale < 1.0)
             {
@@ -769,9 +773,7 @@ public class DwgWriterService : IDwgWriterService, IDxfWriterService
             double textW = bounds.maxX - bounds.minX;
             double textH = bounds.maxY - bounds.minY;
 
-            double scaleW = textW > 0 ? Math.Max(0.4, (frameW * 0.95) / textW) : 1.0;
-            double scaleH = textH > 0 ? Math.Max(0.4, (frameH * 0.95) / textH) : 1.0;
-            double scale = Math.Min(1.0, Math.Min(scaleW, scaleH));
+            double scale = ComputeFrameScale(frameW, frameH, textW, textH);
 
             if (scale < 1.0)
             {
@@ -805,6 +807,169 @@ public class DwgWriterService : IDwgWriterService, IDxfWriterService
             || bounds.maxY > frame.maxY + tolY;
     }
 
+    // ───────────────────── Entity-level collision detection ─────────────────────
+
+    /// <summary>
+    /// Estimates the axis-aligned bounding box of any CAD entity for collision detection.
+    /// Returns null for entity types whose bounds cannot be reliably estimated.
+    /// </summary>
+    private static (double minX, double minY, double maxX, double maxY)? GetEntityBounds(CadEntity entity)
+    {
+        switch (entity)
+        {
+            case CadText text:
+                return EstimateTextBounds(text);
+            case CadMText mtext:
+                return EstimateMTextBounds(mtext);
+            case CadInsert insert:
+                double x = insert.InsertPoint.X;
+                double y = insert.InsertPoint.Y;
+                double w = Math.Abs(insert.XScale) * 80;
+                double h = Math.Abs(insert.YScale) * 80;
+                return (x, y, x + w, y + h);
+            case CadLwPolyline poly:
+                if (poly.Vertices.Count > 0)
+                {
+                    double pminX = poly.Vertices.Min(v => v.Location.X);
+                    double pminY = poly.Vertices.Min(v => v.Location.Y);
+                    double pmaxX = poly.Vertices.Max(v => v.Location.X);
+                    double pmaxY = poly.Vertices.Max(v => v.Location.Y);
+                    return (pminX, pminY, pmaxX, pmaxY);
+                }
+                return null;
+            default:
+                return null;
+        }
+    }
+
+    /// <summary>
+    /// Returns true if two axis-aligned bounding boxes overlap, with a configurable margin.
+    /// </summary>
+    private static bool HasBoundsOverlap(
+        (double minX, double minY, double maxX, double maxY) a,
+        (double minX, double minY, double maxX, double maxY) b,
+        double margin = 2.0)
+    {
+        return a.minX - margin < b.maxX &&
+               a.maxX + margin > b.minX &&
+               a.minY - margin < b.maxY &&
+               a.maxY + margin > b.minY;
+    }
+
+    /// <summary>
+    /// Sets the Height property on text entities (CadText or CadMText).
+    /// No-op for other entity types.
+    /// </summary>
+    private static void TrySetEntityHeight(CadEntity entity, double height)
+    {
+        switch (entity)
+        {
+            case CadText text:
+                text.Height = height;
+                break;
+            case CadMText mtext:
+                mtext.Height = height;
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Binary-search scales down text height to avoid overlapping nearby entities.
+    /// Called after a successful text replacement in ProcessEntityCollection.
+    /// Collects bounds of all OTHER entities in the same collection, checks for
+    /// overlaps with the target entity, and scales height down (≥ 40% original)
+    /// to find the largest non-overlapping size.
+    /// </summary>
+    private static void ScaleDownToAvoidCollisions(
+        CadEntity targetEntity,
+        double originalHeight,
+        IEnumerable<CadEntity> allEntities)
+    {
+        if (originalHeight <= 0) return;
+
+        double currentHeight;
+        switch (targetEntity)
+        {
+            case CadText text:
+                currentHeight = text.Height;
+                break;
+            case CadMText mtext:
+                currentHeight = mtext.Height;
+                break;
+            default:
+                return;
+        }
+
+        double minHeight = originalHeight * 0.4;
+        if (currentHeight <= minHeight) return;
+
+        // Collect bounds of all OTHER entities in the collection
+        var otherBounds = new List<(double minX, double minY, double maxX, double maxY)>();
+        foreach (var other in allEntities)
+        {
+            if (ReferenceEquals(other, targetEntity) || other == null) continue;
+            var b = GetEntityBounds(other);
+            if (b.HasValue) otherBounds.Add(b.Value);
+        }
+
+        if (otherBounds.Count == 0) return;
+
+        // Check current bounds for any overlap
+        var currentBounds = GetEntityBounds(targetEntity);
+        if (!currentBounds.HasValue) return;
+
+        bool hasCollision = false;
+        foreach (var ob in otherBounds)
+        {
+            if (HasBoundsOverlap(currentBounds.Value, ob))
+            {
+                hasCollision = true;
+                break;
+            }
+        }
+
+        if (!hasCollision) return;
+
+        // Binary search for maximum non-overlapping height
+        double lo = minHeight;
+        double hi = currentHeight;
+        double savedHeight = currentHeight;
+
+        for (int iter = 0; iter < 15; iter++)
+        {
+            double mid = (lo + hi) / 2;
+            TrySetEntityHeight(targetEntity, mid);
+
+            var testBounds = GetEntityBounds(targetEntity);
+            if (!testBounds.HasValue) break;
+
+            bool midHasCollision = false;
+            foreach (var ob in otherBounds)
+            {
+                if (HasBoundsOverlap(testBounds.Value, ob))
+                {
+                    midHasCollision = true;
+                    break;
+                }
+            }
+
+            if (midHasCollision)
+                hi = mid;
+            else
+                lo = mid;
+        }
+
+        TrySetEntityHeight(targetEntity, lo);
+
+        if (lo < savedHeight * 0.99)
+        {
+            Log.Debug("Collision-avoidance scaling: {Type} {Handle} height {Old:F2} -> {New:F2}",
+                targetEntity.GetType().Name, targetEntity.Handle, savedHeight, lo);
+        }
+    }
+
+    // ─────────────────────────── Handle formatting ───────────────────────────
+
     /// <summary>
     /// Formats a numeric (ulong) handle to its canonical string representation (uppercase hexadecimal).
     /// This MUST match how handles are stored in TextEntity.Handle by DwgReaderService,
@@ -835,15 +1000,4 @@ public class DwgWriterService : IDwgWriterService, IDxfWriterService
         else
             Log.Debug("ACadSharp [{Type}]: {Message}", e.NotificationType, e.Message);
     }
-}
-
-/// <summary>
-/// Result of a DWG writeback operation.
-/// </summary>
-public class DwgWriteResult
-{
-    public int SuccessCount { get; set; }
-    public int FailCount { get; set; }
-    public List<string> Errors { get; set; } = new();
-    public bool IsSuccess => SuccessCount > 0;
 }

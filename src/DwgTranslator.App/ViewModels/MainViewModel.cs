@@ -36,7 +36,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private readonly IDwgWriterService _dwgWriterService;
     private readonly ILicenseService _licenseService;
     private readonly IAutoCadInteropService _autoCadInteropService;
-    private readonly FormatCodeParser _formatCodeParser;
+    private readonly IFormatCodeParser _formatCodeParser;
     private TranslationConsistencyService _consistencyService;
     private HttpClient? _httpClient;
     private DeepSeekClient? _deepSeekClient;
@@ -116,7 +116,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
             App.Services?.GetService<IDwgWriterService>() ?? new DwgWriterService(),
             App.Services?.GetService<ILicenseService>() ?? App.LicenseService,
             App.Services?.GetService<IAutoCadInteropService>() ?? new DwgTranslator.App.Services.AutoCadInteropService(),
-            App.Services?.GetService<FormatCodeParser>() ?? new FormatCodeParser())
+            App.Services?.GetService<IFormatCodeParser>() ?? new FormatCodeParser())
     {
     }
 
@@ -127,7 +127,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         IDwgWriterService dwgWriterService,
         ILicenseService licenseService,
         IAutoCadInteropService autoCadInteropService,
-        FormatCodeParser formatCodeParser)
+        IFormatCodeParser formatCodeParser)
     {
         _config = new AppConfig();
         _glossaryService = glossaryService;
@@ -201,7 +201,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
             // Load glossary
             RefreshGlossaryData();
 
-            // Load translation consistency cache
+            // Flush and reload translation consistency cache
+            _consistencyService?.FlushCache();
             var cachePath = Path.Combine(App.AppDataDir, "translation_cache.json");
             _consistencyService = new TranslationConsistencyService(cachePath);
 
@@ -651,7 +652,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
             // BUG FIX: 使用 ContextIdle 优先级强制更新最终状态，
             // 确保在所有 Progress<T> 的 BeginInvoke 回调执行完毕后再设置状态消息，
             // 防止残留的异步回调覆盖"翻译完成"状态。
-            Application.Current.Dispatcher.BeginInvoke(() =>
+            _ = Application.Current.Dispatcher.BeginInvoke(() =>
             {
                 StatusMessage = Strings.Get("StatusTranslateComplete", TranslatedCount, FailedCount, LanguageDirection);
                 UpdateStatistics();
@@ -841,7 +842,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
         try
         {
-            Core.Services.DwgWriteResult result;
+            CadWriteResult result;
             bool usedAcadInterop = false;
 
             // Show export mode selection dialog
@@ -874,7 +875,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
             else
             {
                 result = await Task.Run(() =>
-                    _dwgWriterService.WriteTranslations(sourceFilePath, dialog2.FileName, entitiesToWrite, IsCnToEn));
+                    _dwgWriterService.WriteTranslations(sourceFilePath, dialog2.FileName, entitiesToWrite, IsCnToEn, _exportCts!.Token), _exportCts.Token);
             }
 
             ProgressValue = 100;

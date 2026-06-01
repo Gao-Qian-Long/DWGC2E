@@ -14,7 +14,7 @@ namespace DwgTranslator.Cad.Replacement;
 public static class CollisionDetector
 {
     public const double MinCollisionAvoidanceScale = 0.5;
-    private const int BinarySearchIterations = 8;
+    private const int BinarySearchIterations = 12;
 
     public static Extents3d? FindClosestFrame(Point3d point, List<Extents3d> frames)
     {
@@ -102,17 +102,19 @@ public static class CollisionDetector
             try { textBounds = GetCorrectedBounds(textEntity); }
             catch { return true; } // degenerate text
 
-            double padding = originalHeight * 0.45; // safety margin (aligned with cross-layer path)
+            double padding = originalHeight * 0.65; // safety margin (aligned with cross-layer path)
             double minHeight = originalHeight * minHeightRatio;
 
             var colliders = new List<Extents3d>();
             var colliderPositions = new List<Point3d>();
-            CollectPotentialColliders(tr, btr, textEntity.ObjectId, textBounds, padding, colliders, colliderPositions, 0);
+            var colliderTypes = new List<string>();
+            var colliderPaddings = new List<double>();
+            CollectPotentialCollidersWithTypes(tr, btr, textEntity.ObjectId, textBounds, padding, colliders, colliderPositions, colliderTypes, colliderPaddings, 0);
 
             // Cross-block scan: check other block table records for collisions
             if (colliders.Count == 0 && db != null)
             {
-                CollectCrossBlockColliders(tr, db, textEntity.ObjectId, textBounds, padding, colliders, colliderPositions);
+                CollectCrossBlockCollidersWithTypes(tr, db, textEntity.ObjectId, textBounds, padding, colliders, colliderPositions, colliderTypes, colliderPaddings);
             }
 
             if (colliders.Count == 0)
@@ -158,9 +160,10 @@ public static class CollisionDetector
                 {
                     var testBounds = GetCorrectedBounds(textEntity);
                     bool stillCollides = false;
-                    foreach (var c in colliders)
+                    for (int cIdx = 0; cIdx < colliders.Count; cIdx++)
                     {
-                        if (BoundsIntersect2D(testBounds, c, padding))
+                        double cPadding = cIdx < colliderPaddings.Count ? colliderPaddings[cIdx] : padding;
+                        if (BoundsIntersect2D(testBounds, colliders[cIdx], cPadding))
                         { stillCollides = true; break; }
                     }
                     if (stillCollides) highHeight = midHeight;
@@ -173,11 +176,34 @@ public static class CollisionDetector
             textEntity.RecordGraphicsModified(true);
 
             if (!resolved)
-                Log.Warning("Entity {Handle}: unresolved collision with {Count} entities at min height",
-                    textEntity.Handle, colliders.Count);
+            {
+                var typeSummary = colliderTypes
+                    .GroupBy(t => t)
+                    .Select(g => $"{g.Count()}×{g.Key}");
+                Log.Warning("Entity {Handle}: unresolved collision with {Count} entities at min height: [{Types}]",
+                    textEntity.Handle, colliders.Count, string.Join(", ", typeSummary));
+            }
             else if (bestHeight < originalHeight)
                 Log.Information("Entity {Handle}: scaled {Orig:F2}→{New:F2} to avoid {Count} collisions",
                     textEntity.Handle, originalHeight, bestHeight, colliders.Count);
+
+            // Final fallback for MText: try width adjustment when height scaling fails
+            if (!resolved && textEntity is MText mTextFallback)
+            {
+                var colliderList = new List<(Extents3d Bounds, double Padding)>();
+                for (int ci = 0; ci < colliders.Count; ci++)
+                {
+                    double cp = ci < colliderPaddings.Count ? colliderPaddings[ci] : padding;
+                    colliderList.Add((colliders[ci], cp));
+                }
+                double originalWidth = mTextFallback.Width;
+                if (TryResolveMTextByWidthAdjustment(mTextFallback, colliderList, bestHeight, originalHeight, originalWidth))
+                {
+                    resolved = true;
+                    Log.Information("Entity {Handle}: MText width adjustment resolved after binary search failed",
+                        textEntity.Handle);
+                }
+            }
 
             return resolved;
         }
@@ -223,8 +249,6 @@ public static class CollisionDetector
                 continue;
             }
 
-            // Skip Dimension (intentional text/line overlap)
-            if (other is Dimension) continue;
             // Skip Viewport (boundary only, not visual)
             if (other is Viewport) continue;
 
@@ -233,11 +257,13 @@ public static class CollisionDetector
                               or Polyline2d or Polyline3d or MLeader;
             bool isSolidLike = other is Solid or Solid3d or Region or Hatch;
             bool isTextLike = other is DBText or MText or AttributeReference;
+            bool isDimension = other is Dimension;
 
             double collisionPadding;
             if (isTextLike)      collisionPadding = padding * 0.3;  // text can coexist closely
             else if (isLineLike) collisionPadding = padding * 0.65; // reduced — avoid false positives on table lines
             else if (isSolidLike) collisionPadding = padding * 0.8; // moderate for filled areas
+            else if (isDimension) collisionPadding = padding * 0.5; // moderate for dimensions
             else                 collisionPadding = padding;        // default
 
             try
@@ -389,7 +415,7 @@ public static class CollisionDetector
             try { textBounds = GetCorrectedBounds(textEntity); }
             catch { return result; }
 
-            double padding = trueOriginalHeight * 0.45;
+            double padding = trueOriginalHeight * 0.65;
             CollectPotentialCollidersWithTypes(tr, btr, textEntity.ObjectId, textBounds, padding,
                 colliders, positions, types, paddings, 0);
 
@@ -629,9 +655,9 @@ public static class CollisionDetector
             try { textBounds = GetCorrectedBounds(textEntity); }
             catch { return true; } // Degenerate — skip
 
-            // Base padding proportional to original text height (raised to 0.45 per investigation).
-            // For a 2.5-unit text with Line multiplier: 0.45 * 2.5 * 1.3 = 1.46 units detection radius.
-            double padding = trueOriginalHeight * 0.45;
+            // Base padding proportional to original text height (raised to 0.65 per investigation).
+            // For a 2.5-unit text with Line multiplier: 0.65 * 2.5 * 1.3 = 2.11 units detection radius.
+            double padding = trueOriginalHeight * 0.65;
             double minHeight = trueOriginalHeight * minHeightRatio;
             double searchMax = Math.Max(currentHeight, minHeight);
 
@@ -709,8 +735,31 @@ public static class CollisionDetector
                 Log.Information("Entity {Handle}: cross-layer resolved {Orig:F2}→{New:F2} (floor={Floor:F2})",
                     textEntity.Handle, searchMax, best, minHeight);
             else if (!resolved)
-                Log.Warning("Entity {Handle}: cross-layer UNRESOLVED at floor={Floor:F2} ({Count} colliders remain)",
-                    textEntity.Handle, minHeight, colliders.Count);
+            {
+                var typeSummary = colliderTypes
+                    .GroupBy(t => t)
+                    .Select(g => $"{g.Count()}×{g.Key}");
+                Log.Warning("Entity {Handle}: cross-layer UNRESOLVED at floor={Floor:F2} ({Count} colliders remain: [{Types}])",
+                    textEntity.Handle, minHeight, colliders.Count, string.Join(", ", typeSummary));
+            }
+
+            // Final fallback for MText: try width adjustment when height scaling fails
+            if (!resolved && textEntity is MText mTextFallback)
+            {
+                var colliderList = new List<(Extents3d Bounds, double Padding)>();
+                for (int ci = 0; ci < colliders.Count; ci++)
+                {
+                    double cp = ci < colliderPaddings.Count ? colliderPaddings[ci] : padding;
+                    colliderList.Add((colliders[ci], cp));
+                }
+                double originalWidth = mTextFallback.Width;
+                if (TryResolveMTextByWidthAdjustment(mTextFallback, colliderList, best, trueOriginalHeight, originalWidth))
+                {
+                    resolved = true;
+                    Log.Information("Entity {Handle}: MText width adjustment resolved after binary search failed",
+                        textEntity.Handle);
+                }
+            }
 
             return resolved;
         }
@@ -758,18 +807,19 @@ public static class CollisionDetector
                 continue;
             }
 
-            if (other is Dimension) continue;
             if (other is Viewport) continue;
 
             bool isLineLike = other is Line or Polyline or Arc or Circle or Spline
                               or Polyline2d or Polyline3d or MLeader;
             bool isSolidLike = other is Solid or Solid3d or Region or Hatch;
             bool isTextLike = other is DBText or MText or AttributeReference;
+            bool isDimension = other is Dimension;
 
             double collisionPadding;
             if (isLineLike)      collisionPadding = padding * 0.65;
             else if (isSolidLike) collisionPadding = padding * 0.8;
             else if (isTextLike)  collisionPadding = padding * 0.3;
+            else if (isDimension) collisionPadding = padding * 0.5;
             else                  collisionPadding = padding;
 
             try

@@ -1,4 +1,5 @@
 using DwgTranslator.Core.Models;
+using System.Threading;
 
 namespace DwgTranslator.Core.Services;
 
@@ -15,5 +16,5 @@ public interface IDwgWriterService
     /// <param name="entities">List of entities with translated text to apply.</param>
     /// <param name="cnToEn">True for Chinese→English, false for English→Chinese (used for font mapping).</param>
     /// <returns>Result with success/failure counts.</returns>
-    DwgWriteResult WriteTranslations(string sourceFilePath, string outputFilePath, List<TextEntity> entities, bool cnToEn = true);
+    CadWriteResult WriteTranslations(string sourceFilePath, string outputFilePath, List<TextEntity> entities, bool cnToEn = true, CancellationToken cancellationToken = default);
 }

@@ -8,7 +8,7 @@ namespace DwgTranslator.Core.Translation;
 /// Ensures identical source text always receives the same translation,
 /// reducing API costs and improving consistency across the drawing.
 /// </summary>
-public class TranslationConsistencyService
+public class TranslationConsistencyService : ITranslationConsistencyService
 {
     private readonly Dictionary<string, string> _cache;
     private readonly string _cacheFilePath;
@@ -149,7 +149,7 @@ public class TranslationConsistencyService
     /// <summary>
     /// Load cache from disk.
     /// </summary>
-    private void LoadCache()
+    public void LoadCache()
     {
         if (string.IsNullOrEmpty(_cacheFilePath) || !File.Exists(_cacheFilePath))
             return;

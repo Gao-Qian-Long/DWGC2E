@@ -12,7 +12,7 @@ namespace DwgTranslator.App.Services;
 /// Handles AutoCAD COM interop for precise DWG writeback.
 /// Extracted from MainViewModel to improve separation of concerns.
 /// </summary>
-public class AutoCadInteropService : IAutoCadInteropService
+public class AutoCadInteropService : IAutoCadInteropService, IDisposable
 {
     private static readonly string[] AcadProgIDs =
     {
@@ -31,6 +31,9 @@ public class AutoCadInteropService : IAutoCadInteropService
         "AutoCADLT.Application.24.1",
         "AutoCADLT.Application.24",
     };
+
+    private readonly List<object?> _comObjects = new();
+    private bool _disposed;
 
     public bool IsAutoCADAvailable(AppConfig config)
     {
@@ -59,7 +62,7 @@ public class AutoCadInteropService : IAutoCadInteropService
     /// Heavy operations (file I/O, COM interop) run on the calling thread;
     /// the caller is responsible for offloading to a background thread via Task.Run.
     /// </summary>
-    public async Task<DwgWriteResult> WritebackViaAutoCadAsync(
+    public async Task<CadWriteResult> WritebackViaAutoCadAsync(
         string sourceFilePath,
         string outputFilePath,
         List<TextEntity> entities,
@@ -67,8 +70,9 @@ public class AutoCadInteropService : IAutoCadInteropService
         AppConfig config,
         IProgress<string>? progress = null)
     {
-        var result = new DwgWriteResult();
+        var result = new CadWriteResult();
         string? initialTempPath = null;
+        var localComObjects = new List<object?>();
 
         try
         {
@@ -121,6 +125,7 @@ public class AutoCadInteropService : IAutoCadInteropService
             }
 
             dynamic acad = Activator.CreateInstance(acadType)!;
+            localComObjects.Add(acad);
             acad.Visible = true;
 
             // Detect AutoCAD version from ProgID for compatibility check
@@ -128,6 +133,7 @@ public class AutoCadInteropService : IAutoCadInteropService
             Log.Information("Connected to AutoCAD via ProgID: {ProgID}", acadVersion);
 
             var doc = acad.ActiveDocument;
+            localComObjects.Add(doc);
             if (doc == null)
             {
                 result.Errors.Add(Strings.Get("AutoCadNoActiveDoc"));
@@ -158,10 +164,6 @@ public class AutoCadInteropService : IAutoCadInteropService
 
             // Write config to fixed path (WritebackCommand reads from here)
             File.WriteAllText(fixedConfigPath, json);
-
-            // Clean up the initial random-name temp file — the fixed path is now the canonical one
-            try { if (initialTempPath != null && File.Exists(initialTempPath)) File.Delete(initialTempPath); } catch { }
-            initialTempPath = null;
 
             Log.Information("Config written to fixed path: {Path}", fixedConfigPath);
 
@@ -265,8 +267,10 @@ public class AutoCadInteropService : IAutoCadInteropService
         {
             Log.Error(ex, "AutoCAD COM writeback failed");
             result.Errors.Add(Strings.Get("AutoCadWritebackError", ex.Message));
-
-            // Clean up temp file on error
+        }
+        finally
+        {
+            ReleaseComObjects(localComObjects);
             try { if (initialTempPath != null && File.Exists(initialTempPath)) File.Delete(initialTempPath); } catch { }
         }
 
@@ -289,6 +293,7 @@ public class AutoCadInteropService : IAutoCadInteropService
 
     private static void AddTrustedPath(dynamic acad, string dllPath)
     {
+        var comRefs = new List<object?>();
         try
         {
             var dllDir = Path.GetDirectoryName(dllPath);
@@ -297,7 +302,9 @@ public class AutoCadInteropService : IAutoCadInteropService
             if (!dllDir.EndsWith("\\")) dllDir += "\\";
 
             dynamic prefs = acad.Preferences;
+            comRefs.Add(prefs);
             dynamic files = prefs.Files;
+            comRefs.Add(files);
             string? currentTrusted = files.TrustedPath;
 
             if (currentTrusted != null && currentTrusted.Contains(dllDir, StringComparison.OrdinalIgnoreCase))
@@ -316,6 +323,10 @@ public class AutoCadInteropService : IAutoCadInteropService
         catch (Exception ex)
         {
             Log.Warning(ex, "Failed to add trusted path");
+        }
+        finally
+        {
+            ReleaseComObjects(comRefs);
         }
     }
 
@@ -345,6 +356,41 @@ public class AutoCadInteropService : IAutoCadInteropService
         }
 
         return null;
+    }
+
+    private static void ReleaseComObjects(List<object?> objs)
+    {
+        for (int i = objs.Count - 1; i >= 0; i--)
+        {
+            var obj = objs[i];
+            if (obj != null && Marshal.IsComObject(obj))
+            {
+                try { Marshal.ReleaseComObject(obj); } catch { }
+            }
+        }
+    }
+
+    #endregion
+
+    #region IDisposable
+
+    public void Dispose()
+    {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (_disposed) return;
+
+        if (disposing)
+        {
+            ReleaseComObjects(_comObjects);
+            _comObjects.Clear();
+        }
+
+        _disposed = true;
     }
 
     #endregion

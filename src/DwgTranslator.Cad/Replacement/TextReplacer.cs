@@ -43,6 +43,8 @@ public class TextReplacer
             var modelSpace = (BlockTableRecord)transaction.GetObject(modelSpaceId, OpenMode.ForRead);
             var blockTable = (BlockTable)transaction.GetObject(db.BlockTableId, OpenMode.ForRead);
 
+            var frames = FrameDetector.DetectFrames(db);
+
             foreach (var entity in entities)
             {
                 if (entity.Status != TranslationStatus.Reviewed &&
@@ -52,16 +54,17 @@ public class TextReplacer
                     continue;
                 }
 
-                var replaceResult = ReplaceSingleEntity(transaction, db, entity);
+                var replaceResult = ReplaceSingleEntity(transaction, db, entity, frames);
                 if (replaceResult.Success)
                 {
                     // Post-replacement collision avoidance for the modified entity
                     if (replaceResult.ModifiedEntity != null)
                     {
                         var btr = replaceResult.OwningBlock ?? modelSpace;
-                        CollisionDetector.TryResolveCollisionByScaling(
+                        CollisionDetector.TryResolveCrossLayerCollisions(
                             replaceResult.ModifiedEntity, btr, transaction,
-                            replaceResult.OriginalHeight, db: db);
+                            replaceResult.CurrentHeight, replaceResult.OriginalHeight,
+                            db: db);
                     }
 
                     result.SuccessCount++;
@@ -92,7 +95,7 @@ public class TextReplacer
         return result;
     }
 
-    private EntityReplaceResult ReplaceSingleEntity(Transaction tr, Database db, TextEntity entity)
+    private EntityReplaceResult ReplaceSingleEntity(Transaction tr, Database db, TextEntity entity, List<Extents3d> frames)
     {
         try
         {
@@ -119,10 +122,10 @@ public class TextReplacer
             switch (dbObject)
             {
                 case DBText dbText:
-                    return ReplaceDBText(dbText, entity, db, owningBtr);
+                    return ReplaceDBText(dbText, entity, db, owningBtr, frames);
 
                 case MText mText:
-                    return ReplaceMText(mText, entity, db, owningBtr);
+                    return ReplaceMText(mText, entity, db, owningBtr, frames);
 
                 case Dimension dim:
                     return ReplaceDimension(dim, entity, owningBtr);
@@ -140,7 +143,7 @@ public class TextReplacer
         }
     }
 
-    private EntityReplaceResult ReplaceDBText(DBText dbText, TextEntity entity, Database db, BlockTableRecord? owningBtr)
+    private EntityReplaceResult ReplaceDBText(DBText dbText, TextEntity entity, Database db, BlockTableRecord? owningBtr, List<Extents3d> frames)
     {
         var originalHeight = dbText.Height;
         dbText.TextString = entity.TranslatedText;
@@ -155,7 +158,6 @@ public class TextReplacer
         }
 
         // Frame-aware scaling: shrink to fit closest frame if overflowing
-        var frames = FrameDetector.DetectFrames(db);
         var closestFrame = CollisionDetector.FindClosestFrame(dbText.Position, frames);
         if (closestFrame.HasValue)
         {
@@ -185,11 +187,12 @@ public class TextReplacer
             Success = true,
             ModifiedEntity = dbText,
             OwningBlock = owningBtr,
-            OriginalHeight = originalHeight
+            OriginalHeight = originalHeight,
+            CurrentHeight = dbText.Height
         };
     }
 
-    private EntityReplaceResult ReplaceMText(MText mText, TextEntity entity, Database db, BlockTableRecord? owningBtr)
+    private EntityReplaceResult ReplaceMText(MText mText, TextEntity entity, Database db, BlockTableRecord? owningBtr, List<Extents3d> frames)
     {
         var originalHeight = mText.TextHeight;
 
@@ -232,19 +235,19 @@ public class TextReplacer
         mText.ColumnType = ColumnType.NoColumns;
 
         // Delegate all layout optimization (width, height, frame fitting) to LayoutOptimizer
-        var frames = FrameDetector.DetectFrames(db);
         var closestFrame = CollisionDetector.FindClosestFrame(mText.Location, frames);
         LayoutOptimizer.OptimizeMText(mText, contents, entity, closestFrame, null);
 
         // Force geometry refresh so collision detection sees accurate bounds
         mText.RecordGraphicsModified(true);
 
-        return new EntityReplaceResult 
-        { 
-            Success = true, 
-            ModifiedEntity = mText, 
+        return new EntityReplaceResult
+        {
+            Success = true,
+            ModifiedEntity = mText,
             OwningBlock = owningBtr,
-            OriginalHeight = originalHeight 
+            OriginalHeight = originalHeight,
+            CurrentHeight = mText.TextHeight
         };
     }
 
@@ -467,4 +470,5 @@ internal class EntityReplaceResult
     public Entity? ModifiedEntity { get; set; }
     public BlockTableRecord? OwningBlock { get; set; }
     public double OriginalHeight { get; set; }
+    public double CurrentHeight { get; set; }
 }

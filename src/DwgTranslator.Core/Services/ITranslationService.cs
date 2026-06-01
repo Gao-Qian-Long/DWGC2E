@@ -20,4 +20,12 @@ public interface ITranslationService
         string sourceLanguage,
         string targetLanguage,
         CancellationToken cancellationToken = default);
+
+    /// <summary>Deduplicated concurrent translation with streaming progress.</summary>
+    Task<List<TranslationPair>> TranslateBatchWithProgressAsync(
+        List<TextEntity> entities,
+        string sourceLanguage,
+        string targetLanguage,
+        IProgress<TranslationPair>? progress,
+        CancellationToken cancellationToken = default);
 }

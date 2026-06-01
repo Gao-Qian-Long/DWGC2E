@@ -10,6 +10,7 @@ namespace DwgTranslator.Core.Services;
 public class GlossaryService : IGlossaryService
 {
     private readonly List<GlossaryEntry> _entries = new();
+    private readonly ReaderWriterLockSlim _lock = new();
     private const string PlaceholderPrefix = "__GLOSSARY_";
     private const string PlaceholderSuffix = "__";
 
@@ -30,8 +31,16 @@ public class GlossaryService : IGlossaryService
 
         if (entries != null)
         {
-            _entries.Clear();
-            _entries.AddRange(entries.OrderByDescending(e => e.Source.Length)); // Longest match first
+            _lock.EnterWriteLock();
+            try
+            {
+                _entries.Clear();
+                _entries.AddRange(entries.OrderByDescending(e => e.Source.Length)); // Longest match first
+            }
+            finally
+            {
+                _lock.ExitWriteLock();
+            }
             Log.Information("Loaded {Count} glossary entries from {Path}", _entries.Count, filePath);
         }
     }
@@ -39,48 +48,59 @@ public class GlossaryService : IGlossaryService
     /// <inheritdoc/>
     public List<GlossaryMatch> MatchTerms(string text)
     {
-        if (string.IsNullOrEmpty(text) || _entries.Count == 0)
+        if (string.IsNullOrEmpty(text))
             return new List<GlossaryMatch>();
 
-        var matches = new List<GlossaryMatch>();
-        var occupied = new bool[text.Length]; // Track which positions are already matched
-        var matchIndex = 0;
-
-        foreach (var entry in _entries)
+        _lock.EnterReadLock();
+        try
         {
-            int searchStart = 0;
-            int pos;
-            while ((pos = text.IndexOf(entry.Source, searchStart, StringComparison.Ordinal)) >= 0)
+            if (_entries.Count == 0)
+                return new List<GlossaryMatch>();
+
+            var matches = new List<GlossaryMatch>();
+            var occupied = new bool[text.Length]; // Track which positions are already matched
+            var matchIndex = 0;
+
+            foreach (var entry in _entries)
             {
-                // Check if any position in this range is already occupied
-                bool overlaps = false;
-                for (int i = pos; i < pos + entry.Source.Length && i < occupied.Length; i++)
+                int searchStart = 0;
+                int pos;
+                while ((pos = text.IndexOf(entry.Source, searchStart, StringComparison.Ordinal)) >= 0)
                 {
-                    if (occupied[i]) { overlaps = true; break; }
-                }
-
-                if (!overlaps)
-                {
-                    matchIndex++;
-                    matches.Add(new GlossaryMatch
-                    {
-                        Index = matchIndex,
-                        SourceTerm = entry.Source,
-                        TargetTerm = entry.Target,
-                        Placeholder = $"{PlaceholderPrefix}{matchIndex}{PlaceholderSuffix}",
-                        Position = pos
-                    });
-
-                    // Mark positions as occupied
+                    // Check if any position in this range is already occupied
+                    bool overlaps = false;
                     for (int i = pos; i < pos + entry.Source.Length && i < occupied.Length; i++)
-                        occupied[i] = true;
+                    {
+                        if (occupied[i]) { overlaps = true; break; }
+                    }
+
+                    if (!overlaps)
+                    {
+                        matchIndex++;
+                        matches.Add(new GlossaryMatch
+                        {
+                            Index = matchIndex,
+                            SourceTerm = entry.Source,
+                            TargetTerm = entry.Target,
+                            Placeholder = $"{PlaceholderPrefix}{matchIndex}{PlaceholderSuffix}",
+                            Position = pos
+                        });
+
+                        // Mark positions as occupied
+                        for (int i = pos; i < pos + entry.Source.Length && i < occupied.Length; i++)
+                            occupied[i] = true;
+                    }
+
+                    searchStart = pos + entry.Source.Length;
                 }
-
-                searchStart = pos + entry.Source.Length;
             }
-        }
 
-        return matches;
+            return matches;
+        }
+        finally
+        {
+            _lock.ExitReadLock();
+        }
     }
 
     /// <inheritdoc/>
@@ -113,5 +133,16 @@ public class GlossaryService : IGlossaryService
     }
 
     /// <inheritdoc/>
-    public IReadOnlyList<GlossaryEntry> GetAllEntries() => _entries.AsReadOnly();
+    public IReadOnlyList<GlossaryEntry> GetAllEntries()
+    {
+        _lock.EnterReadLock();
+        try
+        {
+            return _entries.ToList().AsReadOnly();
+        }
+        finally
+        {
+            _lock.ExitReadLock();
+        }
+    }
 }
