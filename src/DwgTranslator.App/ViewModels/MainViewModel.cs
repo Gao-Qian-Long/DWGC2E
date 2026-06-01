@@ -143,6 +143,23 @@ public partial class MainViewModel : ObservableObject, IDisposable
         RefreshLicenseStatus();
     }
 
+    /// <summary>
+    /// 异步初始化：加载术语库等需要异步IO的操作。
+    /// 在 MainWindow.Loaded 事件中调用，避免构造函数中同步阻塞 UI 线程。
+    /// </summary>
+    public async Task InitializeAsync()
+    {
+        try
+        {
+            await RefreshGlossaryDataAsync();
+            StatusMessage = Strings.Get("StatusReadyWithGlossary", GlossaryEntries.Count);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Async initialization failed");
+        }
+    }
+
     private void RefreshLicenseStatus()
     {
         LicenseStatusText = _licenseService.CurrentLicense.GetDisplayStatus();
@@ -234,6 +251,26 @@ public partial class MainViewModel : ObservableObject, IDisposable
         GlossaryStatsText = Strings.Get("StatsGlossaryCount", GlossaryEntries.Count);
     }
 
+    /// <summary>
+    /// 异步版本的术语库加载，用于 InitializeAsync 和切换翻译方向。
+    /// 避免在 UI 线程上同步阻塞。
+    /// </summary>
+    private async Task RefreshGlossaryDataAsync()
+    {
+        GlossaryEntries.Clear();
+
+        var glossaryFile = ResolveGlossaryPath();
+        if (File.Exists(glossaryFile))
+        {
+            await _glossaryService.LoadGlossaryAsync(glossaryFile);
+        }
+
+        foreach (var entry in _glossaryService.GetAllEntries())
+            GlossaryEntries.Add(entry);
+
+        GlossaryStatsText = Strings.Get("StatsGlossaryCount", GlossaryEntries.Count);
+    }
+
     private string ResolveGlossaryPath()
     {
         // Try AppData first, then bundled
@@ -268,7 +305,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     /// Toggle translation direction between CN→EN and EN→CN.
     /// </summary>
     [RelayCommand]
-    private void ToggleLanguageDirection()
+    private async Task ToggleLanguageDirectionAsync()
     {
         if (IsProcessing) return;
 
@@ -306,8 +343,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
             _config.TargetLanguage = "ZH";
         }
 
-        // Reload glossary with correct direction
-        RefreshGlossaryData();
+        // Reload glossary with correct direction (async, 不阻塞 UI)
+        await RefreshGlossaryDataAsync();
 
         // Reset existing translations since direction changed
         foreach (var entity in Entities)
@@ -611,6 +648,16 @@ public partial class MainViewModel : ObservableObject, IDisposable
             IsIndeterminate = false;
             OperationLabel = string.Empty;
             IsCancellationRequested = false;
+
+            // BUG FIX: 使用 ContextIdle 优先级强制更新最终状态，
+            // 确保在所有 Progress<T> 的 BeginInvoke 回调执行完毕后再设置状态消息，
+            // 防止残留的异步回调覆盖"翻译完成"状态。
+            Application.Current.Dispatcher.BeginInvoke(() =>
+            {
+                StatusMessage = Strings.Get("StatusTranslateComplete", TranslatedCount, FailedCount, LanguageDirection);
+                UpdateStatistics();
+                ApplyFilter();
+            }, System.Windows.Threading.DispatcherPriority.ContextIdle);
         }
     }
 

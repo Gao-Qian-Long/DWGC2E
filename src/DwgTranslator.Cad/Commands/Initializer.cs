@@ -35,7 +35,6 @@ public class Initializer : IExtensionApplication
         {
             var ed = doc.Editor;
             ed.WriteMessage("\n[DwgTranslator] Plugin loaded successfully.");
-            ed.WriteMessage("\n[DwgTranslator] AssemblyResolve handler registered (static ctor).");
         }
     }
 

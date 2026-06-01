@@ -15,7 +15,11 @@ public partial class MainWindow : Window
         InitializeComponent();
 
         // Resolve ViewModel from DI container (falls back to parameterless ctor if DI not ready)
-        DataContext = App.Services?.GetService<MainViewModel>() ?? new MainViewModel();
+        var vm = App.Services?.GetService<MainViewModel>() ?? new MainViewModel();
+        DataContext = vm;
+
+        // BUG FIX: 异步初始化术语库加载，避免 UI 线程同步阻塞
+        Loaded += async (s, e) => await vm.InitializeAsync();
 
         StateChanged += OnWindowStateChanged;
     }

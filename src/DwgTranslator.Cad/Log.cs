@@ -127,9 +127,13 @@ public static class Log
         if (!string.IsNullOrEmpty(exception))
             readable += $" | {exception}";
 
-        // Output to AutoCAD command line
-        try { Editor?.WriteMessage($"\n[DwgTranslator] {readable}"); }
-        catch { System.Diagnostics.Debug.WriteLine(readable); }
+        // Output to AutoCAD command line — only Warning level and above
+        // to reduce noise on the command line (Debug/Info go to file only)
+        if (level >= LogLevel.Warning)
+        {
+            try { Editor?.WriteMessage($"\n[DwgTranslator] {readable}"); }
+            catch { System.Diagnostics.Debug.WriteLine(readable); }
+        }
 
         // Output to Debug (VS output window)
         System.Diagnostics.Debug.WriteLine(readable);
