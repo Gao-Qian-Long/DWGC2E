@@ -32,10 +32,13 @@ public class WritebackCommand
         public string OutputDwgPath { get; set; } = "";
         public List<TextEntity> Entities { get; set; } = new();
         public bool CnToEn { get; set; } = true;
+        public string? SessionId { get; set; }  // For WPF-side verification
     }
 
     /// <summary>
     /// Fixed path for inter-process communication via temp files.
+    /// Each session includes a SessionId in the config JSON for verification;
+    /// the WPF app validates it matches before accepting the done signal.
     /// </summary>
     private static readonly string ConfigDir = Path.Combine(Path.GetTempPath(), "DwgTranslator");
     private static readonly string ConfigPath = Path.Combine(ConfigDir, "writeback_config.json");
@@ -77,21 +80,23 @@ public class WritebackCommand
             if (config == null || config.Entities == null || config.Entities.Count == 0)
             {
                 ed.WriteMessage("\n配置文件无效或没有可回写的实体。");
-                SignalDone("invalid_config");
+                SignalDone("invalid_config", config?.SessionId);
                 return;
             }
+
+            var sessionId = config.SessionId;
 
             if (string.IsNullOrEmpty(config.SourceDwgPath) || !File.Exists(config.SourceDwgPath))
             {
                 ed.WriteMessage($"\n原始 DWG 文件不存在: {config.SourceDwgPath}");
-                SignalDone("source_missing");
+                SignalDone("source_missing", sessionId);
                 return;
             }
 
             if (string.IsNullOrEmpty(config.OutputDwgPath))
             {
                 ed.WriteMessage("\n输出路径为空。");
-                SignalDone("no_output");
+                SignalDone("no_output", sessionId);
                 return;
             }
 
@@ -133,25 +138,28 @@ public class WritebackCommand
                 ed.WriteMessage($"\n回写失败: {errors}");
             }
 
-            // Signal completion to WPF app
-            SignalDone(result.SuccessCount > 0 ? "success" : "failed");
+            // Signal completion to WPF app (include session ID for verification)
+            SignalDone(result.SuccessCount > 0 ? "success" : "failed", sessionId);
         }
         catch (System.Exception ex)
         {
             ed.WriteMessage($"\n命令执行错误: {ex.Message}");
-            SignalDone("error");
+            SignalDone("error", null);
         }
     }
 
     /// <summary>
     /// Writes a "done" signal file that the WPF app monitors for completion.
     /// </summary>
-    private static void SignalDone(string status)
+    private static void SignalDone(string status, string? sessionId = null)
     {
         try
         {
             Directory.CreateDirectory(ConfigDir);
-            File.WriteAllText(DonePath, $"{status}|{DateTime.Now:O}");
+            var content = sessionId != null
+                ? $"{status}|{sessionId}|{DateTime.Now:O}"
+                : $"{status}|{DateTime.Now:O}";
+            File.WriteAllText(DonePath, content);
         }
         catch { }
     }

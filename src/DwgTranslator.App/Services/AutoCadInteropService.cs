@@ -78,14 +78,19 @@ public class AutoCadInteropService : IAutoCadInteropService, IDisposable
         {
             progress?.Report(Strings.Get("ProgressAutoCadPreparing"));
 
-            // Serialize a config JSON that contains source/output paths + entities
+            // Serialize a config JSON with session ID for race-condition safety.
+            // The session ID is echoed back in the done signal so the WPF app can
+            // verify it's reading the completion signal for ITS session, not a
+            // concurrent one.
+            var sessionId = Guid.NewGuid().ToString("N")[..12];
             initialTempPath = Path.Combine(Path.GetTempPath(), $"dwgtranslate_{Guid.NewGuid():N}.json");
             var configObj = new
             {
                 SourceDwgPath = sourceFilePath,
                 OutputDwgPath = outputFilePath,
                 Entities = entities,
-                CnToEn = cnToEn
+                CnToEn = cnToEn,
+                SessionId = sessionId
             };
             var json = System.Text.Json.JsonSerializer.Serialize(configObj, new System.Text.Json.JsonSerializerOptions
             {
@@ -153,7 +158,9 @@ public class AutoCadInteropService : IAutoCadInteropService, IDisposable
 
             progress?.Report(Strings.Get("ProgressAutoCadPreparingFiles"));
 
-            // Step 1: Write config JSON to a fixed known path
+            // Step 1: Write config JSON to the fixed known path.
+            // The json (with SessionId) was serialized above — write the same
+            // config to the fixed path that the WritebackCommand reads from.
             var configDir = Path.Combine(Path.GetTempPath(), "DwgTranslator");
             Directory.CreateDirectory(configDir);
             var fixedConfigPath = Path.Combine(configDir, "writeback_config.json");
@@ -162,7 +169,7 @@ public class AutoCadInteropService : IAutoCadInteropService, IDisposable
             // Clean up previous signal files
             try { if (File.Exists(doneSignalPath)) File.Delete(doneSignalPath); } catch { }
 
-            // Write config to fixed path (WritebackCommand reads from here)
+            // Write the same config (with SessionId) to the fixed path
             File.WriteAllText(fixedConfigPath, json);
 
             Log.Information("Config written to fixed path: {Path}", fixedConfigPath);
@@ -214,7 +221,27 @@ public class AutoCadInteropService : IAutoCadInteropService, IDisposable
                     try
                     {
                         var doneContent = File.ReadAllText(doneSignalPath);
-                        if (!doneContent.StartsWith("success|", StringComparison.OrdinalIgnoreCase))
+                        // Format: "status|sessionId|timestamp" (new) or "status|timestamp" (legacy)
+                        var parts = doneContent.Split('|');
+                        bool isSuccess = parts.Length > 0 &&
+                            parts[0].StartsWith("success", StringComparison.OrdinalIgnoreCase);
+
+                        // Validate SessionId to prevent cross-session confusion
+                        if (parts.Length >= 2 && !string.IsNullOrEmpty(sessionId))
+                        {
+                            var doneSessionId = parts[1];
+                            if (!string.Equals(doneSessionId, sessionId, StringComparison.OrdinalIgnoreCase)
+                                && doneSessionId.Length == 12) // Only validate if it looks like a session ID
+                            {
+                                Log.Warning("Done signal SessionId mismatch: expected={Expected}, got={Actual}. Ignoring stale signal.",
+                                    sessionId, doneSessionId);
+                                // Not our session — continue waiting (don't break)
+                                waited -= 2; // compensate for the delay
+                                continue;
+                            }
+                        }
+
+                        if (!isSuccess)
                         {
                             result.SuccessCount = 0;
                             result.Errors.Add(Strings.Get("AutoCadWritebackFailed", doneContent));

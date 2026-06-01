@@ -16,11 +16,13 @@ public class TextReplacer
 {
     private readonly double _autoScaleThreshold;
     private readonly double _autoScaleFactor;
+    private readonly bool _cnToEn;
 
-    public TextReplacer(double autoScaleThreshold = 1.5, double autoScaleFactor = 0.95)
+    public TextReplacer(double autoScaleThreshold = 1.5, double autoScaleFactor = 0.95, bool cnToEn = true)
     {
         _autoScaleThreshold = autoScaleThreshold;
         _autoScaleFactor = autoScaleFactor;
+        _cnToEn = cnToEn;
     }
 
     /// <summary>
@@ -157,7 +159,9 @@ public class TextReplacer
             dbText.Height *= scale;
         }
 
-        // Frame-aware scaling: shrink to fit closest frame if overflowing
+        // Frame-aware scaling: shrink to fit closest frame if overflowing.
+        // Checks BOTH X and Y axes (previously only X was checked, so tall
+        // multi-line DBText could overflow vertically without detection).
         var closestFrame = CollisionDetector.FindClosestFrame(dbText.Position, frames);
         if (closestFrame.HasValue)
         {
@@ -168,9 +172,14 @@ public class TextReplacer
                 if (CollisionDetector.ExceedsFrame(bounds, closestFrame.Value))
                 {
                     double frameW = closestFrame.Value.MaxPoint.X - closestFrame.Value.MinPoint.X;
-                    double scale = frameW / (bounds.MaxPoint.X - bounds.MinPoint.X) * 0.92;
+                    double frameH = closestFrame.Value.MaxPoint.Y - closestFrame.Value.MinPoint.Y;
+                    double textW = bounds.MaxPoint.X - bounds.MinPoint.X;
+                    double textH = bounds.MaxPoint.Y - bounds.MinPoint.Y;
+                    double scaleW = textW > 0 ? (frameW * 0.92) / textW : 1.0;
+                    double scaleH = textH > 0 ? (frameH * 0.92) / textH : 1.0;
+                    double scale = Math.Min(scaleW, scaleH);
                     if (scale < 0.5) scale = 0.5;
-                    dbText.Height *= scale;
+                    if (scale < 1.0) dbText.Height *= scale;
                 }
             }
             catch { /* GeometricExtents may fail for degenerate text */ }
@@ -227,12 +236,13 @@ public class TextReplacer
             .Replace("\n", "\\P")
             .Replace("\r", "\\P");
 
-        // Map font if needed
-        MapTextStyle(mText.TextStyleId, db);
+        // Map font if needed (direction-aware, was hardcoded cnToEn: true)
+        MapTextStyle(mText.TextStyleId, db, _cnToEn);
 
-        // Disable column mode to prevent AutoCAD from stretching
-        // text to fill column width (causes excessive word spacing).
-        mText.ColumnType = ColumnType.NoColumns;
+        // Only disable DynamicColumns — preserve StaticColumns if the original
+        // MText intentionally used multi-column layout.
+        if (mText.ColumnType == ColumnType.DynamicColumns)
+            mText.ColumnType = ColumnType.NoColumns;
 
         // Delegate all layout optimization (width, height, frame fitting) to LayoutOptimizer
         var closestFrame = CollisionDetector.FindClosestFrame(mText.Location, frames);
@@ -269,7 +279,7 @@ public class TextReplacer
         if (mLeader.MText != null)
         {
             mLeader.MText.Contents = entity.TranslatedText;
-            MapTextStyle(mLeader.MText.TextStyleId, db);
+            MapTextStyle(mLeader.MText.TextStyleId, db, _cnToEn);
         }
         return new EntityReplaceResult 
         { 
@@ -367,7 +377,7 @@ public class TextReplacer
         return new EntityReplaceResult { Success = false, Error = "Table cell out of range" };
     }
 
-    private void MapTextStyle(ObjectId styleId, Database db)
+    private void MapTextStyle(ObjectId styleId, Database db, bool cnToEn = true)
     {
         if (!styleId.IsValid) return;
 
@@ -375,8 +385,8 @@ public class TextReplacer
         {
             var style = (TextStyleTableRecord)styleId.GetObject(OpenMode.ForWrite);
 
-            // Use shared FontMapper for CJK-to-English mapping
-            var mappedFontName = FontMapper.MapFontName(style.Name, cnToEn: true);
+            // Use shared FontMapper — direction-aware (was hardcoded cnToEn: true)
+            var mappedFontName = FontMapper.MapFontName(style.Name, cnToEn);
             if (string.IsNullOrEmpty(mappedFontName))
                 return;
 

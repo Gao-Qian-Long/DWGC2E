@@ -322,9 +322,12 @@ public class AcadWriterEngine
                     // AutoCAD docs: "You MUST set Width > 0 before calling ColumnType.
                     // If Width=0, DynamicColumns stretches text to fill column width,
                     // causing excessive word spacing."
+                    // Only disable DynamicColumns — preserve StaticColumns if the
+                    // original MText intentionally used multi-column layout.
                     if (mtext.Width <= 0)
                         mtext.Width = Math.Max(ourEntity.OriginalWidth, 50.0);
-                    mtext.ColumnType = ColumnType.NoColumns;
+                    if (mtext.ColumnType == ColumnType.DynamicColumns)
+                        mtext.ColumnType = ColumnType.NoColumns;
 
                     // Re-assert Contents after all Width/ColumnType changes
                     mtext.Contents = contents
@@ -386,9 +389,9 @@ public class AcadWriterEngine
         List<WrittenEntity> written, Transaction tr, Database db)
     {
         const int maxIterations = 3;
-        const double frameMinRatio = 0.80;   // Frame: allow down to 80% of original
-        const double geoMinRatio = 0.80;      // Geometry: 80% floor — background mask handles remainder
-        const double overlapMinRatio = 0.80;  // Overlap: 80% floor — background mask prevents visual clash
+        const double frameMinRatio = 0.65;   // Frame: allow down to 65% of original (was 0.80, too conservative)
+        const double geoMinRatio = 0.65;      // Geometry: 65% floor — background mask handles remainder
+        const double overlapMinRatio = 0.65;  // Overlap: 65% floor — background mask prevents visual clash
 
         if (written.Count == 0) return;
 
@@ -424,12 +427,12 @@ public class AcadWriterEngine
                 }
 
                 // (b) CROSS-LAYER: resolve interference with existing geometry.
-                //     CRITICAL: run when text is BELOW original height (was over-scaled
-                //     by LayoutOptimizer in Phase 1). The method can RESTORE text to
-                //     the min floor (geoMinRatio * trueOriginalHeight) when no collisions exist.
-                //     Old condition "curHeight > floor" SKIPPED restoration, trapping text
-                //     at LayoutOptimizer's aggressive scale (40-50%).
-                if (curHeight < trueOriginalHeight)
+                //     ALWAYS run — the old guard "curHeight < trueOriginalHeight" skipped
+                //     collision detection for the vast majority of entities whose height was
+                //     unchanged by LayoutOptimizer, leaving text unprotected against nearby
+                //     geometry (lines, polylines, hatches, other text, etc.).
+                //     TryResolveCrossLayerCollisions internally binary-searches from curHeight
+                //     down to the floor; it can handle any starting height correctly.
                 {
                     bool resolved = CollisionDetector.TryResolveCrossLayerCollisions(
                         we.Entity, we.Block, tr, curHeight, trueOriginalHeight, geoMinRatio, db);
@@ -442,18 +445,17 @@ public class AcadWriterEngine
                     }
                 }
 
-                // (c) MText WIDTH ADJUSTMENT: if scaling hit the floor, try changing
+                // (c) MText WIDTH ADJUSTMENT: if height is at or near the floor, try changing
                 //     the wrapping width to alter text aspect ratio without shrinking further.
-                if (we.Entity is MText mtw && curHeight <= trueOriginalHeight * geoMinRatio + 0.01)
+                //     Also runs when there are geo colliders even above floor — width changes
+                //     can reflow text to avoid narrow collision zones.
+                if (we.Entity is MText mtw)
                 {
                     var geoColliders = CollisionDetector.CollectEntityColliders(
                         mtw, we.Block, tr, trueOriginalHeight, db);
                     if (geoColliders.Count > 0)
                     {
                         // Compute actual geometric width for accurate test-width derivation.
-                        // When mtext.Width <= 0 (free-width), TryResolveMTextByWidthAdjustment
-                        // uses originalRectWidth as fallback. Passing 0 forces a 100-unit fallback
-                        // which produces irrelevant test widths (e.g. 55, 75, 140 units).
                         double actualRectWidth;
                         try
                         {
@@ -468,8 +470,8 @@ public class AcadWriterEngine
                     }
                 }
 
-                // (d) ENTITY OVERLAPS: restore to floor if text was over-scaled in Phase 1.
-                if (curHeight < trueOriginalHeight)
+                // (d) ENTITY OVERLAPS: resolve interference with other translated entities.
+                //     ALWAYS run — the old guard skipped overlap detection for most entities.
                 {
                     var otherEntities = written
                         .Where(o => !ReferenceEquals(o, we))
@@ -612,7 +614,7 @@ public class AcadWriterEngine
     ///
     /// Returns true if the entity was modified (scaled to fit frame).
     /// </summary>
-    private static bool EnsureEntityFitsFrame(Entity textEntity, Extents3d frame, double originalHeight, double minHeightRatio = 0.50)
+    private static bool EnsureEntityFitsFrame(Entity textEntity, Extents3d frame, double originalHeight, double minHeightRatio = 0.65)
     {
         try
         {

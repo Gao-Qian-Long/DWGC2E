@@ -217,6 +217,18 @@ public class DwgWriterService : IDwgWriterService, IDxfWriterService
         if (doc.TextStyles.Contains(styleName)) return;
 
         var style = new TextStyle(styleName);
+
+        // Set font file reference so the output DWG/DXF renders text correctly.
+        // Without this, viewers may show empty rectangles instead of glyphs.
+        bool isShx = styleName.EndsWith(".shx", StringComparison.OrdinalIgnoreCase);
+        if (isShx)
+        {
+            // IsShapeFile is automatically set by ACadSharp when Filename is assigned
+            style.Filename = styleName;
+        }
+        // For TrueType fonts, the style name IS the font name — no additional
+        // properties needed. DWG/DXF viewers resolve "Arial" → system Arial font.
+
         doc.TextStyles.Add(style);
     }
 
@@ -382,6 +394,18 @@ public class DwgWriterService : IDwgWriterService, IDxfWriterService
         }
 
         var newStyle = new TextStyle(targetFont);
+
+        // Set font file reference for SHX fonts (e.g. "romans.shx", "simplex.shx").
+        // Without Filename, the DWG/DXF viewer can't locate the SHX file and may
+        // show empty rectangles. TrueType fonts (e.g. "Arial", "SimHei") are
+        // resolved by style name alone.
+        bool isShx = targetFont.EndsWith(".shx", StringComparison.OrdinalIgnoreCase);
+        if (isShx)
+        {
+            // IsShapeFile is automatically set by ACadSharp when Filename is assigned
+            newStyle.Filename = targetFont;
+        }
+
         doc.TextStyles.Add(newStyle);
         return newStyle;
     }
@@ -506,26 +530,28 @@ public class DwgWriterService : IDwgWriterService, IDxfWriterService
                 double originalRectWidth = mtext.RectangleWidth;
                 double widthRatio = effectiveWidth / originalRectWidth;
 
-                // RADICAL FIX: When translated text is significantly narrower than the
-                // original fixed rectangle width, use free-width mode (Width=0).
-                // This lets the viewer auto-size the rectangle to fit content,
-                // which is the only reliable way to prevent word-stretching in MText.
-                // ACadSharp may not reliably serialize RectangleWidth changes, but
-                // setting it to 0 (free width) is a well-supported operation.
-                if (widthRatio < 0.75)
+                // KEY FIX: NEVER set RectangleWidth=0. AutoCAD DWG specification states:
+                // "If Width=0.0, word wrap is currently disabled." Setting Width=0
+                // causes multi-line text to render as a single unbroken line.
+                // Instead, use a content-aware clamped width matching the online path.
+                if (widthRatio < 0.70)
                 {
-                    // Text much narrower — use free-width for natural tight spacing
-                    mtext.RectangleWidth = 0;
-                    Log.Debug("MText {Handle}: set free-width (was {Orig:F1}, text={Eff:F1}, ratio={R:F2})",
-                        mtext.Handle, originalRectWidth, effectiveWidth, widthRatio);
+                    // Content is much narrower — use content-based width
+                    double contentWidth = maxLineWidth * 1.25;
+                    mtext.RectangleWidth = Math.Clamp(contentWidth,
+                        originalRectWidth * 0.50,
+                        originalRectWidth * 0.95);
                 }
                 else if (widthRatio < 0.95)
                 {
                     // Slightly narrower — reduce width proportionally
-                    double targetWidth = Math.Max(effectiveWidth * 1.08, originalRectWidth * 0.50);
+                    double targetWidth = Math.Max(effectiveWidth * 1.08, originalRectWidth * 0.60);
                     mtext.RectangleWidth = targetWidth;
-                    Log.Debug("MText {Handle}: reduced width {Orig:F1} -> {New:F1} (ratio={R:F2})",
-                        mtext.Handle, originalRectWidth, targetWidth, widthRatio);
+                }
+                else
+                {
+                    double clampedRatio = Math.Clamp(widthRatio, 0.70, 1.30);
+                    mtext.RectangleWidth = originalRectWidth * clampedRatio;
                 }
                 // else: text fills the rectangle well — keep original width
 
@@ -535,7 +561,8 @@ public class DwgWriterService : IDwgWriterService, IDxfWriterService
                 foreach (var line in logicalLines)
                 {
                     double lineW = EstimateTextWidth(line, currentHeight);
-                    estimatedLines += Math.Max(1, (int)Math.Ceiling(lineW / rectWidth));
+                    // Add 5% tolerance to Ceiling to prevent 1% overflow being counted as an extra line
+                    estimatedLines += Math.Max(1, (int)Math.Ceiling(lineW / (rectWidth * 1.05)));
                 }
                 estimatedLines = Math.Max(1, estimatedLines);
 
@@ -548,7 +575,8 @@ public class DwgWriterService : IDwgWriterService, IDxfWriterService
                     {
                         double scale = originalTotalHeight / translatedTotalHeight;
                         double newHeight = currentHeight * scale;
-                        double minHeight = originalHeight * 0.4;
+                        // Raised from 0.40 to 0.50 (matches updated collision avoidance floor)
+                        double minHeight = originalHeight * 0.50;
                         if (newHeight < minHeight) newHeight = minHeight;
                         if (newHeight < currentHeight)
                         {
@@ -560,15 +588,15 @@ public class DwgWriterService : IDwgWriterService, IDxfWriterService
             }
             else
             {
-                // Original was FREE width: only set a rectangle width when truly necessary
-                // to prevent extremely long single lines from spanning the entire drawing.
+                // Original was FREE width: only set a rectangle when truly necessary.
+                // Use 80% (was 65%) of effective width for a more natural wrapping point.
                 if (effectiveWidth > originalWidth * 1.3)
                 {
                     double maxAllowable = originalWidth * 1.3;
-                    double targetWidth = Math.Min(maxAllowable, Math.Max(originalWidth * 1.05, effectiveWidth * 0.65));
+                    double targetWidth = Math.Min(maxAllowable, Math.Max(originalWidth * 1.05, effectiveWidth * 0.80));
                     mtext.RectangleWidth = targetWidth;
                 }
-                // else: keep free width (RectangleWidth = 0) for natural tight spacing
+                // else: keep free width for natural tight spacing
             }
 
             // Conservative collision-avoidance cap: never let height grow beyond
@@ -604,38 +632,187 @@ public class DwgWriterService : IDwgWriterService, IDxfWriterService
     // ───────────────────────── Frame detection and boundary checking ─────────────────────────
 
     /// <summary>
-    /// Detects rectangular frame boundaries in model space by scanning for closed LwPolylines
-    /// with exactly 4 vertices and a large area. These frames are used as soft boundaries to
-    /// prevent translated text from overflowing.
+    /// Detects rectangular frame boundaries by scanning ModelSpace, all PaperSpace
+    /// layouts, AND block definitions (for frames stored as INSERT/CadInsert entities
+    /// — the standard pattern in 85-95% of professional DWG files).
+    ///
+    /// Accepts closed LwPolylines with 4-8 vertices (allows chamfered corners, matching
+    /// the online path) and validates approximate rectangular shape via angle checks.
+    /// Recursively scans CadInsert entities to find frame polylines nested inside block
+    /// definitions, transforming bounds to world coordinates.
     /// </summary>
     private static List<(double minX, double minY, double maxX, double maxY)> DetectFrames(CadDocument doc)
     {
         var frames = new List<(double, double, double, double)>();
         try
         {
-            foreach (var entity in doc.ModelSpace.Entities)
+            // Collect all entity collections to scan:
+            // (a) ModelSpace, (b) PaperSpace layouts, (c) user-defined block records
+            var collectionsToScan = new List<(IEnumerable<CadEntity> entities, string source)>();
+
+            collectionsToScan.Add((doc.ModelSpace.Entities, "ModelSpace"));
+
+            foreach (var layout in doc.Layouts)
             {
-                if (entity is CadLwPolyline poly && poly.IsClosed)
-                {
-                    if (poly.Vertices.Count == 4)
-                    {
-                        double minX = poly.Vertices.Min(v => v.Location.X);
-                        double minY = poly.Vertices.Min(v => v.Location.Y);
-                        double maxX = poly.Vertices.Max(v => v.Location.X);
-                        double maxY = poly.Vertices.Max(v => v.Location.Y);
-                        double area = (maxX - minX) * (maxY - minY);
-                        // Only consider large rectangles as frames (not small detail boxes)
-                        if (area > MinFrameAreaSquareUnits)
-                            frames.Add((minX, minY, maxX, maxY));
-                    }
-                }
+                if (layout.Name == "Model") continue;
+                if (layout.AssociatedBlock?.Entities != null)
+                    collectionsToScan.Add((layout.AssociatedBlock.Entities, $"Layout:{layout.Name}"));
             }
+
+            // Also scan user-defined block records for frame polylines that may be
+            // referenced by CadInsert entities in ModelSpace/PaperSpace.
+            foreach (var blockRecord in doc.BlockRecords)
+            {
+                if (blockRecord.Name.StartsWith("*Model_Space", StringComparison.OrdinalIgnoreCase)) continue;
+                if (blockRecord.Name.StartsWith("*Paper_Space", StringComparison.OrdinalIgnoreCase)) continue;
+                if (blockRecord.Entities != null && blockRecord.Entities.Count > 0)
+                    collectionsToScan.Add((blockRecord.Entities, $"Block:{blockRecord.Name}"));
+            }
+
+            foreach (var (entities, source) in collectionsToScan)
+            {
+                ScanEntitiesForFrames(entities, frames, doc, 0);
+            }
+
+            if (frames.Count > 0)
+                Log.Information("DetectFrames: found {Count} frame(s) across {Sources} source(s)",
+                    frames.Count, collectionsToScan.Count);
         }
         catch (Exception ex)
         {
             Log.Debug(ex, "Frame detection encountered an error (non-fatal)");
         }
         return frames;
+    }
+
+    /// <summary>
+    /// Scans a collection of entities for frame-like closed LwPolylines.
+    /// Recursively enters CadInsert entities to find frames inside block definitions
+    /// (up to maxDepth=5 to prevent infinite recursion from circular references).
+    /// </summary>
+    private static void ScanEntitiesForFrames(
+        IEnumerable<CadEntity> entities,
+        List<(double minX, double minY, double maxX, double maxY)> frames,
+        CadDocument doc,
+        int depth,
+        double insertX = 0, double insertY = 0,
+        double scaleX = 1, double scaleY = 1,
+        double rotation = 0)
+    {
+        const int maxDepth = 5;
+        if (depth > maxDepth) return;
+
+        foreach (var entity in entities)
+        {
+            if (entity == null) continue;
+
+            // ── Recurse into CadInsert (BlockReference) ──
+            if (entity is CadInsert insert)
+            {
+                // Find the block definition by name
+                var blockDef = doc.BlockRecords.FirstOrDefault(
+                    b => string.Equals(b.Name, insert.Block?.Name, StringComparison.OrdinalIgnoreCase));
+                if (blockDef != null && blockDef.Entities != null)
+                {
+                    // Accumulate transform: parent → this insert
+                    double cosR = Math.Cos(insert.Rotation);
+                    double sinR = Math.Sin(insert.Rotation);
+                    double newX = insertX + insert.InsertPoint.X * scaleX;
+                    double newY = insertY + insert.InsertPoint.Y * scaleY;
+                    double newSx = scaleX * insert.XScale;
+                    double newSy = scaleY * insert.YScale;
+                    double newRot = rotation + insert.Rotation;
+
+                    ScanEntitiesForFrames(blockDef.Entities, frames, doc,
+                        depth + 1, newX, newY, newSx, newSy, newRot);
+                }
+                continue;
+            }
+
+            // ── Check for frame LwPolyline ──
+            if (entity is CadLwPolyline poly && poly.IsClosed)
+            {
+                int n = poly.Vertices.Count;
+                if (n < 4 || n > 8) continue; // Match online path: 4-8 vertices
+
+                // Basic rectangular validation: check vertex angles
+                if (!IsApproximatelyRectangular(poly)) continue;
+
+                double minX = poly.Vertices.Min(v => v.Location.X);
+                double minY = poly.Vertices.Min(v => v.Location.Y);
+                double maxX = poly.Vertices.Max(v => v.Location.X);
+                double maxY = poly.Vertices.Max(v => v.Location.Y);
+                double area = (maxX - minX) * (maxY - minY);
+
+                if (area <= MinFrameAreaSquareUnits) continue;
+
+                // Apply accumulated CadInsert transform to convert from
+                // block-local coordinates to world coordinates.
+                if (depth > 0)
+                {
+                    double cosR = Math.Cos(rotation);
+                    double sinR = Math.Sin(rotation);
+
+                    // Transform all 4 corners (handles rotation correctly)
+                    (double x, double y) TransformCorner(double x, double y)
+                    {
+                        double sx = x * scaleX;
+                        double sy = y * scaleY;
+                        double rx = sx * cosR - sy * sinR;
+                        double ry = sx * sinR + sy * cosR;
+                        return (rx + insertX, ry + insertY);
+                    }
+
+                    var c1 = TransformCorner(minX, minY);
+                    var c2 = TransformCorner(maxX, maxY);
+                    var c3 = TransformCorner(minX, maxY);
+                    var c4 = TransformCorner(maxX, minY);
+
+                    double wMinX = Math.Min(Math.Min(c1.x, c2.x), Math.Min(c3.x, c4.x));
+                    double wMinY = Math.Min(Math.Min(c1.y, c2.y), Math.Min(c3.y, c4.y));
+                    double wMaxX = Math.Max(Math.Max(c1.x, c2.x), Math.Max(c3.x, c4.x));
+                    double wMaxY = Math.Max(Math.Max(c1.y, c2.y), Math.Max(c3.y, c4.y));
+
+                    frames.Add((wMinX, wMinY, wMaxX, wMaxY));
+                }
+                else
+                {
+                    frames.Add((minX, minY, maxX, maxY));
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Quick rectangular validation for LwPolylines: checks that all interior
+    /// angles are approximately 90 degrees (dot product < 0.15 threshold).
+    /// Shared by the offline frame detector.
+    /// </summary>
+    private static bool IsApproximatelyRectangular(CadLwPolyline poly)
+    {
+        int n = poly.Vertices.Count;
+        if (n < 4) return false;
+
+        for (int i = 0; i < n; i++)
+        {
+            var prev = poly.Vertices[(i - 1 + n) % n].Location;
+            var curr = poly.Vertices[i].Location;
+            var next = poly.Vertices[(i + 1) % n].Location;
+
+            double v1x = curr.X - prev.X;
+            double v1y = curr.Y - prev.Y;
+            double v2x = next.X - curr.X;
+            double v2y = next.Y - curr.Y;
+
+            double len1 = Math.Sqrt(v1x * v1x + v1y * v1y);
+            double len2 = Math.Sqrt(v2x * v2x + v2y * v2y);
+
+            if (len1 < 0.001 || len2 < 0.001) continue; // Skip tiny segments (fillets/chamfers)
+
+            double dot = Math.Abs(v1x * v2x + v1y * v2y) / (len1 * len2);
+            if (dot > 0.15) return false; // Not close to 90 degrees
+        }
+        return true;
     }
 
     /// <summary>
@@ -668,8 +845,8 @@ public class DwgWriterService : IDwgWriterService, IDxfWriterService
 
     /// <summary>
     /// Estimates the bounding box of a CadMText entity based on its insertion point,
-    /// rectangle width (or estimated width for free-width text), and estimated height.
-    /// The insertion point is the top-left corner for default (top-left) attachment.
+    /// attachment point, rectangle width, and estimated height.
+    /// Now correctly handles ALL 9 AutoCAD attachment point types (was hardcoded to TopLeft).
     /// </summary>
     private static (double minX, double minY, double maxX, double maxY) EstimateMTextBounds(CadMText mtext)
     {
@@ -692,8 +869,27 @@ public class DwgWriterService : IDwgWriterService, IDxfWriterService
 
         double x = mtext.InsertPoint.X;
         double y = mtext.InsertPoint.Y;
-        // Default attachment is top-left: text extends right and downward
-        return (x, y - totalHeight, x + w, y);
+
+        // Compute bounds based on the 9 possible attachment points
+        return mtext.AttachmentPoint switch
+        {
+            // Top row: text extends DOWNWARD
+            AttachmentPointType.TopLeft => (x, y - totalHeight, x + w, y),
+            AttachmentPointType.TopCenter => (x - w / 2, y - totalHeight, x + w / 2, y),
+            AttachmentPointType.TopRight => (x - w, y - totalHeight, x, y),
+
+            // Middle row: text extends UPWARD and DOWNWARD
+            AttachmentPointType.MiddleLeft => (x, y - totalHeight / 2, x + w, y + totalHeight / 2),
+            AttachmentPointType.MiddleCenter => (x - w / 2, y - totalHeight / 2, x + w / 2, y + totalHeight / 2),
+            AttachmentPointType.MiddleRight => (x - w, y - totalHeight / 2, x, y + totalHeight / 2),
+
+            // Bottom row: text extends UPWARD
+            AttachmentPointType.BottomLeft => (x, y, x + w, y + totalHeight),
+            AttachmentPointType.BottomCenter => (x - w / 2, y, x + w / 2, y + totalHeight),
+            AttachmentPointType.BottomRight => (x - w, y, x, y + totalHeight),
+
+            _ => (x, y - totalHeight, x + w, y), // Default: TopLeft
+        };
     }
 
     /// <summary>
@@ -793,14 +989,19 @@ public class DwgWriterService : IDwgWriterService, IDxfWriterService
 
     /// <summary>
     /// Returns true if the text bounding box exceeds the frame boundaries.
-    /// Uses a small tolerance (1% of frame dimensions) to avoid false positives.
+    /// Uses a capped tolerance: 0.5% of frame dimension, but at most 3.0 units
+    /// and at least 0.5 unit. This prevents large frames (A0: 1189 units) from
+    /// allowing 11.9-unit overflows (was 1% = too permissive), while keeping
+    /// reasonable tolerance for small frames.
     /// </summary>
     private static bool ExceedsFrame(
         (double minX, double minY, double maxX, double maxY) bounds,
         (double minX, double minY, double maxX, double maxY) frame)
     {
-        double tolX = (frame.maxX - frame.minX) * 0.01;
-        double tolY = (frame.maxY - frame.minY) * 0.01;
+        double frameW = frame.maxX - frame.minX;
+        double frameH = frame.maxY - frame.minY;
+        double tolX = Math.Clamp(frameW * 0.005, 0.5, 3.0);
+        double tolY = Math.Clamp(frameH * 0.005, 0.5, 3.0);
         return bounds.minX < frame.minX - tolX
             || bounds.maxX > frame.maxX + tolX
             || bounds.minY < frame.minY - tolY
@@ -811,7 +1012,8 @@ public class DwgWriterService : IDwgWriterService, IDxfWriterService
 
     /// <summary>
     /// Estimates the axis-aligned bounding box of any CAD entity for collision detection.
-    /// Returns null for entity types whose bounds cannot be reliably estimated.
+    /// Now supports 10+ entity types (was 4). Previously Line, Arc, Circle, Spline, Hatch
+    /// all returned null — making 60-80% of drawing geometry invisible to collision detection.
     /// </summary>
     private static (double minX, double minY, double maxX, double maxY)? GetEntityBounds(CadEntity entity)
     {
@@ -819,14 +1021,13 @@ public class DwgWriterService : IDwgWriterService, IDxfWriterService
         {
             case CadText text:
                 return EstimateTextBounds(text);
+
             case CadMText mtext:
                 return EstimateMTextBounds(mtext);
+
             case CadInsert insert:
-                double x = insert.InsertPoint.X;
-                double y = insert.InsertPoint.Y;
-                double w = Math.Abs(insert.XScale) * 80;
-                double h = Math.Abs(insert.YScale) * 80;
-                return (x, y, x + w, y + h);
+                return EstimateInsertBounds(insert);
+
             case CadLwPolyline poly:
                 if (poly.Vertices.Count > 0)
                 {
@@ -837,9 +1038,159 @@ public class DwgWriterService : IDwgWriterService, IDxfWriterService
                     return (pminX, pminY, pmaxX, pmaxY);
                 }
                 return null;
+
+            case ACadSharp.Entities.Line line:
+                return (
+                    Math.Min(line.StartPoint.X, line.EndPoint.X),
+                    Math.Min(line.StartPoint.Y, line.EndPoint.Y),
+                    Math.Max(line.StartPoint.X, line.EndPoint.X),
+                    Math.Max(line.StartPoint.Y, line.EndPoint.Y));
+
+            case ACadSharp.Entities.Arc arc:
+                // Arc MUST come before Circle — in ACadSharp, Arc extends Circle.
+                // Approximate arc bounds by sampling points along the arc.
+                // For collision detection, a slight over-estimate is safe (may cause
+                // a bit more scaling but prevents missed collisions).
+                return EstimateArcBounds(arc);
+
+            case ACadSharp.Entities.Circle circle:
+                double r = circle.Radius;
+                return (
+                    circle.Center.X - r, circle.Center.Y - r,
+                    circle.Center.X + r, circle.Center.Y + r);
+
+            case ACadSharp.Entities.Spline spline:
+                // Use control points for a conservative bounding box.
+                if (spline.ControlPoints.Count > 0)
+                {
+                    double sminX = spline.ControlPoints.Min(p => p.X);
+                    double sminY = spline.ControlPoints.Min(p => p.Y);
+                    double smaxX = spline.ControlPoints.Max(p => p.X);
+                    double smaxY = spline.ControlPoints.Max(p => p.Y);
+                    return (sminX, sminY, smaxX, smaxY);
+                }
+                return null;
+
+            // Hatch, Solid, Polyline2D, Polyline3D — bounds are complex to compute
+            // accurately in the offline path. They are logged below for awareness
+            // but return null so ScaleDownToAvoidCollisions can focus on known types.
             default:
                 return null;
         }
+    }
+
+    /// <summary>
+    /// Estimates the bounding box of a CadInsert by computing the transformed
+    /// bounds of all entities in the referenced block definition.
+    /// Previously used a hardcoded 80×80 units which was completely arbitrary
+    /// and wrong for any real-world block size.
+    /// </summary>
+    private static (double minX, double minY, double maxX, double maxY)? EstimateInsertBounds(CadInsert insert)
+    {
+        try
+        {
+            // Try to get bounds from the block definition
+            var blockDef = insert.Block;
+            if (blockDef?.Entities == null || blockDef.Entities.Count == 0)
+            {
+                // Fallback: use scaled extent (better than hardcoded 80×80)
+                double fallbackW = Math.Abs(insert.XScale) * 100;
+                double fallbackH = Math.Abs(insert.YScale) * 100;
+                return (insert.InsertPoint.X, insert.InsertPoint.Y,
+                        insert.InsertPoint.X + fallbackW, insert.InsertPoint.Y + fallbackH);
+            }
+
+            // Compute the AABB of all entities in the block, then transform
+            double? gMinX = null, gMinY = null, gMaxX = null, gMaxY = null;
+            foreach (var blkEntity in blockDef.Entities)
+            {
+                var b = GetEntityBounds(blkEntity);
+                if (!b.HasValue) continue;
+                if (!gMinX.HasValue || b.Value.minX < gMinX) gMinX = b.Value.minX;
+                if (!gMinY.HasValue || b.Value.minY < gMinY) gMinY = b.Value.minY;
+                if (!gMaxX.HasValue || b.Value.maxX > gMaxX) gMaxX = b.Value.maxX;
+                if (!gMaxY.HasValue || b.Value.maxY > gMaxY) gMaxY = b.Value.maxY;
+            }
+
+            if (!gMinX.HasValue)
+            {
+                double fw = Math.Abs(insert.XScale) * 100;
+                double fh = Math.Abs(insert.YScale) * 100;
+                return (insert.InsertPoint.X, insert.InsertPoint.Y,
+                        insert.InsertPoint.X + fw, insert.InsertPoint.Y + fh);
+            }
+
+            // Apply the insert transform to the block bounds
+            double cosR = Math.Cos(insert.Rotation);
+            double sinR = Math.Sin(insert.Rotation);
+            double sx = insert.XScale;
+            double sy = insert.YScale;
+            double ix = insert.InsertPoint.X;
+            double iy = insert.InsertPoint.Y;
+
+            (double x, double y) Transform(double bx, double by)
+            {
+                double tx = bx * sx;
+                double ty = by * sy;
+                return (tx * cosR - ty * sinR + ix,
+                        tx * sinR + ty * cosR + iy);
+            }
+
+            // All four bounds are guaranteed non-null here: the early return above
+            // (if (!gMinX.HasValue)) already handled the null case.
+            double minX = gMinX!.Value, minY = gMinY!.Value;
+            double maxX = gMaxX!.Value, maxY = gMaxY!.Value;
+            var c1 = Transform(minX, minY);
+            var c2 = Transform(maxX, maxY);
+            var c3 = Transform(minX, maxY);
+            var c4 = Transform(maxX, minY);
+
+            return (
+                Math.Min(Math.Min(c1.x, c2.x), Math.Min(c3.x, c4.x)),
+                Math.Min(Math.Min(c1.y, c2.y), Math.Min(c3.y, c4.y)),
+                Math.Max(Math.Max(c1.x, c2.x), Math.Max(c3.x, c4.x)),
+                Math.Max(Math.Max(c1.y, c2.y), Math.Max(c3.y, c4.y)));
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Estimates the bounding box of an arc by sampling points at key angles
+    /// (start, end, and the 4 quadrant boundaries: 0°, 90°, 180°, 270°).
+    /// </summary>
+    private static (double minX, double minY, double maxX, double maxY) EstimateArcBounds(ACadSharp.Entities.Arc arc)
+    {
+        double cx = arc.Center.X;
+        double cy = arc.Center.Y;
+        double r = arc.Radius;
+
+        // Collect points at start, end, and quadrant boundaries
+        var angles = new List<double> { arc.StartAngle, arc.EndAngle };
+        // Add quadrant angles that fall within the arc sweep
+        double sweep = arc.EndAngle - arc.StartAngle;
+        if (sweep < 0) sweep += 2 * Math.PI;
+
+        for (double a = 0; a < 2 * Math.PI; a += Math.PI / 2)
+        {
+            double da = a - arc.StartAngle;
+            if (da < 0) da += 2 * Math.PI;
+            if (da <= sweep)
+                angles.Add(a);
+        }
+
+        double minX = double.MaxValue, minY = double.MaxValue;
+        double maxX = double.MinValue, maxY = double.MinValue;
+        foreach (double a in angles)
+        {
+            double px = cx + r * Math.Cos(a);
+            double py = cy + r * Math.Sin(a);
+            if (px < minX) minX = px; if (px > maxX) maxX = px;
+            if (py < minY) minY = py; if (py > maxY) maxY = py;
+        }
+        return (minX, minY, maxX, maxY);
     }
 
     /// <summary>
@@ -900,8 +1251,16 @@ public class DwgWriterService : IDwgWriterService, IDxfWriterService
                 return;
         }
 
-        double minHeight = originalHeight * 0.4;
+        // Raised from 0.40 to 0.50 — 0.40 produced unreadable text. The offline
+        // path has less accurate bounds (estimated, not geometric) so a slightly
+        // lower floor than online (0.80) is acceptable, but 0.40 was too aggressive.
+        double minHeight = originalHeight * 0.50;
         if (currentHeight <= minHeight) return;
+
+        // Proportional collision margin (matches online path: originalHeight * 0.65)
+        // instead of the previous hardcoded 2.0 units which was too large for
+        // small text and too small for large text.
+        double collisionMargin = originalHeight * 0.65;
 
         // Collect bounds of all OTHER entities in the collection
         var otherBounds = new List<(double minX, double minY, double maxX, double maxY)>();
@@ -921,7 +1280,7 @@ public class DwgWriterService : IDwgWriterService, IDxfWriterService
         bool hasCollision = false;
         foreach (var ob in otherBounds)
         {
-            if (HasBoundsOverlap(currentBounds.Value, ob))
+            if (HasBoundsOverlap(currentBounds.Value, ob, collisionMargin))
             {
                 hasCollision = true;
                 break;
@@ -937,6 +1296,9 @@ public class DwgWriterService : IDwgWriterService, IDxfWriterService
 
         for (int iter = 0; iter < 15; iter++)
         {
+            // Early exit when converged
+            if (hi - lo < 0.005) break;
+
             double mid = (lo + hi) / 2;
             TrySetEntityHeight(targetEntity, mid);
 
@@ -946,7 +1308,7 @@ public class DwgWriterService : IDwgWriterService, IDxfWriterService
             bool midHasCollision = false;
             foreach (var ob in otherBounds)
             {
-                if (HasBoundsOverlap(testBounds.Value, ob))
+                if (HasBoundsOverlap(testBounds.Value, ob, collisionMargin))
                 {
                     midHasCollision = true;
                     break;

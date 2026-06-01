@@ -71,26 +71,47 @@ public static class LayoutOptimizer
         if (originalRectWidth > 0)
         {
             // Adjust rectangle width proportionally to match translated text.
-            // Clamp between 60% and 150% of original to avoid extremes
-            // while still adapting to the new language's width.
+            // KEY CHANGE: minimum clamp raised from 0.40 to 0.70.
+            // - 0.40 was too aggressive: text that could fit in 1 line became 3 lines
+            //   (especially for EN→CN where Chinese is naturally more compact).
+            // - 0.70 preserves more of the original column width, reducing unnecessary
+            //   line wrapping while still allowing reasonable narrowing.
+            // - When text is very narrow (widthRatio < 0.70), use a content-aware
+            //   width: maxLineWidth with 25% headroom, clamped to [0.50, 1.0] × original.
             double widthRatio = effectiveWidth / Math.Max(originalWidth, 1.0);
-            double clampedRatio = Math.Clamp(widthRatio, 0.40, 1.20);
-            double targetWidth = originalRectWidth * clampedRatio;
-            if (targetWidth < 10.0) targetWidth = 10.0;  // minimum usable width
+            double targetWidth;
+            if (widthRatio < 0.70)
+            {
+                // Content is much narrower than original column — use content-based
+                // width to avoid forcing text into too many short lines.
+                double contentWidth = maxLineWidth * 1.25; // 25% headroom
+                targetWidth = Math.Clamp(contentWidth,
+                    originalRectWidth * 0.50,
+                    originalRectWidth * 0.95);
+            }
+            else
+            {
+                double clampedRatio = Math.Clamp(widthRatio, 0.70, 1.30);
+                targetWidth = originalRectWidth * clampedRatio;
+            }
+            if (targetWidth < 10.0) targetWidth = 10.0;
             mtext.Width = targetWidth;
-            Log.Information("MText {Handle}: scaled width {OrigW:F1}→{NewW:F1} (ratio={R:F2})",
-                mtext.Handle, originalRectWidth, targetWidth, clampedRatio);
+            Log.Debug("MText {Handle}: scaled width {OrigW:F1}→{NewW:F1} (ratio={R:F2})",
+                mtext.Handle, originalRectWidth, targetWidth, widthRatio);
         }
         else
         {
-            // FREE width (Width=0): set a wrapping width only when the
+            // FREE width (original Width=0): set a wrapping width only when the
             // translation is significantly wider than the original to avoid
             // excessively long single lines.
             if (effectiveWidth > Math.Max(originalWidth * 1.05, 50.0))
             {
-                double targetWidth = Math.Max(originalWidth * 1.1, effectiveWidth * 0.55);
+                // Use a width based on the content — never narrower than original
+                // width, and use 80% of effective width (was 55%) to allow natural
+                // wrapping without creating excessive line breaks.
+                double targetWidth = Math.Max(originalWidth * 1.1, effectiveWidth * 0.80);
                 mtext.Width = targetWidth;
-                Log.Information("MText {Handle}: free-width now {W:F1} to wrap (orig={Orig:F1}, eff={Eff:F1})",
+                Log.Debug("MText {Handle}: free-width now {W:F1} to wrap (orig={Orig:F1}, eff={Eff:F1})",
                     mtext.Handle, targetWidth, originalWidth, effectiveWidth);
             }
         }

@@ -34,8 +34,13 @@ public static class CollisionDetector
 
     public static bool ExceedsFrame(Extents3d bounds, Extents3d frame)
     {
-        double tolX = (frame.MaxPoint.X - frame.MinPoint.X) * 0.01;
-        double tolY = (frame.MaxPoint.Y - frame.MinPoint.Y) * 0.01;
+        double frameW = frame.MaxPoint.X - frame.MinPoint.X;
+        double frameH = frame.MaxPoint.Y - frame.MinPoint.Y;
+        // Capped tolerance: 0.5% of frame size, max 3.0 units, min 0.5 unit.
+        // Prevents large frames (A0: 1189 units) from allowing 11.9-unit overflows
+        // while keeping reasonable tolerance for small frames.
+        double tolX = Math.Clamp(frameW * 0.005, 0.5, 3.0);
+        double tolY = Math.Clamp(frameH * 0.005, 0.5, 3.0);
         return bounds.MinPoint.X < frame.MinPoint.X - tolX
             || bounds.MaxPoint.X > frame.MaxPoint.X + tolX
             || bounds.MinPoint.Y < frame.MinPoint.Y - tolY
@@ -685,7 +690,7 @@ public static class CollisionDetector
             {
                 Log.Debug("Entity {Handle}: no cross-layer colliders found (padding={Pad:F1})",
                     textEntity.Handle, padding);
-                return false;
+                return true; // No collisions to resolve = "resolved" (matches TryResolveCollisionByScaling)
             }
 
             // Log what we found for debugging

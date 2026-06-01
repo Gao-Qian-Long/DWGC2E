@@ -9,6 +9,11 @@ public static class TextWidthEstimator
     /// <summary>
     /// Estimates the rendered width of a text string based on character types.
     /// Uses heuristic width ratios: CJK characters are ~1.0× height, Latin ~0.45-0.55× height.
+    ///
+    /// NOTE: These ratios are averages for common TrueType fonts (Arial, SimHei).
+    /// For SHX monospace fonts (simplex.shx, romans.shx), all characters are ~0.58× height
+    /// — the estimator under-estimates SHX by up to 29%. When the text style is known
+    /// to be SHX, callers should adjust accordingly.
     /// </summary>
     public static double EstimateTextWidth(string text, double height)
     {
@@ -18,10 +23,18 @@ public static class TextWidthEstimator
         {
             if (c == ' ') width += height * 0.20;
             else if (c >= 0x4E00 && c <= 0x9FFF) width += height * 1.0;      // CJK Unified Ideographs
-            else if (c >= 0x3000 && c <= 0x303F) width += height * 1.0;      // CJK Symbols and Punctuation
+            else if (c >= 0x3000 && c <= 0x303F)
+            {
+                // CJK Symbols and Punctuation: distinguish full-width symbols from
+                // half-width punctuation (、。〃 etc. are typically ~0.5× height).
+                if (c <= 0x3003 || (c >= 0x3008 && c <= 0x3011) || c == 0x301C || c == 0x3030)
+                    width += height * 0.55;  // Half-width CJK punctuation
+                else
+                    width += height * 0.80;  // CJK symbols: moderate width
+            }
             else if (c >= 0xFF00 && c <= 0xFFEF) width += height * 1.0;      // Fullwidth forms
-            else if (c >= 0x3040 && c <= 0x309F) width += height * 1.0;      // Hiragana
-            else if (c >= 0x30A0 && c <= 0x30FF) width += height * 1.0;      // Katakana
+            else if (c >= 0x3040 && c <= 0x309F) width += height * 0.85;     // Hiragana (not full 1.0)
+            else if (c >= 0x30A0 && c <= 0x30FF) width += height * 0.85;     // Katakana (not full 1.0)
             else if (char.IsUpper(c)) width += height * 0.55;
             else if (char.IsLower(c)) width += height * 0.45;
             else if (char.IsDigit(c)) width += height * 0.50;
