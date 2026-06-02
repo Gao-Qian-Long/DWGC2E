@@ -9,8 +9,8 @@ using System.Windows;
 namespace DwgTranslator.App.ViewModels;
 
 /// <summary>
-/// ViewModel for the log viewer panel. Displays real-time log entries from <see cref="ILogStore"/>
-/// with level filtering, source filtering, text search, auto-scroll, pause, export, and clear functionality.
+/// ViewModel for the log viewer panel.
+/// Displays real-time log entries with level/source filtering, search, and export.
 /// </summary>
 public partial class LogViewModel : ObservableObject, IDisposable
 {
@@ -28,11 +28,7 @@ public partial class LogViewModel : ObservableObject, IDisposable
     [ObservableProperty] private LogEntryViewModel? _selectedEntry;
 
     public ObservableCollection<LogEntryViewModel> LogEntries { get; } = new();
-
-    /// <summary>Level filter options for the ComboBox.</summary>
     public string[] LevelFilters { get; } = { "ALL", "DEBUG", "INFO", "WARN", "ERROR", "FATAL" };
-
-    /// <summary>Source filter options for the ComboBox.</summary>
     public string[] SourceFilters { get; } = { "ALL", "APP", "CAD", "XLT" };
 
     public LogViewModel(ILogStore logStore)
@@ -42,35 +38,22 @@ public partial class LogViewModel : ObservableObject, IDisposable
         RefreshLevelSummary();
     }
 
-    public LogViewModel() : this(App.LogStore ?? new InMemoryLogStore())
-    {
-    }
+    public LogViewModel() : this(App.LogStore ?? new InMemoryLogStore()) { }
 
-    /// <summary>
-    /// Toggle log viewer panel visibility.
-    /// </summary>
     [RelayCommand]
     private void ToggleVisibility()
     {
         IsVisible = !IsVisible;
-        if (IsVisible)
-            RefreshEntries();
+        if (IsVisible) RefreshEntries();
     }
 
-    /// <summary>
-    /// Toggle pause: when paused, new entries are buffered and not displayed until resumed.
-    /// </summary>
     [RelayCommand]
     private void TogglePause()
     {
         IsPaused = !IsPaused;
-        if (!IsPaused)
-            RefreshEntries(); // Refresh to catch up on buffered entries
+        if (!IsPaused) RefreshEntries();
     }
 
-    /// <summary>
-    /// Clear all log entries from the store and display.
-    /// </summary>
     [RelayCommand]
     private void ClearLogs()
     {
@@ -83,9 +66,6 @@ public partial class LogViewModel : ObservableObject, IDisposable
         });
     }
 
-    /// <summary>
-    /// Copy all visible log entries to clipboard.
-    /// </summary>
     [RelayCommand]
     private void CopyLogs()
     {
@@ -94,9 +74,6 @@ public partial class LogViewModel : ObservableObject, IDisposable
             Clipboard.SetText(text);
     }
 
-    /// <summary>
-    /// Export visible log entries to a text file.
-    /// </summary>
     [RelayCommand]
     private void ExportLogs()
     {
@@ -121,9 +98,6 @@ public partial class LogViewModel : ObservableObject, IDisposable
         }
     }
 
-    /// <summary>
-    /// Open the log directory in Windows Explorer.
-    /// </summary>
     [RelayCommand]
     private void OpenLogFolder()
     {
@@ -132,25 +106,13 @@ public partial class LogViewModel : ObservableObject, IDisposable
             System.Diagnostics.Process.Start("explorer.exe", logDir);
     }
 
-    partial void OnSelectedLevelFilterChanged(string value)
-    {
-        RefreshEntries();
-    }
-
-    partial void OnSelectedSourceFilterChanged(string value)
-    {
-        RefreshEntries();
-    }
-
-    partial void OnSearchFilterChanged(string value)
-    {
-        RefreshEntries();
-    }
+    partial void OnSelectedLevelFilterChanged(string value) => RefreshEntries();
+    partial void OnSelectedSourceFilterChanged(string value) => RefreshEntries();
+    partial void OnSearchFilterChanged(string value) => RefreshEntries();
 
     private void OnEntryAdded(LogEntry entry)
     {
-        if (!IsVisible) return;
-        if (IsPaused) return; // Buffer entries while paused
+        if (!IsVisible || IsPaused) return;
         if (!PassesFilter(entry)) return;
 
         Application.Current.Dispatcher.Invoke(() =>
@@ -158,7 +120,6 @@ public partial class LogViewModel : ObservableObject, IDisposable
             LogEntries.Add(new LogEntryViewModel(entry));
             TotalLogCount = _logStore.Count;
 
-            // Trim display if too many entries
             while (LogEntries.Count > _maxDisplayEntries)
                 LogEntries.RemoveAt(0);
 
@@ -207,20 +168,15 @@ public partial class LogViewModel : ObservableObject, IDisposable
 
     private LogLevel GetMinLevel() => SelectedLevelFilter switch
     {
-        "DEBUG" => LogLevel.Debug,
-        "INFO" => LogLevel.Information,
-        "WARN" => LogLevel.Warning,
-        "ERROR" => LogLevel.Error,
-        "FATAL" => LogLevel.Fatal,
-        _ => LogLevel.Verbose
+        "DEBUG" => LogLevel.Debug, "INFO" => LogLevel.Information,
+        "WARN" => LogLevel.Warning, "ERROR" => LogLevel.Error,
+        "FATAL" => LogLevel.Fatal, _ => LogLevel.Verbose
     };
 
     private LogSource? GetSourceFilter() => SelectedSourceFilter switch
     {
-        "APP" => LogSource.App,
-        "CAD" => LogSource.CadPlugin,
-        "XLT" => LogSource.Translation,
-        _ => null // "ALL" = no filter
+        "APP" => LogSource.App, "CAD" => LogSource.CadPlugin,
+        "XLT" => LogSource.Translation, _ => null
     };
 
     private void RefreshLevelSummary()
@@ -241,61 +197,4 @@ public partial class LogViewModel : ObservableObject, IDisposable
     {
         _logStore.EntryAdded -= OnEntryAdded;
     }
-}
-
-/// <summary>
-/// Wrapper around <see cref="LogEntry"/> for WPF binding with computed display properties.
-/// </summary>
-public class LogEntryViewModel
-{
-    private readonly LogEntry _entry;
-
-    public LogEntryViewModel(LogEntry entry) => _entry = entry;
-
-    public string Timestamp => _entry.Timestamp.ToString("HH:mm:ss.fff");
-    public string LevelTag => _entry.LevelTag;
-    public LogLevel Level => _entry.Level;
-    public string Category => _entry.Category;
-    public string Message => _entry.Message;
-    public string? Exception => _entry.Exception;
-    public string DisplayText => _entry.DisplayText;
-    public string SourceTag => _entry.SourceTag;
-    public LogSource LogSource => _entry.LogSource;
-    public string? CorrelationId => _entry.CorrelationId;
-    public double? DurationMs => _entry.DurationMs;
-
-    /// <summary>
-    /// Level badge color hex for XAML binding.
-    /// </summary>
-    public string LevelColor => _entry.Level switch
-    {
-        LogLevel.Verbose => "#9E9E9E",
-        LogLevel.Debug => "#78909C",
-        LogLevel.Information => "#1976D2",
-        LogLevel.Warning => "#FF9800",
-        LogLevel.Error => "#E53935",
-        LogLevel.Fatal => "#B71C1C",
-        _ => "#757575"
-    };
-
-    /// <summary>
-    /// Source badge color hex for XAML binding.
-    /// </summary>
-    public string SourceColor => _entry.LogSource switch
-    {
-        LogSource.CadPlugin => "#FF6F00",
-        LogSource.Translation => "#7B1FA2",
-        _ => "#546E7A"
-    };
-
-    /// <summary>
-    /// Background color for the log row based on level.
-    /// </summary>
-    public string RowBackground => _entry.Level switch
-    {
-        LogLevel.Error => "#FFF0F0",
-        LogLevel.Fatal => "#FFEBEE",
-        LogLevel.Warning => "#FFFDE7",
-        _ => "Transparent"
-    };
 }

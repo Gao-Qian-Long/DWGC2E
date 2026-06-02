@@ -1,7 +1,4 @@
-using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
-using Autodesk.AutoCAD.Geometry;
-using Autodesk.AutoCAD.GraphicsInterface;
 using DwgTranslator.Cad;
 using DwgTranslator.Core.Models;
 using DwgTranslator.Core.Services;
@@ -25,27 +22,19 @@ public class TextReplacer
         _cnToEn = cnToEn;
     }
 
-    /// <summary>
-    /// Replace text in a database with translated text.
-    /// Creates a backup before modification.
-    /// </summary>
     public WritebackResult ReplaceAll(Database db, List<TextEntity> entities)
     {
         var result = new WritebackResult();
 
-        // Create backup
         var backupPath = CreateBackup(db);
         result.BackupPath = backupPath;
 
         using var transaction = db.TransactionManager.StartTransaction();
         try
         {
-            // Pre-load model space and paper space block records for collision detection
             var modelSpaceId = SymbolUtilityServices.GetBlockModelSpaceId(db);
             var modelSpace = (BlockTableRecord)transaction.GetObject(modelSpaceId, OpenMode.ForRead);
             var blockTable = (BlockTable)transaction.GetObject(db.BlockTableId, OpenMode.ForRead);
-
-            var frames = FrameDetector.DetectFrames(db);
 
             foreach (var entity in entities)
             {
@@ -56,19 +45,9 @@ public class TextReplacer
                     continue;
                 }
 
-                var replaceResult = ReplaceSingleEntity(transaction, db, entity, frames);
+                var replaceResult = ReplaceSingleEntity(transaction, db, entity);
                 if (replaceResult.Success)
                 {
-                    // Post-replacement collision avoidance for the modified entity
-                    if (replaceResult.ModifiedEntity != null)
-                    {
-                        var btr = replaceResult.OwningBlock ?? modelSpace;
-                        CollisionDetector.TryResolveCrossLayerCollisions(
-                            replaceResult.ModifiedEntity, btr, transaction,
-                            replaceResult.CurrentHeight, replaceResult.OriginalHeight,
-                            db: db);
-                    }
-
                     result.SuccessCount++;
                     entity.Status = TranslationStatus.WritebackSuccess;
                 }
@@ -77,8 +56,7 @@ public class TextReplacer
                     result.FailCount++;
                     entity.Status = TranslationStatus.WritebackFailed;
                     result.Errors.Add($"Handle {entity.Handle}: {replaceResult.Error}");
-                    Log.Warning("Failed to replace entity {Handle}: {Error}",
-                        entity.Handle, replaceResult.Error);
+                    Log.Warning("Failed to replace entity {Handle}: {Error}", entity.Handle, replaceResult.Error);
                 }
             }
 
@@ -97,14 +75,12 @@ public class TextReplacer
         return result;
     }
 
-    private EntityReplaceResult ReplaceSingleEntity(Transaction tr, Database db, TextEntity entity, List<Extents3d> frames)
+    private EntityReplaceResult ReplaceSingleEntity(Transaction tr, Database db, TextEntity entity)
     {
         try
         {
-            // Parse handle - special format for attributes
             if (entity.Handle.Contains('/'))
                 return ReplaceAttribute(tr, db, entity);
-
             if (entity.Handle.Contains(':'))
                 return ReplaceTableCell(tr, db, entity);
 
@@ -112,29 +88,24 @@ public class TextReplacer
             var objectId = db.GetObjectId(false, handle, 0);
             var dbObject = tr.GetObject(objectId, OpenMode.ForWrite);
 
-            // Determine owning block for collision detection
             BlockTableRecord? owningBtr = null;
             try
             {
                 if (dbObject.OwnerId.IsValid)
                     owningBtr = tr.GetObject(dbObject.OwnerId, OpenMode.ForRead) as BlockTableRecord;
             }
-            catch { /* ignore */ }
+            catch { }
 
             switch (dbObject)
             {
                 case DBText dbText:
-                    return ReplaceDBText(dbText, entity, db, owningBtr, frames);
-
+                    return ReplaceDBText(dbText, entity, db, owningBtr);
                 case MText mText:
-                    return ReplaceMText(mText, entity, db, owningBtr, frames);
-
+                    return ReplaceMText(mText, entity, db, owningBtr);
                 case Dimension dim:
                     return ReplaceDimension(dim, entity, owningBtr);
-
                 case MLeader mLeader:
                     return ReplaceMLeader(mLeader, entity, db, owningBtr);
-
                 default:
                     return new EntityReplaceResult { Success = false, Error = "Unsupported entity type" };
             }
@@ -145,131 +116,45 @@ public class TextReplacer
         }
     }
 
-    private EntityReplaceResult ReplaceDBText(DBText dbText, TextEntity entity, Database db, BlockTableRecord? owningBtr, List<Extents3d> frames)
+    private EntityReplaceResult ReplaceDBText(DBText dbText, TextEntity entity, Database db, BlockTableRecord? owningBtr)
     {
         var originalHeight = dbText.Height;
         dbText.TextString = entity.TranslatedText;
-
-        // Auto-scale if translated text is significantly wider
-        var newWidth = EstimateTextWidth(entity.TranslatedText, dbText.Height);
-        if (entity.OriginalWidth > 0 && newWidth > entity.OriginalWidth * _autoScaleThreshold)
-        {
-            double scale = entity.OriginalWidth / newWidth * _autoScaleFactor;
-            if (scale < 0.5) scale = 0.5;
-            dbText.Height *= scale;
-        }
-
-        // Frame-aware scaling: shrink to fit closest frame if overflowing.
-        // Checks BOTH X and Y axes (previously only X was checked, so tall
-        // multi-line DBText could overflow vertically without detection).
-        var closestFrame = CollisionDetector.FindClosestFrame(dbText.Position, frames);
-        if (closestFrame.HasValue)
-        {
-            dbText.RecordGraphicsModified(true);
-            try
-            {
-                var bounds = dbText.GeometricExtents;
-                if (CollisionDetector.ExceedsFrame(bounds, closestFrame.Value))
-                {
-                    double frameW = closestFrame.Value.MaxPoint.X - closestFrame.Value.MinPoint.X;
-                    double frameH = closestFrame.Value.MaxPoint.Y - closestFrame.Value.MinPoint.Y;
-                    double textW = bounds.MaxPoint.X - bounds.MinPoint.X;
-                    double textH = bounds.MaxPoint.Y - bounds.MinPoint.Y;
-                    double scaleW = textW > 0 ? (frameW * 0.92) / textW : 1.0;
-                    double scaleH = textH > 0 ? (frameH * 0.92) / textH : 1.0;
-                    double scale = Math.Min(scaleW, scaleH);
-                    if (scale < 0.5) scale = 0.5;
-                    if (scale < 1.0) dbText.Height *= scale;
-                }
-            }
-            catch { /* GeometricExtents may fail for degenerate text */ }
-        }
-
-        // Height cap: never grow beyond original (matches offline collision avoidance)
-        if (dbText.Height > originalHeight * 1.05)
-        {
-            dbText.Height = originalHeight * 1.05;
-        }
-
         return new EntityReplaceResult
         {
-            Success = true,
-            ModifiedEntity = dbText,
-            OwningBlock = owningBtr,
-            OriginalHeight = originalHeight,
-            CurrentHeight = dbText.Height
+            Success = true, ModifiedEntity = dbText, OwningBlock = owningBtr,
+            OriginalHeight = originalHeight, CurrentHeight = dbText.Height
         };
     }
 
-    private EntityReplaceResult ReplaceMText(MText mText, TextEntity entity, Database db, BlockTableRecord? owningBtr, List<Extents3d> frames)
+    private EntityReplaceResult ReplaceMText(MText mText, TextEntity entity, Database db, BlockTableRecord? owningBtr)
     {
         var originalHeight = mText.TextHeight;
 
-        // Preserve original line spacing
         if (entity.MTextLineSpacing > 0)
             mText.LineSpacingFactor = entity.MTextLineSpacing;
         if (entity.MTextLineSpacingStyle > 0)
             mText.LineSpacingStyle = (LineSpacingStyle)entity.MTextLineSpacingStyle;
 
-        // Rebuild multi-line structure:
-        // - Hard \P breaks: use target line count from original
-        // - Fixed-width wrap (no \P): reflow to fit within original rectangle width
-        // - Free-width: keep as-is
-        string contents;
-        if (entity.MTextHasHardBreaks)
-        {
-            contents = Core.Services.TextWidthEstimator.RebuildMTextWithLineBreaks(
-                entity.TranslatedText, entity.MTextLineCount);
-        }
-        else if (entity.MTextRectangleWidth > 0)
-        {
-            contents = Core.Services.TextWidthEstimator.ReflowTextToWidth(
-                entity.TranslatedText, entity.MTextRectangleWidth, mText.TextHeight);
-        }
-        else
-        {
-            contents = entity.TranslatedText;
-        }
+        mText.Contents = entity.TranslatedText
+            .Replace("\r\n", "\\P").Replace("\n", "\\P").Replace("\r", "\\P");
 
-        mText.Contents = contents
-            .Replace("\r\n", "\\P")
-            .Replace("\n", "\\P")
-            .Replace("\r", "\\P");
-
-        // Map font if needed (direction-aware, was hardcoded cnToEn: true)
         MapTextStyle(mText.TextStyleId, db, _cnToEn);
-
-        // Only disable DynamicColumns — preserve StaticColumns if the original
-        // MText intentionally used multi-column layout.
-        if (mText.ColumnType == ColumnType.DynamicColumns)
-            mText.ColumnType = ColumnType.NoColumns;
-
-        // Delegate all layout optimization (width, height, frame fitting) to LayoutOptimizer
-        var closestFrame = CollisionDetector.FindClosestFrame(mText.Location, frames);
-        LayoutOptimizer.OptimizeMText(mText, contents, entity, closestFrame, null);
-
-        // Force geometry refresh so collision detection sees accurate bounds
         mText.RecordGraphicsModified(true);
 
         return new EntityReplaceResult
         {
-            Success = true,
-            ModifiedEntity = mText,
-            OwningBlock = owningBtr,
-            OriginalHeight = originalHeight,
-            CurrentHeight = mText.TextHeight
+            Success = true, ModifiedEntity = mText, OwningBlock = owningBtr,
+            OriginalHeight = originalHeight, CurrentHeight = mText.TextHeight
         };
     }
 
-    private EntityReplaceResult ReplaceDimension(Dimension dim, TextEntity entity, BlockTableRecord? owningBtr)
+    private static EntityReplaceResult ReplaceDimension(Dimension dim, TextEntity entity, BlockTableRecord? owningBtr)
     {
         dim.DimensionText = entity.TranslatedText;
-        return new EntityReplaceResult 
-        { 
-            Success = true, 
-            ModifiedEntity = dim, 
-            OwningBlock = owningBtr,
-            OriginalHeight = 2.5 
+        return new EntityReplaceResult
+        {
+            Success = true, ModifiedEntity = dim, OwningBlock = owningBtr, OriginalHeight = 2.5
         };
     }
 
@@ -281,12 +166,9 @@ public class TextReplacer
             mLeader.MText.Contents = entity.TranslatedText;
             MapTextStyle(mLeader.MText.TextStyleId, db, _cnToEn);
         }
-        return new EntityReplaceResult 
-        { 
-            Success = true, 
-            ModifiedEntity = mLeader.MText, 
-            OwningBlock = owningBtr,
-            OriginalHeight = originalHeight 
+        return new EntityReplaceResult
+        {
+            Success = true, ModifiedEntity = mLeader.MText, OwningBlock = owningBtr, OriginalHeight = originalHeight
         };
     }
 
@@ -308,7 +190,7 @@ public class TextReplacer
             if (blockRef.OwnerId.IsValid)
                 owningBtr = tr.GetObject(blockRef.OwnerId, OpenMode.ForRead) as BlockTableRecord;
         }
-        catch { /* ignore */ }
+        catch { }
 
         foreach (ObjectId attId in blockRef.AttributeCollection)
         {
@@ -317,22 +199,10 @@ public class TextReplacer
             {
                 var originalHeight = attRef.Height;
                 attRef.TextString = entity.TranslatedText;
-
-                // Auto-scale
-                var newWidth = EstimateTextWidth(entity.TranslatedText, attRef.Height);
-                if (entity.OriginalWidth > 0 && newWidth > entity.OriginalWidth * _autoScaleThreshold)
-                {
-                    attRef.Height *= entity.OriginalWidth / newWidth * _autoScaleFactor;
-                }
-
-                // Sync attributes
                 blockRef.RecordGraphicsModified(true);
-                return new EntityReplaceResult 
-                { 
-                    Success = true, 
-                    ModifiedEntity = attRef, 
-                    OwningBlock = owningBtr,
-                    OriginalHeight = originalHeight 
+                return new EntityReplaceResult
+                {
+                    Success = true, ModifiedEntity = attRef, OwningBlock = owningBtr, OriginalHeight = originalHeight
                 };
             }
         }
@@ -359,18 +229,15 @@ public class TextReplacer
             if (table.OwnerId.IsValid)
                 owningBtr = tr.GetObject(table.OwnerId, OpenMode.ForRead) as BlockTableRecord;
         }
-        catch { /* ignore */ }
+        catch { }
 
         if (row < table.Rows.Count && col < table.Columns.Count)
         {
             var cell = table.Cells[row, col];
             cell.Value = entity.TranslatedText;
-            return new EntityReplaceResult 
-            { 
-                Success = true, 
-                ModifiedEntity = null, // Table cells don't have a direct entity for collision
-                OwningBlock = owningBtr,
-                OriginalHeight = 2.5 
+            return new EntityReplaceResult
+            {
+                Success = true, ModifiedEntity = null, OwningBlock = owningBtr, OriginalHeight = 2.5
             };
         }
 
@@ -385,29 +252,23 @@ public class TextReplacer
         {
             var style = (TextStyleTableRecord)styleId.GetObject(OpenMode.ForWrite);
 
-            // Use shared FontMapper — direction-aware (was hardcoded cnToEn: true)
             var mappedFontName = FontMapper.MapFontName(style.Name, cnToEn);
-            if (string.IsNullOrEmpty(mappedFontName))
-                return;
+            if (string.IsNullOrEmpty(mappedFontName)) return;
 
-            // Determine if the mapped font is a SHX or TrueType font
             bool isShx = mappedFontName.EndsWith(".shx", StringComparison.OrdinalIgnoreCase);
 
             if (isShx)
             {
-                // SHX font: set the FileName property
                 style.FileName = mappedFontName;
                 style.BigFontFileName = string.Empty;
-                Log.Information("Font mapped (SHX): {Style} -> {Font}", style.Name, mappedFontName);
             }
             else
             {
-                // TrueType font: create a new FontDescriptor
                 var currentFont = style.Font;
-                var newFont = new FontDescriptor(mappedFontName, currentFont.Bold, currentFont.Italic, 0, 0);
+                var newFont = new Autodesk.AutoCAD.GraphicsInterface.FontDescriptor(mappedFontName, currentFont.Bold, currentFont.Italic, 0, 0);
                 style.Font = newFont;
-                Log.Information("Font mapped (TrueType): {Style} -> {Font}", style.Name, mappedFontName);
             }
+            Log.Information("Font mapped: {Style} -> {Font}", style.Name, mappedFontName);
         }
         catch (Exception ex)
         {
@@ -415,15 +276,14 @@ public class TextReplacer
         }
     }
 
-    private string CreateBackup(Database db)
+    private static string CreateBackup(Database db)
     {
         var originalPath = db.Filename;
         var backupPath = Path.ChangeExtension(originalPath, ".bak");
 
         try
         {
-            if (File.Exists(backupPath))
-                File.Delete(backupPath);
+            if (File.Exists(backupPath)) File.Delete(backupPath);
             File.Copy(originalPath, backupPath);
             Log.Information("Backup created: {Path}", backupPath);
         }
@@ -436,15 +296,13 @@ public class TextReplacer
         return backupPath;
     }
 
-    private void RestoreBackup(Database db, string backupPath)
+    private static void RestoreBackup(Database db, string backupPath)
     {
-        if (string.IsNullOrEmpty(backupPath) || !File.Exists(backupPath))
-            return;
+        if (string.IsNullOrEmpty(backupPath) || !File.Exists(backupPath)) return;
 
         try
         {
             var originalPath = db.Filename;
-            // Cannot overwrite while database is open — restore to a .restored copy
             var restorePath = Path.ChangeExtension(originalPath, ".restored.dwg");
             File.Copy(backupPath, restorePath, overwrite: true);
             Log.Warning("Backup restored to {Path} (original file is locked by AutoCAD)", restorePath);
@@ -454,31 +312,4 @@ public class TextReplacer
             Log.Error(ex, "Failed to restore backup");
         }
     }
-
-    private static double EstimateTextWidth(string text, double height) => Core.Services.TextWidthEstimator.EstimateTextWidth(text, height);
-}
-
-/// <summary>
-/// Result of a writeback operation.
-/// </summary>
-public class WritebackResult
-{
-    public int SuccessCount { get; set; }
-    public int FailCount { get; set; }
-    public int SkippedCount { get; set; }
-    public string BackupPath { get; set; } = string.Empty;
-    public List<string> Errors { get; set; } = new();
-}
-
-/// <summary>
-/// Result of a single entity replacement.
-/// </summary>
-internal class EntityReplaceResult
-{
-    public bool Success { get; set; }
-    public string Error { get; set; } = string.Empty;
-    public Entity? ModifiedEntity { get; set; }
-    public BlockTableRecord? OwningBlock { get; set; }
-    public double OriginalHeight { get; set; }
-    public double CurrentHeight { get; set; }
 }

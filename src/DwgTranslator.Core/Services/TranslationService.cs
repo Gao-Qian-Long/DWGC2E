@@ -8,7 +8,6 @@ namespace DwgTranslator.Core.Services;
 /// <summary>
 /// Implements deduplicated concurrent translation pipeline.
 /// Same PlainText is only translated once; results are mapped back to all entities with same text.
-/// Concurrency scales adaptively based on entity count.
 /// </summary>
 public class TranslationService : ITranslationService
 {
@@ -41,7 +40,6 @@ public class TranslationService : ITranslationService
         _consistencyService = consistencyService ?? new TranslationConsistencyService();
     }
 
-    /// <inheritdoc/>
     public async Task<List<TranslationPair>> TranslateBatchAsync(
         List<TextEntity> entities, string sourceLanguage, string targetLanguage,
         CancellationToken cancellationToken = default)
@@ -49,18 +47,12 @@ public class TranslationService : ITranslationService
         return await TranslateBatchWithProgressAsync(entities, sourceLanguage, targetLanguage, null, cancellationToken);
     }
 
-    /// <summary>
-    /// Deduplicated concurrent translation with streaming progress.
-    /// Groups entities by PlainText, translates each unique text once, 
-    /// then maps results to all entities with the same PlainText.
-    /// </summary>
     public async Task<List<TranslationPair>> TranslateBatchWithProgressAsync(
         List<TextEntity> entities, string sourceLanguage, string targetLanguage,
         IProgress<TranslationPair>? progress, CancellationToken cancellationToken = default)
     {
         var allResults = new List<TranslationPair>();
 
-        // Step 1: Group by unique PlainText to avoid duplicate API calls
         var groups = entities
             .Where(e => !string.IsNullOrWhiteSpace(e.PlainText))
             .GroupBy(e => e.PlainText.Trim(), StringComparer.Ordinal)
@@ -68,15 +60,10 @@ public class TranslationService : ITranslationService
 
         int uniqueCount = groups.Count;
         int totalCount = entities.Count;
-        int savedCalls = totalCount - uniqueCount;
-
         Log.Information("Translation: {Unique} unique texts from {Total} entities (saved {Saved} API calls)",
-            uniqueCount, totalCount, savedCalls);
+            uniqueCount, totalCount, totalCount - uniqueCount);
 
-        // Step 2: Adaptive concurrency based on count (capped by maxConcurrency)
         int concurrency = Math.Clamp(uniqueCount, 1, _maxConcurrency);
-        Log.Information("Using {Concurrency} concurrent streams for {Count} unique texts", concurrency, uniqueCount);
-
         var semaphore = new SemaphoreSlim(concurrency, concurrency);
         var tasks = new List<Task>();
         var translationMap = new Dictionary<string, TranslationPair>(StringComparer.Ordinal);
@@ -95,37 +82,24 @@ public class TranslationService : ITranslationService
                 {
                     var pair = await TranslateSingleAsync(representative, sourceLanguage, targetLanguage, cancellationToken);
 
-                    lock (mapLock)
-                    {
-                        translationMap[plainText] = pair;
-                    }
+                    lock (mapLock) { translationMap[plainText] = pair; }
 
-                    // Report progress and emit results for ALL entities with same text
                     int localDone = Interlocked.Increment(ref completed);
                     foreach (var entity in group)
                     {
                         var result = new TranslationPair
                         {
-                            Handle = entity.Handle,
-                            SourceText = entity.PlainText,
-                            TranslatedText = pair.TranslatedText,
-                            GlossaryHit = pair.GlossaryHit,
-                            Status = pair.Status
+                            Handle = entity.Handle, SourceText = entity.PlainText,
+                            TranslatedText = pair.TranslatedText, GlossaryHit = pair.GlossaryHit, Status = pair.Status
                         };
-
                         lock (mapLock) allResults.Add(result);
                         progress?.Report(result);
                     }
 
                     if (localDone % 10 == 0 || localDone == uniqueCount)
-                    {
                         Log.Debug("Translation progress: {Done}/{Total} unique texts", localDone, uniqueCount);
-                    }
                 }
-                finally
-                {
-                    semaphore.Release();
-                }
+                finally { semaphore.Release(); }
             }, cancellationToken));
         }
 
@@ -136,45 +110,12 @@ public class TranslationService : ITranslationService
         return allResults;
     }
 
-    /// <inheritdoc/>
     public async Task<string> TranslateAsync(string text, string sourceLanguage, string targetLanguage,
         CancellationToken cancellationToken = default)
     {
         var (translated, _) = await TranslateWithMetadataAsync(text, sourceLanguage, targetLanguage, cancellationToken);
         return translated;
     }
-
-    private static readonly Regex NumericOnlyRegex = new(
-        @"^[\s\d\.\,\+\-\*\/\=<>≤≥±°\#\%‰〇零一二三四五六七八九十百千万亿φΦ⌀ⓧⓓ]+$",
-        RegexOptions.Compiled);
-
-    private static bool ShouldSkipTranslation(string text, string sourceLang, string targetLang)
-    {
-        if (string.IsNullOrWhiteSpace(text)) return true;
-        var trimmed = text.Trim();
-
-        // Engineering labels: short text with digits and few letters (e.g. 24V, Φ12, M8, IP65, 50Hz)
-        if (trimmed.Length <= 15 && trimmed.Any(char.IsDigit) && !HasCjk(trimmed))
-        {
-            var letterCount = trimmed.Count(char.IsLetter);
-            if (letterCount <= 5) return true;
-        }
-
-        // Already target language detection
-        if (sourceLang == "ZH" && targetLang == "EN")
-        {
-            if (!HasCjk(trimmed)) return true; // No CJK = already English
-        }
-        else if (sourceLang == "EN" && targetLang == "ZH")
-        {
-            if (!HasAsciiLetters(trimmed)) return true; // No ASCII letters = already Chinese
-        }
-
-        return false;
-    }
-
-    private static bool HasCjk(string text) => text.Any(c => c >= 0x4E00 && c <= 0x9FFF);
-    private static bool HasAsciiLetters(string text) => text.Any(c => (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z'));
 
     private async Task<TranslationPair> TranslateSingleAsync(
         TextEntity entity, string sourceLanguage, string targetLanguage, CancellationToken ct)
@@ -184,31 +125,24 @@ public class TranslationService : ITranslationService
             if (string.IsNullOrWhiteSpace(entity.PlainText))
                 return new TranslationPair { Handle = entity.Handle, Status = TranslationStatus.Skipped };
 
-            // Skip pure numeric/dimension values (no actual text to translate)
-            if (NumericOnlyRegex.IsMatch(entity.PlainText.Trim()))
+            if (TranslationFilter.IsNumericOnly(entity.PlainText))
             {
-                Log.Debug("Skipped numeric-only text: {Text}", entity.PlainText);
                 return new TranslationPair
                 {
                     Handle = entity.Handle, SourceText = entity.PlainText,
-                    TranslatedText = entity.PlainText, GlossaryHit = false,
-                    Status = TranslationStatus.Skipped
+                    TranslatedText = entity.PlainText, GlossaryHit = false, Status = TranslationStatus.Skipped
                 };
             }
 
-            // Skip engineering labels and already-target-language text
-            if (ShouldSkipTranslation(entity.PlainText, sourceLanguage, targetLanguage))
+            if (TranslationFilter.ShouldSkipTranslation(entity.PlainText, sourceLanguage, targetLanguage))
             {
-                Log.Debug("Skipped translation for {Text}", entity.PlainText);
                 return new TranslationPair
                 {
                     Handle = entity.Handle, SourceText = entity.PlainText,
-                    TranslatedText = entity.PlainText, GlossaryHit = false,
-                    Status = TranslationStatus.Skipped
+                    TranslatedText = entity.PlainText, GlossaryHit = false, Status = TranslationStatus.Skipped
                 };
             }
 
-            // Check cache
             if (_consistencyService.TryGetMatch(entity.PlainText, out var cached))
             {
                 return new TranslationPair
@@ -264,7 +198,7 @@ public class TranslationService : ITranslationService
 
         var translated = await TranslateWithRetryAsync(cleanText, sourceLanguage, targetLanguage, ct);
         translated = _glossaryService.RestorePlaceholders(translated, matches);
-        return (CleanTranslationOutput(translated), glossaryHit);
+        return (TranslationFilter.CleanTranslationOutput(translated), glossaryHit);
     }
 
     private string RestoreFormatCodes(string translated, string rawText)
@@ -274,51 +208,27 @@ public class TranslationService : ITranslationService
         var (_, template, codes) = _formatCodeParser.Parse(rawText);
         if (codes.Count == 0) return translated;
 
-        // Build a template where all non-placeholder text is replaced with translated text
         var parts = Regex.Split(template, @"(__FMT_\d+__)");
         var sb = new System.Text.StringBuilder();
         bool textInserted = false;
         foreach (var part in parts)
         {
             if (Regex.IsMatch(part, @"^__FMT_\d+__$"))
-            {
                 sb.Append(part);
-            }
-            else if (!string.IsNullOrEmpty(part))
+            else if (!string.IsNullOrEmpty(part) && !textInserted)
             {
-                if (!textInserted)
-                {
-                    sb.Append(translated);
-                    textInserted = true;
-                }
-                // Remaining original text segments are omitted to avoid duplication
+                sb.Append(translated);
+                textInserted = true;
             }
         }
         var withPlaceholders = sb.ToString();
         var result = _formatCodeParser.Restore(withPlaceholders, codes);
-        // Only replace newlines with \P if the original text contained \P hard line breaks.
-        // This prevents adding unwanted line breaks for text that originally had none.
         if (rawText.Contains("\\P"))
-        {
             result = result.Replace("\r\n", "\\P").Replace("\n", "\\P").Replace("\r", "\\P");
-        }
         return result;
     }
 
-    private static string CleanTranslationOutput(string text)
-    {
-        if (string.IsNullOrEmpty(text)) return text;
-        text = text.Trim();
-        if (text.StartsWith("Translated", StringComparison.OrdinalIgnoreCase) && text.Contains(":"))
-        {
-            var ci = text.IndexOf(':');
-            if (ci > 0 && ci < 30) text = text[(ci + 1)..].Trim();
-        }
-        return text;
-    }
-
-    private async Task<string> TranslateWithRetryAsync(
-        string text, string src, string tgt, CancellationToken ct)
+    private async Task<string> TranslateWithRetryAsync(string text, string src, string tgt, CancellationToken ct)
     {
         Exception? last = null;
         var msg = BuildUserMessage(text, src, tgt);
@@ -328,7 +238,7 @@ public class TranslationService : ITranslationService
             {
                 if (i > 0) await Task.Delay(TimeSpan.FromSeconds(Math.Pow(2, i)), ct);
                 var result = await _deepSeekClient.ChatCompletionAsync(_systemPrompt, msg, ct);
-                if (!string.IsNullOrWhiteSpace(result)) return CleanTranslationOutput(result);
+                if (!string.IsNullOrWhiteSpace(result)) return TranslationFilter.CleanTranslationOutput(result);
             }
             catch (OperationCanceledException) { throw; }
             catch (Exception ex) { last = ex; Log.Warning(ex, "Attempt {A}/{M}", i + 1, _maxRetryCount + 1); }
