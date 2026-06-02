@@ -75,7 +75,12 @@ TestResults/
 *.trx
 *.coverage
 
+# ===== Python Cache =====
+__pycache__/
+*.pyc
+
 # ===== Development Notes & Temp Files =====
+.codegraph/
 功能开发.md
 BUG反馈.md
-.codegraph
+CLAUDE.md

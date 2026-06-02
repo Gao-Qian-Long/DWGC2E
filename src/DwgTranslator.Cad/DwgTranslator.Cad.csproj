@@ -38,8 +38,6 @@
            Text="AutoCAD directory not found. Please set AutoCadDir in Directory.Build.props, via environment variable AUTO_CAD_DIR, or command line: dotnet build -p:AutoCadDir='C:\Program Files\Autodesk\AutoCAD 2026'" />
   </Target>
   <ItemGroup>
-  </ItemGroup>
-  <ItemGroup>
     <ProjectReference Include="..\DwgTranslator.Core\DwgTranslator.Core.csproj" />
   </ItemGroup>
 </Project>

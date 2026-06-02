@@ -10,12 +10,12 @@ namespace DwgTranslator.App.Services;
 
 /// <summary>
 /// Handles AutoCAD COM interop for precise DWG writeback.
-/// Extracted from MainViewModel to improve separation of concerns.
+/// Orchestrates: COM connection → config serialization → LISP script → signal polling.
 /// </summary>
 public class AutoCadInteropService : IAutoCadInteropService, IDisposable
 {
     private static readonly string[] AcadProgIDs =
-    {
+    [
         "AutoCAD.Application",
         "AutoCAD.Application.25",      // 2026
         "AutoCAD.Application.24.3",    // 2025
@@ -30,37 +30,37 @@ public class AutoCadInteropService : IAutoCadInteropService, IDisposable
         "AutoCADLT.Application.24.2",
         "AutoCADLT.Application.24.1",
         "AutoCADLT.Application.24",
+    ];
+
+    private static readonly System.Text.Json.JsonSerializerOptions ConfigJsonOptions = new()
+    {
+        WriteIndented = false,
+        PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase
     };
 
-    private readonly List<object?> _comObjects = new();
+    private readonly List<object?> _comObjects = [];
     private bool _disposed;
 
     public bool IsAutoCADAvailable(AppConfig config)
     {
-        // 1. Check configured path
         var configuredPath = config.AutoCadInstallPath;
         if (!string.IsNullOrEmpty(configuredPath) && AutoCadDetector.IsValidAutoCadPath(configuredPath))
-        {
             return IsAutoCADRunning();
-        }
 
-        // 2. Auto-detect from registry
         var detection = AutoCadDetector.DetectInstallation();
         if (detection.Found)
         {
-            // Auto-save detected path for future use
             config.AutoCadInstallPath = detection.InstallPath;
             return IsAutoCADRunning();
         }
 
-        // 3. Fallback: try COM ProgID directly
         return IsAutoCADRunning();
     }
 
     /// <summary>
     /// Execute writeback of translated entities via AutoCAD COM interop.
-    /// Heavy operations (file I/O, COM interop) run on the calling thread;
-    /// the caller is responsible for offloading to a background thread via Task.Run.
+    /// Heavy operations run on the calling thread; the caller is responsible
+    /// for offloading to a background thread via Task.Run.
     /// </summary>
     public async Task<CadWriteResult> WritebackViaAutoCadAsync(
         string sourceFilePath,
@@ -71,71 +71,23 @@ public class AutoCadInteropService : IAutoCadInteropService, IDisposable
         IProgress<string>? progress = null)
     {
         var result = new CadWriteResult();
-        string? initialTempPath = null;
+        string? tempConfigPath = null;
         var localComObjects = new List<object?>();
 
         try
         {
+            // Step 1: Serialize config with session ID for race-condition safety
+            var sessionId = Guid.NewGuid().ToString("N")[..12];
+            var configJson = SerializeConfig(sourceFilePath, outputFilePath, entities, cnToEn, sessionId);
+            tempConfigPath = Path.Combine(Path.GetTempPath(), $"dwgtranslate_{Guid.NewGuid():N}.json");
+            File.WriteAllText(tempConfigPath, configJson);
+
             progress?.Report(Strings.Get("ProgressAutoCadPreparing"));
 
-            // Serialize a config JSON with session ID for race-condition safety.
-            // The session ID is echoed back in the done signal so the WPF app can
-            // verify it's reading the completion signal for ITS session, not a
-            // concurrent one.
-            var sessionId = Guid.NewGuid().ToString("N")[..12];
-            initialTempPath = Path.Combine(Path.GetTempPath(), $"dwgtranslate_{Guid.NewGuid():N}.json");
-            var configObj = new
-            {
-                SourceDwgPath = sourceFilePath,
-                OutputDwgPath = outputFilePath,
-                Entities = entities,
-                CnToEn = cnToEn,
-                SessionId = sessionId
-            };
-            var json = System.Text.Json.JsonSerializer.Serialize(configObj, new System.Text.Json.JsonSerializerOptions
-            {
-                WriteIndented = false,
-                PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase
-            });
-            File.WriteAllText(initialTempPath, json);
-
+            // Step 2: Connect to AutoCAD via COM
             progress?.Report(Strings.Get("ProgressAutoCadConnecting"));
-
-            // Try multiple ProgIDs to connect to AutoCAD
-            Type? acadType = null;
-            string? triedProgID = null;
-            Exception? lastException = null;
-            foreach (var progId in AcadProgIDs)
-            {
-                try
-                {
-                    triedProgID = progId;
-                    acadType = Type.GetTypeFromProgID(progId, false);
-                    if (acadType != null)
-                    {
-                        Log.Information("Found AutoCAD COM ProgID: {ProgID}", progId);
-                        break;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    lastException = ex;
-                }
-            }
-
-            if (acadType == null)
-            {
-                result.Errors.Add(Strings.Get("AutoCadConnectFailed"));
-                return result;
-            }
-
-            dynamic acad = Activator.CreateInstance(acadType)!;
-            localComObjects.Add(acad);
-            acad.Visible = true;
-
-            // Detect AutoCAD version from ProgID for compatibility check
-            string acadVersion = triedProgID ?? "unknown";
-            Log.Information("Connected to AutoCAD via ProgID: {ProgID}", acadVersion);
+            dynamic? acad = ConnectToAutoCad(localComObjects, result);
+            if (acad is null) return result;
 
             var doc = acad.ActiveDocument;
             localComObjects.Add(doc);
@@ -145,147 +97,34 @@ public class AutoCadInteropService : IAutoCadInteropService, IDisposable
                 return result;
             }
 
-            // Locate the Cad plugin DLL
+            // Step 3: Locate the Cad plugin DLL
             string? cadDllPath = ResolveCadPluginPath(config);
-
             if (string.IsNullOrEmpty(cadDllPath) || !File.Exists(cadDllPath))
             {
                 result.Errors.Add(Strings.Get("AutoCadPluginNotFound"));
                 return result;
             }
-
             Log.Information("Using Cad plugin: {Path}", cadDllPath);
 
+            // Step 4: Write config + LISP script to AutoCAD temp directory
             progress?.Report(Strings.Get("ProgressAutoCadPreparingFiles"));
+            var (fixedConfigPath, doneSignalPath, lspPath) = PrepareAutoCadFiles(configJson, cadDllPath);
 
-            // Step 1: Write config JSON to the fixed known path.
-            // The json (with SessionId) was serialized above — write the same
-            // config to the fixed path that the WritebackCommand reads from.
-            var configDir = Path.Combine(Path.GetTempPath(), "DwgTranslator");
-            Directory.CreateDirectory(configDir);
-            var fixedConfigPath = Path.Combine(configDir, "writeback_config.json");
-            var doneSignalPath = Path.Combine(configDir, "writeback_done.txt");
+            // Step 5: Add trusted path (best-effort)
+            try { AddTrustedPath(acad, cadDllPath); }
+            catch (Exception ex) { Log.Warning(ex, "Failed to add trusted path"); }
 
-            // Clean up previous signal files
-            try { if (File.Exists(doneSignalPath)) File.Delete(doneSignalPath); } catch { }
-
-            // Write the same config (with SessionId) to the fixed path
-            File.WriteAllText(fixedConfigPath, json);
-
-            Log.Information("Config written to fixed path: {Path}", fixedConfigPath);
-
-            // Step 2: Add DLL directory to AutoCAD Trusted Paths
-            try
-            {
-                AddTrustedPath(acad, cadDllPath);
-            }
-            catch (Exception ex)
-            {
-                Log.Warning(ex, "Failed to add trusted path (security dialog may still appear)");
-            }
-
-            // Step 3: Create a LISP file that loads the DLL and runs the writeback command
-            var lspPath = Path.Combine(configDir, "dwgtranslate_exec.lsp");
-            var lispDllPath = cadDllPath.Replace("\\", "\\\\");
-
-            var lspContent = $@"(princ ""\nDwgTranslator: loading plugin..."")
-(command ""_.NETLOAD"" ""{lispDllPath}"" )
-(princ ""\nDwgTranslator: executing writeback..."")
-(command ""_.DwgTranslateWrite"" )
-(princ ""\nDwgTranslator: done."")
-(princ)
-";
-            File.WriteAllText(lspPath, lspContent);
-            Log.Information("Created LISP file: {Path}", lspPath);
-
+            // Step 6: Execute LISP via SendCommand
             progress?.Report(Strings.Get("ProgressAutoCadSendingCommand"));
-
-            // Step 4: Load and execute the LISP file via SendCommand
             var lispLspPath = lspPath.Replace("\\", "\\\\");
             doc.SendCommand($"(load \"{lispLspPath}\") ");
 
+            // Step 7: Poll for completion signal
             progress?.Report(Strings.Get("ProgressAutoCadWaiting"));
-
-            // Step 5: Wait for the command to complete (monitor the done signal file)
-            Log.Information("Waiting for WritebackCommand to complete...");
-            int maxWaitSeconds = 120;
-            int waited = 0;
-            while (waited < maxWaitSeconds)
-            {
-                await Task.Delay(2000).ConfigureAwait(false);
-                waited += 2;
-
-                if (File.Exists(doneSignalPath))
-                {
-                    Log.Information("WritebackCommand completed (done signal detected)");
-                    try
-                    {
-                        var doneContent = File.ReadAllText(doneSignalPath);
-                        // Format: "status|sessionId|timestamp" (new) or "status|timestamp" (legacy)
-                        var parts = doneContent.Split('|');
-                        bool isSuccess = parts.Length > 0 &&
-                            parts[0].StartsWith("success", StringComparison.OrdinalIgnoreCase);
-
-                        // Validate SessionId to prevent cross-session confusion
-                        if (parts.Length >= 2 && !string.IsNullOrEmpty(sessionId))
-                        {
-                            var doneSessionId = parts[1];
-                            if (!string.Equals(doneSessionId, sessionId, StringComparison.OrdinalIgnoreCase)
-                                && doneSessionId.Length == 12) // Only validate if it looks like a session ID
-                            {
-                                Log.Warning("Done signal SessionId mismatch: expected={Expected}, got={Actual}. Ignoring stale signal.",
-                                    sessionId, doneSessionId);
-                                // Not our session — continue waiting (don't break)
-                                waited -= 2; // compensate for the delay
-                                continue;
-                            }
-                        }
-
-                        if (!isSuccess)
-                        {
-                            result.SuccessCount = 0;
-                            result.Errors.Add(Strings.Get("AutoCadWritebackFailed", doneContent));
-                        }
-                        else
-                        {
-                            result.SuccessCount = entities.Count;
-                        }
-                    }
-                    catch
-                    {
-                        result.SuccessCount = 0;
-                        result.Errors.Add(Strings.Get("AutoCadSignalReadError"));
-                    }
-                    break;
-                }
-
-                // Also check if the output DWG file has been created recently
-                if (File.Exists(outputFilePath))
-                {
-                    try
-                    {
-                        var fi = new FileInfo(outputFilePath);
-                        if (fi.Length > 1000 && fi.LastWriteTime > DateTime.Now.AddSeconds(-10))
-                        {
-                            Log.Information("Output DWG detected, writeback likely complete");
-                            result.SuccessCount = entities.Count;
-                            break;
-                        }
-                    }
-                    catch { }
-                }
-            }
-
-            if (result.SuccessCount == 0 && waited >= maxWaitSeconds)
-            {
-                Log.Warning("WritebackCommand timed out after {Sec}s", maxWaitSeconds);
-                result.Errors.Add(Strings.Get("AutoCadTimeout", fixedConfigPath));
-            }
+            await WaitForCompletion(doneSignalPath, outputFilePath, sessionId, entities.Count, fixedConfigPath, result);
 
             if (result.SuccessCount > 0)
-            {
                 progress?.Report(Strings.Get("ProgressAutoCadCompleted"));
-            }
 
             // Cleanup signal file
             try { if (File.Exists(doneSignalPath)) File.Delete(doneSignalPath); } catch { }
@@ -298,13 +137,185 @@ public class AutoCadInteropService : IAutoCadInteropService, IDisposable
         finally
         {
             ReleaseComObjects(localComObjects);
-            try { if (initialTempPath != null && File.Exists(initialTempPath)) File.Delete(initialTempPath); } catch { }
+            try { if (tempConfigPath != null && File.Exists(tempConfigPath)) File.Delete(tempConfigPath); } catch { }
         }
 
         return result;
     }
 
-    #region Private Helpers
+    // ───────────────────── Step methods ─────────────────────
+
+    private static string SerializeConfig(string source, string output, List<TextEntity> entities, bool cnToEn, string sessionId)
+    {
+        var configObj = new
+        {
+            SourceDwgPath = source,
+            OutputDwgPath = output,
+            Entities = entities,
+            CnToEn = cnToEn,
+            SessionId = sessionId
+        };
+        return System.Text.Json.JsonSerializer.Serialize(configObj, ConfigJsonOptions);
+    }
+
+    private static dynamic? ConnectToAutoCad(List<object?> comObjects, CadWriteResult result)
+    {
+        Type? acadType = null;
+        string? triedProgID = null;
+
+        foreach (var progId in AcadProgIDs)
+        {
+            try
+            {
+                triedProgID = progId;
+                acadType = Type.GetTypeFromProgID(progId, false);
+                if (acadType != null)
+                {
+                    Log.Information("Found AutoCAD COM ProgID: {ProgID}", progId);
+                    break;
+                }
+            }
+            catch { /* Try next ProgID */ }
+        }
+
+        if (acadType == null)
+        {
+            result.Errors.Add(Strings.Get("AutoCadConnectFailed"));
+            return null;
+        }
+
+        dynamic acad = Activator.CreateInstance(acadType)!;
+        comObjects.Add(acad);
+        acad.Visible = true;
+
+        Log.Information("Connected to AutoCAD via ProgID: {ProgID}", triedProgID ?? "unknown");
+        return acad;
+    }
+
+    private static (string configPath, string signalPath, string lspPath) PrepareAutoCadFiles(string configJson, string cadDllPath)
+    {
+        var configDir = Path.Combine(Path.GetTempPath(), "DwgTranslator");
+        Directory.CreateDirectory(configDir);
+
+        var fixedConfigPath = Path.Combine(configDir, "writeback_config.json");
+        var doneSignalPath = Path.Combine(configDir, "writeback_done.txt");
+
+        // Clean up previous signal files
+        try { if (File.Exists(doneSignalPath)) File.Delete(doneSignalPath); } catch { }
+
+        File.WriteAllText(fixedConfigPath, configJson);
+        Log.Information("Config written to fixed path: {Path}", fixedConfigPath);
+
+        // Create LISP file
+        var lspPath = Path.Combine(configDir, "dwgtranslate_exec.lsp");
+        var lispDllPath = cadDllPath.Replace("\\", "\\\\");
+        var lspContent = $@"(princ ""\nDwgTranslator: loading plugin..."")
+(command ""_.NETLOAD"" ""{lispDllPath}"" )
+(princ ""\nDwgTranslator: executing writeback..."")
+(command ""_.DwgTranslateWrite"" )
+(princ ""\nDwgTranslator: done."")
+(princ)
+";
+        File.WriteAllText(lspPath, lspContent);
+        Log.Information("Created LISP file: {Path}", lspPath);
+
+        return (fixedConfigPath, doneSignalPath, lspPath);
+    }
+
+    private static async Task WaitForCompletion(string doneSignalPath, string outputFilePath,
+        string sessionId, int entityCount, string configPath, CadWriteResult result)
+    {
+        Log.Information("Waiting for WritebackCommand to complete...");
+        int maxWaitSeconds = 120;
+        int waited = 0;
+
+        while (waited < maxWaitSeconds)
+        {
+            await Task.Delay(2000).ConfigureAwait(false);
+            waited += 2;
+
+            if (File.Exists(doneSignalPath))
+            {
+                if (ProcessDoneSignal(doneSignalPath, sessionId, entityCount, result))
+                {
+                    waited -= 2; // Stale signal — continue waiting
+                    continue;
+                }
+                return; // Valid signal processed
+            }
+
+            // Also check if the output DWG file has been created recently
+            if (TryDetectOutputFile(outputFilePath, entityCount, result))
+                return;
+        }
+
+        if (result.SuccessCount == 0)
+        {
+            Log.Warning("WritebackCommand timed out after {Sec}s", maxWaitSeconds);
+            result.Errors.Add(Strings.Get("AutoCadTimeout", configPath));
+        }
+    }
+
+    /// <returns>true if the signal was stale and caller should continue waiting</returns>
+    private static bool ProcessDoneSignal(string doneSignalPath, string sessionId, int entityCount, CadWriteResult result)
+    {
+        Log.Information("WritebackCommand completed (done signal detected)");
+        try
+        {
+            var doneContent = File.ReadAllText(doneSignalPath);
+            var parts = doneContent.Split('|');
+            bool isSuccess = parts.Length > 0 &&
+                parts[0].StartsWith("success", StringComparison.OrdinalIgnoreCase);
+
+            // Validate SessionId to prevent cross-session confusion
+            if (parts.Length >= 2 && !string.IsNullOrEmpty(sessionId))
+            {
+                var doneSessionId = parts[1];
+                if (!string.Equals(doneSessionId, sessionId, StringComparison.OrdinalIgnoreCase)
+                    && doneSessionId.Length == 12)
+                {
+                    Log.Warning("Done signal SessionId mismatch: expected={Expected}, got={Actual}",
+                        sessionId, doneSessionId);
+                    return true; // Stale — continue waiting
+                }
+            }
+
+            if (!isSuccess)
+            {
+                result.SuccessCount = 0;
+                result.Errors.Add(Strings.Get("AutoCadWritebackFailed", doneContent));
+            }
+            else
+            {
+                result.SuccessCount = entityCount;
+            }
+        }
+        catch
+        {
+            result.SuccessCount = 0;
+            result.Errors.Add(Strings.Get("AutoCadSignalReadError"));
+        }
+        return false;
+    }
+
+    private static bool TryDetectOutputFile(string outputFilePath, int entityCount, CadWriteResult result)
+    {
+        if (!File.Exists(outputFilePath)) return false;
+        try
+        {
+            var fi = new FileInfo(outputFilePath);
+            if (fi.Length > 1000 && fi.LastWriteTime > DateTime.Now.AddSeconds(-10))
+            {
+                Log.Information("Output DWG detected, writeback likely complete");
+                result.SuccessCount = entityCount;
+                return true;
+            }
+        }
+        catch { }
+        return false;
+    }
+
+    // ───────────────────── Helpers ─────────────────────
 
     private static bool IsAutoCADRunning()
     {
@@ -314,7 +325,6 @@ public class AutoCadInteropService : IAutoCadInteropService, IDisposable
             if (Process.GetProcessesByName("acadlt").Length > 0) return true;
         }
         catch { }
-
         return false;
     }
 
@@ -326,7 +336,7 @@ public class AutoCadInteropService : IAutoCadInteropService, IDisposable
             var dllDir = Path.GetDirectoryName(dllPath);
             if (string.IsNullOrEmpty(dllDir)) return;
 
-            if (!dllDir.EndsWith("\\")) dllDir += "\\";
+            if (!dllDir.EndsWith('\\')) dllDir += "\\";
 
             dynamic prefs = acad.Preferences;
             comRefs.Add(prefs);
@@ -359,27 +369,21 @@ public class AutoCadInteropService : IAutoCadInteropService, IDisposable
 
     private static string? ResolveCadPluginPath(AppConfig config)
     {
-        // 1. Use configured path
         if (!string.IsNullOrEmpty(config.CadPluginPath) && File.Exists(config.CadPluginPath))
             return config.CadPluginPath;
 
-        // 2. Auto-detect using AutoCadDetector
         var detected = AutoCadDetector.FindCadPlugin();
-        if (detected != null)
-            return detected;
+        if (detected != null) return detected;
 
-        // 3. Fallback: look in exe directory and solution output
         string cadDllPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "DwgTranslator.Cad.dll");
-        if (File.Exists(cadDllPath))
-            return cadDllPath;
+        if (File.Exists(cadDllPath)) return cadDllPath;
 
         string appDir = AppDomain.CurrentDomain.BaseDirectory;
         string srcDir = Path.GetFullPath(Path.Combine(appDir, "..", "..", "..", ".."));
         foreach (var configuration in new[] { "Release", "Debug" })
         {
             var path = Path.Combine(srcDir, "DwgTranslator.Cad", "bin", configuration, "net8.0", "DwgTranslator.Cad.dll");
-            if (File.Exists(path))
-                return path;
+            if (File.Exists(path)) return path;
         }
 
         return null;
@@ -396,8 +400,6 @@ public class AutoCadInteropService : IAutoCadInteropService, IDisposable
             }
         }
     }
-
-    #endregion
 
     #region IDisposable
 
