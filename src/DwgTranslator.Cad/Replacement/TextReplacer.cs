@@ -7,35 +7,28 @@ namespace DwgTranslator.Cad.Replacement;
 
 /// <summary>
 /// Replaces text in DWG entities with translated text.
-/// Handles font mapping and auto-scaling for text overflow.
+/// Handles font mapping and backup management.
 /// </summary>
 public class TextReplacer
 {
-    private readonly double _autoScaleThreshold;
-    private readonly double _autoScaleFactor;
+    private const double DefaultTextHeight = 2.5;
+
     private readonly bool _cnToEn;
 
-    public TextReplacer(double autoScaleThreshold = 1.5, double autoScaleFactor = 0.95, bool cnToEn = true)
+    public TextReplacer(bool cnToEn = true)
     {
-        _autoScaleThreshold = autoScaleThreshold;
-        _autoScaleFactor = autoScaleFactor;
         _cnToEn = cnToEn;
     }
 
     public WritebackResult ReplaceAll(Database db, List<TextEntity> entities)
     {
         var result = new WritebackResult();
-
         var backupPath = CreateBackup(db);
         result.BackupPath = backupPath;
 
         using var transaction = db.TransactionManager.StartTransaction();
         try
         {
-            var modelSpaceId = SymbolUtilityServices.GetBlockModelSpaceId(db);
-            var modelSpace = (BlockTableRecord)transaction.GetObject(modelSpaceId, OpenMode.ForRead);
-            var blockTable = (BlockTable)transaction.GetObject(db.BlockTableId, OpenMode.ForRead);
-
             foreach (var entity in entities)
             {
                 if (entity.Status != TranslationStatus.Reviewed &&
@@ -56,13 +49,16 @@ public class TextReplacer
                     result.FailCount++;
                     entity.Status = TranslationStatus.WritebackFailed;
                     result.Errors.Add($"Handle {entity.Handle}: {replaceResult.Error}");
-                    Log.Warning("Failed to replace entity {Handle}: {Error}", entity.Handle, replaceResult.Error);
                 }
             }
 
             transaction.Commit();
-            Log.Information("Writeback complete: {Success} success, {Failed} failed, {Skipped} skipped",
-                result.SuccessCount, result.FailCount, result.SkippedCount);
+
+            // Clean up backup on success
+            if (result.FailCount == 0 && !string.IsNullOrEmpty(backupPath) && File.Exists(backupPath))
+            {
+                try { File.Delete(backupPath); } catch { /* best-effort */ }
+            }
         }
         catch (Autodesk.AutoCAD.Runtime.Exception ex)
         {
@@ -87,28 +83,16 @@ public class TextReplacer
             var handle = new Handle(Convert.ToInt64(entity.Handle, 16));
             var objectId = db.GetObjectId(false, handle, 0);
             var dbObject = tr.GetObject(objectId, OpenMode.ForWrite);
+            var owningBtr = ResolveOwnerBtr(tr, dbObject.OwnerId);
 
-            BlockTableRecord? owningBtr = null;
-            try
+            return dbObject switch
             {
-                if (dbObject.OwnerId.IsValid)
-                    owningBtr = tr.GetObject(dbObject.OwnerId, OpenMode.ForRead) as BlockTableRecord;
-            }
-            catch { }
-
-            switch (dbObject)
-            {
-                case DBText dbText:
-                    return ReplaceDBText(dbText, entity, db, owningBtr);
-                case MText mText:
-                    return ReplaceMText(mText, entity, db, owningBtr);
-                case Dimension dim:
-                    return ReplaceDimension(dim, entity, owningBtr);
-                case MLeader mLeader:
-                    return ReplaceMLeader(mLeader, entity, db, owningBtr);
-                default:
-                    return new EntityReplaceResult { Success = false, Error = "Unsupported entity type" };
-            }
+                DBText dbText => ReplaceDBText(dbText, entity, owningBtr),
+                MText mText => ReplaceMText(mText, entity, db, owningBtr),
+                Dimension dim => ReplaceDimension(dim, entity, owningBtr),
+                MLeader mLeader => ReplaceMLeader(mLeader, entity, db, owningBtr),
+                _ => new EntityReplaceResult { Success = false, Error = "Unsupported entity type" }
+            };
         }
         catch (Exception ex)
         {
@@ -116,7 +100,7 @@ public class TextReplacer
         }
     }
 
-    private EntityReplaceResult ReplaceDBText(DBText dbText, TextEntity entity, Database db, BlockTableRecord? owningBtr)
+    private EntityReplaceResult ReplaceDBText(DBText dbText, TextEntity entity, BlockTableRecord? owningBtr)
     {
         var originalHeight = dbText.Height;
         dbText.TextString = entity.TranslatedText;
@@ -139,7 +123,7 @@ public class TextReplacer
         mText.Contents = entity.TranslatedText
             .Replace("\r\n", "\\P").Replace("\n", "\\P").Replace("\r", "\\P");
 
-        MapTextStyle(mText.TextStyleId, db, _cnToEn);
+        MapTextStyle(mText.TextStyleId, db);
         mText.RecordGraphicsModified(true);
 
         return new EntityReplaceResult
@@ -154,17 +138,17 @@ public class TextReplacer
         dim.DimensionText = entity.TranslatedText;
         return new EntityReplaceResult
         {
-            Success = true, ModifiedEntity = dim, OwningBlock = owningBtr, OriginalHeight = 2.5
+            Success = true, ModifiedEntity = dim, OwningBlock = owningBtr, OriginalHeight = DefaultTextHeight
         };
     }
 
     private EntityReplaceResult ReplaceMLeader(MLeader mLeader, TextEntity entity, Database db, BlockTableRecord? owningBtr)
     {
-        var originalHeight = mLeader.MText?.TextHeight ?? 2.5;
+        var originalHeight = mLeader.MText?.TextHeight ?? DefaultTextHeight;
         if (mLeader.MText != null)
         {
             mLeader.MText.Contents = entity.TranslatedText;
-            MapTextStyle(mLeader.MText.TextStyleId, db, _cnToEn);
+            MapTextStyle(mLeader.MText.TextStyleId, db);
         }
         return new EntityReplaceResult
         {
@@ -183,14 +167,7 @@ public class TextReplacer
 
         var objectId = db.GetObjectId(false, blockRefHandle, 0);
         var blockRef = (BlockReference)tr.GetObject(objectId, OpenMode.ForWrite);
-
-        BlockTableRecord? owningBtr = null;
-        try
-        {
-            if (blockRef.OwnerId.IsValid)
-                owningBtr = tr.GetObject(blockRef.OwnerId, OpenMode.ForRead) as BlockTableRecord;
-        }
-        catch { }
+        var owningBtr = ResolveOwnerBtr(tr, blockRef.OwnerId);
 
         foreach (ObjectId attId in blockRef.AttributeCollection)
         {
@@ -222,14 +199,7 @@ public class TextReplacer
 
         var objectId = db.GetObjectId(false, tableHandle, 0);
         var table = (Table)tr.GetObject(objectId, OpenMode.ForWrite);
-
-        BlockTableRecord? owningBtr = null;
-        try
-        {
-            if (table.OwnerId.IsValid)
-                owningBtr = tr.GetObject(table.OwnerId, OpenMode.ForRead) as BlockTableRecord;
-        }
-        catch { }
+        var owningBtr = ResolveOwnerBtr(tr, table.OwnerId);
 
         if (row < table.Rows.Count && col < table.Columns.Count)
         {
@@ -237,26 +207,34 @@ public class TextReplacer
             cell.Value = entity.TranslatedText;
             return new EntityReplaceResult
             {
-                Success = true, ModifiedEntity = null, OwningBlock = owningBtr, OriginalHeight = 2.5
+                Success = true, ModifiedEntity = null, OwningBlock = owningBtr, OriginalHeight = DefaultTextHeight
             };
         }
 
         return new EntityReplaceResult { Success = false, Error = "Table cell out of range" };
     }
 
-    private void MapTextStyle(ObjectId styleId, Database db, bool cnToEn = true)
+    /// <summary>
+    /// Resolves the owning BlockTableRecord from an ObjectId, returning null on failure.
+    /// Eliminates 3x duplicated try/catch pattern.
+    /// </summary>
+    private static BlockTableRecord? ResolveOwnerBtr(Transaction tr, ObjectId ownerId)
+    {
+        try { return ownerId.IsValid ? tr.GetObject(ownerId, OpenMode.ForRead) as BlockTableRecord : null; }
+        catch { return null; }
+    }
+
+    private void MapTextStyle(ObjectId styleId, Database db)
     {
         if (!styleId.IsValid) return;
 
         try
         {
             var style = (TextStyleTableRecord)styleId.GetObject(OpenMode.ForWrite);
-
-            var mappedFontName = FontMapper.MapFontName(style.Name, cnToEn);
+            var mappedFontName = FontMapper.MapFontName(style.Name, _cnToEn);
             if (string.IsNullOrEmpty(mappedFontName)) return;
 
             bool isShx = mappedFontName.EndsWith(".shx", StringComparison.OrdinalIgnoreCase);
-
             if (isShx)
             {
                 style.FileName = mappedFontName;
@@ -265,10 +243,10 @@ public class TextReplacer
             else
             {
                 var currentFont = style.Font;
-                var newFont = new Autodesk.AutoCAD.GraphicsInterface.FontDescriptor(mappedFontName, currentFont.Bold, currentFont.Italic, 0, 0);
+                var newFont = new Autodesk.AutoCAD.GraphicsInterface.FontDescriptor(
+                    mappedFontName, currentFont.Bold, currentFont.Italic, 0, 0);
                 style.Font = newFont;
             }
-            Log.Information("Font mapped: {Style} -> {Font}", style.Name, mappedFontName);
         }
         catch (Exception ex)
         {
@@ -280,30 +258,25 @@ public class TextReplacer
     {
         var originalPath = db.Filename;
         var backupPath = Path.ChangeExtension(originalPath, ".bak");
-
         try
         {
             if (File.Exists(backupPath)) File.Delete(backupPath);
             File.Copy(originalPath, backupPath);
-            Log.Information("Backup created: {Path}", backupPath);
         }
         catch (Exception ex)
         {
             Log.Warning(ex, "Failed to create backup");
             backupPath = string.Empty;
         }
-
         return backupPath;
     }
 
     private static void RestoreBackup(Database db, string backupPath)
     {
         if (string.IsNullOrEmpty(backupPath) || !File.Exists(backupPath)) return;
-
         try
         {
-            var originalPath = db.Filename;
-            var restorePath = Path.ChangeExtension(originalPath, ".restored.dwg");
+            var restorePath = Path.ChangeExtension(db.Filename, ".restored.dwg");
             File.Copy(backupPath, restorePath, overwrite: true);
             Log.Warning("Backup restored to {Path} (original file is locked by AutoCAD)", restorePath);
         }

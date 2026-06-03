@@ -70,15 +70,6 @@ installer/Output/
 *.exe
 !DwgTranslator.iss
 
-# ===== Test Output =====
-TestResults/
-*.trx
-*.coverage
-
-# ===== Python Cache =====
-__pycache__/
-*.pyc
-
 # ===== Development Notes & Temp Files =====
 .codegraph/
 功能开发.md

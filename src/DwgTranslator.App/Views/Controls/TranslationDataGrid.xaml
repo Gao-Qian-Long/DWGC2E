@@ -1,0 +1,117 @@
+<UserControl x:Class="DwgTranslator.App.Views.Controls.TranslationDataGrid"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:conv="clr-namespace:DwgTranslator.App.Converters">
+    <DataGrid Margin="10,5,10,5"
+              ItemsSource="{Binding FilteredEntities}"
+              AutoGenerateColumns="False"
+              CanUserAddRows="False"
+              SelectionMode="Single"
+              CanUserSortColumns="True"
+              GridLinesVisibility="Horizontal"
+              RowStyle="{StaticResource TranslationRowStyle}"
+              AlternationCount="2"
+              CanUserResizeColumns="True"
+              EnableRowVirtualization="True"
+              IsReadOnly="False"
+              RowHeight="32"
+              FontSize="12"
+              HeadersVisibility="Column"
+              HorizontalGridLinesBrush="#ECEFF1"
+              BorderBrush="#E0E0E0" BorderThickness="1">
+        <DataGrid.Resources>
+            <Style TargetType="DataGridColumnHeader">
+                <Setter Property="Background" Value="#37474F"/>
+                <Setter Property="Foreground" Value="White"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+                <Setter Property="FontSize" Value="12"/>
+                <Setter Property="Height" Value="34"/>
+                <Setter Property="HorizontalContentAlignment" Value="Center"/>
+                <Setter Property="Padding" Value="6,0"/>
+            </Style>
+            <Style TargetType="DataGridCell">
+                <Setter Property="VerticalAlignment" Value="Center"/>
+                <Setter Property="Padding" Value="4,2"/>
+                <Setter Property="FontSize" Value="12"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            </Style>
+        </DataGrid.Resources>
+        <DataGrid.Columns>
+            <DataGridTextColumn Header="Handle" Binding="{Binding Handle}" Width="70" IsReadOnly="True"
+                                CanUserSort="True" SortMemberPath="Handle">
+                <DataGridTextColumn.ElementStyle>
+                    <Style TargetType="TextBlock" BasedOn="{StaticResource CenteredCellStyle}">
+                        <Setter Property="FontFamily" Value="Consolas"/>
+                        <Setter Property="FontSize" Value="10"/>
+                        <Setter Property="Foreground" Value="#78909C"/>
+                    </Style>
+                </DataGridTextColumn.ElementStyle>
+            </DataGridTextColumn>
+
+            <DataGridTextColumn Header="{conv:Localize ColType}" Binding="{Binding EntityType}" Width="80" IsReadOnly="True"
+                                CanUserSort="True" SortMemberPath="EntityType"
+                                ElementStyle="{StaticResource CenteredCellStyle}"/>
+
+            <DataGridTextColumn Header="{conv:Localize ColOriginal}" Binding="{Binding PlainText}" Width="2*" MinWidth="150" IsReadOnly="True"
+                                CanUserSort="True" SortMemberPath="PlainText"
+                                ElementStyle="{StaticResource WrapCellStyle}"/>
+
+            <DataGridTemplateColumn Header="{conv:Localize ColTranslation}" Width="2*" MinWidth="150" SortMemberPath="TranslatedText" CanUserSort="True">
+                <DataGridTemplateColumn.CellTemplate>
+                    <DataTemplate>
+                        <TextBox Text="{Binding TranslatedText, UpdateSourceTrigger=LostFocus}"
+                                 TextWrapping="Wrap" AcceptsReturn="True" MinHeight="24"
+                                 BorderBrush="#E0E0E0" Background="Transparent"
+                                 FontSize="12" VerticalContentAlignment="Center"
+                                 Padding="4,2"
+                                 ToolTip="{conv:Localize TipEditTranslation}"/>
+                    </DataTemplate>
+                </DataGridTemplateColumn.CellTemplate>
+            </DataGridTemplateColumn>
+
+            <DataGridTemplateColumn Header="{conv:Localize ColGlossary}" Width="55" SortMemberPath="GlossaryHit" CanUserSort="True">
+                <DataGridTemplateColumn.CellTemplate>
+                    <DataTemplate>
+                        <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="13"
+                                   ToolTip="{conv:Localize TipGlossaryMatch}">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Text" Value=""/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding GlossaryHit}" Value="True">
+                                            <Setter Property="Text" Value="&#x2714;"/>
+                                            <Setter Property="Foreground" Value="#4CAF50"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </DataTemplate>
+                </DataGridTemplateColumn.CellTemplate>
+            </DataGridTemplateColumn>
+
+            <DataGridTemplateColumn Header="{conv:Localize ColStatus}" Width="90" SortMemberPath="Status" CanUserSort="True">
+                <DataGridTemplateColumn.CellTemplate>
+                    <DataTemplate>
+                        <Border CornerRadius="4" Padding="6,2" Margin="2,0"
+                                Background="{Binding Status, Converter={StaticResource StatusBrush}}"
+                                ToolTip="{Binding Status}">
+                            <TextBlock Text="{Binding Status}" FontSize="11" FontWeight="SemiBold"
+                                       Foreground="White"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </DataTemplate>
+                </DataGridTemplateColumn.CellTemplate>
+            </DataGridTemplateColumn>
+
+            <DataGridTextColumn Header="{conv:Localize ColBlock}" Binding="{Binding BlockName}" Width="*" MinWidth="80" IsReadOnly="True"
+                                CanUserSort="True" SortMemberPath="BlockName"
+                                ElementStyle="{StaticResource CenteredCellStyle}"/>
+
+            <DataGridTextColumn Header="{conv:Localize ColNotes}" Binding="{Binding Notes}" Width="*" MinWidth="80" IsReadOnly="False"
+                                CanUserSort="True" SortMemberPath="Notes"
+                                ElementStyle="{StaticResource WrapCellStyle}"/>
+        </DataGrid.Columns>
+    </DataGrid>
+</UserControl>

@@ -24,21 +24,15 @@ internal static class DwgFrameDetector
 
     /// <summary>
     /// Detects rectangular frame boundaries by scanning ModelSpace, all PaperSpace
-    /// layouts, AND block definitions (for frames stored as INSERT/CadInsert entities
-    /// — the standard pattern in 85-95% of professional DWG files).
-    ///
+    /// layouts, AND block definitions (for frames stored as INSERT/CadInsert entities).
     /// Accepts closed LwPolylines with 4-8 vertices (allows chamfered corners) and
     /// validates approximate rectangular shape via angle checks.
-    /// Recursively scans CadInsert entities to find frame polylines nested inside block
-    /// definitions, transforming bounds to world coordinates.
     /// </summary>
     public static List<(double minX, double minY, double maxX, double maxY)> DetectFrames(CadDocument doc)
     {
         var frames = new List<(double, double, double, double)>();
         try
         {
-            // Collect all entity collections to scan:
-            // (a) ModelSpace, (b) PaperSpace layouts, (c) user-defined block records
             var collectionsToScan = new List<(IEnumerable<CadEntity> entities, string source)>();
 
             collectionsToScan.Add((doc.ModelSpace.Entities, "ModelSpace"));
@@ -50,8 +44,6 @@ internal static class DwgFrameDetector
                     collectionsToScan.Add((layout.AssociatedBlock.Entities, $"Layout:{layout.Name}"));
             }
 
-            // Also scan user-defined block records for frame polylines that may be
-            // referenced by CadInsert entities in ModelSpace/PaperSpace.
             foreach (var blockRecord in doc.BlockRecords)
             {
                 if (blockRecord.Name.StartsWith("*Model_Space", StringComparison.OrdinalIgnoreCase)) continue;
@@ -78,8 +70,7 @@ internal static class DwgFrameDetector
 
     /// <summary>
     /// Scans a collection of entities for frame-like closed LwPolylines.
-    /// Recursively enters CadInsert entities to find frames inside block definitions
-    /// (up to maxDepth=5 to prevent infinite recursion from circular references).
+    /// Recursively enters CadInsert entities to find frames inside block definitions.
     /// </summary>
     private static void ScanEntitiesForFrames(
         IEnumerable<CadEntity> entities,
@@ -104,8 +95,6 @@ internal static class DwgFrameDetector
                     b => string.Equals(b.Name, insert.Block?.Name, StringComparison.OrdinalIgnoreCase));
                 if (blockDef != null && blockDef.Entities != null)
                 {
-                    double cosR = Math.Cos(insert.Rotation);
-                    double sinR = Math.Sin(insert.Rotation);
                     double newX = insertX + insert.InsertPoint.X * scaleX;
                     double newY = insertY + insert.InsertPoint.Y * scaleY;
                     double newSx = scaleX * insert.XScale;
@@ -123,7 +112,6 @@ internal static class DwgFrameDetector
             {
                 int n = poly.Vertices.Count;
                 if (n < 4 || n > 8) continue;
-
                 if (!IsApproximatelyRectangular(poly)) continue;
 
                 double minX = poly.Vertices.Min(v => v.Location.X);
@@ -141,26 +129,12 @@ internal static class DwgFrameDetector
                     double cosR = Math.Cos(rotation);
                     double sinR = Math.Sin(rotation);
 
-                    (double x, double y) TransformCorner(double x, double y)
-                    {
-                        double sx = x * scaleX;
-                        double sy = y * scaleY;
-                        double rx = sx * cosR - sy * sinR;
-                        double ry = sx * sinR + sy * cosR;
-                        return (rx + insertX, ry + insertY);
-                    }
+                    var worldBounds = CadGeometryHelper.TransformAabb(
+                        minX, minY, maxX, maxY,
+                        scaleX, scaleY, cosR, sinR,
+                        insertX, insertY);
 
-                    var c1 = TransformCorner(minX, minY);
-                    var c2 = TransformCorner(maxX, maxY);
-                    var c3 = TransformCorner(minX, maxY);
-                    var c4 = TransformCorner(maxX, minY);
-
-                    double wMinX = Math.Min(Math.Min(c1.x, c2.x), Math.Min(c3.x, c4.x));
-                    double wMinY = Math.Min(Math.Min(c1.y, c2.y), Math.Min(c3.y, c4.y));
-                    double wMaxX = Math.Max(Math.Max(c1.x, c2.x), Math.Max(c3.x, c4.x));
-                    double wMaxY = Math.Max(Math.Max(c1.y, c2.y), Math.Max(c3.y, c4.y));
-
-                    frames.Add((wMinX, wMinY, wMaxX, wMaxY));
+                    frames.Add(worldBounds);
                 }
                 else
                 {
@@ -254,37 +228,13 @@ internal static class DwgFrameDetector
         List<(double minX, double minY, double maxX, double maxY)> frames,
         double originalHeight)
     {
-        try
-        {
-            double px = textEntity.InsertPoint.X;
-            double py = textEntity.InsertPoint.Y;
-            var frame = FindClosestFrame(px, py, frames);
-            if (!frame.HasValue) return;
-
-            var bounds = DwgBoundsEstimator.EstimateTextBounds(textEntity);
-            if (!ExceedsFrame(bounds, frame.Value)) return;
-
-            double frameW = frame.Value.maxX - frame.Value.minX;
-            double frameH = frame.Value.maxY - frame.Value.minY;
-            double textW = bounds.maxX - bounds.minX;
-            double textH = bounds.maxY - bounds.minY;
-
-            double scale = ComputeFrameScale(frameW, frameH, textW, textH);
-
-            if (scale < 1.0)
-            {
-                double newHeight = textEntity.Height * scale;
-                double minHeight = originalHeight * 0.4;
-                if (newHeight < minHeight) newHeight = minHeight;
-                textEntity.Height = newHeight;
-                Log.Debug("Frame-boundary scaling: Text {Handle} scaled by {Scale:F2} (height {Old:F2} -> {New:F2})",
-                    textEntity.Handle, scale, originalHeight, newHeight);
-            }
-        }
-        catch (Exception ex)
-        {
-            Log.Debug(ex, "Frame boundary check failed for text {Handle} (non-fatal)", textEntity.Handle);
-        }
+        CheckAndScaleToFitFrameCore(
+            textEntity, frames, originalHeight,
+            e => (e.InsertPoint.X, e.InsertPoint.Y),
+            DwgBoundsEstimator.EstimateTextBounds,
+            e => e.Height,
+            (e, h) => e.Height = h,
+            e => e.Handle);
     }
 
     /// <summary>
@@ -296,14 +246,36 @@ internal static class DwgFrameDetector
         List<(double minX, double minY, double maxX, double maxY)> frames,
         double originalHeight)
     {
+        CheckAndScaleToFitFrameCore(
+            mtext, frames, originalHeight,
+            e => (e.InsertPoint.X, e.InsertPoint.Y),
+            DwgBoundsEstimator.EstimateMTextBounds,
+            e => e.Height,
+            (e, h) => e.Height = h,
+            e => e.Handle);
+    }
+
+    /// <summary>
+    /// Generic core for frame-boundary scaling. Eliminates duplication between
+    /// CadText and CadMText overloads.
+    /// </summary>
+    private static void CheckAndScaleToFitFrameCore<T>(
+        T entity,
+        List<(double minX, double minY, double maxX, double maxY)> frames,
+        double originalHeight,
+        Func<T, (double X, double Y)> getInsertPoint,
+        Func<T, (double minX, double minY, double maxX, double maxY)> getBounds,
+        Func<T, double> getHeight,
+        Action<T, double> setHeight,
+        Func<T, ulong> getHandle)
+    {
         try
         {
-            double px = mtext.InsertPoint.X;
-            double py = mtext.InsertPoint.Y;
+            var (px, py) = getInsertPoint(entity);
             var frame = FindClosestFrame(px, py, frames);
             if (!frame.HasValue) return;
 
-            var bounds = DwgBoundsEstimator.EstimateMTextBounds(mtext);
+            var bounds = getBounds(entity);
             if (!ExceedsFrame(bounds, frame.Value)) return;
 
             double frameW = frame.Value.maxX - frame.Value.minX;
@@ -315,17 +287,19 @@ internal static class DwgFrameDetector
 
             if (scale < 1.0)
             {
-                double newHeight = mtext.Height * scale;
+                double currentHeight = getHeight(entity);
+                double newHeight = currentHeight * scale;
                 double minHeight = originalHeight * 0.4;
                 if (newHeight < minHeight) newHeight = minHeight;
-                mtext.Height = newHeight;
-                Log.Debug("Frame-boundary scaling: MText {Handle} scaled by {Scale:F2} (height {Old:F2} -> {New:F2})",
-                    mtext.Handle, scale, originalHeight, newHeight);
+                setHeight(entity, newHeight);
+                Log.Debug("Frame-boundary scaling: {Type} {Handle} scaled by {Scale:F2} (height {Old:F2} -> {New:F2})",
+                    typeof(T).Name, getHandle(entity), scale, originalHeight, newHeight);
             }
         }
         catch (Exception ex)
         {
-            Log.Debug(ex, "Frame boundary check failed for MText {Handle} (non-fatal)", mtext.Handle);
+            Log.Debug(ex, "Frame boundary check failed for {Type} {Handle} (non-fatal)",
+                typeof(T).Name, getHandle(entity));
         }
     }
 }

@@ -2,7 +2,7 @@ namespace DwgTranslator.Core.Services;
 
 /// <summary>
 /// Shared font mapping logic for CJK↔English font conversion.
-/// Used by all writeback paths (offline ACadSharp, online AcadWriterEngine, legacy TextReplacer).
+/// Used by all writeback paths (offline ACadSharp, online AcadWriterEngine, interactive TextReplacer).
 /// </summary>
 public static class FontMapper
 {

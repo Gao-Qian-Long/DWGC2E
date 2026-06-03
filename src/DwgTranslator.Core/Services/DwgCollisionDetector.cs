@@ -24,140 +24,28 @@ internal static class DwgCollisionDetector
     /// </summary>
     public static (double minX, double minY, double maxX, double maxY)? GetEntityBounds(CadEntity entity, int depth = 0)
     {
-        switch (entity)
+        return entity switch
         {
-            case CadText text:
-                return DwgBoundsEstimator.EstimateTextBounds(text);
-
-            case CadMText mtext:
-                return DwgBoundsEstimator.EstimateMTextBounds(mtext);
-
-            case CadInsert insert:
-                return EstimateInsertBounds(insert, depth + 1);
-
-            case CadLwPolyline poly:
-                if (poly.Vertices.Count > 0)
-                {
-                    double pminX = poly.Vertices.Min(v => v.Location.X);
-                    double pminY = poly.Vertices.Min(v => v.Location.Y);
-                    double pmaxX = poly.Vertices.Max(v => v.Location.X);
-                    double pmaxY = poly.Vertices.Max(v => v.Location.Y);
-                    return (pminX, pminY, pmaxX, pmaxY);
-                }
-                return null;
-
-            case Line line:
-                return (
-                    Math.Min(line.StartPoint.X, line.EndPoint.X),
-                    Math.Min(line.StartPoint.Y, line.EndPoint.Y),
-                    Math.Max(line.StartPoint.X, line.EndPoint.X),
-                    Math.Max(line.StartPoint.Y, line.EndPoint.Y));
-
-            case Arc arc:
-                // Arc MUST come before Circle — in ACadSharp, Arc extends Circle.
-                return EstimateArcBounds(arc);
-
-            case Circle circle:
-                double r = circle.Radius;
-                return (
-                    circle.Center.X - r, circle.Center.Y - r,
-                    circle.Center.X + r, circle.Center.Y + r);
-
-            case Spline spline:
-                // Use control points for a conservative bounding box.
-                if (spline.ControlPoints.Count > 0)
-                {
-                    double sminX = spline.ControlPoints.Min(p => p.X);
-                    double sminY = spline.ControlPoints.Min(p => p.Y);
-                    double smaxX = spline.ControlPoints.Max(p => p.X);
-                    double smaxY = spline.ControlPoints.Max(p => p.Y);
-                    return (sminX, sminY, smaxX, smaxY);
-                }
-                return null;
-
-            // Hatch, Solid, Polyline2D, Polyline3D — bounds are complex to compute
-            // accurately in the offline path. Return null so ScaleDownToAvoidCollisions
-            // can focus on known types.
-            default:
-                return null;
-        }
-    }
-
-    /// <summary>
-    /// Estimates the bounding box of a CadInsert by computing the transformed
-    /// bounds of all entities in the referenced block definition.
-    /// Limited to maxDepth=5 to prevent stack overflow from circular block references.
-    /// </summary>
-    private static (double minX, double minY, double maxX, double maxY)? EstimateInsertBounds(CadInsert insert, int depth = 0)
-    {
-        const int maxDepth = 5;
-        if (depth > maxDepth) return null;
-
-        try
-        {
-            var blockDef = insert.Block;
-            if (blockDef?.Entities == null || blockDef.Entities.Count == 0)
-            {
-                double fallbackW = Math.Abs(insert.XScale) * 100;
-                double fallbackH = Math.Abs(insert.YScale) * 100;
-                return (insert.InsertPoint.X, insert.InsertPoint.Y,
-                        insert.InsertPoint.X + fallbackW, insert.InsertPoint.Y + fallbackH);
-            }
-
-            // Compute the AABB of all entities in the block, then transform
-            double? gMinX = null, gMinY = null, gMaxX = null, gMaxY = null;
-            foreach (var blkEntity in blockDef.Entities)
-            {
-                var b = depth + 1 <= maxDepth ? GetEntityBounds(blkEntity) : null;
-                if (!b.HasValue) continue;
-                if (!gMinX.HasValue || b.Value.minX < gMinX) gMinX = b.Value.minX;
-                if (!gMinY.HasValue || b.Value.minY < gMinY) gMinY = b.Value.minY;
-                if (!gMaxX.HasValue || b.Value.maxX > gMaxX) gMaxX = b.Value.maxX;
-                if (!gMaxY.HasValue || b.Value.maxY > gMaxY) gMaxY = b.Value.maxY;
-            }
-
-            if (!gMinX.HasValue)
-            {
-                double fw = Math.Abs(insert.XScale) * 100;
-                double fh = Math.Abs(insert.YScale) * 100;
-                return (insert.InsertPoint.X, insert.InsertPoint.Y,
-                        insert.InsertPoint.X + fw, insert.InsertPoint.Y + fh);
-            }
-
-            // Apply the insert transform to the block bounds
-            double cosR = Math.Cos(insert.Rotation);
-            double sinR = Math.Sin(insert.Rotation);
-            double sx = insert.XScale;
-            double sy = insert.YScale;
-            double ix = insert.InsertPoint.X;
-            double iy = insert.InsertPoint.Y;
-
-            (double x, double y) Transform(double bx, double by)
-            {
-                double tx = bx * sx;
-                double ty = by * sy;
-                return (tx * cosR - ty * sinR + ix,
-                        tx * sinR + ty * cosR + iy);
-            }
-
-            double minX = gMinX!.Value, minY = gMinY!.Value;
-            double maxX = gMaxX!.Value, maxY = gMaxY!.Value;
-            var c1 = Transform(minX, minY);
-            var c2 = Transform(maxX, maxY);
-            var c3 = Transform(minX, maxY);
-            var c4 = Transform(maxX, minY);
-
-            return (
-                Math.Min(Math.Min(c1.x, c2.x), Math.Min(c3.x, c4.x)),
-                Math.Min(Math.Min(c1.y, c2.y), Math.Min(c3.y, c4.y)),
-                Math.Max(Math.Max(c1.x, c2.x), Math.Max(c3.x, c4.x)),
-                Math.Max(Math.Max(c1.y, c2.y), Math.Max(c3.y, c4.y)));
-        }
-        catch (Exception ex)
-        {
-            Log.Debug(ex, "Failed to estimate insert bounds for block '{Name}'", insert.Block?.Name);
-            return null;
-        }
+            CadText text => DwgBoundsEstimator.EstimateTextBounds(text),
+            CadMText mtext => DwgBoundsEstimator.EstimateMTextBounds(mtext),
+            CadInsert insert => CadGeometryHelper.EstimateInsertBounds(insert, GetEntityBounds, depth + 1),
+            CadLwPolyline poly => poly.Vertices.Count > 0
+                ? CadGeometryHelper.ComputeAabbFromPoints(poly.Vertices.Select(v => (v.Location.X, v.Location.Y)))
+                : null,
+            Line line => (
+                Math.Min(line.StartPoint.X, line.EndPoint.X),
+                Math.Min(line.StartPoint.Y, line.EndPoint.Y),
+                Math.Max(line.StartPoint.X, line.EndPoint.X),
+                Math.Max(line.StartPoint.Y, line.EndPoint.Y)),
+            Arc arc => EstimateArcBounds(arc),
+            Circle circle => (
+                circle.Center.X - circle.Radius, circle.Center.Y - circle.Radius,
+                circle.Center.X + circle.Radius, circle.Center.Y + circle.Radius),
+            Spline spline => spline.ControlPoints.Count > 0
+                ? CadGeometryHelper.ComputeAabbFromPoints(spline.ControlPoints.Select(p => (p.X, p.Y)))
+                : null,
+            _ => null
+        };
     }
 
     /// <summary>
@@ -289,7 +177,6 @@ internal static class DwgCollisionDetector
         double lo = minHeight;
         double hi = currentHeight;
         double savedHeight = currentHeight;
-        bool foundSafe = false;
 
         for (int iter = 0; iter < 15; iter++)
         {
@@ -314,16 +201,12 @@ internal static class DwgCollisionDetector
             if (midHasCollision)
                 hi = mid;
             else
-            {
                 lo = mid;
-                foundSafe = true;
-            }
         }
 
-        if (foundSafe)
-            TrySetEntityHeight(targetEntity, lo);
-        else
-            TrySetEntityHeight(targetEntity, savedHeight);
+        // Apply best-effort height (lo is the largest non-overlapping height found,
+        // or minHeight if every height in the range still had collisions)
+        TrySetEntityHeight(targetEntity, lo);
 
         if (lo < savedHeight * 0.99)
         {
