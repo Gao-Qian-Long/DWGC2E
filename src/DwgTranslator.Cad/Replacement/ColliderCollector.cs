@@ -36,7 +36,7 @@ internal static class ColliderCollector
 
             Entity? other;
             try { other = tr.GetObject(otherId, OpenMode.ForRead, false) as Entity; }
-            catch { continue; }
+            catch (System.Exception ex) { System.Diagnostics.Debug.WriteLine($"ColliderCollector: {ex.Message}"); continue; }
             if (other == null) continue;
 
             if (other is BlockReference nestedBr)
@@ -52,7 +52,7 @@ internal static class ColliderCollector
                     CollectPotentialColliders(tr, nestedBtr, skipId, textBounds, padding,
                         colliders, colliderPositions, depth + 1, trackTypes, types, typePaddings);
                 }
-                catch { }
+                catch (System.Exception ex) { System.Diagnostics.Debug.WriteLine($"ColliderCollector: {ex.Message}"); }
                 continue;
             }
 
@@ -81,7 +81,7 @@ internal static class ColliderCollector
                     typePaddings?.Add(typePadding);
                 }
             }
-            catch { }
+            catch (System.Exception ex) { System.Diagnostics.Debug.WriteLine($"ColliderCollector: {ex.Message}"); }
         }
     }
 
@@ -101,7 +101,7 @@ internal static class ColliderCollector
         {
             BlockTableRecord btr;
             try { btr = (BlockTableRecord)tr.GetObject(btrId, OpenMode.ForRead); }
-            catch { continue; }
+            catch (System.Exception ex) { System.Diagnostics.Debug.WriteLine($"ColliderCollector: {ex.Message}"); continue; }
 
             if (btr.Name.StartsWith("*Model_Space", StringComparison.OrdinalIgnoreCase)) continue;
             if (btr.IsAnonymous) continue;

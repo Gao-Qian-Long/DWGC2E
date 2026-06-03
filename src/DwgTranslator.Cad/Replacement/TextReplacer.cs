@@ -87,7 +87,7 @@ public class TextReplacer
 
             return dbObject switch
             {
-                DBText dbText => ReplaceDBText(dbText, entity, owningBtr),
+                DBText dbText => ReplaceDBText(dbText, entity, db, owningBtr),
                 MText mText => ReplaceMText(mText, entity, db, owningBtr),
                 Dimension dim => ReplaceDimension(dim, entity, owningBtr),
                 MLeader mLeader => ReplaceMLeader(mLeader, entity, db, owningBtr),
@@ -100,10 +100,11 @@ public class TextReplacer
         }
     }
 
-    private EntityReplaceResult ReplaceDBText(DBText dbText, TextEntity entity, BlockTableRecord? owningBtr)
+    private EntityReplaceResult ReplaceDBText(DBText dbText, TextEntity entity, Database db, BlockTableRecord? owningBtr)
     {
         var originalHeight = dbText.Height;
         dbText.TextString = entity.TranslatedText;
+        MapTextStyle(dbText.TextStyleId, db);
         return new EntityReplaceResult
         {
             Success = true, ModifiedEntity = dbText, OwningBlock = owningBtr,
@@ -147,8 +148,12 @@ public class TextReplacer
         var originalHeight = mLeader.MText?.TextHeight ?? DefaultTextHeight;
         if (mLeader.MText != null)
         {
-            mLeader.MText.Contents = entity.TranslatedText;
+            mLeader.MText.Contents = entity.TranslatedText
+                .Replace("\r\n", "\\P")
+                .Replace("\n", "\\P")
+                .Replace("\r", "\\P");
             MapTextStyle(mLeader.MText.TextStyleId, db);
+
         }
         return new EntityReplaceResult
         {

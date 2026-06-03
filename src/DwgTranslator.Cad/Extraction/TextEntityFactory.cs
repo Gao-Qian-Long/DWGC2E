@@ -76,8 +76,8 @@ internal static class TextEntityFactory
             PlainText = plainText,
             FormatTemplate = rawText,
             EntityType = entityType,
-            Height = 2.5,
-            Rotation = 0,
+            Height = 2.5, // Dimension text height is controlled by dimension style (DIMTXT), not per-entity
+            Rotation = dim.TextRotation,
             TextStyleName = GetTextStyleName(tr, dim.TextStyleId),
             BlockName = blockName,
             IsXref = false,

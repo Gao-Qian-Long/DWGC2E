@@ -135,8 +135,15 @@ public class DwgWriterService : IDwgWriterService, IDxfWriterService
         try
         {
             var backupPath = sourceFilePath + ".bak";
-            File.Copy(sourceFilePath, backupPath, overwrite: true);
-            Log.Information("Backup created: {Backup}", backupPath);
+            if (!File.Exists(backupPath))
+            {
+                File.Copy(sourceFilePath, backupPath, overwrite: false);
+                Log.Information("Backup created: {Backup}", backupPath);
+            }
+            else
+            {
+                Log.Debug("Backup already exists, skipping: {Backup}", backupPath);
+            }
         }
         catch (Exception ex)
         {

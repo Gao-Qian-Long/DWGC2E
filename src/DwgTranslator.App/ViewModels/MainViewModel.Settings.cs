@@ -147,6 +147,8 @@ public partial class MainViewModel
     [RelayCommand]
     private void Settings()
     {
+        if (IsProcessing) return;
+
         var dialog = new Views.SettingsDialog
         {
             Owner = Application.Current.MainWindow

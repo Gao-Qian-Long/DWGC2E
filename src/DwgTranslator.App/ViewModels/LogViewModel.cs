@@ -58,7 +58,7 @@ public partial class LogViewModel : ObservableObject, IDisposable
     private void ClearLogs()
     {
         _logStore.Clear();
-        Application.Current.Dispatcher.Invoke(() =>
+        Application.Current.Dispatcher.BeginInvoke(() =>
         {
             LogEntries.Clear();
             TotalLogCount = 0;
@@ -115,7 +115,7 @@ public partial class LogViewModel : ObservableObject, IDisposable
         if (!IsVisible || IsPaused) return;
         if (!PassesFilter(entry)) return;
 
-        Application.Current.Dispatcher.Invoke(() =>
+        Application.Current.Dispatcher.BeginInvoke(() =>
         {
             LogEntries.Add(new LogEntryViewModel(entry));
             TotalLogCount = _logStore.Count;
@@ -129,7 +129,7 @@ public partial class LogViewModel : ObservableObject, IDisposable
 
     private void RefreshEntries()
     {
-        Application.Current.Dispatcher.Invoke(() =>
+        Application.Current.Dispatcher.BeginInvoke(() =>
         {
             LogEntries.Clear();
             var minLevel = GetMinLevel();

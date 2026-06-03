@@ -18,6 +18,7 @@ public class LicenseService : ILicenseService
 
     private readonly string _licensePath;
     private LicenseInfo _license = new();
+    private readonly object _licenseLock = new();
 
     public LicenseService(string appDataDir)
     {
@@ -105,13 +106,16 @@ public class LicenseService : ILicenseService
 
     public bool ConsumeTrialUse()
     {
-        if (_license.Type != LicenseType.Trial)
-            return true;
+        lock (_licenseLock)
+        {
+            if (_license.Type != LicenseType.Trial)
+                return true;
 
-        if (_license.TrialUsesRemaining <= 0)
-            return false;
+            if (_license.TrialUsesRemaining <= 0)
+                return false;
 
-        _license.TrialUsesRemaining--;
+            _license.TrialUsesRemaining--;
+        }
         SaveLicense();
         Log.Information("Trial use consumed. Remaining: {Remaining}", _license.TrialUsesRemaining);
         return true;

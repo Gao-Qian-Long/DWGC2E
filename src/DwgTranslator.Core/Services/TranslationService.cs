@@ -64,7 +64,7 @@ public class TranslationService : ITranslationService
             uniqueCount, totalCount, totalCount - uniqueCount);
 
         int concurrency = Math.Clamp(uniqueCount, 1, _maxConcurrency);
-        var semaphore = new SemaphoreSlim(concurrency, concurrency);
+        using var semaphore = new SemaphoreSlim(concurrency, concurrency);
         var tasks = new List<Task>();
         var translationMap = new Dictionary<string, TranslationPair>(StringComparer.Ordinal);
         var mapLock = new object();
@@ -103,7 +103,9 @@ public class TranslationService : ITranslationService
             }, cancellationToken));
         }
 
-        await Task.WhenAll(tasks);
+        try { await Task.WhenAll(tasks); }
+        catch (AggregateException ex) { Log.Warning(ex, "Some translation tasks failed"); }
+        catch (OperationCanceledException) { /* user cancelled */ }
         _consistencyService.FlushCache();
 
         Log.Information("Translation complete: {Unique} unique -> {Total} total results", uniqueCount, allResults.Count);

@@ -107,7 +107,7 @@ public static class FrameDetector
             {
                 frameExt = poly.GeometricExtents;
             }
-            else if (entity is Polyline2d poly2d && IsRectangularFrame(poly2d))
+            else if (entity is Polyline2d poly2d && IsRectangularFrame(poly2d, tr))
             {
                 frameExt = poly2d.GeometricExtents;
             }
@@ -175,7 +175,7 @@ public static class FrameDetector
         return true;
     }
 
-    private static bool IsRectangularFrame(Polyline2d poly2d)
+    private static bool IsRectangularFrame(Polyline2d poly2d, Transaction tr)
     {
         if (!poly2d.Closed) return false;
 
@@ -185,7 +185,7 @@ public static class FrameDetector
         {
             try
             {
-                var vtx = (Vertex2d)vid.GetObject(OpenMode.ForRead);
+                var vtx = (Vertex2d)tr.GetObject(vid, OpenMode.ForRead);
                 pts.Add(vtx.Position);
             }
             catch { return false; }

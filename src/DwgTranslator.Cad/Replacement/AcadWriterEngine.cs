@@ -119,7 +119,7 @@ public class AcadWriterEngine
             if (!id.IsValid) continue;
 
             Entity? entity = null;
-            try { entity = tr.GetObject(id, OpenMode.ForWrite, false) as Entity; }
+            try { entity = tr.GetObject(id, OpenMode.ForRead, false) as Entity; }
             catch (Exception ex)
             {
                 if (entityMap.ContainsKey(id.Handle.ToString()))
@@ -132,6 +132,7 @@ public class AcadWriterEngine
             var handleStr = entity.Handle.ToString();
             if (entityMap.TryGetValue(handleStr, out var textEntity))
             {
+                entity.UpgradeOpen();
                 if (ReplaceEntity(entity, textEntity, cnToEn, tr))
                 {
                     count++;
@@ -200,6 +201,7 @@ public class AcadWriterEngine
                     return true;
 
                 case Dimension dim:
+                    AcadFontApplier.MapFont(dim, ourEntity.TextStyleName, cnToEn, tr);
                     dim.DimensionText = translatedText;
                     return true;
 

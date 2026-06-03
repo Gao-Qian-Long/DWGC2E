@@ -29,6 +29,16 @@ internal static class AcadFontApplier
             mtext.TextStyleId = styleId.Value;
     }
 
+    /// <summary>
+    /// Maps the font for a Dimension entity based on its current text style.
+    /// </summary>
+    public static void MapFont(Dimension dim, string originalStyleName, bool cnToEn, Transaction tr)
+    {
+        ObjectId? styleId = ResolveStyleId(dim.Database, originalStyleName, cnToEn, tr);
+        if (styleId.HasValue)
+            dim.TextStyleId = styleId.Value;
+    }
+
     private static ObjectId? ResolveStyleId(Database? db, string originalStyleName, bool cnToEn, Transaction tr)
     {
         try

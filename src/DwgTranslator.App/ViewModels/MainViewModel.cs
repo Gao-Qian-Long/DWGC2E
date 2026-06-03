@@ -130,9 +130,14 @@ public partial class MainViewModel : ObservableObject, IDisposable
     public void Dispose()
     {
         _cts?.Cancel();
+        _cts?.Dispose();
         _exportCts?.Cancel();
+        _exportCts?.Dispose();
         _logViewModel?.Dispose();
         _consistencyService?.FlushCache();
         _httpClient?.Dispose();
+        _httpClient = null;
+        _cts = null;
+        _exportCts = null;
     }
 }

@@ -144,6 +144,10 @@ internal static class DwgTextReplacer
                     return true;
 
                 case CadDimension dim:
+                    // TODO: Add ApplyFontMapping overload for CadDimension.
+                    // DwgFontManager only has overloads for CadText and CadMText;
+                    // Dimension.Style is DimensionStyle (not TextStyle), so a
+                    // dedicated overload or different approach is needed.
                     dim.Text = translatedText;
                     return true;
 

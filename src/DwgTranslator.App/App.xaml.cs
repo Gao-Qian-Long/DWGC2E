@@ -240,6 +240,7 @@ public partial class App : Application
     {
         Log.Information("Application shutting down");
         CadLogReader?.Dispose();
+        (Services as IDisposable)?.Dispose();
         Log.CloseAndFlush();
         base.OnExit(e);
     }

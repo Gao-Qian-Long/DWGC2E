@@ -19,5 +19,6 @@ public partial class MainWindow : Window
 
         // BUG FIX: 异步初始化术语库加载，避免 UI 线程同步阻塞
         Loaded += async (s, e) => await vm.InitializeAsync();
+        Closing += (s, e) => vm.Dispose();
     }
 }
