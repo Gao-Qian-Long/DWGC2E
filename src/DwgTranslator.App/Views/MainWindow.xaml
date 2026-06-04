@@ -26,107 +26,129 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- Row 0: Custom Title Bar -->
+        <!-- ═══ Row 0: Custom Title Bar ═══ -->
         <controls:TitleBarControl Grid.Row="0"/>
 
-        <!-- Row 1: Toolbar -->
-        <controls:MainToolBar Grid.Row="1"/>
+        <!-- ═══ Row 1: Toolbar — card-grouped action buttons ═══ -->
+        <controls:MainToolBar Grid.Row="1" Margin="8,4,8,0"/>
 
-        <!-- Row 2: Filter + Stats -->
-        <controls:FilterStatsBar Grid.Row="2"/>
+        <!-- ═══ Row 2: Filter + Stats card ═══ -->
+        <controls:FilterStatsBar Grid.Row="2" Margin="8,4,8,0"/>
 
-        <!-- Row 3: Progress Bar -->
-        <Grid Grid.Row="3" Visibility="{Binding IsProcessing, Converter={StaticResource BoolToVis}}">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="Auto"/>
-            </Grid.ColumnDefinitions>
-            <Border Grid.Column="0" Background="{DynamicResource Brush.PrimaryLight}" CornerRadius="0" Padding="8,2">
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="{Binding OperationLabel}" FontSize="11" Foreground="{DynamicResource Brush.Primary}" FontWeight="SemiBold"
-                               VerticalAlignment="Center"/>
-                    <TextBlock Text="..." FontSize="11" Foreground="{DynamicResource Brush.Primary}" VerticalAlignment="Center">
-                        <TextBlock.Style>
-                            <Style TargetType="TextBlock">
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding IsCancellationRequested}" Value="True">
-                                        <Setter Property="Text" Value="{conv:Localize ProgressCancelling}"/>
-                                        <Setter Property="Foreground" Value="{DynamicResource Brush.Danger}"/>
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </TextBlock.Style>
-                    </TextBlock>
-                </StackPanel>
-            </Border>
-            <ProgressBar Grid.Column="1" Height="4"
-                         Value="{Binding ProgressValue}" Maximum="100"
-                         IsIndeterminate="{Binding IsIndeterminate}"
-                         Foreground="{DynamicResource Brush.Primary}" Background="{DynamicResource Brush.BackgroundAlt}"/>
-            <TextBlock Grid.Column="2" Margin="6,0" FontSize="11" Foreground="{DynamicResource Brush.TextMuted}" VerticalAlignment="Center">
-                <TextBlock.Text>
-                    <Binding Path="ProgressValue" StringFormat="{}{0:0}%"/>
-                </TextBlock.Text>
-            </TextBlock>
-        </Grid>
+        <!-- ═══ Row 3: Progress Bar card ═══ -->
+        <Border Grid.Row="3" Margin="8,4,8,0"
+                Visibility="{Binding IsProcessing, Converter={StaticResource BoolToVis}}"
+                Style="{StaticResource StripCard}" Padding="6,3">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
 
-        <!-- Row 4: Data Grid -->
-        <controls:TranslationDataGrid Grid.Row="4"/>
+                <!-- Operation label + cancelling indicator -->
+                <Border Grid.Column="0" Background="{DynamicResource Brush.PrimaryLight}"
+                        CornerRadius="{DynamicResource CornerRadius.Small}" Padding="8,2">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="{Binding OperationLabel}" FontSize="11"
+                                   Foreground="{DynamicResource Brush.Primary}" FontWeight="SemiBold"
+                                   VerticalAlignment="Center"/>
+                        <TextBlock Text="..." FontSize="11" Foreground="{DynamicResource Brush.Primary}"
+                                   VerticalAlignment="Center">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsCancellationRequested}" Value="True">
+                                            <Setter Property="Text" Value="{conv:Localize ProgressCancelling}"/>
+                                            <Setter Property="Foreground" Value="{DynamicResource Brush.Danger}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </StackPanel>
+                </Border>
 
-        <!-- Row 5: Log Viewer Panel (collapsible) -->
+                <!-- Progress bar -->
+                <ProgressBar Grid.Column="1" Height="4" Margin="8,0"
+                             Value="{Binding ProgressValue}" Maximum="100"
+                             IsIndeterminate="{Binding IsIndeterminate}"
+                             Foreground="{DynamicResource Brush.Primary}"
+                             Background="{DynamicResource Brush.BackgroundAlt}"/>
+
+                <!-- Percentage -->
+                <TextBlock Grid.Column="2" Margin="4,0" FontSize="11"
+                           Foreground="{DynamicResource Brush.TextMuted}"
+                           VerticalAlignment="Center">
+                    <TextBlock.Text>
+                        <Binding Path="ProgressValue" StringFormat="{}{0:0}%"/>
+                    </TextBlock.Text>
+                </TextBlock>
+            </Grid>
+        </Border>
+
+        <!-- ═══ Row 4: DataGrid card ═══ -->
+        <controls:TranslationDataGrid Grid.Row="4" Margin="8,4,8,8"/>
+
+        <!-- ═══ Row 5: Log Viewer Panel (collapsible) ═══ -->
         <views:LogViewerPanel Grid.Row="5" x:Name="LogPanel"
                               DataContext="{Binding LogViewModel}"
-                              MaxHeight="280"
+                              MaxHeight="280" Margin="8,0,8,0"
                               Visibility="{Binding IsVisible, Converter={StaticResource BoolToVis}}"/>
 
-        <!-- Row 6: Status Bar -->
-        <Border Grid.Row="6" Background="{DynamicResource Brush.StatusBar}" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="0,1,0,0" Padding="0">
-            <StatusBar Background="Transparent" Margin="0">
-                <StatusBar.ItemsPanel>
-                    <ItemsPanelTemplate>
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                        </Grid>
-                    </ItemsPanelTemplate>
-                </StatusBar.ItemsPanel>
-                <StatusBarItem Grid.Column="0">
-                    <StackPanel Orientation="Horizontal">
-                        <Border Width="8" Height="8" CornerRadius="4" Margin="0,0,6,0"
-                                Visibility="{Binding IsProcessing, Converter={StaticResource BoolToVis}}">
-                            <Border.Background>
-                                <SolidColorBrush Color="{DynamicResource Color.Warning}"/>
-                            </Border.Background>
-                            <Border.Triggers>
-                                <EventTrigger RoutedEvent="Border.Loaded">
-                                    <BeginStoryboard>
-                                        <Storyboard RepeatBehavior="Forever">
-                                            <ColorAnimation Storyboard.TargetProperty="Background.Color"
-                                                            From="#D97706" To="#4F46E5" Duration="0:0:0.8"
-                                                            AutoReverse="True"/>
-                                        </Storyboard>
-                                    </BeginStoryboard>
-                                </EventTrigger>
-                            </Border.Triggers>
-                        </Border>
-                        <TextBlock Text="{Binding StatusMessage}" TextTrimming="CharacterEllipsis" FontSize="12" Foreground="{DynamicResource Brush.TextSecondary}"/>
-                    </StackPanel>
-                </StatusBarItem>
-                <StatusBarItem Grid.Column="1">
-                    <TextBlock Text="{Binding GlossaryStatsText}" Foreground="{DynamicResource Brush.TextMuted}" FontSize="11" Margin="0,0,15,0"/>
-                </StatusBarItem>
-                <StatusBarItem Grid.Column="2">
-                    <TextBlock Text="{Binding LicenseStatusText}" Foreground="{DynamicResource Brush.Warning}" FontSize="11" Margin="0,0,15,0" FontWeight="SemiBold"/>
-                </StatusBarItem>
-                <StatusBarItem Grid.Column="3">
-                    <TextBlock Text="DWG Translator v2.1" Foreground="{DynamicResource Brush.TextMuted}" FontSize="10"/>
-                </StatusBarItem>
-            </StatusBar>
+        <!-- ═══ Row 6: Status Bar card ═══ -->
+        <Border Grid.Row="6" Style="{StaticResource StripCard}"
+                BorderThickness="0,1,0,0"
+                CornerRadius="0"
+                Padding="10,4"
+                Background="{DynamicResource Brush.StatusBar}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Left: Status message + processing indicator -->
+                <StackPanel Grid.Column="0" Orientation="Horizontal">
+                    <Border Width="8" Height="8" CornerRadius="4" Margin="0,0,6,0"
+                            Visibility="{Binding IsProcessing, Converter={StaticResource BoolToVis}}">
+                        <Border.Background>
+                            <SolidColorBrush Color="{DynamicResource Color.Warning}"/>
+                        </Border.Background>
+                        <Border.Triggers>
+                            <EventTrigger RoutedEvent="Border.Loaded">
+                                <BeginStoryboard>
+                                    <Storyboard RepeatBehavior="Forever">
+                                        <ColorAnimation Storyboard.TargetProperty="Background.Color"
+                                                        From="#D97706" To="#4F46E5" Duration="0:0:0.8"
+                                                        AutoReverse="True"/>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </EventTrigger>
+                        </Border.Triggers>
+                    </Border>
+                    <TextBlock Text="{Binding StatusMessage}" TextTrimming="CharacterEllipsis"
+                               FontSize="11.5" Foreground="{DynamicResource Brush.TextSecondary}"
+                               VerticalAlignment="Center"/>
+                </StackPanel>
+
+                <!-- Glossary stats -->
+                <TextBlock Grid.Column="1" Text="{Binding GlossaryStatsText}"
+                           Foreground="{DynamicResource Brush.TextMuted}" FontSize="11"
+                           Margin="0,0,15,0" VerticalAlignment="Center"/>
+
+                <!-- License status -->
+                <TextBlock Grid.Column="2" Text="{Binding LicenseStatusText}"
+                           Foreground="{DynamicResource Brush.Warning}" FontSize="11"
+                           Margin="0,0,15,0" FontWeight="SemiBold" VerticalAlignment="Center"/>
+
+                <!-- Version -->
+                <TextBlock Grid.Column="3" Text="DWG Translator v2.1"
+                           Foreground="{DynamicResource Brush.TextMuted}" FontSize="10"
+                           VerticalAlignment="Center"/>
+            </Grid>
         </Border>
     </Grid>
 </Window>

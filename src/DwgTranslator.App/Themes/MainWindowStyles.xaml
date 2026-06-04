@@ -231,4 +231,92 @@
         <Setter Property="Padding" Value="8,4"/>
     </Style>
 
+    <!-- ════════════════════════════════════════════════════════
+         Card-System Styles
+         ════════════════════════════════════════════════════════ -->
+
+    <!-- Card header label — small, muted, for card title bars -->
+    <Style x:Key="CardHeader" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="11"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}"/>
+        <Setter Property="Margin" Value="0,0,0,6"/>
+    </Style>
+
+    <!-- Toolbar card group — compact card for grouping related toolbar buttons -->
+    <Style x:Key="ToolbarCard" TargetType="Border">
+        <Setter Property="Background" Value="{DynamicResource Brush.Surface}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource Brush.BorderLight}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="{DynamicResource CornerRadius.Medium}"/>
+        <Setter Property="Padding" Value="10,7"/>
+        <Setter Property="Effect" Value="{StaticResource CardShadow}"/>
+    </Style>
+
+    <!-- Content card — full card wrapper for major content areas -->
+    <Style x:Key="ContentCard" TargetType="Border">
+        <Setter Property="Background" Value="{DynamicResource Brush.Surface}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="{DynamicResource CornerRadius.Large}"/>
+        <Setter Property="Padding" Value="12"/>
+        <Setter Property="Effect" Value="{StaticResource CardShadow}"/>
+    </Style>
+
+    <!-- Card with no padding — for wrapping DataGrid edge-to-edge -->
+    <Style x:Key="ContentCardNoPad" TargetType="Border">
+        <Setter Property="Background" Value="{DynamicResource Brush.Surface}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="{DynamicResource CornerRadius.Large}"/>
+        <Setter Property="Padding" Value="0"/>
+        <Setter Property="Effect" Value="{StaticResource CardShadow}"/>
+    </Style>
+
+    <!-- Thin strip card for progress / status -->
+    <Style x:Key="StripCard" TargetType="Border">
+        <Setter Property="Background" Value="{DynamicResource Brush.Surface}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource Brush.BorderLight}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="{DynamicResource CornerRadius.Small}"/>
+        <Setter Property="Padding" Value="8,4"/>
+    </Style>
+
+    <!-- Card header bar — thin accent strip with bottom border -->
+    <Style x:Key="CardHeaderBar" TargetType="Border">
+        <Setter Property="Background" Value="{DynamicResource Brush.SurfaceAlt}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border}"/>
+        <Setter Property="BorderThickness" Value="0,0,0,1"/>
+        <Setter Property="Padding" Value="12,6"/>
+    </Style>
+
+    <!-- Vertical divider between toolbar card groups -->
+    <Style x:Key="ToolbarDivider" TargetType="Border">
+        <Setter Property="Width" Value="1"/>
+        <Setter Property="Background" Value="{DynamicResource Brush.Border}"/>
+        <Setter Property="Margin" Value="8,4"/>
+        <Setter Property="VerticalAlignment" Value="Stretch"/>
+    </Style>
+
+    <!-- Compact tool button for inside cards -->
+    <Style x:Key="CompactToolButton" TargetType="Button" BasedOn="{StaticResource ToolButton}">
+        <Setter Property="Padding" Value="8,4"/>
+        <Setter Property="FontSize" Value="11.5"/>
+        <Setter Property="Margin" Value="1"/>
+    </Style>
+
+    <!-- Compact primary button for inside cards -->
+    <Style x:Key="CompactPrimaryButton" TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
+        <Setter Property="Padding" Value="10,4"/>
+        <Setter Property="FontSize" Value="11.5"/>
+        <Setter Property="Margin" Value="1"/>
+    </Style>
+
+    <!-- Compact danger button for inside cards -->
+    <Style x:Key="CompactDangerButton" TargetType="Button" BasedOn="{StaticResource DangerButton}">
+        <Setter Property="Padding" Value="10,4"/>
+        <Setter Property="FontSize" Value="11.5"/>
+        <Setter Property="Margin" Value="1"/>
+    </Style>
+
 </ResourceDictionary>

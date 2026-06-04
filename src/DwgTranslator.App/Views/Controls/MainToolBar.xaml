@@ -2,145 +2,184 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:conv="clr-namespace:DwgTranslator.App.Converters">
-    <Border Background="{DynamicResource Brush.ToolBar}" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="0,0,0,1" Padding="10,8">
-        <WrapPanel Orientation="Horizontal">
-            <Button Style="{StaticResource PrimaryButton}" Command="{Binding ImportDwgCommand}"
-                    Background="{DynamicResource Brush.Primary}" ToolTip="{conv:Localize TipImportDwg}">
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="&#x1F4C2;" Margin="0,0,4,0"/>
-                    <TextBlock Text="{conv:Localize BtnImportDwg}"/>
-                </StackPanel>
-            </Button>
-            <Separator Margin="6,0" Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}"/>
+    <Border Background="{DynamicResource Brush.ToolBar}"
+            BorderBrush="{DynamicResource Brush.Border}"
+            BorderThickness="0,0,0,1"
+            Padding="8,6">
+        <StackPanel Orientation="Horizontal">
 
-            <Button Style="{StaticResource ToolButton}"
-                    Command="{Binding ToggleLanguageDirectionCommand}"
-                    ToolTip="{conv:Localize TipToggleDirection}" Margin="2">
-                <TextBlock TextAlignment="Center">
-                    <Run Text="&#x21C4; " FontSize="14"/><Run Text="{Binding LanguageDirection}" FontSize="12"/>
-                </TextBlock>
-            </Button>
-            <Separator Margin="6,0" Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}"/>
+            <!-- ═══ Card 1: 文件操作 ═══ -->
+            <Border Style="{StaticResource ToolbarCard}" MinWidth="220">
+                <StackPanel>
+                    <TextBlock Text="文件操作" Style="{StaticResource CardHeader}"/>
+                    <WrapPanel>
+                        <Button Style="{StaticResource CompactPrimaryButton}"
+                                Command="{Binding ImportDwgCommand}"
+                                ToolTip="{conv:Localize TipImportDwg}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#x1F4C2;" Margin="0,0,4,0"/>
+                                <TextBlock Text="{conv:Localize BtnImportDwg}"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Style="{StaticResource CompactPrimaryButton}"
+                                Command="{Binding ExportDwgCommand}"
+                                ToolTip="{conv:Localize TipExportDwg}"
+                                Visibility="{Binding IsProcessing, Converter={StaticResource BoolToVis}, ConverterParameter=false}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#x1F4BE;" Margin="0,0,4,0"/>
+                                <TextBlock Text="{conv:Localize BtnExportDwg}"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Style="{StaticResource CompactDangerButton}"
+                                Command="{Binding CancelExportCommand}"
+                                ToolTip="{conv:Localize TipCancelExport}"
+                                Visibility="{Binding IsProcessing, Converter={StaticResource BoolToVis}}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#x25A0;" Margin="0,0,4,0" FontSize="10"/>
+                                <TextBlock Text="{conv:Localize BtnCancelExport}"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Style="{StaticResource CompactToolButton}"
+                                Command="{Binding ExportExcelCommand}"
+                                ToolTip="{conv:Localize TipExportExcel}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#x1F4CA;" Margin="0,0,4,0"/>
+                                <TextBlock Text="{conv:Localize BtnExportExcel}"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Style="{StaticResource CompactToolButton}"
+                                Command="{Binding ImportExcelCommand}"
+                                ToolTip="{conv:Localize TipImportExcel}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#x1F4C5;" Margin="0,0,4,0"/>
+                                <TextBlock Text="{conv:Localize BtnImportExcel}"/>
+                            </StackPanel>
+                        </Button>
+                    </WrapPanel>
+                </StackPanel>
+            </Border>
 
-            <Button Style="{StaticResource PrimaryButton}" Command="{Binding TranslateCommand}"
-                    Background="{DynamicResource Brush.Primary}" ToolTip="{conv:Localize TipTranslate}"
-                    Visibility="{Binding IsProcessing, Converter={StaticResource BoolToVis}, ConverterParameter=false}">
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="&#x25B6;" Margin="0,0,4,0" FontSize="11"/>
-                    <TextBlock Text="{conv:Localize BtnTranslate}"/>
-                </StackPanel>
-            </Button>
-            <Button Style="{StaticResource DangerButton}" Command="{Binding CancelTranslateCommand}"
-                    ToolTip="{conv:Localize TipStopTranslation}"
-                    Visibility="{Binding IsProcessing, Converter={StaticResource BoolToVis}}">
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="&#x25A0;" Margin="0,0,4,0" FontSize="11"/>
-                    <TextBlock Text="{conv:Localize BtnStop}"/>
-                </StackPanel>
-            </Button>
-            <Separator Margin="6,0" Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}"/>
+            <Border Style="{StaticResource ToolbarDivider}"/>
 
-            <Button Style="{StaticResource ToolButton}" Command="{Binding ExportExcelCommand}"
-                    ToolTip="{conv:Localize TipExportExcel}">
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="&#x1F4CA;" Margin="0,0,4,0"/>
-                    <TextBlock Text="{conv:Localize BtnExportExcel}"/>
+            <!-- ═══ Card 2: 翻译控制 ═══ -->
+            <Border Style="{StaticResource ToolbarCard}" MinWidth="170">
+                <StackPanel>
+                    <TextBlock Text="翻译控制" Style="{StaticResource CardHeader}"/>
+                    <WrapPanel>
+                        <Button Style="{StaticResource CompactPrimaryButton}"
+                                Command="{Binding TranslateCommand}"
+                                ToolTip="{conv:Localize TipTranslate}"
+                                Visibility="{Binding IsProcessing, Converter={StaticResource BoolToVis}, ConverterParameter=false}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#x25B6;" Margin="0,0,4,0" FontSize="10"/>
+                                <TextBlock Text="{conv:Localize BtnTranslate}"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Style="{StaticResource CompactDangerButton}"
+                                Command="{Binding CancelTranslateCommand}"
+                                ToolTip="{conv:Localize TipStopTranslation}"
+                                Visibility="{Binding IsProcessing, Converter={StaticResource BoolToVis}}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#x25A0;" Margin="0,0,4,0" FontSize="10"/>
+                                <TextBlock Text="{conv:Localize BtnStop}"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Style="{StaticResource CompactToolButton}"
+                                Command="{Binding ToggleLanguageDirectionCommand}"
+                                ToolTip="{conv:Localize TipToggleDirection}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#x21C4;" Margin="0,0,3,0" FontSize="12"/>
+                                <TextBlock Text="{Binding LanguageDirection}" FontSize="11.5"/>
+                            </StackPanel>
+                        </Button>
+                    </WrapPanel>
                 </StackPanel>
-            </Button>
-            <Button Style="{StaticResource ToolButton}" Command="{Binding ImportExcelCommand}"
-                    ToolTip="{conv:Localize TipImportExcel}">
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="&#x1F4C5;" Margin="0,0,4,0"/>
-                    <TextBlock Text="{conv:Localize BtnImportExcel}"/>
-                </StackPanel>
-            </Button>
-            <Separator Margin="6,0" Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}"/>
+            </Border>
 
-            <Button Style="{StaticResource PrimaryButton}" Command="{Binding ExportDwgCommand}"
-                    Background="{DynamicResource Brush.Primary}" ToolTip="{conv:Localize TipExportDwg}"
-                    Visibility="{Binding IsProcessing, Converter={StaticResource BoolToVis}, ConverterParameter=false}">
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="&#x1F4BE;" Margin="0,0,4,0"/>
-                    <TextBlock Text="{conv:Localize BtnExportDwg}"/>
-                </StackPanel>
-            </Button>
-            <Button Style="{StaticResource DangerButton}" Command="{Binding CancelExportCommand}"
-                    ToolTip="{conv:Localize TipCancelExport}"
-                    Visibility="{Binding IsProcessing, Converter={StaticResource BoolToVis}}">
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="&#x25A0;" Margin="0,0,4,0" FontSize="11"/>
-                    <TextBlock Text="{conv:Localize BtnCancelExport}"/>
-                </StackPanel>
-            </Button>
-            <Separator Margin="6,0" Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}"/>
+            <Border Style="{StaticResource ToolbarDivider}"/>
 
-            <Button Style="{StaticResource ToolButton}" Command="{Binding MarkAllReviewedCommand}"
-                    ToolTip="{conv:Localize TipMarkReviewed}">
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="&#x2714;" Margin="0,0,4,0" Foreground="{DynamicResource Brush.Success}"/>
-                    <TextBlock Text="{conv:Localize BtnMarkAllReviewed}"/>
+            <!-- ═══ Card 3: 工具与系统 ═══ -->
+            <Border Style="{StaticResource ToolbarCard}">
+                <StackPanel>
+                    <TextBlock Text="工具与系统" Style="{StaticResource CardHeader}"/>
+                    <WrapPanel MaxWidth="520">
+                        <Button Style="{StaticResource CompactToolButton}"
+                                Command="{Binding MarkAllReviewedCommand}"
+                                ToolTip="{conv:Localize TipMarkReviewed}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#x2714;" Margin="0,0,4,0" Foreground="{DynamicResource Brush.Success}"/>
+                                <TextBlock Text="{conv:Localize BtnMarkAllReviewed}"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Style="{StaticResource CompactToolButton}"
+                                Command="{Binding RetryFailedCommand}"
+                                ToolTip="{conv:Localize TipRetryFailed}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#x21BB;" Margin="0,0,4,0" Foreground="{DynamicResource Brush.Warning}"/>
+                                <TextBlock Text="{conv:Localize BtnRetryFailed}"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Style="{StaticResource CompactToolButton}"
+                                Command="{Binding OpenGlossaryManagerCommand}"
+                                ToolTip="{conv:Localize TipGlossary}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#x1F4D6;" Margin="0,0,4,0"/>
+                                <TextBlock Text="{conv:Localize BtnGlossary}"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Style="{StaticResource CompactToolButton}"
+                                Command="{Binding ImportGlossaryCommand}"
+                                ToolTip="{conv:Localize TipImportGlossary}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#x1F4E5;" Margin="0,0,4,0"/>
+                                <TextBlock Text="{conv:Localize BtnImportGlossary}"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Style="{StaticResource CompactToolButton}"
+                                Command="{Binding OpenLicenseDialogCommand}"
+                                ToolTip="{conv:Localize TipLicense}"
+                                BorderBrush="{DynamicResource Brush.Warning}" BorderThickness="1">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#x1F511;" Margin="0,0,4,0"/>
+                                <TextBlock Text="{conv:Localize BtnLicense}"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Style="{StaticResource CompactToolButton}"
+                                Command="{Binding SettingsCommand}"
+                                ToolTip="{conv:Localize TipSettings}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#x2699;" Margin="0,0,4,0"/>
+                                <TextBlock Text="{conv:Localize BtnSettings}"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Style="{StaticResource CompactToolButton}"
+                                Command="{Binding ToggleLogViewerCommand}"
+                                ToolTip="{conv:Localize TipLog}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#x1F4CB;" Margin="0,0,4,0"/>
+                                <TextBlock Text="{conv:Localize BtnLog}"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Style="{StaticResource CompactToolButton}"
+                                Command="{Binding ShowHelpCommand}"
+                                ToolTip="{conv:Localize TipHelp}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#x2753;" Margin="0,0,4,0"/>
+                                <TextBlock Text="{conv:Localize BtnHelp}"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Style="{StaticResource CompactToolButton}"
+                                Command="{Binding ClearAllCommand}"
+                                ToolTip="{conv:Localize TipClear}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#x1F5D1;" Margin="0,0,4,0"/>
+                                <TextBlock Text="{conv:Localize BtnClear}"/>
+                            </StackPanel>
+                        </Button>
+                    </WrapPanel>
                 </StackPanel>
-            </Button>
-            <Button Style="{StaticResource ToolButton}" Command="{Binding RetryFailedCommand}"
-                    ToolTip="{conv:Localize TipRetryFailed}">
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="&#x21BB;" Margin="0,0,4,0" Foreground="{DynamicResource Brush.Warning}"/>
-                    <TextBlock Text="{conv:Localize BtnRetryFailed}"/>
-                </StackPanel>
-            </Button>
-            <Separator Margin="6,0" Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}"/>
+            </Border>
 
-            <Button Style="{StaticResource ToolButton}" Command="{Binding OpenGlossaryManagerCommand}"
-                    ToolTip="{conv:Localize TipGlossary}">
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="&#x1F4D6;" Margin="0,0,4,0"/>
-                    <TextBlock Text="{conv:Localize BtnGlossary}"/>
-                </StackPanel>
-            </Button>
-            <Button Style="{StaticResource ToolButton}" Command="{Binding ImportGlossaryCommand}"
-                    ToolTip="{conv:Localize TipImportGlossary}">
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="&#x1F4E5;" Margin="0,0,4,0"/>
-                    <TextBlock Text="{conv:Localize BtnImportGlossary}"/>
-                </StackPanel>
-            </Button>
-            <Separator Margin="6,0" Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}"/>
-
-            <Button Style="{StaticResource ToolButton}" Command="{Binding OpenLicenseDialogCommand}"
-                    ToolTip="{conv:Localize TipLicense}" BorderBrush="{DynamicResource Brush.Warning}" BorderThickness="1">
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="&#x1F511;" Margin="0,0,4,0"/>
-                    <TextBlock Text="{conv:Localize BtnLicense}"/>
-                </StackPanel>
-            </Button>
-            <Button Style="{StaticResource ToolButton}" Command="{Binding SettingsCommand}"
-                    ToolTip="{conv:Localize TipSettings}">
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="&#x2699;" Margin="0,0,4,0"/>
-                    <TextBlock Text="{conv:Localize BtnSettings}"/>
-                </StackPanel>
-            </Button>
-            <Button Style="{StaticResource ToolButton}" Command="{Binding ToggleLogViewerCommand}"
-                    ToolTip="{conv:Localize TipLog}">
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="&#x1F4CB;" Margin="0,0,4,0"/>
-                    <TextBlock Text="{conv:Localize BtnLog}"/>
-                </StackPanel>
-            </Button>
-            <Button Style="{StaticResource ToolButton}" Command="{Binding ShowHelpCommand}"
-                    ToolTip="{conv:Localize TipHelp}">
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="&#x2753;" Margin="0,0,4,0"/>
-                    <TextBlock Text="{conv:Localize BtnHelp}"/>
-                </StackPanel>
-            </Button>
-            <Button Style="{StaticResource ToolButton}" Command="{Binding ClearAllCommand}"
-                    ToolTip="{conv:Localize TipClear}">
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="&#x1F5D1;" Margin="0,0,4,0"/>
-                    <TextBlock Text="{conv:Localize BtnClear}"/>
-                </StackPanel>
-            </Button>
-        </WrapPanel>
+        </StackPanel>
     </Border>
 </UserControl>
