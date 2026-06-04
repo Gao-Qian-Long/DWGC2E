@@ -66,25 +66,21 @@ public class DwgWriterService : IDwgWriterService, IDxfWriterService
             // 3. Ensure output font styles exist in document
             DwgFontManager.EnsureFontStyles(doc, cnToEn);
 
-            // 4. Detect frame boundaries for collision-aware scaling
-            var frames = DwgFrameDetector.DetectFrames(doc);
-            if (frames.Count > 0)
-                Log.Information("Detected {Count} frame boundary rectangles", frames.Count);
-
-            // 5. Build lookup: handle → translated text
+            // 4. Build lookup: handle → translated text
             var translationMap = BuildTranslationMap(entities);
             Log.Information("Translation map: {Count} entities to replace", translationMap.Count);
 
-            // 6. Process all entity collections: ModelSpace, layouts, block definitions
+            // 5. Process all entity collections: ModelSpace, layouts, block definitions
+            var emptyFrames = new List<(double minX, double minY, double maxX, double maxY)>();
             int modelSpaceCount = DwgTextReplacer.ProcessEntityCollection(
-                doc.ModelSpace.Entities, translationMap, result, cnToEn, doc, frames);
+                doc.ModelSpace.Entities, translationMap, result, cnToEn, doc, emptyFrames);
             Log.Information("ModelSpace: {Count} replacements", modelSpaceCount);
 
             foreach (var layout in doc.Layouts)
             {
                 if (layout.Name == "Model" || layout.AssociatedBlock == null) continue;
                 int layoutCount = DwgTextReplacer.ProcessEntityCollection(
-                    layout.AssociatedBlock.Entities, translationMap, result, cnToEn, doc, frames);
+                    layout.AssociatedBlock.Entities, translationMap, result, cnToEn, doc, emptyFrames);
                 if (layoutCount > 0)
                     Log.Debug("Layout '{Name}': {Count} replacements", layout.Name, layoutCount);
             }
@@ -95,7 +91,7 @@ public class DwgWriterService : IDwgWriterService, IDxfWriterService
                 if (blockRecord.Name.StartsWith("*Model_Space", StringComparison.OrdinalIgnoreCase)) continue;
                 if (blockRecord.Name.StartsWith("*Paper_Space", StringComparison.OrdinalIgnoreCase)) continue;
                 int blockCount = DwgTextReplacer.ProcessEntityCollection(
-                    blockRecord.Entities, translationMap, result, cnToEn, doc, frames);
+                    blockRecord.Entities, translationMap, result, cnToEn, doc, emptyFrames);
                 if (blockCount > 0)
                     Log.Debug("Block '{Name}': {Count} replacements", blockRecord.Name, blockCount);
             }
