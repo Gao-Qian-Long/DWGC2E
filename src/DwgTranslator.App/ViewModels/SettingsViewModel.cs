@@ -16,6 +16,7 @@ public partial class SettingsViewModel : ObservableObject
 {
     private readonly string _settingsPath;
     private readonly ILocalizationService _localizationService;
+    private static readonly JsonSerializerOptions s_writeIndentedOptions = new() { WriteIndented = true };
 
     [ObservableProperty] private string _apiKey = string.Empty;
     [ObservableProperty] private string _baseUrl = "https://api.deepseek.com";
@@ -86,8 +87,7 @@ public partial class SettingsViewModel : ObservableObject
             config.MinimumLogLevel = SelectedLogLevel;
 
             Directory.CreateDirectory(Path.GetDirectoryName(_settingsPath)!);
-            var options = new JsonSerializerOptions { WriteIndented = true };
-            File.WriteAllText(_settingsPath, JsonSerializer.Serialize(config, options));
+            File.WriteAllText(_settingsPath, JsonSerializer.Serialize(config, s_writeIndentedOptions));
             return true;
         }
         catch (Exception ex)

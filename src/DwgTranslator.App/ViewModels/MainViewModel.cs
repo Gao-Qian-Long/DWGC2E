@@ -64,15 +64,16 @@ public partial class MainViewModel : ObservableObject, IDisposable
     public LogViewModel LogViewModel => _logViewModel ??= new LogViewModel(
         App.Services?.GetService<ILogStore>() ?? App.LogStore ?? new InMemoryLogStore());
 
-    public ObservableCollection<TextEntity> Entities { get; } = new();
-    public ObservableCollection<TextEntity> FilteredEntities { get; } = new();
-    public ObservableCollection<GlossaryEntry> GlossaryEntries { get; } = new();
+    public ObservableCollection<TextEntity> Entities { get; } = [];
+    public ObservableCollection<TextEntity> FilteredEntities { get; } = [];
+    public ObservableCollection<GlossaryEntry> GlossaryEntries { get; } = [];
 
-    public string[] FilterOptions { get; } = {
+    public string[] FilterOptions { get; } =
+    [
         Strings.Get("FilterAll"), Strings.Get("FilterPending"), Strings.Get("FilterTranslated"),
         Strings.Get("FilterReviewed"), Strings.Get("FilterFailed"), Strings.Get("FilterGlossaryHit"),
         Strings.Get("FilterSkipped")
-    };
+    ];
 
     public MainViewModel()
         : this(
@@ -139,5 +140,6 @@ public partial class MainViewModel : ObservableObject, IDisposable
         _httpClient = null;
         _cts = null;
         _exportCts = null;
+        GC.SuppressFinalize(this);
     }
 }
