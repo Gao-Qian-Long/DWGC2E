@@ -7,7 +7,7 @@
         WindowStartupLocation="CenterOwner"
         WindowStyle="ToolWindow"
         ResizeMode="CanResize"
-        Background="#F5F7FA"
+        Background="{DynamicResource Brush.Background}"
         MaxHeight="800">
     <Grid Margin="12">
         <Grid.RowDefinitions>
@@ -19,8 +19,8 @@
 
         <!-- Header -->
         <StackPanel Grid.Row="0" Margin="0,0,0,8">
-            <TextBlock x:Name="TitleText" FontSize="16" FontWeight="Bold" Foreground="#1976D2"/>
-            <TextBlock Text="{conv:Localize GlossaryDesc}" FontSize="11" Foreground="#78909C" Margin="0,3,0,0"/>
+            <TextBlock x:Name="TitleText" FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource Brush.TextPrimary}"/>
+            <TextBlock Text="{conv:Localize GlossaryDesc}" FontSize="11" Foreground="{DynamicResource Brush.TextMuted}" Margin="0,3,0,0"/>
         </StackPanel>
 
         <!-- DataGrid -->
@@ -34,8 +34,8 @@
                   RowHeight="28"
                   HeadersVisibility="Column"
                   GridLinesVisibility="Horizontal"
-                  HorizontalGridLinesBrush="#ECEFF1"
-                  BorderBrush="#E0E0E0" BorderThickness="1">
+                  HorizontalGridLinesBrush="{DynamicResource Brush.BorderLight}"
+                  BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1">
             <DataGrid.Resources>
                 <Style TargetType="DataGridColumnHeader">
                     <Setter Property="Background" Value="#37474F"/>
@@ -63,19 +63,19 @@
         <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,0,0,8">
             <Button Content="+ 新增术语" Padding="10,5" Margin="0,0,6,0"
                     Click="AddRow_Click" Cursor="Hand" FontSize="12"
-                    Background="#43A047" Foreground="White" BorderThickness="0" FontWeight="SemiBold"/>
+                    Background="{DynamicResource Brush.Success}" Foreground="White" BorderThickness="0" FontWeight="SemiBold"/>
             <Button x:Name="DeleteSelectedButton" Content="删除选中" Padding="10,5"
                     Click="DeleteSelected_Click" Cursor="Hand" FontSize="12"
-                    Background="#E53935" Foreground="White" BorderThickness="0" FontWeight="SemiBold"/>
+                    Background="{DynamicResource Brush.Danger}" Foreground="White" BorderThickness="0" FontWeight="SemiBold"/>
         </StackPanel>
 
         <!-- Footer buttons -->
         <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right">
             <Button x:Name="SaveButton" Content="{conv:Localize BtnSaveGlossary}" Padding="14,6" Margin="0,0,8,0"
-                    Background="#1976D2" Foreground="White" FontWeight="SemiBold" FontSize="12"
+                    Background="{DynamicResource Brush.Primary}" Foreground="White" FontWeight="SemiBold" FontSize="12"
                     Click="Save_Click" Cursor="Hand" BorderThickness="0"/>
             <Button Content="{conv:Localize BtnCancel}" Padding="14,6" FontSize="12"
-                    Click="Cancel_Click" Cursor="Hand" Background="#F5F5F5" BorderBrush="#E0E0E0" BorderThickness="1"/>
+                    Click="Cancel_Click" Cursor="Hand" Background="{DynamicResource Brush.BackgroundAlt}" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1"/>
         </StackPanel>
     </Grid>
 </Window>

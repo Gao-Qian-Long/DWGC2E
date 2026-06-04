@@ -17,26 +17,10 @@
               RowHeight="32"
               FontSize="12"
               HeadersVisibility="Column"
-              HorizontalGridLinesBrush="#ECEFF1"
-              BorderBrush="#E0E0E0" BorderThickness="1">
-        <DataGrid.Resources>
-            <Style TargetType="DataGridColumnHeader">
-                <Setter Property="Background" Value="#37474F"/>
-                <Setter Property="Foreground" Value="White"/>
-                <Setter Property="FontWeight" Value="SemiBold"/>
-                <Setter Property="FontSize" Value="12"/>
-                <Setter Property="Height" Value="34"/>
-                <Setter Property="HorizontalContentAlignment" Value="Center"/>
-                <Setter Property="Padding" Value="6,0"/>
-            </Style>
-            <Style TargetType="DataGridCell">
-                <Setter Property="VerticalAlignment" Value="Center"/>
-                <Setter Property="Padding" Value="4,2"/>
-                <Setter Property="FontSize" Value="12"/>
-                <Setter Property="BorderThickness" Value="0"/>
-                <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
-            </Style>
-        </DataGrid.Resources>
+              ColumnHeaderStyle="{StaticResource DataGridHeaderStyle}"
+              CellStyle="{StaticResource DataGridCellStyle}"
+              HorizontalGridLinesBrush="{DynamicResource Brush.BorderLight}"
+              BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1">
         <DataGrid.Columns>
             <DataGridTextColumn Header="Handle" Binding="{Binding Handle}" Width="70" IsReadOnly="True"
                                 CanUserSort="True" SortMemberPath="Handle">
@@ -44,7 +28,7 @@
                     <Style TargetType="TextBlock" BasedOn="{StaticResource CenteredCellStyle}">
                         <Setter Property="FontFamily" Value="Consolas"/>
                         <Setter Property="FontSize" Value="10"/>
-                        <Setter Property="Foreground" Value="#78909C"/>
+                        <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}"/>
                     </Style>
                 </DataGridTextColumn.ElementStyle>
             </DataGridTextColumn>
@@ -62,7 +46,7 @@
                     <DataTemplate>
                         <TextBox Text="{Binding TranslatedText, UpdateSourceTrigger=LostFocus}"
                                  TextWrapping="Wrap" AcceptsReturn="True" MinHeight="24"
-                                 BorderBrush="#E0E0E0" Background="Transparent"
+                                 BorderBrush="{DynamicResource Brush.Border}" Background="Transparent"
                                  FontSize="12" VerticalContentAlignment="Center"
                                  Padding="4,2"
                                  ToolTip="{conv:Localize TipEditTranslation}"/>
@@ -81,7 +65,7 @@
                                     <Style.Triggers>
                                         <DataTrigger Binding="{Binding GlossaryHit}" Value="True">
                                             <Setter Property="Text" Value="&#x2714;"/>
-                                            <Setter Property="Foreground" Value="#4CAF50"/>
+                                            <Setter Property="Foreground" Value="{DynamicResource Brush.Success}"/>
                                         </DataTrigger>
                                     </Style.Triggers>
                                 </Style>

@@ -6,17 +6,17 @@
         MinHeight="400" MinWidth="500"
         WindowStartupLocation="CenterOwner"
         ResizeMode="CanResizeWithGrip"
-        Background="#F5F7FA">
+        Background="{DynamicResource Brush.Background}">
     <Window.Resources>
         <Style x:Key="SectionHeader" TargetType="TextBlock">
             <Setter Property="FontWeight" Value="Bold"/>
             <Setter Property="FontSize" Value="15"/>
-            <Setter Property="Foreground" Value="#1976D2"/>
+            <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}"/>
             <Setter Property="Margin" Value="0,20,0,8"/>
         </Style>
         <Style x:Key="BodyText" TargetType="TextBlock">
             <Setter Property="TextWrapping" Value="Wrap"/>
-            <Setter Property="Foreground" Value="#424242"/>
+            <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}"/>
             <Setter Property="FontSize" Value="12.5"/>
             <Setter Property="LineHeight" Value="22"/>
         </Style>
@@ -29,7 +29,7 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <TextBlock Grid.Row="0" Text="{conv:Localize HelpTitle}" FontWeight="Bold" FontSize="18" Foreground="#1976D2" Margin="0,0,0,10"/>
+        <TextBlock Grid.Row="0" Text="{conv:Localize HelpTitle}" FontWeight="SemiBold" FontSize="18" Foreground="{DynamicResource Brush.TextPrimary}" Margin="0,0,0,10"/>
 
         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
             <StackPanel>
@@ -38,83 +38,83 @@
                 <TextBlock Style="{StaticResource SectionHeader}" Text="快速入门"/>
                 <TextBlock Style="{StaticResource BodyText}" Text="DWG Translator 是一款图纸翻译工具，能够自动识别 DWG/DXF 图纸中的文字内容，并利用 AI 进行中英互译。翻译完成后，译文会自动写回原图纸，保持排版整洁。"/>
 
-                <TextBlock Style="{StaticResource BodyText}" Margin="0,10,0,0" FontWeight="SemiBold" Foreground="#37474F" Text="四步完成翻译："/>
+                <TextBlock Style="{StaticResource BodyText}" Margin="0,10,0,0" FontWeight="SemiBold" Foreground="{DynamicResource Brush.TextPrimary}" Text="四步完成翻译："/>
                 <TextBlock Style="{StaticResource BodyText}" Text="1. 点击「导入 DWG」按钮，选择一个或多个 DWG/DXF 文件"/>
                 <TextBlock Style="{StaticResource BodyText}" Text="2. 点击 ⇄ 按钮选择翻译方向（中文→英文 或 英文→中文），然后点击「翻译」"/>
                 <TextBlock Style="{StaticResource BodyText}" Text="3. 翻译完成后，可直接在列表中双击译文进行修改，或导出 Excel 批量校对"/>
                 <TextBlock Style="{StaticResource BodyText}" Text="4. 点击「导出 DWG」按钮，选择回写模式后导出翻译后的图纸"/>
 
-                <TextBlock Style="{StaticResource BodyText}" Margin="0,8,0,0" Text="💡 首次使用前，请先点击「设置」按钮，在「DeepSeek API 设置」中填入您的 API Key。" Foreground="#2E7D32"/>
+                <TextBlock Style="{StaticResource BodyText}" Margin="0,8,0,0" Text="💡 首次使用前，请先点击「设置」按钮，在「DeepSeek API 设置」中填入您的 API Key。" Foreground="{DynamicResource Brush.Success}"/>
 
                 <!-- ========== 主要功能 ========== -->
                 <TextBlock Style="{StaticResource SectionHeader}" Text="主要功能"/>
 
-                <TextBlock Style="{StaticResource BodyText}" FontWeight="SemiBold" Foreground="#37474F" Text="导入 DWG/DXF"/>
+                <TextBlock Style="{StaticResource BodyText}" FontWeight="SemiBold" Foreground="{DynamicResource Brush.TextPrimary}" Text="导入 DWG/DXF"/>
                 <TextBlock Style="{StaticResource BodyText}" Text="支持 .dwg 和 .dxf 格式文件的导入，可一次选择多个文件。程序会自动扫描图纸中的所有文字实体（单行文字、多行文字、属性文字等），并以表格形式展示。"/>
 
-                <TextBlock Style="{StaticResource BodyText}" FontWeight="SemiBold" Foreground="#37474F" Margin="0,8,0,0" Text="AI 翻译"/>
+                <TextBlock Style="{StaticResource BodyText}" FontWeight="SemiBold" Foreground="{DynamicResource Brush.TextPrimary}" Margin="0,8,0,0" Text="AI 翻译"/>
                 <TextBlock Style="{StaticResource BodyText}" Text="使用 DeepSeek AI 模型翻译，5 路并发，速度约为逐条翻译的 5 倍。支持智能去重（相同内容只翻译一次）和术语库匹配。翻译过程中可随时点击「停止」按钮中断。"/>
 
-                <TextBlock Style="{StaticResource BodyText}" FontWeight="SemiBold" Foreground="#37474F" Margin="0,8,0,0" Text="术语库"/>
+                <TextBlock Style="{StaticResource BodyText}" FontWeight="SemiBold" Foreground="{DynamicResource Brush.TextPrimary}" Margin="0,8,0,0" Text="术语库"/>
                 <TextBlock Style="{StaticResource BodyText}" Text="术语库确保专业术语翻译一致。点击工具栏「术语库」按钮可管理术语条目，支持从外部 JSON 文件导入。程序自带机械工程领域术语库。翻译时命中术语库的条目会在列表中标记。"/>
 
-                <TextBlock Style="{StaticResource BodyText}" FontWeight="SemiBold" Foreground="#37474F" Margin="0,8,0,0" Text="Excel 导出/导入"/>
+                <TextBlock Style="{StaticResource BodyText}" FontWeight="SemiBold" Foreground="{DynamicResource Brush.TextPrimary}" Margin="0,8,0,0" Text="Excel 导出/导入"/>
                 <TextBlock Style="{StaticResource BodyText}" Text="导出 Excel 后可在 Excel 中批量校对译文，修改完成后再导入回程序。适合大批量文字的校对工作。"/>
 
-                <TextBlock Style="{StaticResource BodyText}" FontWeight="SemiBold" Foreground="#37474F" Margin="0,8,0,0" Text="导出 DWG（回写模式）"/>
+                <TextBlock Style="{StaticResource BodyText}" FontWeight="SemiBold" Foreground="{DynamicResource Brush.TextPrimary}" Margin="0,8,0,0" Text="导出 DWG（回写模式）"/>
                 <TextBlock Style="{StaticResource BodyText}" Text="• AutoCAD 精确回写（推荐）：通过 COM 接口控制 AutoCAD，支持碰撞检测和智能排版。需要 AutoCAD 运行。"/>
                 <TextBlock Style="{StaticResource BodyText}" Text="• 离线回写：使用 ACadSharp 库直接修改文件，不需要 AutoCAD。包含智能缩放但无碰撞检测。"/>
 
-                <TextBlock Style="{StaticResource BodyText}" FontWeight="SemiBold" Foreground="#37474F" Margin="0,8,0,0" Text="筛选与搜索"/>
+                <TextBlock Style="{StaticResource BodyText}" FontWeight="SemiBold" Foreground="{DynamicResource Brush.TextPrimary}" Margin="0,8,0,0" Text="筛选与搜索"/>
                 <TextBlock Style="{StaticResource BodyText}" Text="使用下拉菜单筛选状态（全部/待翻译/已翻译/翻译失败等），在搜索框输入关键词查找原文或译文。"/>
 
                 <!-- ========== 常见问题 ========== -->
                 <TextBlock Style="{StaticResource SectionHeader}" Text="常见问题"/>
 
-                <TextBlock Style="{StaticResource BodyText}" FontWeight="SemiBold" Foreground="#37474F" Text="Q: 翻译后文字间距太大怎么办？"/>
+                <TextBlock Style="{StaticResource BodyText}" FontWeight="SemiBold" Foreground="{DynamicResource Brush.TextPrimary}" Text="Q: 翻译后文字间距太大怎么办？"/>
                 <TextBlock Style="{StaticResource BodyText}" Text="A: v2.1 已优化 MText 处理逻辑。如果仍有问题，建议使用 AutoCAD 精确回写模式。"/>
 
-                <TextBlock Style="{StaticResource BodyText}" FontWeight="SemiBold" Foreground="#37474F" Margin="0,8,0,0" Text="Q: 翻译后文字与线条重叠怎么办？"/>
+                <TextBlock Style="{StaticResource BodyText}" FontWeight="SemiBold" Foreground="{DynamicResource Brush.TextPrimary}" Margin="0,8,0,0" Text="Q: 翻译后文字与线条重叠怎么办？"/>
                 <TextBlock Style="{StaticResource BodyText}" Text="A: AutoCAD 精确回写模式会自动检测碰撞并缩小字高。离线模式暂不支持碰撞检测。"/>
 
-                <TextBlock Style="{StaticResource BodyText}" FontWeight="SemiBold" Foreground="#37474F" Margin="0,8,0,0" Text="Q: AutoCAD 弹出安全警告对话框？"/>
+                <TextBlock Style="{StaticResource BodyText}" FontWeight="SemiBold" Foreground="{DynamicResource Brush.TextPrimary}" Margin="0,8,0,0" Text="Q: AutoCAD 弹出安全警告对话框？"/>
                 <TextBlock Style="{StaticResource BodyText}" Text="A: 这是正常现象。请注意：该对话框可能在 AutoCAD 窗口后面！请点击任务栏的 AutoCAD 图标切换过去，然后点击「始终加载」(Always Load)。"/>
 
-                <TextBlock Style="{StaticResource BodyText}" FontWeight="SemiBold" Foreground="#37474F" Margin="0,8,0,0" Text="Q: 体验版用完了怎么办？"/>
+                <TextBlock Style="{StaticResource BodyText}" FontWeight="SemiBold" Foreground="{DynamicResource Brush.TextPrimary}" Margin="0,8,0,0" Text="Q: 体验版用完了怎么办？"/>
                 <TextBlock Style="{StaticResource BodyText}" Text="A: 点击工具栏「授权」按钮，输入激活码升级。买断制 ¥699 永久使用，订阅制 ¥49/月。"/>
 
-                <TextBlock Style="{StaticResource BodyText}" FontWeight="SemiBold" Foreground="#37474F" Margin="0,8,0,0" Text="Q: 切换翻译方向后之前的译文还在吗？"/>
+                <TextBlock Style="{StaticResource BodyText}" FontWeight="SemiBold" Foreground="{DynamicResource Brush.TextPrimary}" Margin="0,8,0,0" Text="Q: 切换翻译方向后之前的译文还在吗？"/>
                 <TextBlock Style="{StaticResource BodyText}" Text="A: 切换方向后，已翻译的条目会被重置为「待翻译」，需重新翻译。建议先导出 Excel 备份。"/>
 
                 <!-- ========== 名词解释 ========== -->
                 <TextBlock Style="{StaticResource SectionHeader}" Text="名词解释"/>
 
-                <TextBlock Style="{StaticResource BodyText}" FontWeight="SemiBold" Foreground="#37474F" Text="DWG/DXF 文件"/>
+                <TextBlock Style="{StaticResource BodyText}" FontWeight="SemiBold" Foreground="{DynamicResource Brush.TextPrimary}" Text="DWG/DXF 文件"/>
                 <TextBlock Style="{StaticResource BodyText}" Text="AutoCAD 软件使用的图纸文件格式。DWG 是二进制格式，DXF 是文本格式。本软件两种格式均支持导入和导出。"/>
 
-                <TextBlock Style="{StaticResource BodyText}" FontWeight="SemiBold" Foreground="#37474F" Margin="0,8,0,0" Text="多行文字（MText）/ 单行文字（Text）"/>
+                <TextBlock Style="{StaticResource BodyText}" FontWeight="SemiBold" Foreground="{DynamicResource Brush.TextPrimary}" Margin="0,8,0,0" Text="多行文字（MText）/ 单行文字（Text）"/>
                 <TextBlock Style="{StaticResource BodyText}" Text="AutoCAD 中的两种文字类型。MText 有多行内容和矩形边界框，Text 只有一行。程序会自动处理这两种类型。"/>
 
-                <TextBlock Style="{StaticResource BodyText}" FontWeight="SemiBold" Foreground="#37474F" Margin="0,8,0,0" Text="API Key（密钥）"/>
+                <TextBlock Style="{StaticResource BodyText}" FontWeight="SemiBold" Foreground="{DynamicResource Brush.TextPrimary}" Margin="0,8,0,0" Text="API Key（密钥）"/>
                 <TextBlock Style="{StaticResource BodyText}" Text="使用 AI 翻译服务的凭证，可在 DeepSeek 官网注册获取。"/>
 
-                <TextBlock Style="{StaticResource BodyText}" FontWeight="SemiBold" Foreground="#37474F" Margin="0,8,0,0" Text="碰撞检测"/>
+                <TextBlock Style="{StaticResource BodyText}" FontWeight="SemiBold" Foreground="{DynamicResource Brush.TextPrimary}" Margin="0,8,0,0" Text="碰撞检测"/>
                 <TextBlock Style="{StaticResource BodyText}" Text="翻译后文字可能更长导致与图形重叠，碰撞检测会自动缩小字高避免。仅 AutoCAD 精确回写模式支持。"/>
 
-                <TextBlock Style="{StaticResource BodyText}" FontWeight="SemiBold" Foreground="#37474F" Margin="0,8,0,0" Text="回写"/>
+                <TextBlock Style="{StaticResource BodyText}" FontWeight="SemiBold" Foreground="{DynamicResource Brush.TextPrimary}" Margin="0,8,0,0" Text="回写"/>
                 <TextBlock Style="{StaticResource BodyText}" Text="将翻译后的文字写回 DWG 图纸的过程，程序会找到原始文字位置用译文替换，并自动调整排版。"/>
 
-                <TextBlock Style="{StaticResource BodyText}" FontWeight="SemiBold" Foreground="#37474F" Margin="0,8,0,0" Text="翻译缓存"/>
+                <TextBlock Style="{StaticResource BodyText}" FontWeight="SemiBold" Foreground="{DynamicResource Brush.TextPrimary}" Margin="0,8,0,0" Text="翻译缓存"/>
                 <TextBlock Style="{StaticResource BodyText}" Text="程序会记住已翻译的内容，重新翻译相同文本时直接使用缓存，不消耗 API 费用。"/>
 
-                <TextBlock Style="{StaticResource BodyText}" FontWeight="SemiBold" Foreground="#37474F" Margin="0,8,0,0" Text="Handle（句柄）"/>
+                <TextBlock Style="{StaticResource BodyText}" FontWeight="SemiBold" Foreground="{DynamicResource Brush.TextPrimary}" Margin="0,8,0,0" Text="Handle（句柄）"/>
                 <TextBlock Style="{StaticResource BodyText}" Text="DWG 文件中每个图形对象的唯一编号，类似身份证号。程序用 Handle 精确匹配原文和译文。"/>
 
             </StackPanel>
         </ScrollViewer>
 
         <Button Grid.Row="2" Content="{conv:Localize BtnClose}" Width="80" Height="30" Click="Close_Click"
-                Background="#1976D2" Foreground="White" FontWeight="SemiBold" BorderThickness="0" Cursor="Hand"
+                Background="{DynamicResource Brush.Primary}" Foreground="White" FontWeight="SemiBold" BorderThickness="0" Cursor="Hand"
                 HorizontalAlignment="Right" Margin="0,10,0,0"/>
     </Grid>
 </Window>

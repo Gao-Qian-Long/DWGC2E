@@ -10,16 +10,16 @@ namespace DwgTranslator.App.Converters;
 /// </summary>
 public class StatusToBrushConverter : IValueConverter
 {
-    // Soft professional colors (no deep blues/reds)
-    private static readonly SolidColorBrush PendingBrush = new(Color.FromRgb(0x9E, 0x9E, 0x9E));         // gray
-    private static readonly SolidColorBrush GlossaryBrush = new(Color.FromRgb(0xFF, 0xB7, 0x4D));       // soft orange
-    private static readonly SolidColorBrush TranslatedBrush = new(Color.FromRgb(0x66, 0xBB, 0x6A));      // soft green
-    private static readonly SolidColorBrush ReviewedBrush = new(Color.FromRgb(0x43, 0xA0, 0x47));         // medium green
-    private static readonly SolidColorBrush FailedBrush = new(Color.FromRgb(0xEF, 0x9A, 0x9A));          // soft red
-    private static readonly SolidColorBrush WritebackSuccessBrush = new(Color.FromRgb(0x2E, 0x7D, 0x32));// dark green
-    private static readonly SolidColorBrush WritebackFailedBrush = new(Color.FromRgb(0xE5, 0x73, 0x73)); // red
-    private static readonly SolidColorBrush SkippedBrush = new(Color.FromRgb(0xBD, 0xBD, 0xBD));         // light gray
-    private static readonly SolidColorBrush DefaultBrush = new(Color.FromRgb(0x75, 0x75, 0x75));         // dark gray
+    // Color token palette -- Tailwind slate/amber/emerald/red
+    private static readonly SolidColorBrush PendingBrush = new(Color.FromRgb(0x94, 0xA3, 0xB8));           // slate-400
+    private static readonly SolidColorBrush GlossaryBrush = new(Color.FromRgb(0xD9, 0x77, 0x06));           // amber-600
+    private static readonly SolidColorBrush TranslatedBrush = new(Color.FromRgb(0x05, 0x96, 0x69));         // emerald-600
+    private static readonly SolidColorBrush ReviewedBrush = new(Color.FromRgb(0x04, 0x78, 0x57));           // emerald-700
+    private static readonly SolidColorBrush FailedBrush = new(Color.FromRgb(0xDC, 0x26, 0x26));            // red-600
+    private static readonly SolidColorBrush WritebackSuccessBrush = new(Color.FromRgb(0x06, 0x5F, 0x46));  // emerald-800
+    private static readonly SolidColorBrush WritebackFailedBrush = new(Color.FromRgb(0xB9, 0x1C, 0x1C));  // red-700
+    private static readonly SolidColorBrush SkippedBrush = new(Color.FromRgb(0xCB, 0xD5, 0xE1));           // slate-300
+    private static readonly SolidColorBrush DefaultBrush = new(Color.FromRgb(0x47, 0x55, 0x69));           // slate-600
 
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
     {

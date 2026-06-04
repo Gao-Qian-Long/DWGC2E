@@ -2,58 +2,92 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:conv="clr-namespace:DwgTranslator.App.Converters">
-    <Border Background="White" Padding="10,6" BorderBrush="#EEEEEE" BorderThickness="0,0,0,1">
+    <Border Background="{DynamicResource Brush.Surface}" Padding="8,6"
+            BorderBrush="{DynamicResource Brush.Border}" BorderThickness="0,0,0,1">
         <StackPanel Orientation="Horizontal">
-            <TextBlock Text="{conv:Localize StatsFilter}" VerticalAlignment="Center" Margin="0,0,6,0" FontSize="12" Foreground="#78909C"/>
+
+            <!-- Filter Combo -->
+            <TextBlock Text="{conv:Localize StatsFilter}" VerticalAlignment="Center" Margin="0,0,6,0"
+                       FontSize="12" Foreground="{DynamicResource Brush.TextSecondary}"/>
             <ComboBox ItemsSource="{Binding FilterOptions}"
                       SelectedItem="{Binding FilterStatusText, UpdateSourceTrigger=PropertyChanged}"
-                      Width="95" Height="28" Margin="0,0,15,0" FontSize="12"/>
-            <TextBlock Text="{conv:Localize StatsSearch}" VerticalAlignment="Center" Margin="0,0,6,0" FontSize="12" Foreground="#78909C"/>
-            <TextBox Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" Width="180" Height="28"
-                     ToolTip="{conv:Localize TipSearch}" FontSize="12" VerticalContentAlignment="Center"
-                     Padding="6,0"/>
-            <Button Content="{conv:Localize BtnFind}" Command="{Binding ApplySearchCommand}" Padding="10,4" Margin="5,0,20,0"
+                      Width="95" Height="28" Margin="0,0,12,0" FontSize="12"
+                      Background="{DynamicResource Brush.Background}"
+                      BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1"/>
+
+            <!-- Search Box -->
+            <TextBlock Text="{conv:Localize StatsSearch}" VerticalAlignment="Center" Margin="0,0,6,0"
+                       FontSize="12" Foreground="{DynamicResource Brush.TextSecondary}"/>
+            <Border Background="{DynamicResource Brush.Background}" BorderBrush="{DynamicResource Brush.Border}"
+                    BorderThickness="1" CornerRadius="4" Padding="0">
+                <TextBox Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" Width="180" Height="28"
+                         ToolTip="{conv:Localize TipSearch}" FontSize="12" VerticalContentAlignment="Center"
+                         Padding="6,0" Background="Transparent" BorderThickness="0"/>
+            </Border>
+            <Button Content="{conv:Localize BtnFind}" Command="{Binding ApplySearchCommand}" Padding="10,4" Margin="6,0,0,0"
                     Style="{StaticResource ToolButton}" FontSize="12"/>
 
-            <!-- Stats Badge Row -->
-            <Border Background="#E3F2FD" CornerRadius="6" Padding="12,5" Margin="0,0,8,0"
-                    Effect="{StaticResource CardShadow}">
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock FontSize="12" VerticalAlignment="Center">
-                        <Run Text="{conv:Localize StatsTotal}" Foreground="#78909C"/><Run Text="{Binding TotalCount}" FontWeight="SemiBold" Foreground="#37474F"/>
-                    </TextBlock>
-                    <Border Width="1" Height="14" Background="#BBDEFB" Margin="10,0"/>
-                    <TextBlock FontSize="12" VerticalAlignment="Center" Margin="10,0,0,0">
-                        <Run Text="{conv:Localize StatsTranslated}" Foreground="#78909C"/><Run Text="{Binding TranslatedCount}" FontWeight="SemiBold" Foreground="#1976D2"/>
-                    </TextBlock>
-                    <Border Width="1" Height="14" Background="#BBDEFB" Margin="10,0"/>
-                    <TextBlock FontSize="12" VerticalAlignment="Center" Margin="10,0,0,0">
-                        <Run Text="{conv:Localize StatsFailed}" Foreground="#78909C"/><Run Text="{Binding FailedCount}" FontWeight="SemiBold" Foreground="#E53935"/>
-                    </TextBlock>
-                    <Border Width="1" Height="14" Background="#BBDEFB" Margin="10,0"/>
-                    <TextBlock FontSize="12" VerticalAlignment="Center" Margin="10,0,0,0">
-                        <Run Text="{conv:Localize StatsGlossary}" Foreground="#78909C"/><Run Text="{Binding GlossaryHitCount}" FontWeight="SemiBold" Foreground="#E65100"/>
-                    </TextBlock>
-                    <Border Width="1" Height="14" Background="#BBDEFB" Margin="10,0"/>
-                    <TextBlock FontSize="12" VerticalAlignment="Center" Margin="10,0,0,0">
-                        <Run Text="{conv:Localize StatsCache}" Foreground="#78909C"/><Run Text="{Binding CacheHitCount}" FontWeight="SemiBold" Foreground="#78909C"/>
-                    </TextBlock>
-                    <Border Width="1" Height="14" Background="#BBDEFB" Margin="10,0"/>
-                    <TextBlock FontSize="12" VerticalAlignment="Center" Margin="10,0,0,0">
-                        <Run Text="{conv:Localize StatsVisible}" Foreground="#78909C"/><Run Text="{Binding VisibleCount}" FontWeight="SemiBold" Foreground="#37474F"/>
-                    </TextBlock>
-                </StackPanel>
+            <!-- Separator -->
+            <Border Width="1" Height="16" Background="{DynamicResource Brush.Border}"
+                    Margin="12,0" VerticalAlignment="Center"/>
+
+            <!-- Stats Badges -->
+            <Border Background="{DynamicResource Brush.PrimaryLight}" CornerRadius="4" Padding="6,3" Margin="0,0,6,0">
+                <TextBlock FontSize="11" VerticalAlignment="Center">
+                    <Run Text="{conv:Localize StatsTotal}" Foreground="{DynamicResource Brush.TextMuted}"/>
+                    <Run Text="{Binding TotalCount}" FontWeight="SemiBold" Foreground="{DynamicResource Brush.Primary}"/>
+                </TextBlock>
             </Border>
 
+            <Border Background="{DynamicResource Brush.PrimaryLight}" CornerRadius="4" Padding="6,3" Margin="0,0,6,0">
+                <TextBlock FontSize="11" VerticalAlignment="Center">
+                    <Run Text="{conv:Localize StatsTranslated}" Foreground="{DynamicResource Brush.TextMuted}"/>
+                    <Run Text="{Binding TranslatedCount}" FontWeight="SemiBold" Foreground="{DynamicResource Brush.Success}"/>
+                </TextBlock>
+            </Border>
+
+            <Border Background="{DynamicResource Brush.DangerLight}" CornerRadius="4" Padding="6,3" Margin="0,0,6,0">
+                <TextBlock FontSize="11" VerticalAlignment="Center">
+                    <Run Text="{conv:Localize StatsFailed}" Foreground="{DynamicResource Brush.TextMuted}"/>
+                    <Run Text="{Binding FailedCount}" FontWeight="SemiBold" Foreground="{DynamicResource Brush.Danger}"/>
+                </TextBlock>
+            </Border>
+
+            <Border Background="{DynamicResource Brush.PrimaryLight}" CornerRadius="4" Padding="6,3" Margin="0,0,6,0">
+                <TextBlock FontSize="11" VerticalAlignment="Center">
+                    <Run Text="{conv:Localize StatsGlossary}" Foreground="{DynamicResource Brush.TextMuted}"/>
+                    <Run Text="{Binding GlossaryHitCount}" FontWeight="SemiBold" Foreground="{DynamicResource Brush.Info}"/>
+                </TextBlock>
+            </Border>
+
+            <Border Background="{DynamicResource Brush.PrimaryLight}" CornerRadius="4" Padding="6,3" Margin="0,0,6,0">
+                <TextBlock FontSize="11" VerticalAlignment="Center">
+                    <Run Text="{conv:Localize StatsCache}" Foreground="{DynamicResource Brush.TextMuted}"/>
+                    <Run Text="{Binding CacheHitCount}" FontWeight="SemiBold" Foreground="{DynamicResource Brush.TextSecondary}"/>
+                </TextBlock>
+            </Border>
+
+            <Border Background="{DynamicResource Brush.PrimaryLight}" CornerRadius="4" Padding="6,3" Margin="0,0,0,0">
+                <TextBlock FontSize="11" VerticalAlignment="Center">
+                    <Run Text="{conv:Localize StatsVisible}" Foreground="{DynamicResource Brush.TextMuted}"/>
+                    <Run Text="{Binding VisibleCount}" FontWeight="SemiBold" Foreground="{DynamicResource Brush.Primary}"/>
+                </TextBlock>
+            </Border>
+
+            <!-- Separator -->
+            <Border Width="1" Height="16" Background="{DynamicResource Brush.Border}"
+                    Margin="12,0" VerticalAlignment="Center"/>
+
             <!-- License Status Badge -->
-            <Border Background="#FFF3E0" CornerRadius="6" Padding="12,5" BorderBrush="#FFE0B2" BorderThickness="1">
+            <Border Background="{DynamicResource Brush.WarningLight}" CornerRadius="4" Padding="6,3">
                 <StackPanel Orientation="Horizontal">
                     <TextBlock Text="&#x1F511;" FontSize="11" VerticalAlignment="Center" Margin="0,0,4,0"/>
-                    <TextBlock FontSize="11" FontWeight="SemiBold" Foreground="#E65100" VerticalAlignment="Center">
+                    <TextBlock FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource Brush.Warning}" VerticalAlignment="Center">
                         <Run Text="{Binding LicenseStatusText}"/>
                     </TextBlock>
                 </StackPanel>
             </Border>
+
         </StackPanel>
     </Border>
 </UserControl>

@@ -222,7 +222,7 @@ public partial class MainViewModel
             string formatText = isDxfSource ? "DXF" : "DWG";
             StatusMessage = Strings.Get("StatusDwgExportComplete", formatText, modeText, result.SuccessCount, Path.GetFileName(destFilePath));
             MessageBox.Show(
-                Strings.Get("MsgDwgExportSuccess", formatText, modeText, result.SuccessCount, result.FailCount, destFilePath),
+                Strings.Get("MsgDwgExportSuccess", formatText, modeText, result.SuccessCount, result.FailCount, destFilePath.Replace('\\', '/')),
                 Strings.Get("MsgTitleExportSuccess"),
                 MessageBoxButton.OK,
                 result.Errors.Count > 0 ? MessageBoxImage.Warning : MessageBoxImage.Information);

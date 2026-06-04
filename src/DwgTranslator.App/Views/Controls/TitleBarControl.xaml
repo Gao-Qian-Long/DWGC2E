@@ -1,101 +1,130 @@
 <UserControl x:Class="DwgTranslator.App.Views.Controls.TitleBarControl"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:conv="clr-namespace:DwgTranslator.App.Converters">
-    <Border>
-        <Border.Background>
-            <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                <GradientStop Color="#1565C0" Offset="0"/>
-                <GradientStop Color="#1976D2" Offset="0.5"/>
-                <GradientStop Color="#1E88E5" Offset="1"/>
-            </LinearGradientBrush>
-        </Border.Background>
+             xmlns:conv="clr-namespace:DwgTranslator.App.Converters"
+             Height="40">
+    <UserControl.Resources>
+        <!-- Shared button style for minimize / maximize / pin -->
+        <Style x:Key="TitleBarButton" TargetType="Button">
+            <Setter Property="Width" Value="46"/>
+            <Setter Property="Height" Value="40"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="FontFamily" Value="Segoe UI"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="WindowChrome.IsHitTestVisibleInChrome" Value="True"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bg" Background="{TemplateBinding Background}"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bg" Property="Background">
+                                    <Setter.Value>
+                                        <SolidColorBrush Color="White" Opacity="0.2"/>
+                                    </Setter.Value>
+                                </Setter>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bg" Property="Background">
+                                    <Setter.Value>
+                                        <SolidColorBrush Color="White" Opacity="0.3"/>
+                                    </Setter.Value>
+                                </Setter>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Close button style (red hover) -->
+        <Style x:Key="CloseButtonStyle" TargetType="Button">
+            <Setter Property="Width" Value="46"/>
+            <Setter Property="Height" Value="40"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontFamily" Value="Segoe UI"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="WindowChrome.IsHitTestVisibleInChrome" Value="True"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bg" Background="{TemplateBinding Background}"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="#E81123"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="#C50F1F"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
+    <Border Background="{DynamicResource Brush.TitleBarBackground}">
         <Grid>
+            <!-- Left: App title -->
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
-                <TextBlock Text="DWG" Foreground="White" FontSize="13" FontWeight="Bold"
-                           VerticalAlignment="Center" Opacity="0.9"/>
-                <TextBlock Text=" Translator" Foreground="White" FontSize="13"
-                           VerticalAlignment="Center" Opacity="0.9"/>
-                <TextBlock Foreground="#BBDEFB" FontSize="11"
-                           VerticalAlignment="Center" Margin="4,0,0,0">
-                    <Run Text=" — "/><Run Text="{conv:Localize AppTitleShort}"/>
+                <TextBlock Text="DWG Translator"
+                           Foreground="White" Opacity="0.95"
+                           FontFamily="Segoe UI" FontSize="13" FontWeight="SemiBold"
+                           VerticalAlignment="Center"/>
+                <TextBlock Foreground="White" Opacity="0.55"
+                           FontFamily="Segoe UI" FontSize="11"
+                           VerticalAlignment="Center" Margin="8,0,0,0">
+                    <Run Text="{conv:Localize AppTitleShort}"/>
                 </TextBlock>
             </StackPanel>
+
+            <!-- Right: Window buttons -->
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <!-- Pin / Topmost toggle -->
                 <Button Command="{Binding ToggleTopmostCommand}"
-                        ToolTip="{conv:Localize TipTopmostToggle}"
-                        WindowChrome.IsHitTestVisibleInChrome="True"
-                        Width="46" Height="36"
-                        Foreground="White" BorderThickness="0" FontSize="14"
-                        VerticalContentAlignment="Center" HorizontalContentAlignment="Center"
-                        Background="Transparent">
+                        ToolTip="{conv:Localize TipTopmostToggle}">
                     <Button.Style>
-                        <Style TargetType="Button">
-                            <Setter Property="Background" Value="Transparent"/>
-                            <Setter Property="Content" Value="&#x1F4CC;"/>
+                        <Style TargetType="Button" BasedOn="{StaticResource TitleBarButton}">
+                            <Setter Property="Content" Value="&#x2912;"/>
+                            <Setter Property="FontSize" Value="15"/>
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding IsTopmost}" Value="True">
-                                    <Setter Property="Background" Value="#FF9800"/>
-                                    <Setter Property="Content" Value="&#x1F4CD;"/>
+                                    <Setter Property="Background" Value="#6366F1"/>
+                                    <Setter Property="Foreground" Value="White"/>
                                 </DataTrigger>
-                                <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter Property="Background" Value="#1976D2"/>
-                                </Trigger>
                             </Style.Triggers>
                         </Style>
                     </Button.Style>
                 </Button>
-                <Button x:Name="MinimizeButton" Content="&#x2013;"
+
+                <!-- Minimize -->
+                <Button x:Name="MinimizeButton" Content="&#x2500;"
                         Click="MinimizeButton_Click"
-                        WindowChrome.IsHitTestVisibleInChrome="True"
-                        Width="46" Height="36" Background="Transparent"
-                        Foreground="White" BorderThickness="0" FontSize="16"
-                        VerticalContentAlignment="Center" HorizontalContentAlignment="Center">
-                    <Button.Style>
-                        <Style TargetType="Button">
-                            <Setter Property="Background" Value="Transparent"/>
-                            <Style.Triggers>
-                                <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter Property="Background" Value="#1976D2"/>
-                                </Trigger>
-                            </Style.Triggers>
-                        </Style>
-                    </Button.Style>
-                </Button>
+                        Style="{StaticResource TitleBarButton}"/>
+
+                <!-- Maximize -->
                 <Button x:Name="MaximizeButton" Content="&#x25A1;"
                         Click="MaximizeButton_Click"
-                        WindowChrome.IsHitTestVisibleInChrome="True"
-                        Width="46" Height="36" Background="Transparent"
-                        Foreground="White" BorderThickness="0" FontSize="14"
-                        VerticalContentAlignment="Center" HorizontalContentAlignment="Center">
-                    <Button.Style>
-                        <Style TargetType="Button">
-                            <Setter Property="Background" Value="Transparent"/>
-                            <Style.Triggers>
-                                <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter Property="Background" Value="#1976D2"/>
-                                </Trigger>
-                            </Style.Triggers>
-                        </Style>
-                    </Button.Style>
-                </Button>
-                <Button Content="&#x2715;"
+                        Style="{StaticResource TitleBarButton}"/>
+
+                <!-- Close -->
+                <Button x:Name="CloseButton" Content="&#x2715;"
                         Click="CloseButton_Click"
-                        WindowChrome.IsHitTestVisibleInChrome="True"
-                        Width="46" Height="36" Background="Transparent"
-                        Foreground="White" BorderThickness="0" FontSize="14"
-                        VerticalContentAlignment="Center" HorizontalContentAlignment="Center">
-                    <Button.Style>
-                        <Style TargetType="Button">
-                            <Setter Property="Background" Value="Transparent"/>
-                            <Style.Triggers>
-                                <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter Property="Background" Value="#E81123"/>
-                                </Trigger>
-                            </Style.Triggers>
-                        </Style>
-                    </Button.Style>
-                </Button>
+                        Style="{StaticResource CloseButtonStyle}"/>
             </StackPanel>
         </Grid>
     </Border>

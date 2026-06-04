@@ -41,7 +41,7 @@ public partial class App : Application
         try
         {
             MessageBox.Show(
-                Strings.Get("MsgUnhandledError", Path.Combine(AppDataDir, "logs")),
+                Strings.Get("MsgUnhandledError", Path.Combine(AppDataDir, "logs").Replace('\\', '/')),
                 Strings.Get("MsgTitleWarning"), MessageBoxButton.OK, MessageBoxImage.Warning);
         }
         catch { /* last resort: ignore if even MessageBox fails */ }
@@ -57,7 +57,7 @@ public partial class App : Application
             try
             {
                 MessageBox.Show(
-                    Strings.Get("MsgFatalError", ex?.Message ?? "Unknown", Path.Combine(AppDataDir, "logs")),
+                    Strings.Get("MsgFatalError", (ex?.Message ?? "Unknown").Replace('\\', '/'), Path.Combine(AppDataDir, "logs").Replace('\\', '/')),
                     Strings.Get("MsgTitleFatalError"), MessageBoxButton.OK, MessageBoxImage.Error);
             }
             catch { /* ignore */ }

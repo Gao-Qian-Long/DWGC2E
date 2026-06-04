@@ -5,7 +5,7 @@
         Title="{conv:Localize LicenseTitle}" SizeToContent="Height" Width="520"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize"
-        Background="#F5F7FA"
+        Background="{DynamicResource Brush.Background}"
         MaxHeight="700">
     <Grid Margin="20">
         <Grid.RowDefinitions>
@@ -16,15 +16,15 @@
 
         <!-- Header -->
         <StackPanel Grid.Row="0" Margin="0,0,0,12">
-            <TextBlock Text="{conv:Localize LicenseHeader}" FontSize="18" FontWeight="Bold" Foreground="#1976D2"/>
-            <TextBlock Text="{conv:Localize LicenseManageDesc}" FontSize="12" Foreground="#78909C" Margin="0,4,0,0"/>
+            <TextBlock Text="{conv:Localize LicenseHeader}" FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource Brush.TextPrimary}"/>
+            <TextBlock Text="{conv:Localize LicenseManageDesc}" FontSize="12" Foreground="{DynamicResource Brush.TextMuted}" Margin="0,4,0,0"/>
         </StackPanel>
 
         <!-- Scrollable Content -->
         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="0,0,0,12">
             <StackPanel>
                 <!-- Current Status Panel -->
-                <Border Background="White" CornerRadius="6" Padding="14" BorderBrush="#E0E0E0" BorderThickness="1" Margin="0,0,0,10">
+                <Border Background="{DynamicResource Brush.Surface}" CornerRadius="6" Padding="14" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1" Margin="0,0,0,10">
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
@@ -36,34 +36,34 @@
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
-                        <TextBlock Grid.Row="0" Grid.Column="0" Text="{conv:Localize LicenseCurrentStatus}" FontWeight="SemiBold" Margin="0,0,8,4" VerticalAlignment="Center" Foreground="#546E7A"/>
-                        <TextBlock Grid.Row="0" Grid.Column="1" x:Name="StatusText" Text="{conv:Localize LicenseLoading}" Foreground="#1976D2" FontWeight="Bold" FontSize="13" Margin="0,0,0,4" VerticalAlignment="Center"/>
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="{conv:Localize LicenseCurrentStatus}" FontWeight="SemiBold" Margin="0,0,8,4" VerticalAlignment="Center" Foreground="{DynamicResource Brush.TextSecondary}"/>
+                        <TextBlock Grid.Row="0" Grid.Column="1" x:Name="StatusText" Text="{conv:Localize LicenseLoading}" Foreground="{DynamicResource Brush.Primary}" FontWeight="Bold" FontSize="13" Margin="0,0,0,4" VerticalAlignment="Center"/>
 
-                        <TextBlock Grid.Row="1" Grid.Column="0" Text="{conv:Localize LicenseMachineId}" FontWeight="SemiBold" Margin="0,0,8,4" VerticalAlignment="Center" Foreground="#546E7A"/>
-                        <TextBox Grid.Row="1" Grid.Column="1" x:Name="MachineIdBox" IsReadOnly="True" Background="#F5F5F5" Padding="4,2" FontFamily="Consolas" FontSize="11" Margin="0,0,0,4" VerticalAlignment="Center" BorderBrush="#E0E0E0"/>
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="{conv:Localize LicenseMachineId}" FontWeight="SemiBold" Margin="0,0,8,4" VerticalAlignment="Center" Foreground="{DynamicResource Brush.TextSecondary}"/>
+                        <TextBox Grid.Row="1" Grid.Column="1" x:Name="MachineIdBox" IsReadOnly="True" Background="{DynamicResource Brush.BackgroundAlt}" Padding="4,2" FontFamily="Consolas" FontSize="11" Margin="0,0,0,4" VerticalAlignment="Center" BorderBrush="{DynamicResource Brush.Border}"/>
 
-                        <TextBlock Grid.Row="2" Grid.Column="0" Text="{conv:Localize LicenseTrialRemaining}" FontWeight="SemiBold" Margin="0,0,8,4" VerticalAlignment="Center" Foreground="#546E7A"/>
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="{conv:Localize LicenseTrialRemaining}" FontWeight="SemiBold" Margin="0,0,8,4" VerticalAlignment="Center" Foreground="{DynamicResource Brush.TextSecondary}"/>
                         <TextBlock Grid.Row="2" Grid.Column="1" x:Name="TrialText" Text="-" Margin="0,0,0,4" VerticalAlignment="Center"/>
 
-                        <TextBlock Grid.Row="3" Grid.Column="0" Text="{conv:Localize LicenseType}" FontWeight="SemiBold" Margin="0,0,8,0" VerticalAlignment="Center" Foreground="#546E7A"/>
+                        <TextBlock Grid.Row="3" Grid.Column="0" Text="{conv:Localize LicenseType}" FontWeight="SemiBold" Margin="0,0,8,0" VerticalAlignment="Center" Foreground="{DynamicResource Brush.TextSecondary}"/>
                         <TextBlock Grid.Row="3" Grid.Column="1" x:Name="LicenseTypeText" Text="{conv:Localize LicenseTrial}" Margin="0,0,0,0" VerticalAlignment="Center"/>
                     </Grid>
                 </Border>
 
                 <!-- Activation Input -->
-                <Border Background="White" CornerRadius="6" Padding="14" BorderBrush="#E0E0E0" BorderThickness="1" Margin="0,0,0,10">
+                <Border Background="{DynamicResource Brush.Surface}" CornerRadius="6" Padding="14" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1" Margin="0,0,0,10">
                     <StackPanel>
-                        <TextBlock Text="{conv:Localize LicenseEnterCode}" FontWeight="Bold" Margin="0,0,0,6" Foreground="#37474F"/>
+                        <TextBlock Text="{conv:Localize LicenseEnterCode}" FontWeight="Bold" Margin="0,0,0,6" Foreground="{DynamicResource Brush.TextPrimary}"/>
                         <TextBox x:Name="ActivationCodeBox" Padding="8,6" FontSize="13" FontFamily="Consolas"
-                                 TextWrapping="NoWrap" AcceptsReturn="False" BorderBrush="#E0E0E0"
+                                 TextWrapping="NoWrap" AcceptsReturn="False" BorderBrush="{DynamicResource Brush.Border}"
                                  ToolTip="输入 gql119871 或 DwgTranslator-P-XXXX..."/>
                         <TextBlock x:Name="ResultText" Text="" Margin="0,6,0,0" FontSize="12" TextWrapping="Wrap"/>
                     </StackPanel>
                 </Border>
 
                 <!-- Pricing Info -->
-                <Border Background="#E3F2FD" CornerRadius="4" Padding="12" Margin="0,0,0,0">
-                    <TextBlock TextWrapping="Wrap" FontSize="11" Foreground="#1565C0" LineHeight="17">
+                <Border Background="{DynamicResource Brush.InfoLight}" CornerRadius="4" Padding="12" Margin="0,0,0,0">
+                    <TextBlock TextWrapping="Wrap" FontSize="11" Foreground="{DynamicResource Brush.Info}" LineHeight="17">
                         <Run FontWeight="Bold" Text="{conv:Localize LicensePricing}"/><LineBreak/>
                         <Run Text="{conv:Localize LicenseTrialDesc}"/><LineBreak/>
                         <Run Text="{conv:Localize LicensePerpetualDesc}"/><LineBreak/>
@@ -77,13 +77,13 @@
         <!-- Buttons - ALWAYS VISIBLE at bottom -->
         <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,0,0">
             <Button x:Name="CopyMachineIdButton" Content="{conv:Localize BtnCopyMachineId}" Padding="12,6" Margin="0,0,8,0"
-                    Click="CopyMachineId_Click" FontSize="12" Background="#F5F5F5" BorderBrush="#E0E0E0" BorderThickness="1"
+                    Click="CopyMachineId_Click" FontSize="12" Background="{DynamicResource Brush.BackgroundAlt}" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1"
                     Cursor="Hand"/>
             <Button x:Name="ActivateButton" Content="{conv:Localize BtnActivate}" Padding="12,6" Margin="0,0,8,0"
-                    Background="#1976D2" Foreground="White" FontWeight="Bold" FontSize="12"
+                    Background="{DynamicResource Brush.Primary}" Foreground="White" FontWeight="Bold" FontSize="12"
                     Click="Activate_Click" Cursor="Hand" BorderThickness="0"/>
             <Button Content="{conv:Localize BtnOk}" Padding="12,6" Margin="0,0,0,0" FontSize="12" FontWeight="SemiBold"
-                    Click="Close_Click" IsDefault="True" Background="#F5F5F5" BorderBrush="#E0E0E0" BorderThickness="1"
+                    Click="Close_Click" IsDefault="True" Background="{DynamicResource Brush.BackgroundAlt}" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1"
                     Cursor="Hand"/>
         </StackPanel>
     </Grid>

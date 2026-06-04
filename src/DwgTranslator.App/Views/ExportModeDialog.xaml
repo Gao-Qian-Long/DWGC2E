@@ -5,7 +5,7 @@
         Title="{conv:Localize ExportModeTitle}" Height="440" Width="540"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize"
-        Background="#F5F7FA">
+        Background="{DynamicResource Brush.Background}">
     <Grid Margin="24">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -15,8 +15,8 @@
 
         <!-- Title -->
         <StackPanel Grid.Row="0" Margin="0,0,0,16">
-            <TextBlock Text="{conv:Localize ExportModeSelectTitle}" FontWeight="Bold" FontSize="18" Foreground="#1976D2"/>
-            <TextBlock Text="{conv:Localize ExportModeSelectDesc}" FontSize="12" Foreground="#78909C" Margin="0,4,0,0"/>
+            <TextBlock Text="{conv:Localize ExportModeSelectTitle}" FontWeight="SemiBold" FontSize="18" Foreground="{DynamicResource Brush.TextPrimary}"/>
+            <TextBlock Text="{conv:Localize ExportModeSelectDesc}" FontSize="12" Foreground="{DynamicResource Brush.TextMuted}" Margin="0,4,0,0"/>
         </StackPanel>
 
         <!-- Mode Cards -->
@@ -28,8 +28,8 @@
 
             <!-- AutoCAD Mode -->
             <Border Grid.Column="0" x:Name="AutoCadCard"
-                    BorderBrush="#1976D2" BorderThickness="2" CornerRadius="8"
-                    Background="White" Padding="16" Margin="0,0,8,0"
+                    BorderBrush="{DynamicResource Brush.Info}" BorderThickness="2" CornerRadius="8"
+                    Background="{DynamicResource Brush.Surface}" Padding="16" Margin="0,0,8,0"
                     Cursor="Hand" MouseLeftButtonDown="AutoCadCard_Click">
                 <Border.Effect>
                     <DropShadowEffect ShadowDepth="2" BlurRadius="8" Opacity="0.12" Direction="270"/>
@@ -37,29 +37,29 @@
                 <StackPanel>
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                         <TextBlock Text="&#x1F3AF;" FontSize="16" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                        <TextBlock Text="{conv:Localize ExportModeAutoCad}" FontWeight="Bold" FontSize="14" Foreground="#1565C0" VerticalAlignment="Center"/>
+                        <TextBlock Text="{conv:Localize ExportModeAutoCad}" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource Brush.Info}" VerticalAlignment="Center"/>
                     </StackPanel>
-                    <Border Background="#4CAF50" CornerRadius="3" Padding="6,2" HorizontalAlignment="Left" Margin="0,0,0,10">
+                    <Border Background="{DynamicResource Brush.Success}" CornerRadius="3" Padding="6,2" HorizontalAlignment="Left" Margin="0,0,0,10">
                         <TextBlock Text="{conv:Localize ExportModeRecommended}" FontSize="11" FontWeight="Bold" Foreground="White"/>
                     </Border>
                     <TextBlock Text="{conv:Localize ExportModeAutoCadFeature1}"
-                               TextWrapping="Wrap" Foreground="#546E7A" FontSize="12" Margin="0,0,0,5"/>
+                               TextWrapping="Wrap" Foreground="{DynamicResource Brush.TextSecondary}" FontSize="12" Margin="0,0,0,5"/>
                     <TextBlock Text="{conv:Localize ExportModeAutoCadFeature2}"
-                               TextWrapping="Wrap" Foreground="#546E7A" FontSize="12" Margin="0,0,0,5"/>
+                               TextWrapping="Wrap" Foreground="{DynamicResource Brush.TextSecondary}" FontSize="12" Margin="0,0,0,5"/>
                     <TextBlock Text="{conv:Localize ExportModeAutoCadFeature3}"
-                               TextWrapping="Wrap" Foreground="#546E7A" FontSize="12" Margin="0,0,0,5"/>
+                               TextWrapping="Wrap" Foreground="{DynamicResource Brush.TextSecondary}" FontSize="12" Margin="0,0,0,5"/>
                     <TextBlock Text="{conv:Localize ExportModeAutoCadFeature4}"
-                               TextWrapping="Wrap" Foreground="#546E7A" FontSize="12" Margin="0,0,0,5"/>
+                               TextWrapping="Wrap" Foreground="{DynamicResource Brush.TextSecondary}" FontSize="12" Margin="0,0,0,5"/>
                     <TextBlock x:Name="AutoCadStatusText"
                                Text="{conv:Localize ExportModeAutoCadWarning}" FontSize="11"
-                               Foreground="#FF9800" Margin="0,8,0,0" FontWeight="Medium"/>
+                               Foreground="{DynamicResource Brush.Warning}" Margin="0,8,0,0" FontWeight="Medium"/>
                 </StackPanel>
             </Border>
 
             <!-- Offline Mode -->
             <Border Grid.Column="1" x:Name="OfflineCard"
-                    BorderBrush="#BDBDBD" BorderThickness="1" CornerRadius="8"
-                    Background="White" Padding="16" Margin="8,0,0,0"
+                    BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1" CornerRadius="8"
+                    Background="{DynamicResource Brush.Surface}" Padding="16" Margin="8,0,0,0"
                     Cursor="Hand" MouseLeftButtonDown="OfflineCard_Click">
                 <Border.Effect>
                     <DropShadowEffect ShadowDepth="2" BlurRadius="8" Opacity="0.08" Direction="270"/>
@@ -67,19 +67,19 @@
                 <StackPanel>
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                         <TextBlock Text="&#x1F4BE;" FontSize="16" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                        <TextBlock Text="{conv:Localize ExportModeOffline}" FontWeight="Bold" FontSize="14" Foreground="#616161" VerticalAlignment="Center"/>
+                        <TextBlock Text="{conv:Localize ExportModeOffline}" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource Brush.TextSecondary}" VerticalAlignment="Center"/>
                     </StackPanel>
-                    <Border Background="#9E9E9E" CornerRadius="3" Padding="6,2" HorizontalAlignment="Left" Margin="0,0,0,10">
+                    <Border Background="{DynamicResource Brush.TextDisabled}" CornerRadius="3" Padding="6,2" HorizontalAlignment="Left" Margin="0,0,0,10">
                         <TextBlock Text="{conv:Localize ExportModeNoAutoCad}" FontSize="11" FontWeight="Bold" Foreground="White"/>
                     </Border>
                     <TextBlock Text="{conv:Localize ExportModeOfflineFeature1}"
-                               TextWrapping="Wrap" Foreground="#757575" FontSize="12" Margin="0,0,0,5"/>
+                               TextWrapping="Wrap" Foreground="{DynamicResource Brush.TextSecondary}" FontSize="12" Margin="0,0,0,5"/>
                     <TextBlock Text="{conv:Localize ExportModeOfflineFeature2}"
-                               TextWrapping="Wrap" Foreground="#757575" FontSize="12" Margin="0,0,0,5"/>
+                               TextWrapping="Wrap" Foreground="{DynamicResource Brush.TextSecondary}" FontSize="12" Margin="0,0,0,5"/>
                     <TextBlock Text="{conv:Localize ExportModeOfflineFeature3}"
-                               TextWrapping="Wrap" Foreground="#757575" FontSize="12" Margin="0,0,0,5"/>
+                               TextWrapping="Wrap" Foreground="{DynamicResource Brush.TextSecondary}" FontSize="12" Margin="0,0,0,5"/>
                     <TextBlock Text="{conv:Localize ExportModeOfflineFeature4}"
-                               TextWrapping="Wrap" Foreground="#757575" FontSize="12" Margin="0,0,0,5"/>
+                               TextWrapping="Wrap" Foreground="{DynamicResource Brush.TextSecondary}" FontSize="12" Margin="0,0,0,5"/>
                 </StackPanel>
             </Border>
         </Grid>
@@ -87,7 +87,7 @@
         <!-- Bottom -->
         <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
             <Button Content="{conv:Localize BtnCancel}" Width="80" Height="32" Margin="0,0,0,0" Click="Cancel_Click"
-                    Background="#F5F5F5" BorderBrush="#E0E0E0" BorderThickness="1" Cursor="Hand"/>
+                    Background="{DynamicResource Brush.BackgroundAlt}" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1" Cursor="Hand"/>
         </StackPanel>
     </Grid>
 </Window>

@@ -93,7 +93,7 @@ public partial class LogViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Failed to export logs: {ex.Message}", "Export Error",
+            MessageBox.Show($"Failed to export logs: {ex.Message.Replace('\\', '/')}", "Export Error",
                 MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }

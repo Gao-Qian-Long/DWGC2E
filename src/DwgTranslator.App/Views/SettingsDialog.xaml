@@ -5,7 +5,7 @@
         Title="{conv:Localize SettingsTitle}" Height="620" Width="580"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize"
-        Background="#F0F4F8">
+        Background="{DynamicResource Brush.Background}">
     <Window.Resources>
         <DropShadowEffect x:Key="CardShadow" ShadowDepth="1" BlurRadius="4" Opacity="0.1" Direction="270"/>
     </Window.Resources>
@@ -27,7 +27,7 @@
             <StackPanel>
                 <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
                     <TextBlock Text="&#x1F512;" FontSize="14" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                    <TextBlock Text="{conv:Localize SettingsApiSection}" FontWeight="Bold" FontSize="14" Foreground="#1976D2"/>
+                    <TextBlock Text="{conv:Localize SettingsApiSection}" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource Brush.TextPrimary}"/>
                 </StackPanel>
 
                 <Grid Margin="0,0,0,8">
@@ -36,9 +36,9 @@
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    <TextBlock Text="{conv:Localize SettingsApiKey}" VerticalAlignment="Center" Foreground="#546E7A"/>
-                    <PasswordBox x:Name="ApiKeyBox" Grid.Column="1" Padding="6,4" VerticalContentAlignment="Center" BorderBrush="#E0E0E0"/>
-                    <TextBox x:Name="ApiKeyTextBox" Grid.Column="1" Padding="6,4" VerticalContentAlignment="Center" BorderBrush="#E0E0E0"
+                    <TextBlock Text="{conv:Localize SettingsApiKey}" VerticalAlignment="Center" Foreground="{DynamicResource Brush.TextSecondary}"/>
+                    <PasswordBox x:Name="ApiKeyBox" Grid.Column="1" Padding="6,4" VerticalContentAlignment="Center" BorderBrush="{DynamicResource Brush.Border}"/>
+                    <TextBox x:Name="ApiKeyTextBox" Grid.Column="1" Padding="6,4" VerticalContentAlignment="Center" BorderBrush="{DynamicResource Brush.Border}"
                              Visibility="Collapsed" FontFamily="Consolas" FontSize="12"/>
                     <Button x:Name="ToggleApiKeyVisibility" Grid.Column="2" Content="{conv:Localize BtnShow}" Width="50" Height="26" Margin="5,0,0,0"
                             Click="ToggleApiKeyVisibility_Click" FontSize="10" Cursor="Hand"/>
@@ -49,8 +49,8 @@
                         <ColumnDefinition Width="80"/>
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
-                    <TextBlock Text="{conv:Localize SettingsApiUrl}" VerticalAlignment="Center" Foreground="#546E7A"/>
-                    <TextBox x:Name="BaseUrlBox" Grid.Column="1" Padding="6,4" VerticalContentAlignment="Center" BorderBrush="#E0E0E0"/>
+                    <TextBlock Text="{conv:Localize SettingsApiUrl}" VerticalAlignment="Center" Foreground="{DynamicResource Brush.TextSecondary}"/>
+                    <TextBox x:Name="BaseUrlBox" Grid.Column="1" Padding="6,4" VerticalContentAlignment="Center" BorderBrush="{DynamicResource Brush.Border}"/>
                 </Grid>
 
                 <Grid Margin="0,0,0,4">
@@ -59,10 +59,10 @@
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    <TextBlock Text="{conv:Localize SettingsModel}" VerticalAlignment="Center" Foreground="#546E7A"/>
-                    <TextBox x:Name="ModelBox" Grid.Column="1" Padding="6,4" VerticalContentAlignment="Center" BorderBrush="#E0E0E0"/>
+                    <TextBlock Text="{conv:Localize SettingsModel}" VerticalAlignment="Center" Foreground="{DynamicResource Brush.TextSecondary}"/>
+                    <TextBox x:Name="ModelBox" Grid.Column="1" Padding="6,4" VerticalContentAlignment="Center" BorderBrush="{DynamicResource Brush.Border}"/>
                     <Button Grid.Column="2" Content="{conv:Localize BtnTestConnection}" Width="75" Height="26" Margin="5,0,0,0" Click="TestConnection_Click"
-                            Background="#1976D2" Foreground="White" BorderThickness="0" Cursor="Hand" FontSize="11"/>
+                            Background="{DynamicResource Brush.Primary}" Foreground="White" BorderThickness="0" Cursor="Hand" FontSize="11"/>
                 </Grid>
 
                 <TextBlock x:Name="ResultText" Text="" FontSize="11" Margin="80,2,0,0"/>
@@ -75,7 +75,7 @@
             <StackPanel>
                 <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
                     <TextBlock Text="&#x1F4BE;" FontSize="14" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                    <TextBlock Text="{conv:Localize SettingsAutoCadSection}" FontWeight="Bold" FontSize="14" Foreground="#1976D2"/>
+                    <TextBlock Text="{conv:Localize SettingsAutoCadSection}" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource Brush.TextPrimary}"/>
                 </StackPanel>
 
                 <Grid Margin="0,0,0,8">
@@ -84,8 +84,8 @@
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    <TextBlock Text="{conv:Localize SettingsInstallPath}" VerticalAlignment="Center" Foreground="#546E7A"/>
-                    <TextBox x:Name="AutoCadPathBox" Grid.Column="1" Padding="6,4" VerticalContentAlignment="Center" Margin="0,0,5,0" BorderBrush="#E0E0E0"/>
+                    <TextBlock Text="{conv:Localize SettingsInstallPath}" VerticalAlignment="Center" Foreground="{DynamicResource Brush.TextSecondary}"/>
+                    <TextBox x:Name="AutoCadPathBox" Grid.Column="1" Padding="6,4" VerticalContentAlignment="Center" Margin="0,0,5,0" BorderBrush="{DynamicResource Brush.Border}"/>
                     <StackPanel Grid.Column="2" Orientation="Horizontal">
                         <Button Content="{conv:Localize BtnBrowse}" Width="50" Height="26" Margin="0,0,3,0" Click="BrowseAutoCad_Click" Cursor="Hand" FontSize="11"/>
                         <Button Content="{conv:Localize BtnAutoDetect}" Width="70" Height="26" Click="DetectAutoCad_Click" Cursor="Hand" FontSize="11"/>
@@ -98,13 +98,13 @@
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    <TextBlock Text="{conv:Localize SettingsPluginPath}" VerticalAlignment="Center" Foreground="#546E7A"/>
-                    <TextBox x:Name="CadPluginPathBox" Grid.Column="1" Padding="6,4" VerticalContentAlignment="Center" Margin="0,0,5,0" BorderBrush="#E0E0E0"/>
+                    <TextBlock Text="{conv:Localize SettingsPluginPath}" VerticalAlignment="Center" Foreground="{DynamicResource Brush.TextSecondary}"/>
+                    <TextBox x:Name="CadPluginPathBox" Grid.Column="1" Padding="6,4" VerticalContentAlignment="Center" Margin="0,0,5,0" BorderBrush="{DynamicResource Brush.Border}"/>
                     <Button Grid.Column="2" Content="{conv:Localize BtnBrowse}" Width="50" Height="26" Click="BrowseCadPlugin_Click" Cursor="Hand" FontSize="11"/>
                 </Grid>
 
                 <TextBlock x:Name="AutoCadStatusText" Text="" FontSize="11" Margin="80,2,0,0"
-                           Foreground="Gray" TextWrapping="Wrap" VerticalAlignment="Top"/>
+                           Foreground="{DynamicResource Brush.TextMuted}" TextWrapping="Wrap" VerticalAlignment="Top"/>
             </StackPanel>
         </Border>
 
@@ -114,14 +114,14 @@
             <StackPanel>
                 <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
                     <TextBlock Text="&#x1F4CB;" FontSize="14" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                    <TextBlock Text="{conv:Localize SettingsLogSection}" FontWeight="Bold" FontSize="14" Foreground="#1976D2"/>
+                    <TextBlock Text="{conv:Localize SettingsLogSection}" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource Brush.TextPrimary}"/>
                 </StackPanel>
 
                 <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="{conv:Localize SettingsLogLevel}" Width="80" VerticalAlignment="Center" Foreground="#546E7A"/>
+                    <TextBlock Text="{conv:Localize SettingsLogLevel}" Width="80" VerticalAlignment="Center" Foreground="{DynamicResource Brush.TextSecondary}"/>
                     <ComboBox x:Name="LogLevelComboBox" Width="160" Height="28" FontSize="12"
                               VerticalContentAlignment="Center"/>
-                    <TextBlock Text="{conv:Localize SettingsLogLevelNote}" VerticalAlignment="Center" Foreground="#90A4AE" FontSize="11" Margin="8,0,0,0"/>
+                    <TextBlock Text="{conv:Localize SettingsLogLevelNote}" VerticalAlignment="Center" Foreground="{DynamicResource Brush.TextMuted}" FontSize="11" Margin="8,0,0,0"/>
                 </StackPanel>
             </StackPanel>
         </Border>
@@ -135,9 +135,9 @@
         <!-- Footer -->
         <StackPanel Grid.Row="6" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,4,0,0">
             <Button Content="{conv:Localize BtnSave}" Width="80" Height="32" Margin="0,0,10,0" Click="Save_Click"
-                    Background="#1976D2" Foreground="White" FontWeight="SemiBold" BorderThickness="0" Cursor="Hand"/>
+                    Background="{DynamicResource Brush.Primary}" Foreground="White" FontWeight="SemiBold" BorderThickness="0" Cursor="Hand"/>
             <Button Content="{conv:Localize BtnCancel}" Width="80" Height="32" Click="Cancel_Click"
-                    Background="#F5F5F5" BorderBrush="#E0E0E0" BorderThickness="1" Cursor="Hand"/>
+                    Background="{DynamicResource Brush.BackgroundAlt}" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1" Cursor="Hand"/>
         </StackPanel>
     </Grid>
     </ScrollViewer>
