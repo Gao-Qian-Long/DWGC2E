@@ -129,6 +129,12 @@ internal static class DwgTextReplacer
             {
                 case CadText textEntity when entity is not CadMText:
                     textEntity.Value = translatedText;
+                    // Restore original text height before font mapping and scaling.
+                    // Font mapping may change the text style, which could alter the
+                    // entity's effective height. Explicitly resetting to the
+                    // extraction-time height guarantees the scaling baseline is correct.
+                    if (originalHeight > 0)
+                        textEntity.Height = originalHeight;
                     DwgFontManager.ApplyFontMapping(textEntity, ourEntity.TextStyleName, cnToEn, doc);
                     DwgTextScaler.ApplyScaling(textEntity, translatedText, ourEntity);
                     if (frames.Count > 0 && originalHeight > 0)
@@ -137,6 +143,10 @@ internal static class DwgTextReplacer
 
                 case CadMText mtext:
                     mtext.Value = translatedText.Replace("\r\n", "\\P").Replace("\n", "\\P").Replace("\r", "\\P");
+                    // Restore original text height before font mapping and scaling.
+                    // Same rationale as CadText above.
+                    if (originalHeight > 0)
+                        mtext.Height = originalHeight;
                     DwgFontManager.ApplyFontMapping(mtext, ourEntity.TextStyleName, cnToEn, doc);
                     DwgTextScaler.ApplyScaling(mtext, translatedText, ourEntity);
                     if (frames.Count > 0 && originalHeight > 0)

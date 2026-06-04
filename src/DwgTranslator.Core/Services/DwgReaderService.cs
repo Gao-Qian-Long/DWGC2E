@@ -190,6 +190,7 @@ public class DwgReaderService : IDwgReaderService, IDxfReaderService
         Rotation = dim.TextRotation,
         TextStyleName = dim.Style?.Name ?? "Standard", BlockName = blockName, IsXref = false,
         Position = new Point3d(dim.TextMiddlePoint.X, dim.TextMiddlePoint.Y, dim.TextMiddlePoint.Z),
+        OriginalHeight = dim.Style?.TextHeight > 0 ? dim.Style.TextHeight : 2.5,
         OriginalWidth = 0
     };
 
@@ -210,6 +211,7 @@ public class DwgReaderService : IDwgReaderService, IDxfReaderService
             Rotation = ctx.TextRotation, TextStyleName = ctx.TextStyle?.Name ?? "Standard",
             BlockName = blockName, IsXref = false,
             Position = new Point3d(ctx.TextLocation.X, ctx.TextLocation.Y, ctx.TextLocation.Z),
+            OriginalHeight = textHeight,
             OriginalWidth = 0
         });
         return entities;
@@ -224,6 +226,7 @@ public class DwgReaderService : IDwgReaderService, IDxfReaderService
         EntityType = "AttributeReference", Height = att.Height, Rotation = att.Rotation,
         TextStyleName = att.Style?.Name ?? "Standard", BlockName = blockName, IsXref = false,
         Position = new Point3d(att.InsertPoint.X, att.InsertPoint.Y, att.InsertPoint.Z),
+        OriginalHeight = att.Height,
         OriginalWidth = EstimateTextWidth(att.Value ?? string.Empty, att.Height)
     };
 
