@@ -140,7 +140,7 @@ internal static class DwgCollisionDetector
                 return;
         }
 
-        double minHeight = originalHeight * 0.50;
+        double minHeight = originalHeight * 0.75;
         if (currentHeight <= minHeight) return;
 
         // Proportional collision margin (matches online path: originalHeight * 0.65)

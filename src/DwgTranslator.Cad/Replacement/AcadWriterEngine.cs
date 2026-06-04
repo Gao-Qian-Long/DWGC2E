@@ -266,7 +266,7 @@ public class AcadWriterEngine
             if (newWidth > originalWidth)
             {
                 double scale = originalWidth / newWidth;
-                if (scale < 0.5) scale = 0.5;
+                if (scale < 0.85) scale = 0.85;
                 double newHeight = originalHeight * scale;
                 text.Height = newHeight;
             }
@@ -338,7 +338,7 @@ public class AcadWriterEngine
                     {
                         double scale = originalTotalHeight / translatedTotalHeight;
                         double newHeight = currentHeight * scale;
-                        double minHeight = originalHeight * 0.50;
+                        double minHeight = originalHeight * 0.85;
                         if (newHeight < minHeight) newHeight = minHeight;
                         if (newHeight < currentHeight)
                             mtext.TextHeight = newHeight;

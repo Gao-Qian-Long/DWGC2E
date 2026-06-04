@@ -8,7 +8,7 @@ namespace DwgTranslator.Cad.Replacement;
 /// </summary>
 public static class CollisionDetector
 {
-    public const double MinCollisionAvoidanceScale = 0.5;
+    public const double MinCollisionAvoidanceScale = 0.75;
     private const int BinarySearchIterations = 12;
 
     public static Extents3d? FindClosestFrame(Point3d point, List<Extents3d> frames)

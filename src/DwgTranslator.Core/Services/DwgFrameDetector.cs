@@ -289,7 +289,7 @@ internal static class DwgFrameDetector
             {
                 double currentHeight = getHeight(entity);
                 double newHeight = currentHeight * scale;
-                double minHeight = originalHeight * 0.4;
+                double minHeight = originalHeight * 0.75;
                 if (newHeight < minHeight) newHeight = minHeight;
                 setHeight(entity, newHeight);
                 Log.Debug("Frame-boundary scaling: {Type} {Handle} scaled by {Scale:F2} (height {Old:F2} -> {New:F2})",

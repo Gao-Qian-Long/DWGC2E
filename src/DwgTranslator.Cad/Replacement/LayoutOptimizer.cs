@@ -243,7 +243,7 @@ public static class LayoutOptimizer
                 {
                     double overflowRatio = CollisionDetector.ComputeOverflowRatio(bounds, frame.Value);
                     double scale = 1.0 / (1.0 + overflowRatio);
-                    if (scale < 0.5) scale = 0.5;
+                    if (scale < 0.75) scale = 0.75;
                     dbText.Height *= scale;
                     dbText.RecordGraphicsModified(true);
 
@@ -255,7 +255,7 @@ public static class LayoutOptimizer
                         {
                             double ratio2 = CollisionDetector.ComputeOverflowRatio(newBounds, frame.Value);
                             double scale2 = 1.0 / (1.0 + ratio2);
-                            if (scale2 < 0.5) scale2 = 0.5;
+                            if (scale2 < 0.75) scale2 = 0.75;
                             dbText.Height *= scale2;
                         }
                     }

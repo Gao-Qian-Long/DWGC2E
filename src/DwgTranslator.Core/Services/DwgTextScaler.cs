@@ -34,7 +34,7 @@ internal static class DwgTextScaler
             if (newWidth > originalWidth)
             {
                 double scale = originalWidth / newWidth;
-                if (scale < 0.5) scale = 0.5; // keep at least 50% of original height
+                if (scale < 0.85) scale = 0.85; // keep at least 85% of original height
                 double newHeight = originalHeight * scale;
                 double oldHeight = textEntity.Height;
                 textEntity.Height = newHeight;
@@ -149,7 +149,7 @@ internal static class DwgTextScaler
                     {
                         double scale = originalTotalHeight / translatedTotalHeight;
                         double newHeight = currentHeight * scale;
-                        double minHeight = originalHeight * 0.50;
+                        double minHeight = originalHeight * 0.85;
                         if (newHeight < minHeight) newHeight = minHeight;
                         if (newHeight < currentHeight)
                         {
