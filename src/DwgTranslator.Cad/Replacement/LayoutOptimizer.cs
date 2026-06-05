@@ -35,6 +35,8 @@ public static class LayoutOptimizer
         double originalLineSpacing = ourEntity.MTextLineSpacing > 0 ? ourEntity.MTextLineSpacing : 1.0;
         double originalRectWidth = ourEntity.MTextRectangleWidth;
 
+        mtext.ColumnType = ColumnType.NoColumns;
+
         // Preserve original line spacing
         if (ourEntity.MTextLineSpacing > 0)
             mtext.LineSpacingFactor = ourEntity.MTextLineSpacing;

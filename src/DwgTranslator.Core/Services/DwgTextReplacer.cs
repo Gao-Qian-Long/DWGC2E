@@ -136,6 +136,8 @@ internal static class DwgTextReplacer
 
                 case CadMText mtext:
                     mtext.Value = translatedText.Replace("\r\n", "\\P").Replace("\n", "\\P").Replace("\r", "\\P");
+                    if (mtext.HasColumns && mtext.ColumnData != null)
+                        mtext.ColumnData.ColumnType = ACadSharp.Entities.ColumnType.NoColumns;
                     if (originalHeight > 0)
                         mtext.Height = originalHeight;
                     DwgFontManager.ApplyFontMapping(mtext, ourEntity.TextStyleName, cnToEn, doc);

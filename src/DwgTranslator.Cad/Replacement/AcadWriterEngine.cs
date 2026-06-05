@@ -1,8 +1,17 @@
 using Autodesk.AutoCAD.DatabaseServices;
+using Autodesk.AutoCAD.Geometry;
 using DwgTranslator.Core.Models;
 using DwgTranslator.Cad;
+using DwgTranslator.Cad.Replacement;
 
 namespace DwgTranslator.Cad.Replacement;
+
+internal class ReplacedEntityInfo
+{
+    public ObjectId EntityId { get; set; }
+    public double OriginalHeight { get; set; }
+    public BlockTableRecord? OwningBtr { get; set; }
+}
 
 /// <summary>
 /// High-precision DWG writeback engine using AutoCAD .NET API.
@@ -71,12 +80,13 @@ public class AcadWriterEngine
 
             int successCount = 0;
             var unprocessed = new HashSet<string>(entityMap.Keys, StringComparer.OrdinalIgnoreCase);
+            var replacedEntities = new List<ReplacedEntityInfo>();
 
             // Model space
             var modelSpaceId = SymbolUtilityServices.GetBlockModelSpaceId(db);
             var modelSpace = (BlockTableRecord)tr.GetObject(modelSpaceId, OpenMode.ForWrite);
             var errors = new List<string>();
-            successCount += ProcessBlockTableRecord(modelSpace, tr, entityMap, unprocessed, cnToEn, errors);
+            successCount += ProcessBlockTableRecord(modelSpace, tr, entityMap, unprocessed, cnToEn, errors, replacedEntities);
             result.Errors.AddRange(errors);
 
             // Paper space layouts and user blocks
@@ -93,7 +103,7 @@ public class AcadWriterEngine
                 {
                     if (isPaperSpace || (!btr.IsAnonymous && !name.StartsWith("*")))
                     {
-                        successCount += ProcessBlockTableRecord(btr, tr, entityMap, unprocessed, cnToEn, errors);
+                        successCount += ProcessBlockTableRecord(btr, tr, entityMap, unprocessed, cnToEn, errors, replacedEntities);
                     }
                 }
             }
@@ -104,6 +114,66 @@ public class AcadWriterEngine
             if (unprocessed.Count > 0)
                 Log.Warning("AcadWriter: skipped {Count} unmatched entities", unprocessed.Count);
 
+            // Phase 1: Per-entity collision resolution
+            int resolvedCount = 0;
+            int collisionCount = 0;
+            foreach (var info in replacedEntities)
+            {
+                if (!info.EntityId.IsValid || info.OwningBtr == null) continue;
+                try
+                {
+                    var ent = tr.GetObject(info.EntityId, OpenMode.ForWrite) as Entity;
+                    if (ent == null) continue;
+                    collisionCount++;
+                    if (CollisionResolver.Resolve(ent, info.OwningBtr, tr, db, info.OriginalHeight, out var newEntityId))
+                    {
+                        resolvedCount++;
+                        if (newEntityId.HasValue)
+                            info.EntityId = newEntityId.Value;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Warning(ex, "Phase 1 collision resolution failed for {Handle}", info.EntityId.Handle);
+                }
+            }
+
+            if (collisionCount > 0)
+                Log.Information("Phase 1 collision resolution: {Resolved}/{Total} entities resolved",
+                    resolvedCount, collisionCount);
+
+            // Phase 2: Global verification pass (precise IntersectWith)
+            int reResolved = 0;
+            foreach (var info in replacedEntities)
+            {
+                if (!info.EntityId.IsValid || info.OwningBtr == null) continue;
+                try
+                {
+                    var ent = tr.GetObject(info.EntityId, OpenMode.ForWrite) as Entity;
+                    if (ent == null) continue;
+                    ent.RecordGraphicsModified(true);
+                    ent.RecordGraphicsModified(true);
+
+                    var nearbyEntities = CollisionDetector.CollectNearbyEntities(ent, info.OwningBtr, tr, info.OriginalHeight);
+                    if (CollisionDetector.HasAnyCollision(ent, nearbyEntities))
+                    {
+                        if (CollisionResolver.Resolve(ent, info.OwningBtr, tr, db, info.OriginalHeight, out var newEntityId2))
+                        {
+                            reResolved++;
+                            if (newEntityId2.HasValue)
+                                info.EntityId = newEntityId2.Value;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Warning(ex, "Phase 2 verification failed for {Handle}", info.EntityId.Handle);
+                }
+            }
+
+            if (reResolved > 0)
+                Log.Information("Phase 2 verification: {Count} additional entities resolved", reResolved);
+
             tr.Commit();
         }
     }
@@ -111,7 +181,7 @@ public class AcadWriterEngine
     private int ProcessBlockTableRecord(
         BlockTableRecord btr, Transaction tr,
         Dictionary<string, TextEntity> entityMap, HashSet<string> unprocessed,
-        bool cnToEn, List<string> errors)
+        bool cnToEn, List<string> errors, List<ReplacedEntityInfo> replacedEntities)
     {
         int count = 0;
         foreach (ObjectId id in btr)
@@ -137,6 +207,12 @@ public class AcadWriterEngine
                 {
                     count++;
                     unprocessed.Remove(handleStr);
+                    replacedEntities.Add(new ReplacedEntityInfo
+                    {
+                        EntityId = entity.ObjectId,
+                        OriginalHeight = textEntity.OriginalHeight > 0 ? textEntity.OriginalHeight : textEntity.Height,
+                        OwningBtr = btr
+                    });
                 }
             }
 
@@ -155,9 +231,16 @@ public class AcadWriterEngine
                     {
                         try
                         {
+                            var origAttHeight = att.Height;
                             att.TextString = attEntity.TranslatedText;
                             count++;
                             unprocessed.Remove(compoundHandle);
+                            replacedEntities.Add(new ReplacedEntityInfo
+                            {
+                                EntityId = att.ObjectId,
+                                OriginalHeight = origAttHeight > 0 ? origAttHeight : 2.5,
+                                OwningBtr = btr
+                            });
                         }
                         catch (Exception ex)
                         {
@@ -204,6 +287,13 @@ public class AcadWriterEngine
                         .Replace("\r\n", "\\P")
                         .Replace("\n", "\\P")
                         .Replace("\r", "\\P");
+
+                    mtext.ColumnType = ColumnType.NoColumns;
+
+                    bool translatedIsSingleLine = !mtext.Contents.Contains("\\P");
+                    bool originalHadFixedWidth = ourEntity.MTextRectangleWidth > 0;
+                    if (translatedIsSingleLine && originalHadFixedWidth)
+                        mtext.Width = 0;
 
                     // Restore original text height
                     if (ourEntity.Height > 0)

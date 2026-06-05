@@ -124,6 +124,8 @@ public class TextReplacer
         mText.Contents = entity.TranslatedText
             .Replace("\r\n", "\\P").Replace("\n", "\\P").Replace("\r", "\\P");
 
+        mText.ColumnType = ColumnType.NoColumns;
+
         MapTextStyle(mText.TextStyleId, db);
         mText.RecordGraphicsModified(true);
 
