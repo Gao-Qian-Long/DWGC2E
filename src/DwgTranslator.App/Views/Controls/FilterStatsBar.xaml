@@ -3,94 +3,81 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:conv="clr-namespace:DwgTranslator.App.Converters">
 
-    <Border Style="{StaticResource ContentCard}" Padding="10,8">
+    <Border Background="{DynamicResource Brush.Surface}"
+            BorderBrush="{DynamicResource Brush.Border}"
+            BorderThickness="0,0,0,1"
+            Padding="12,8">
         <Grid>
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
 
-            <!-- Left: Filter + Search -->
-            <StackPanel Grid.Column="0" Orientation="Horizontal">
-                <TextBlock Text="{conv:Localize StatsFilter}" VerticalAlignment="Center" Margin="0,0,6,0"
-                           FontSize="12" Foreground="{DynamicResource Brush.TextSecondary}"/>
-                <ComboBox ItemsSource="{Binding FilterOptions}"
-                          SelectedItem="{Binding FilterStatusText, UpdateSourceTrigger=PropertyChanged}"
-                          Width="95" Height="28" Margin="0,0,10,0" FontSize="12"
-                          Background="{DynamicResource Brush.Background}"
-                          BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1"/>
+            <!-- Left: Inline stats -->
+            <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                <TextBlock VerticalAlignment="Center" FontSize="13" Margin="0,0,4,0">
+                    <Run Text="{conv:Localize StatsTotal}" Foreground="{DynamicResource Brush.TextMuted}"/>
+                    <Run Text="{Binding TotalCount, Mode=OneWay}" Foreground="{DynamicResource Brush.TextPrimary}"
+                         FontFamily="Consolas" FontWeight="SemiBold"/>
+                </TextBlock>
 
-                <TextBlock Text="{conv:Localize StatsSearch}" VerticalAlignment="Center" Margin="0,0,6,0"
-                           FontSize="12" Foreground="{DynamicResource Brush.TextSecondary}"/>
-                <Border Background="{DynamicResource Brush.Background}" BorderBrush="{DynamicResource Brush.Border}"
-                        BorderThickness="1" CornerRadius="4" Padding="0">
-                    <TextBox Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" Width="170" Height="28"
-                             ToolTip="{conv:Localize TipSearch}" FontSize="12" VerticalContentAlignment="Center"
-                             Padding="6,0" Background="Transparent" BorderThickness="0"/>
-                </Border>
-                <Button Content="{conv:Localize BtnFind}" Command="{Binding ApplySearchCommand}"
-                        Padding="8,4" Margin="6,0,0,0"
-                        Style="{StaticResource ToolButton}" FontSize="11.5"/>
+                <TextBlock Text="&#x2002;" Margin="2,0"/>
+
+                <TextBlock VerticalAlignment="Center" FontSize="13" Margin="0,0,4,0">
+                    <Run Text="&#x2713;" Foreground="{DynamicResource Brush.Success}"/>
+                    <Run Text="{Binding TranslatedCount, Mode=OneWay}" Foreground="{DynamicResource Brush.Success}"
+                         FontFamily="Consolas" FontWeight="SemiBold"/>
+                </TextBlock>
+
+                <TextBlock Text="&#x2002;" Margin="2,0"/>
+
+                <TextBlock VerticalAlignment="Center" FontSize="13" Margin="0,0,4,0">
+                    <Run Text="&#x26A0;" Foreground="{DynamicResource Brush.Danger}"/>
+                    <Run Text="{Binding FailedCount, Mode=OneWay}" Foreground="{DynamicResource Brush.Danger}"
+                         FontFamily="Consolas" FontWeight="SemiBold"/>
+                </TextBlock>
+
+                <TextBlock Text="&#x2002;" Margin="2,0"/>
+
+                <TextBlock VerticalAlignment="Center" FontSize="13" Margin="0,0,4,0">
+                    <Run Text="&#x1F4D6;" Foreground="{DynamicResource Brush.Info}"/>
+                    <Run Text="{Binding GlossaryHitCount, Mode=OneWay}" Foreground="{DynamicResource Brush.Info}"
+                         FontFamily="Consolas" FontWeight="SemiBold"/>
+                </TextBlock>
+
+                <TextBlock Text="&#xB7;" Margin="4,0" Foreground="{DynamicResource Brush.TextMuted}" VerticalAlignment="Center"/>
+
+                <TextBlock VerticalAlignment="Center" FontSize="13">
+                    <Run Text="{conv:Localize StatsCache}" Foreground="{DynamicResource Brush.TextMuted}"/>
+                    <Run Text="{Binding CacheHitCount, Mode=OneWay}" Foreground="{DynamicResource Brush.TextMuted}"
+                         FontFamily="Consolas" FontWeight="SemiBold"/>
+                </TextBlock>
             </StackPanel>
 
             <!-- Separator -->
             <Border Grid.Column="1" Width="1" Height="20"
                     Background="{DynamicResource Brush.Border}"
-                    Margin="12,0" HorizontalAlignment="Left" VerticalAlignment="Center"/>
+                    Margin="10,0" VerticalAlignment="Center"/>
 
-            <!-- Right: Stats badges + license -->
-            <StackPanel Grid.Column="2" Orientation="Horizontal">
-                <Border Background="{DynamicResource Brush.PrimaryLight}" CornerRadius="4" Padding="6,3" Margin="0,0,5,0">
-                    <TextBlock FontSize="11" VerticalAlignment="Center">
-                        <Run Text="{conv:Localize StatsTotal}" Foreground="{DynamicResource Brush.TextMuted}"/>
-                        <Run Text="{Binding TotalCount}" FontWeight="SemiBold" Foreground="{DynamicResource Brush.Primary}"/>
-                    </TextBlock>
+            <!-- Right: Search + Filter -->
+            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                <Border Background="{DynamicResource Brush.Background}"
+                        BorderBrush="{DynamicResource Brush.Border}"
+                        BorderThickness="1" CornerRadius="4" Padding="0" Margin="0,0,6,0">
+                    <TextBox x:Name="SearchBox"
+                             Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                             Width="200" Height="30"
+                             ToolTip="{conv:Localize TipSearch}" FontSize="13"
+                             VerticalContentAlignment="Center"
+                             Padding="8,0" Background="Transparent" BorderThickness="0"
+                             KeyDown="SearchBox_KeyDown"/>
                 </Border>
-                <Border Background="{DynamicResource Brush.SuccessLight}" CornerRadius="4" Padding="6,3" Margin="0,0,5,0">
-                    <TextBlock FontSize="11" VerticalAlignment="Center">
-                        <Run Text="{conv:Localize StatsTranslated}" Foreground="{DynamicResource Brush.TextMuted}"/>
-                        <Run Text="{Binding TranslatedCount}" FontWeight="SemiBold" Foreground="{DynamicResource Brush.Success}"/>
-                    </TextBlock>
-                </Border>
-                <Border Background="{DynamicResource Brush.DangerLight}" CornerRadius="4" Padding="6,3" Margin="0,0,5,0">
-                    <TextBlock FontSize="11" VerticalAlignment="Center">
-                        <Run Text="{conv:Localize StatsFailed}" Foreground="{DynamicResource Brush.TextMuted}"/>
-                        <Run Text="{Binding FailedCount}" FontWeight="SemiBold" Foreground="{DynamicResource Brush.Danger}"/>
-                    </TextBlock>
-                </Border>
-                <Border Background="{DynamicResource Brush.InfoLight}" CornerRadius="4" Padding="6,3" Margin="0,0,5,0">
-                    <TextBlock FontSize="11" VerticalAlignment="Center">
-                        <Run Text="{conv:Localize StatsGlossary}" Foreground="{DynamicResource Brush.TextMuted}"/>
-                        <Run Text="{Binding GlossaryHitCount}" FontWeight="SemiBold" Foreground="{DynamicResource Brush.Info}"/>
-                    </TextBlock>
-                </Border>
-                <Border Background="{DynamicResource Brush.PrimaryLight}" CornerRadius="4" Padding="6,3" Margin="0,0,5,0">
-                    <TextBlock FontSize="11" VerticalAlignment="Center">
-                        <Run Text="{conv:Localize StatsCache}" Foreground="{DynamicResource Brush.TextMuted}"/>
-                        <Run Text="{Binding CacheHitCount}" FontWeight="SemiBold" Foreground="{DynamicResource Brush.TextSecondary}"/>
-                    </TextBlock>
-                </Border>
-                <Border Background="{DynamicResource Brush.PrimaryLight}" CornerRadius="4" Padding="6,3" Margin="0,0,8,0">
-                    <TextBlock FontSize="11" VerticalAlignment="Center">
-                        <Run Text="{conv:Localize StatsVisible}" Foreground="{DynamicResource Brush.TextMuted}"/>
-                        <Run Text="{Binding VisibleCount}" FontWeight="SemiBold" Foreground="{DynamicResource Brush.Primary}"/>
-                    </TextBlock>
-                </Border>
-
-                <!-- Separator -->
-                <Border Width="1" Height="20" Background="{DynamicResource Brush.Border}"
-                        Margin="0,0,8,0" VerticalAlignment="Center"/>
-
-                <!-- License Status -->
-                <Border Background="{DynamicResource Brush.WarningLight}" CornerRadius="4" Padding="6,3">
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="&#x1F511;" FontSize="11" VerticalAlignment="Center" Margin="0,0,4,0"/>
-                        <TextBlock FontSize="11" FontWeight="SemiBold"
-                                   Foreground="{DynamicResource Brush.Warning}" VerticalAlignment="Center"
-                                   Text="{Binding LicenseStatusText}"/>
-                    </StackPanel>
-                </Border>
+                <ComboBox ItemsSource="{Binding FilterOptions}"
+                          SelectedItem="{Binding FilterStatusText, UpdateSourceTrigger=PropertyChanged}"
+                          Width="90" Height="30" FontSize="13"
+                          Background="{DynamicResource Brush.Background}"
+                          BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1"/>
             </StackPanel>
         </Grid>
     </Border>

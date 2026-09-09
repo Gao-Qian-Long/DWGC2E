@@ -7,27 +7,27 @@
          ============================================================ -->
 
     <!-- ── Primary ── -->
-    <SolidColorBrush x:Key="Brush.Primary"        Color="#4F46E5" />
-    <SolidColorBrush x:Key="Brush.PrimaryHover"   Color="#4338CA" />
-    <SolidColorBrush x:Key="Brush.PrimaryLight"   Color="#EEF2FF" />
+    <SolidColorBrush x:Key="Brush.Primary"        Color="#2563EB" />
+    <SolidColorBrush x:Key="Brush.PrimaryHover"   Color="#1D4ED8" />
+    <SolidColorBrush x:Key="Brush.PrimaryLight"   Color="#EFF6FF" />
 
     <!-- ── Surface ── -->
     <SolidColorBrush x:Key="Brush.Surface"        Color="#FFFFFF" />
-    <SolidColorBrush x:Key="Brush.SurfaceAlt"     Color="#F8FAFC" />
+    <SolidColorBrush x:Key="Brush.SurfaceAlt"     Color="#F1F5F9" />
 
     <!-- ── Background ── -->
-    <SolidColorBrush x:Key="Brush.Background"     Color="#F1F5F9" />
+    <SolidColorBrush x:Key="Brush.Background"     Color="#F8FAFC" />
     <SolidColorBrush x:Key="Brush.BackgroundAlt"  Color="#E2E8F0" />
 
     <!-- ── Text ── -->
     <SolidColorBrush x:Key="Brush.TextPrimary"    Color="#0F172A" />
-    <SolidColorBrush x:Key="Brush.TextSecondary"  Color="#475569" />
-    <SolidColorBrush x:Key="Brush.TextMuted"      Color="#94A3B8" />
-    <SolidColorBrush x:Key="Brush.TextDisabled"   Color="#CBD5E1" />
+    <SolidColorBrush x:Key="Brush.TextSecondary"  Color="#334155" />
+    <SolidColorBrush x:Key="Brush.TextMuted"      Color="#64748B" />
+    <SolidColorBrush x:Key="Brush.TextDisabled"   Color="#94A3B8" />
 
     <!-- ── Border ── -->
-    <SolidColorBrush x:Key="Brush.Border"         Color="#E2E8F0" />
-    <SolidColorBrush x:Key="Brush.BorderLight"    Color="#F1F5F9" />
+    <SolidColorBrush x:Key="Brush.Border"         Color="#CBD5E1" />
+    <SolidColorBrush x:Key="Brush.BorderLight"    Color="#E2E8F0" />
 
     <!-- ── Status: Success ── -->
     <SolidColorBrush x:Key="Brush.Success"        Color="#059669" />
@@ -49,15 +49,15 @@
     <!-- ── Semantic: Title Bar ── -->
     <LinearGradientBrush x:Key="Brush.TitleBarBackground"
                          StartPoint="0,0" EndPoint="1,1">
-        <GradientStop Color="#4F46E5" Offset="0" />
-        <GradientStop Color="#6366F1" Offset="1" />
+        <GradientStop Color="#2563EB" Offset="0" />
+        <GradientStop Color="#3B82F6" Offset="1" />
     </LinearGradientBrush>
 
     <!-- ── Semantic: DataGrid Header ── -->
-    <SolidColorBrush x:Key="Brush.DataGridHeader" Color="#334155" />
+    <SolidColorBrush x:Key="Brush.DataGridHeader" Color="#1E293B" />
 
     <!-- ── Semantic: Status Bar ── -->
-    <SolidColorBrush x:Key="Brush.StatusBar"      Color="#F8FAFC" />
+    <SolidColorBrush x:Key="Brush.StatusBar"      Color="#F1F5F9" />
 
     <!-- ── Semantic: Tool Bar ── -->
     <SolidColorBrush x:Key="Brush.ToolBar"        Color="#FFFFFF" />

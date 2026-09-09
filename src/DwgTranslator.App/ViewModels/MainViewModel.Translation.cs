@@ -18,7 +18,7 @@ public partial class MainViewModel
     {
         if (IsProcessing) return;
 
-        if (!_licenseService.CanExecuteOperation())
+        if (_config.LicensingEnabled && !_licenseService.CanExecuteOperation())
         {
             StatusMessage = Strings.Get("StatusLicenseRequired");
             PromptForActivation();
@@ -26,7 +26,8 @@ public partial class MainViewModel
         }
 
         var entitiesToTranslate = Entities
-            .Where(e => !e.IsXref && e.Status == TranslationStatus.Pending)
+            .Where(e => !e.IsXref && e.Status == TranslationStatus.Pending &&
+                !AttributeTranslationPolicy.IsMetadataHandle(e.Handle))
             .ToList();
 
         if (entitiesToTranslate.Count == 0)
@@ -43,6 +44,7 @@ public partial class MainViewModel
         }
 
         IsProcessing = true;
+        IsTranslating = true;
         OperationLabel = Strings.Get("OperationTranslating");
         IsCancellationRequested = false;
         _cts = new CancellationTokenSource();
@@ -60,21 +62,23 @@ public partial class MainViewModel
             var systemPrompt = LoadSystemPrompt();
             EnsureDeepSeekClient();
 
-            var progress = new Progress<TranslationPair>(pair =>
+            // Build the identity index once rather than scanning all 8,000+ rows
+            // and normalizing their file paths for each progress notification.
+            var entityIndex = entitiesToTranslate
+                .GroupBy(e => (e.Handle.ToUpperInvariant(), NormalizeSourcePath(e.SourceFilePath).ToUpperInvariant()))
+                .ToDictionary(g => g.Key, g => g.ToList());
+            var progress = new DwgTranslator.App.Services.DispatcherProgress<TranslationPair>(
+                Application.Current.Dispatcher, pair =>
             {
-                Application.Current.Dispatcher.BeginInvoke(() =>
-                {
-                    var entity = Entities.FirstOrDefault(e => e.Handle == pair.Handle);
-                    if (entity == null)
-                    {
-                        entity = Entities.FirstOrDefault(e =>
-                            string.Equals(e.Handle, pair.Handle, StringComparison.OrdinalIgnoreCase));
-                    }
-                    if (entity == null) return;
+                    if (!entityIndex.TryGetValue((pair.Handle.ToUpperInvariant(),
+                        NormalizeSourcePath(pair.SourceFilePath).ToUpperInvariant()), out var matchingEntities)) return;
 
+                    foreach (var entity in matchingEntities)
+                    {
                     entity.TranslatedText = pair.TranslatedText;
                     entity.GlossaryHit = pair.GlossaryHit;
                     entity.Status = pair.Status;
+                    }
 
                     Interlocked.Increment(ref completedCount);
 
@@ -91,14 +95,14 @@ public partial class MainViewModel
                     CacheHitCount = _consistencyService.CacheSize;
                     ProgressValue = (double)completedCount / totalCount * 100;
                     StatusMessage = Strings.Get("StatusTranslating", completedCount, totalCount);
-                });
             });
 
             await Task.Run(async () =>
             {
                 var translationService = new TranslationService(
                     _glossaryService, _formatCodeParser, _deepSeekClient!, systemPrompt,
-                    _config.BatchSize, _config.MaxRetryCount, _consistencyService, maxConcurrency: 5);
+                    _config.BatchSize, _config.MaxRetryCount, _consistencyService,
+                    maxConcurrency: _config.MaxTranslationConcurrency);
 
                 await translationService.TranslateBatchWithProgressAsync(
                     entitiesToTranslate, CurrentSourceLang, CurrentTargetLang, progress, _cts.Token);
@@ -107,6 +111,10 @@ public partial class MainViewModel
             ApplyFilter();
             UpdateStatistics();
             StatusMessage = Strings.Get("StatusTranslateComplete", TranslatedCount, FailedCount, LanguageDirection);
+        }
+        catch (TaskCanceledException) when (_cts?.IsCancellationRequested == true)
+        {
+            StatusMessage = Strings.Get("StatusTranslateCancelled");
         }
         catch (TaskCanceledException)
         {
@@ -134,22 +142,27 @@ public partial class MainViewModel
             _cts?.Dispose();
             _cts = null;
             IsProcessing = false;
+            IsTranslating = false;
             IsIndeterminate = false;
             OperationLabel = string.Empty;
             IsCancellationRequested = false;
 
-            _ = Application.Current.Dispatcher.BeginInvoke(() =>
-            {
-                StatusMessage = Strings.Get("StatusTranslateComplete", TranslatedCount, FailedCount, LanguageDirection);
-                UpdateStatistics();
-                ApplyFilter();
-            }, System.Windows.Threading.DispatcherPriority.ContextIdle);
+            UpdateStatistics();
+            ApplyFilter();
         }
+    }
+
+    private static string NormalizeSourcePath(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return string.Empty;
+        try { return Path.GetFullPath(path); }
+        catch { return path.Trim(); }
     }
 
     [RelayCommand]
     private void CancelTranslate()
     {
+        if (!IsTranslating) return;
         IsCancellationRequested = true;
         _cts?.Cancel();
         StatusMessage = Strings.Get("StatusStoppingTranslation");
@@ -158,6 +171,7 @@ public partial class MainViewModel
     [RelayCommand]
     private void CancelExport()
     {
+        if (!IsExporting) return;
         IsCancellationRequested = true;
         _exportCts?.Cancel();
         StatusMessage = Strings.Get("StatusCancellingExport");

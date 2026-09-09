@@ -1,6 +1,18 @@
+#if GSTARCAD
+using Gssoft.Gscad.ApplicationServices;
+#else
 using Autodesk.AutoCAD.ApplicationServices;
+#endif
+#if GSTARCAD
+using Gssoft.Gscad.EditorInput;
+#else
 using Autodesk.AutoCAD.EditorInput;
+#endif
+#if GSTARCAD
+using Gssoft.Gscad.Runtime;
+#else
 using Autodesk.AutoCAD.Runtime;
+#endif
 using System.Reflection;
 
 namespace DwgTranslator.Cad.Commands;
@@ -16,7 +28,7 @@ namespace DwgTranslator.Cad.Commands;
 public class Initializer : IExtensionApplication
 {
     /// <summary>
-    /// Static constructor — runs when the type is first accessed, BEFORE Initialize().
+    /// Static constructor 鈥?runs when the type is first accessed, BEFORE Initialize().
     /// This ensures AssemblyResolve is registered early enough to resolve dependency
     /// assembly version conflicts (e.g. Serilog 4.2 vs AutoCAD's built-in 4.0).
     /// </summary>
@@ -30,6 +42,10 @@ public class Initializer : IExtensionApplication
     /// </summary>
     public void Initialize()
     {
+        var logDirectory = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "DwgTranslator", "logs");
+        Log.InitFileLogging(logDirectory);
         var doc = Application.DocumentManager.MdiActiveDocument;
         if (doc != null)
         {
@@ -43,6 +59,7 @@ public class Initializer : IExtensionApplication
     /// </summary>
     public void Terminate()
     {
+        Log.CloseFileLogging();
         AppDomain.CurrentDomain.AssemblyResolve -= OnAssemblyResolve;
     }
 

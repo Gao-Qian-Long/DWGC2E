@@ -1,7 +1,20 @@
+#if GSTARCAD
+using Gssoft.Gscad.ApplicationServices;
+#else
 using Autodesk.AutoCAD.ApplicationServices;
+#endif
+#if GSTARCAD
+using Gssoft.Gscad.DatabaseServices;
+#else
 using Autodesk.AutoCAD.DatabaseServices;
+#endif
 using DwgTranslator.Cad;
 using DwgTranslator.Core.Models;
+#if GSTARCAD
+using CadRuntimeException = Gssoft.Gscad.Runtime.Exception;
+#else
+using CadRuntimeException = Autodesk.AutoCAD.Runtime.Exception;
+#endif
 
 namespace DwgTranslator.Cad.Extraction;
 
@@ -24,13 +37,14 @@ public class TextExtractor
     public List<TextEntity> ExtractAll(Database db)
     {
         var entities = new List<TextEntity>();
+        var visitedBlocks = new HashSet<ObjectId>();
 
         using var transaction = db.TransactionManager.StartTransaction();
         try
         {
             var modelSpace = (BlockTableRecord)transaction.GetObject(
                 SymbolUtilityServices.GetBlockModelSpaceId(db), OpenMode.ForRead);
-            entities.AddRange(ExtractFromBlock(transaction, modelSpace, string.Empty, 0));
+            entities.AddRange(ExtractFromBlock(transaction, modelSpace, string.Empty, 0, visitedBlocks));
 
             var layoutDict = (DBDictionary)transaction.GetObject(
                 db.LayoutDictionaryId, OpenMode.ForRead);
@@ -43,18 +57,30 @@ public class TextExtractor
                 if (btrId.IsValid)
                 {
                     var btr = (BlockTableRecord)transaction.GetObject(btrId, OpenMode.ForRead);
-                    entities.AddRange(ExtractFromBlock(transaction, btr, string.Empty, 0));
+                    entities.AddRange(ExtractFromBlock(transaction, btr, string.Empty, 0, visitedBlocks));
                 }
             }
 
             transaction.Commit();
         }
-        catch (Autodesk.AutoCAD.Runtime.Exception ex)
+        catch (CadRuntimeException ex)
         {
             Log.Error(ex, "Error extracting text entities");
             transaction.Abort();
             throw;
         }
+
+        // Stamp source file path when available (multi-file writeback safety)
+        try
+        {
+            var sourcePath = db.Filename;
+            if (!string.IsNullOrWhiteSpace(sourcePath))
+            {
+                foreach (var e in entities)
+                    e.SourceFilePath = sourcePath;
+            }
+        }
+        catch { }
 
         Log.Information("Extracted {Count} text entities", entities.Count);
         return entities;
@@ -64,7 +90,8 @@ public class TextExtractor
     /// Extract text entities from a specific block table record.
     /// </summary>
     private List<TextEntity> ExtractFromBlock(
-        Transaction tr, BlockTableRecord btr, string parentBlockName, int depth)
+        Transaction tr, BlockTableRecord btr, string parentBlockName, int depth,
+        HashSet<ObjectId> visitedBlocks)
     {
         var entities = new List<TextEntity>();
 
@@ -77,6 +104,9 @@ public class TextExtractor
         if (btr.IsAnonymous)
             return entities;
 
+        if (!visitedBlocks.Add(btr.ObjectId))
+            return entities;
+
         foreach (ObjectId objId in btr)
         {
             var dbObject = tr.GetObject(objId, OpenMode.ForRead);
@@ -84,6 +114,11 @@ public class TextExtractor
 
             switch (dbObject)
             {
+                case AttributeDefinition definition when !definition.Constant:
+                    var template = TextEntityFactory.CreateFromDBText(tr, definition, "AttributeDefinition", parentBlockName);
+                    template.Status = TranslationStatus.Skipped;
+                    entities.Add(template);
+                    break;
                 case DBText dbText:
                     entities.Add(TextEntityFactory.CreateFromDBText(tr, dbText, "DBText", parentBlockName));
                     break;
@@ -126,7 +161,7 @@ public class TextExtractor
                     {
                         var nestedEntities = ExtractFromBlock(tr, nestedBtr,
                             string.IsNullOrEmpty(parentBlockName) ? nestedBtr.Name : parentBlockName,
-                            depth + 1);
+                            depth + 1, visitedBlocks);
                         entities.AddRange(nestedEntities);
                     }
                     break;

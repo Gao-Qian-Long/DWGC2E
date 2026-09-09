@@ -6,6 +6,8 @@ namespace DwgTranslator.Core.Models;
 public class TranslationPair
 {
     public string Handle { get; set; } = string.Empty;
+    /// <summary>Source drawing path; Handle is only unique inside one drawing.</summary>
+    public string SourceFilePath { get; set; } = string.Empty;
     public string SourceText { get; set; } = string.Empty;
     public string TranslatedText { get; set; } = string.Empty;
     public bool GlossaryHit { get; set; }

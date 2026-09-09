@@ -1,4 +1,4 @@
-using System.Runtime.Versioning;
+﻿using System.Runtime.Versioning;
 using System.Text.Json;
 using DwgTranslator.Core.Models;
 using DwgTranslator.Core.Resources;
@@ -10,7 +10,9 @@ namespace DwgTranslator.Core.Services;
 /// Implements license management with hardware-bound activation codes,
 /// trial tracking, and encrypted local storage.
 /// </summary>
+#if !NETFRAMEWORK
 [SupportedOSPlatform("windows")]
+#endif
 public class LicenseService : ILicenseService
 {
     private const string LicenseFileName = "license.dat";
@@ -43,7 +45,7 @@ public class LicenseService : ILicenseService
                 {
                     Type = LicenseType.Trial,
                     TrialUsesRemaining = DefaultTrialUses,
-                    MachineId = MachineIdentifier.GetMachineId(),
+                    MachineId = MachineIdentifier.GetLicenseBindingId(),
                     FirstUseDate = DateTime.UtcNow
                 };
                 SaveLicense();
@@ -51,12 +53,12 @@ public class LicenseService : ILicenseService
 
             if (!string.IsNullOrEmpty(_license.MachineId) && !MachineIdentifier.IsMachineIdMatch(_license.MachineId))
             {
-                Log.Warning("License machine ID mismatch. Resetting to trial.");
+                Log.Warning("License machine ID mismatch. Disabling local trial until reactivation.");
                 _license = new LicenseInfo
                 {
                     Type = LicenseType.Trial,
-                    TrialUsesRemaining = DefaultTrialUses,
-                    MachineId = MachineIdentifier.GetMachineId(),
+                    TrialUsesRemaining = 0,
+                    MachineId = MachineIdentifier.GetLicenseBindingId(),
                     FirstUseDate = DateTime.UtcNow
                 };
                 SaveLicense();
@@ -77,7 +79,7 @@ public class LicenseService : ILicenseService
                 {
                     Type = LicenseType.Trial,
                     TrialUsesRemaining = 0,
-                    MachineId = MachineIdentifier.GetMachineId(),
+                    MachineId = MachineIdentifier.GetLicenseBindingId(),
                     FirstUseDate = DateTime.UtcNow
                 };
             }
@@ -135,16 +137,19 @@ public class LicenseService : ILicenseService
         if (string.IsNullOrWhiteSpace(activationCode))
             return (false, Strings.Get("LicenseActivationEmpty"));
 
+        // Preserve original Base64 casing; only trim surrounding whitespace.
+        // Do NOT uppercase or strip dashes - Base64 is case-sensitive and the
+        // product prefix intentionally contains hyphens (DwgTranslator-P-/S-).
         var rawCode = activationCode.Trim();
-        activationCode = rawCode.Replace("-", "").ToUpperInvariant();
 
         try
         {
-            var machineId = MachineIdentifier.GetMachineId();
+            // Prefer stable binding id so renames do not invalidate activated licenses.
+            var machineId = MachineIdentifier.GetLicenseBindingId();
 
-            if (activationCode.StartsWith("DwgTranslator-P-"))
+            if (rawCode.StartsWith("DwgTranslator-P-", StringComparison.Ordinal))
             {
-                var payload = activationCode["DwgTranslator-P-".Length..];
+                var payload = rawCode["DwgTranslator-P-".Length..];
                 var decoded = LicenseCrypto.DecodePayload(payload);
                 if (decoded == null || !LicenseCrypto.ValidateChecksum(decoded))
                     return (false, Strings.Get("LicenseActivationInvalid"));
@@ -164,9 +169,9 @@ public class LicenseService : ILicenseService
                 Log.Information("Perpetual license activated");
                 return (true, Strings.Get("LicenseActivationSuccessPerpetual"));
             }
-            else if (activationCode.StartsWith("DwgTranslator-S-"))
+            else if (rawCode.StartsWith("DwgTranslator-S-", StringComparison.Ordinal))
             {
-                var payload = activationCode["DwgTranslator-S-".Length..];
+                var payload = rawCode["DwgTranslator-S-".Length..];
                 var decoded = LicenseCrypto.DecodePayload(payload);
                 if (decoded == null || !LicenseCrypto.ValidateChecksum(decoded))
                     return (false, Strings.Get("LicenseActivationInvalid"));
@@ -206,13 +211,15 @@ public class LicenseService : ILicenseService
 
     public string GenerateActivationRequest()
     {
-        var machineId = MachineIdentifier.GetMachineId();
+        // Use stable binding ID so generated codes survive machine rename.
+        var machineId = MachineIdentifier.GetLicenseBindingId();
         var hash = LicenseCrypto.ComputeHash(machineId + "|" + DateTime.UtcNow.Ticks);
         return $"REQ-{machineId}-{hash[..8]}";
     }
 
     /// <summary>
-    /// Gets the machine ID for external use (e.g., license generation).
+    /// Gets the machine ID for external use (e.g., license generation / display).
+    /// Returns the stable binding ID so issued codes remain valid across renames.
     /// </summary>
-    public static string GetMachineId() => MachineIdentifier.GetMachineId();
+    public static string GetMachineId() => MachineIdentifier.GetLicenseBindingId();
 }

@@ -1,10 +1,25 @@
+#if GSTARCAD
+using Gssoft.Gscad.ApplicationServices;
+#else
 using Autodesk.AutoCAD.ApplicationServices;
+#endif
+#if GSTARCAD
+using Gssoft.Gscad.EditorInput;
+#else
 using Autodesk.AutoCAD.EditorInput;
+#endif
+#if GSTARCAD
+using Gssoft.Gscad.Runtime;
+#else
 using Autodesk.AutoCAD.Runtime;
+#endif
 using DwgTranslator.Cad.Replacement;
 using DwgTranslator.Core.Models;
-using DwgTranslator.Core.Services;
+#if NETFRAMEWORK
+using System.Web.Script.Serialization;
+#else
 using System.Text.Json;
+#endif
 
 [assembly: CommandClass(typeof(DwgTranslator.Cad.Commands.WritebackCommand))]
 
@@ -12,154 +27,145 @@ namespace DwgTranslator.Cad.Commands;
 
 /// <summary>
 /// AutoCAD command entry point for high-precision DWG writeback.
-///
-/// Communication mechanism: Fixed-path config file
-/// - WPF app writes config to %TEMP%\DwgTranslator\writeback_config.json
-/// - This command reads from that fixed path (no env vars, no command-line args)
-/// - On completion, writes %TEMP%\DwgTranslator\writeback_done.txt as signal
-/// - Deletes the config file on success
-///
-/// The config JSON contains: sourceDwgPath, outputDwgPath, entities[], cnToEn
+/// The WPF app passes a session-specific config path as the first command argument.
+/// A legacy fixed path is retained only for manually invoked older integrations.
 /// </summary>
 public class WritebackCommand
 {
-    /// <summary>
-    /// Config file format for automated writeback.
-    /// </summary>
     private class WritebackConfig
     {
         public string SourceDwgPath { get; set; } = "";
         public string OutputDwgPath { get; set; } = "";
         public List<TextEntity> Entities { get; set; } = new();
         public bool CnToEn { get; set; } = true;
-        public string? SessionId { get; set; }  // For WPF-side verification
+        public string? SessionId { get; set; }
+        public string? DoneSignalPath { get; set; }
     }
 
-    /// <summary>
-    /// Fixed path for inter-process communication via temp files.
-    /// Each session includes a SessionId in the config JSON for verification;
-    /// the WPF app validates it matches before accepting the done signal.
-    /// </summary>
-    private static readonly string ConfigDir = Path.Combine(Path.GetTempPath(), "DwgTranslator");
-    private static readonly string ConfigPath = Path.Combine(ConfigDir, "writeback_config.json");
-    private static readonly string DonePath = Path.Combine(ConfigDir, "writeback_done.txt");
+    private static readonly string LegacyConfigDir = Path.Combine(Path.GetTempPath(), "DwgTranslator");
+    private static readonly string LegacyConfigPath = Path.Combine(LegacyConfigDir, "writeback_config.json");
+    private static readonly string LegacyDonePath = Path.Combine(LegacyConfigDir, "writeback_done.txt");
 
-    /// <summary>
-    /// Executes the writeback operation within the AutoCAD process.
-    /// Reads config from a fixed known path (written by the WPF app).
-    /// </summary>
-    [CommandMethod("DwgTranslateWrite", CommandFlags.Session)]
+    [CommandMethod("DwgTranslateWrite")]
     public void Execute()
     {
         var doc = Application.DocumentManager.MdiActiveDocument;
         if (doc == null) return;
 
         var ed = doc.Editor;
-
-        // CAD command-line logging is disabled by default.
-        // Logs are written to Debug output and JSON-lines file only.
-        // To re-enable: set Cad.Log.OutputToCommandLine = true and Cad.Log.Editor = ed;
+        string configPath = LegacyConfigPath;
+        string donePath = LegacyDonePath;
+        string? sessionId = null;
 
         try
         {
-            // Read config from fixed known path (no env vars, no command-line args needed)
-            if (!File.Exists(ConfigPath))
+            var prompt = new PromptStringOptions("\nWriteback config path <legacy>: ")
             {
-                ed.WriteMessage("\n没有找到回写配置文件。请先在 DWG Translator 中执行导出操作。");
-                ed.WriteMessage($"\n预期配置文件位置: {ConfigPath}");
-                SignalDone("no_config");
+                AllowSpaces = true,
+                UseDefaultValue = true,
+                DefaultValue = LegacyConfigPath
+            };
+            var promptResult = ed.GetString(prompt);
+            if (promptResult.Status == PromptStatus.OK && !string.IsNullOrWhiteSpace(promptResult.StringResult))
+                configPath = promptResult.StringResult.Trim().Trim('"');
+
+            if (!File.Exists(configPath))
+            {
+                ed.WriteMessage($"\nNo writeback config file found: {configPath}");
+                SignalDone(donePath, "no_config", sessionId);
                 return;
             }
 
-            var json = File.ReadAllText(ConfigPath);
+            var json = File.ReadAllText(configPath);
+#if NETFRAMEWORK
+            var config = new JavaScriptSerializer().Deserialize<WritebackConfig>(json);
+#else
             var config = JsonSerializer.Deserialize<WritebackConfig>(json, new JsonSerializerOptions
             {
                 PropertyNameCaseInsensitive = true
             });
+#endif
+
+            sessionId = config?.SessionId;
+            var configuredDonePath = config?.DoneSignalPath;
+            donePath = !string.IsNullOrWhiteSpace(configuredDonePath)
+                ? configuredDonePath!
+                : Path.Combine(Path.GetDirectoryName(configPath) ?? LegacyConfigDir, "writeback_done.txt");
 
             if (config == null || config.Entities == null || config.Entities.Count == 0)
             {
-                ed.WriteMessage("\n配置文件无效或没有可回写的实体。");
-                SignalDone("invalid_config", config?.SessionId);
+                ed.WriteMessage("\nConfig file invalid or has no entities to write back.");
+                SignalDone(donePath, "invalid_config", sessionId);
                 return;
             }
 
-            var sessionId = config.SessionId;
-
             if (string.IsNullOrEmpty(config.SourceDwgPath) || !File.Exists(config.SourceDwgPath))
             {
-                ed.WriteMessage($"\n原始 DWG 文件不存在: {config.SourceDwgPath}");
-                SignalDone("source_missing", sessionId);
+                ed.WriteMessage($"\nSource DWG not found: {config.SourceDwgPath}");
+                SignalDone(donePath, "source_missing", sessionId);
                 return;
             }
 
             if (string.IsNullOrEmpty(config.OutputDwgPath))
             {
-                ed.WriteMessage("\n输出路径为空。");
-                SignalDone("no_output", sessionId);
+                ed.WriteMessage("\nOutput path is empty.");
+                SignalDone(donePath, "no_output", sessionId);
                 return;
             }
 
-            ed.WriteMessage($"\n开始回写 {config.Entities.Count} 个实体...");
+            ed.WriteMessage($"\nStarting writeback: {config.Entities.Count} entities...");
 
-            // Use side database on a temp COPY to avoid eFilerError
-            // (can't ReadDwgFile on a file AutoCAD has open).
-            // The active document is a blank Drawing1.dwg and does not contain
-            // the source entities, so we must read the source file.
-            var tempPath = Path.Combine(ConfigDir, $"__temp_{Path.GetFileName(config.SourceDwgPath)}");
-            File.Copy(config.SourceDwgPath, tempPath, overwrite: true);
-
-            CadWriteResult result;
-            try
-            {
-                var engine = new AcadWriterEngine();
-                result = engine.WriteTranslations(
-                    tempPath, config.OutputDwgPath,
-                    config.Entities, config.CnToEn);
-            }
-            finally
-            {
-                // Clean up temp copy
-                try { File.Delete(tempPath); } catch { }
-            }
+            // AcadWriterEngine opens the source read-only and saves atomically through
+            // a separate output file. Passing the source directly avoids GstarCAD
+            // retaining a lock on a session-local copy until the command fully exits.
+            var engine = new AcadWriterEngine();
+            var result = engine.WriteTranslations(
+                config.SourceDwgPath, config.OutputDwgPath,
+                config.Entities, config.CnToEn);
 
             if (result.SuccessCount > 0)
             {
-                ed.WriteMessage($"\n回写完成: {result.SuccessCount} 成功, {result.FailCount} 失败。");
-
-                // Delete config file on success (cleanup)
-                try { File.Delete(ConfigPath); } catch { }
+                ed.WriteMessage($"\nWriteback complete: {result.SuccessCount} success, {result.FailCount} failed.");
+                try { File.Delete(configPath); } catch { }
             }
             else
             {
                 var errors = result.Errors.Count > 0
                     ? string.Join(", ", result.Errors.Take(3))
-                    : "(无详细错误信息)";
-                ed.WriteMessage($"\n回写失败: {errors}");
+                    : "(no detailed error info)";
+                ed.WriteMessage($"\nWriteback failed: {errors}");
             }
 
-            // Signal completion to WPF app (include session ID for verification)
-            SignalDone(result.SuccessCount > 0 ? "success" : "failed", sessionId);
+            SignalDone(
+                donePath,
+                result.SuccessCount > 0 ? "success" : "failed",
+                sessionId,
+                result.SuccessCount,
+                result.FailCount,
+                string.Join("; ", result.Errors.Take(5)));
         }
         catch (System.Exception ex)
         {
-            ed.WriteMessage($"\n命令执行错误: {ex.Message}");
-            SignalDone("error", null);
+            ed.WriteMessage($"\nCommand error: {ex.Message}");
+            SignalDone(donePath, "error", sessionId);
         }
     }
 
-    /// <summary>
-    /// Writes a "done" signal file that the WPF app monitors for completion.
-    /// </summary>
-    private static void SignalDone(string status, string? sessionId = null)
+    private static void SignalDone(
+        string donePath,
+        string status,
+        string? sessionId = null,
+        int successCount = 0,
+        int failCount = 0,
+        string detail = "")
     {
         try
         {
-            Directory.CreateDirectory(ConfigDir);
-            var content = sessionId != null
-                ? $"{status}|{sessionId}|{DateTime.Now:O}"
-                : $"{status}|{DateTime.Now:O}";
-            File.WriteAllText(DonePath, content);
+            var directory = Path.GetDirectoryName(donePath);
+            if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
+            var sid = sessionId ?? "none";
+            var content = $"{status}|{sid}|{successCount}|{failCount}|{DateTime.UtcNow:O}|{detail.Replace('|', ';').Replace('\r', ' ').Replace('\n', ' ')}";
+            File.WriteAllText(donePath, content);
         }
         catch { }
     }

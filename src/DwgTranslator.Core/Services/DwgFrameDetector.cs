@@ -1,5 +1,6 @@
 using ACadSharp;
 using ACadSharp.Entities;
+using DwgTranslator.Core.Models;
 using Serilog;
 
 using CadEntity = ACadSharp.Entities.Entity;
@@ -69,6 +70,19 @@ internal static class DwgFrameDetector
     }
 
     /// <summary>
+    /// Detects frames in one coordinate space only. Callers processing model space,
+    /// a paper-space layout, or a block definition must not share frame lists.
+    /// </summary>
+    public static List<(double minX, double minY, double maxX, double maxY)> DetectFrames(
+        IEnumerable<CadEntity> entities, CadDocument doc)
+    {
+        var frames = new List<(double, double, double, double)>();
+        try { ScanEntitiesForFrames(entities, frames, doc, 0); }
+        catch (Exception ex) { Log.Debug(ex, "Frame detection failed for entity collection"); }
+        return frames;
+    }
+
+    /// <summary>
     /// Scans a collection of entities for frame-like closed LwPolylines.
     /// Recursively enters CadInsert entities to find frames inside block definitions.
     /// </summary>
@@ -95,8 +109,13 @@ internal static class DwgFrameDetector
                     b => string.Equals(b.Name, insert.Block?.Name, StringComparison.OrdinalIgnoreCase));
                 if (blockDef != null && blockDef.Entities != null)
                 {
-                    double newX = insertX + insert.InsertPoint.X * scaleX;
-                    double newY = insertY + insert.InsertPoint.Y * scaleY;
+                    // Compose the child insertion with the complete parent transform.
+                    double localX = insert.InsertPoint.X * scaleX;
+                    double localY = insert.InsertPoint.Y * scaleY;
+                    double parentCos = Math.Cos(rotation);
+                    double parentSin = Math.Sin(rotation);
+                    double newX = insertX + localX * parentCos - localY * parentSin;
+                    double newY = insertY + localX * parentSin + localY * parentCos;
                     double newSx = scaleX * insert.XScale;
                     double newSy = scaleY * insert.YScale;
                     double newRot = rotation + insert.Rotation;
@@ -289,7 +308,7 @@ internal static class DwgFrameDetector
             {
                 double currentHeight = getHeight(entity);
                 double newHeight = currentHeight * scale;
-                double minHeight = originalHeight * 0.75;
+                double minHeight = originalHeight * WritebackConstants.MinHeightRatio;
                 if (newHeight < minHeight) newHeight = minHeight;
                 setHeight(entity, newHeight);
                 Log.Debug("Frame-boundary scaling: {Type} {Handle} scaled by {Scale:F2} (height {Old:F2} -> {New:F2})",

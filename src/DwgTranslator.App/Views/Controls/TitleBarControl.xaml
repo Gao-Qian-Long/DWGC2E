@@ -4,7 +4,6 @@
              xmlns:conv="clr-namespace:DwgTranslator.App.Converters"
              Height="40">
     <UserControl.Resources>
-        <!-- Shared button style for minimize / maximize / pin -->
         <Style x:Key="TitleBarButton" TargetType="Button">
             <Setter Property="Width" Value="46"/>
             <Setter Property="Height" Value="40"/>
@@ -44,7 +43,6 @@
             </Setter>
         </Style>
 
-        <!-- Close button style (red hover) -->
         <Style x:Key="CloseButtonStyle" TargetType="Button">
             <Setter Property="Width" Value="46"/>
             <Setter Property="Height" Value="40"/>
@@ -79,22 +77,65 @@
 
     <Border Background="{DynamicResource Brush.TitleBarBackground}">
         <Grid>
-            <!-- Left: App title -->
-            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
-                <TextBlock Text="DWG Translator"
-                           Foreground="White" Opacity="0.95"
-                           FontFamily="Segoe UI" FontSize="13" FontWeight="SemiBold"
-                           VerticalAlignment="Center"/>
-                <TextBlock Foreground="White" Opacity="0.55"
-                           FontFamily="Segoe UI" FontSize="11"
-                           VerticalAlignment="Center" Margin="8,0,0,0">
-                    <Run Text="{conv:Localize AppTitleShort}"/>
-                </TextBlock>
+            <!-- Left: App title (no subtitle) -->
+            <TextBlock Text="DWG Translator"
+                       Foreground="White" Opacity="0.95"
+                       FontFamily="Segoe UI" FontSize="13" FontWeight="SemiBold"
+                       VerticalAlignment="Center"
+                       Margin="12,0,0,0" HorizontalAlignment="Left"/>
+
+            <!-- Center: Language direction -->
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                <Button Command="{Binding ToggleLanguageDirectionCommand}"
+                        ToolTip="{conv:Localize TipToggleDirection}"
+                        WindowChrome.IsHitTestVisibleInChrome="True"
+                        Cursor="Hand" Background="Transparent" BorderThickness="0"
+                        Padding="6,2">
+                    <Button.Style>
+                        <Style TargetType="Button">
+                            <Setter Property="Background" Value="Transparent"/>
+                            <Setter Property="BorderThickness" Value="0"/>
+                            <Setter Property="Cursor" Value="Hand"/>
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                                                CornerRadius="4" Padding="8,4" SnapsToDevicePixels="True">
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="{Binding LanguageDirection}"
+                                                           Foreground="White" Opacity="0.9"
+                                                           FontSize="14" FontWeight="SemiBold"
+                                                           VerticalAlignment="Center"/>
+                                                <TextBlock Text="&#x21C4;" Margin="6,0,0,0"
+                                                           Foreground="White" Opacity="0.6"
+                                                           FontSize="13" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="Bd" Property="Background">
+                                                    <Setter.Value>
+                                                        <SolidColorBrush Color="White" Opacity="0.15"/>
+                                                    </Setter.Value>
+                                                </Setter>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+                    </Button.Style>
+                </Button>
             </StackPanel>
 
-            <!-- Right: Window buttons -->
+            <!-- Right: Settings + Window buttons -->
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                <!-- Pin / Topmost toggle -->
+                <Button Command="{Binding SettingsCommand}"
+                        ToolTip="{conv:Localize TipSettings}"
+                        Content="&#x2699;"
+                        FontSize="14" Width="40" Height="40"
+                        Style="{StaticResource TitleBarButton}"/>
+
                 <Button Command="{Binding ToggleTopmostCommand}"
                         ToolTip="{conv:Localize TipTopmostToggle}">
                     <Button.Style>
@@ -103,7 +144,7 @@
                             <Setter Property="FontSize" Value="15"/>
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding IsTopmost}" Value="True">
-                                    <Setter Property="Background" Value="#6366F1"/>
+                                    <Setter Property="Background" Value="#2563EB"/>
                                     <Setter Property="Foreground" Value="White"/>
                                 </DataTrigger>
                             </Style.Triggers>
@@ -111,17 +152,14 @@
                     </Button.Style>
                 </Button>
 
-                <!-- Minimize -->
                 <Button x:Name="MinimizeButton" Content="&#x2500;"
                         Click="MinimizeButton_Click"
                         Style="{StaticResource TitleBarButton}"/>
 
-                <!-- Maximize -->
                 <Button x:Name="MaximizeButton" Content="&#x25A1;"
                         Click="MaximizeButton_Click"
                         Style="{StaticResource TitleBarButton}"/>
 
-                <!-- Close -->
                 <Button x:Name="CloseButton" Content="&#x2715;"
                         Click="CloseButton_Click"
                         Style="{StaticResource CloseButtonStyle}"/>

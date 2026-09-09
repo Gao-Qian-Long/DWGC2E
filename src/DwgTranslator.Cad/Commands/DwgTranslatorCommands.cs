@@ -1,6 +1,18 @@
+#if GSTARCAD
+using Gssoft.Gscad.ApplicationServices;
+#else
 using Autodesk.AutoCAD.ApplicationServices;
+#endif
+#if GSTARCAD
+using Gssoft.Gscad.DatabaseServices;
+#else
 using Autodesk.AutoCAD.DatabaseServices;
+#endif
+#if GSTARCAD
+using Gssoft.Gscad.Runtime;
+#else
 using Autodesk.AutoCAD.Runtime;
+#endif
 using DwgTranslator.Cad.Extraction;
 using DwgTranslator.Cad.Replacement;
 using DwgTranslator.Core.Models;
@@ -9,6 +21,13 @@ using DwgTranslator.Cad;
 using DwgTranslator.Core.Translation;
 using System.Text.Json;
 using Exception = System.Exception;
+#if GSTARCAD
+using Gssoft.Gscad.EditorInput;
+using CadRuntimeException = Gssoft.Gscad.Runtime.Exception;
+#else
+using Autodesk.AutoCAD.EditorInput;
+using CadRuntimeException = Autodesk.AutoCAD.Runtime.Exception;
+#endif
 
 [assembly: CommandClass(typeof(DwgTranslator.Cad.Commands.DwgTranslatorCommands))]
 
@@ -69,7 +88,7 @@ public class DwgTranslatorCommands
             editor.WriteMessage($"\n[DwgTranslator] Exported to: {exportPath}");
             editor.WriteMessage("\n[DwgTranslator] Please review translations in Excel, then run DWGTRANSLATEBACK\n");
         }
-        catch (Autodesk.AutoCAD.Runtime.Exception ex)
+        catch (CadRuntimeException ex)
         {
             Log.Error(ex, "Text extraction failed");
             editor.WriteMessage($"\n[DwgTranslator] Error: {ex.Message}\n");
@@ -173,7 +192,7 @@ public class DwgTranslatorCommands
 
             // Ask for Excel file path
             var excelPath = editor.GetString("\n[DwgTranslator] Enter Excel file path with reviewed translations:");
-            if (excelPath.Status != Autodesk.AutoCAD.EditorInput.PromptStatus.OK)
+            if (excelPath.Status != PromptStatus.OK)
                 return;
 
             var filePath = excelPath.StringResult;
@@ -217,19 +236,40 @@ public class DwgTranslatorCommands
     {
         if (_config != null) return;
 
-        var configPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "settings.json");
+        // Prefer AppData settings (same as WPF app) so API key/glossary match UI config.
+        var appDataPath = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "DwgTranslator", "settings.json");
+        var basePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "settings.json");
+        var configPath = File.Exists(appDataPath) ? appDataPath : basePath;
+
         if (File.Exists(configPath))
         {
             var json = File.ReadAllText(configPath);
             _config = JsonSerializer.Deserialize<AppConfig>(json) ?? new AppConfig();
+            Log.Information("CAD plugin loaded settings from {Path}", configPath);
         }
         else
         {
             _config = new AppConfig();
+            Log.Warning("CAD plugin settings.json not found; using defaults");
         }
 
         // Decrypt API key if stored with DPAPI protection
         _config.DeepSeekApiKey = AppConfig.DecryptApiKey(_config.DeepSeekApiKey);
+
+        // Resolve relative glossary/export paths against AppData when needed
+        var appDataDir = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "DwgTranslator");
+        if (!string.IsNullOrEmpty(_config.GlossaryPath) && !Path.IsPathRooted(_config.GlossaryPath))
+        {
+            var appDataGlossary = Path.Combine(appDataDir, _config.GlossaryPath);
+            if (File.Exists(appDataGlossary))
+                _config.GlossaryPath = appDataGlossary;
+        }
+        if (!string.IsNullOrEmpty(_config.ExportDirectory) && !Path.IsPathRooted(_config.ExportDirectory))
+            _config.ExportDirectory = Path.Combine(appDataDir, _config.ExportDirectory);
     }
 
     private static string LoadSystemPrompt()

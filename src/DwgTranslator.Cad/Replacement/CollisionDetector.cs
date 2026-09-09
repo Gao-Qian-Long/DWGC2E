@@ -1,11 +1,20 @@
+#if GSTARCAD
+using Gssoft.Gscad.DatabaseServices;
+#else
 using Autodesk.AutoCAD.DatabaseServices;
+#endif
+#if GSTARCAD
+using Gssoft.Gscad.Geometry;
+#else
 using Autodesk.AutoCAD.Geometry;
+#endif
+using WBC = DwgTranslator.Core.Models.WritebackConstants;
 
 namespace DwgTranslator.Cad.Replacement;
 
 public static class CollisionDetector
 {
-    public const double MinCollisionAvoidanceScale = 0.35;
+    public static readonly double MinCollisionAvoidanceScale = WBC.MinHeightRatio;
 
     public static Extents3d? FindClosestFrame(Point3d point, List<Extents3d> frames)
     {
@@ -27,8 +36,8 @@ public static class CollisionDetector
     {
         double frameW = frame.MaxPoint.X - frame.MinPoint.X;
         double frameH = frame.MaxPoint.Y - frame.MinPoint.Y;
-        double tolX = Math.Clamp(frameW * 0.005, 0.5, 3.0);
-        double tolY = Math.Clamp(frameH * 0.005, 0.5, 3.0);
+        double tolX = DwgTranslator.Cad.Compat.Clamp(frameW * 0.005, 0.5, 3.0);
+        double tolY = DwgTranslator.Cad.Compat.Clamp(frameH * 0.005, 0.5, 3.0);
         return bounds.MinPoint.X < frame.MinPoint.X - tolX
             || bounds.MaxPoint.X > frame.MaxPoint.X + tolX
             || bounds.MinPoint.Y < frame.MinPoint.Y - tolY
@@ -54,22 +63,60 @@ public static class CollisionDetector
             && a.MaxPoint.Y + padding > b.MinPoint.Y - padding;
     }
 
-    public static Extents3d GetCorrectedBounds(Entity entity)
+    public static Extents3d GetCorrectedBounds(Entity entity, bool includeLayoutAdvance = true)
+    {
+        var previous=HostApplicationServices.WorkingDatabase;
+        try
+        {
+            if(entity.Database!=null)HostApplicationServices.WorkingDatabase=entity.Database;
+            return MeasureInk(entity, includeLayoutAdvance);
+        }
+        finally { HostApplicationServices.WorkingDatabase=previous; }
+    }
+
+    private static Extents3d MeasureInk(Entity entity, bool includeLayoutAdvance)
     {
         entity.RecordGraphicsModified(true);
-        var rawBounds = entity.GeometricExtents;
-        if (entity is MText mt && mt.Width > 0)
+        if (entity is MText mtext)
         {
-            double aw = mt.ActualWidth;
-            if (aw > 0 && aw < rawBounds.MaxPoint.X - rawBounds.MinPoint.X)
+            // GstarCAD's MText extents may describe the wrap rectangle, not ink:
+            // an unbreakable English word can extend far beyond that rectangle.
+            var pieces = new DBObjectCollection();
+            Extents3d? ink = null;
+            try
             {
-                double cx = (rawBounds.MinPoint.X + rawBounds.MaxPoint.X) / 2.0;
-                return new Extents3d(
-                    new Point3d(cx - aw / 2.0, rawBounds.MinPoint.Y, 0),
-                    new Point3d(cx + aw / 2.0, rawBounds.MaxPoint.Y, 0));
+                mtext.Explode(pieces);
+                foreach (DBObject piece in pieces)
+                {
+                    if (piece is not Entity glyph) continue;
+                    var bounds = glyph.GeometricExtents;
+                    if (ink.HasValue) { var union = ink.Value; union.AddExtents(bounds); ink = union; }
+                    else ink = bounds;
+                }
+                // The host's text layout metrics may reserve more advance than
+                // exploded glyph extents (notably Latin text printed as PDF).
+                // Include that correctly rotated, attachment-aware rectangle too.
+                if (includeLayoutAdvance && (int)mtext.Attachment >= 1 && (int)mtext.Attachment <= 9)
+                {
+                double w=mtext.ActualWidth, h=mtext.ActualHeight;
+                int attachment=(int)mtext.Attachment-1;
+                double x0=-(attachment%3)*w/2, y0=(attachment/3)*h/2;
+                var u=mtext.Direction.GetNormal();
+                var v=mtext.Normal.CrossProduct(u).GetNormal();
+                foreach(var x in new[]{x0,x0+w})
+                foreach(var y in new[]{y0,y0-h})
+                {
+                    var point=mtext.Location+u*x+v*y;
+                    if(ink.HasValue){var union=ink.Value;union.AddPoint(point);ink=union;}
+                    else ink=new Extents3d(point,point);
+                }
+                }
             }
+            finally { foreach (DBObject piece in pieces) piece.Dispose(); }
+            if (ink.HasValue) return ink.Value;
+            throw new InvalidOperationException("MText has no measurable rendered glyphs");
         }
-        return rawBounds;
+        return entity.GeometricExtents;
     }
 
     public static List<Entity> CollectNearbyEntities(
@@ -84,7 +131,7 @@ public static class CollisionDetector
             try { textBounds = GetCorrectedBounds(textEntity); }
             catch { return new List<Entity>(); }
 
-            double padding = originalHeight * 0.40;
+            double padding = originalHeight * WBC.CollisionMarginRatio;
             return ColliderCollector.CollectPotentialColliders(tr, btr, textEntity.ObjectId, textBounds, padding);
         }
         catch { return new List<Entity>(); }
@@ -104,9 +151,11 @@ public static class CollisionDetector
         {
             try
             {
-                var textBounds = textEntity.GeometricExtents;
+                // Fallback only: use corrected bounds and tiny epsilon, not large padding,
+                // to avoid false collisions with nearby non-touching geometry.
+                var textBounds = GetCorrectedBounds(textEntity);
                 var otherBounds = other.GeometricExtents;
-                return BoundsIntersect2D(textBounds, otherBounds);
+                return BoundsIntersect2D(textBounds, otherBounds, 0.01);
             }
             catch { return false; }
         }

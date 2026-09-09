@@ -10,6 +10,8 @@ namespace DwgTranslator.App.ViewModels;
 
 public partial class MainViewModel
 {
+    private static readonly JsonSerializerOptions ConfigWriteOptions = new() { WriteIndented = true };
+
     #region Config
 
     private void LoadConfig()
@@ -24,6 +26,38 @@ public partial class MainViewModel
             {
                 var json = File.ReadAllText(_settingsPath);
                 _config = JsonSerializer.Deserialize<AppConfig>(json) ?? new AppConfig();
+            }
+
+            // Resolve the installed CAD host and bundled plugin automatically. Persist
+            // encrypted/raw settings before decrypting the API key in memory.
+            var settingsChanged = false;
+            if (!AutoCadDetector.IsValidAutoCadPath(_config.AutoCadInstallPath))
+            {
+                var detection = AutoCadDetector.DetectInstallation();
+                if (detection.Found)
+                {
+                    _config.AutoCadInstallPath = detection.InstallPath;
+                    settingsChanged = true;
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(_config.CadPluginPath) || !File.Exists(_config.CadPluginPath))
+            {
+                var pluginPath = AutoCadDetector.FindCadPlugin();
+                if (!string.IsNullOrWhiteSpace(pluginPath))
+                {
+                    _config.CadPluginPath = pluginPath;
+                    settingsChanged = true;
+                }
+            }
+
+            if (settingsChanged || !File.Exists(appDataPath))
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(appDataPath)!);
+                File.WriteAllText(appDataPath, JsonSerializer.Serialize(_config, ConfigWriteOptions));
+                _settingsPath = appDataPath;
+                Log.Information("CAD integration defaults saved: Install={Install}; Plugin={Plugin}",
+                    _config.AutoCadInstallPath, _config.CadPluginPath);
             }
 
             _config.DeepSeekApiKey = AppConfig.DecryptApiKey(_config.DeepSeekApiKey);
@@ -48,6 +82,7 @@ public partial class MainViewModel
             _consistencyService = new TranslationConsistencyService(cachePath);
 
             ApplyLanguageDirection();
+            RefreshLicenseStatus();
             StatusMessage = Strings.Get("StatusReadyWithGlossary", GlossaryEntries.Count);
         }
         catch (Exception ex)

@@ -1,7 +1,18 @@
+#if GSTARCAD
+using Gssoft.Gscad.DatabaseServices;
+#else
 using Autodesk.AutoCAD.DatabaseServices;
+#endif
 using DwgTranslator.Cad;
 using DwgTranslator.Core.Models;
 using DwgTranslator.Core.Services;
+#if GSTARCAD
+using Gssoft.Gscad.GraphicsInterface;
+using CadRuntimeException = Gssoft.Gscad.Runtime.Exception;
+#else
+using Autodesk.AutoCAD.GraphicsInterface;
+using CadRuntimeException = Autodesk.AutoCAD.Runtime.Exception;
+#endif
 
 namespace DwgTranslator.Cad.Replacement;
 
@@ -60,7 +71,7 @@ public class TextReplacer
                 try { File.Delete(backupPath); } catch { /* best-effort */ }
             }
         }
-        catch (Autodesk.AutoCAD.Runtime.Exception ex)
+        catch (CadRuntimeException ex)
         {
             Log.Error(ex, "Writeback transaction failed, rolling back");
             transaction.Abort();
@@ -241,7 +252,7 @@ public class TextReplacer
             var mappedFontName = FontMapper.MapFontName(style.Name, _cnToEn);
             if (string.IsNullOrEmpty(mappedFontName)) return;
 
-            bool isShx = mappedFontName.EndsWith(".shx", StringComparison.OrdinalIgnoreCase);
+            bool isShx = mappedFontName!.EndsWith(".shx", StringComparison.OrdinalIgnoreCase);
             if (isShx)
             {
                 style.FileName = mappedFontName;
@@ -250,7 +261,7 @@ public class TextReplacer
             else
             {
                 var currentFont = style.Font;
-                var newFont = new Autodesk.AutoCAD.GraphicsInterface.FontDescriptor(
+                var newFont = new FontDescriptor(
                     mappedFontName, currentFont.Bold, currentFont.Italic, 0, 0);
                 style.Font = newFont;
             }

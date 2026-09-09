@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 
 namespace DwgTranslator.Core.Services;
 
@@ -88,23 +88,30 @@ internal static class MachineIdentifier
     }
 
     /// <summary>
-    /// Fuzzy machine ID matching: allows minor hardware changes (e.g., USB devices)
-    /// by checking if the primary identifiers (OS install date + CPU cores) match.
+    /// Prefer the stable machine ID for license binding so renames do not break licenses.
+    /// Full fingerprint is retained for display/diagnostics via <see cref="GetMachineId"/>.
+    /// </summary>
+    public static string GetLicenseBindingId() => GetStableMachineId();
+
+    /// <summary>
+    /// Machine ID matching for license binding.
+    /// Accepts either the full fingerprint or the stable fingerprint so that:
+    /// - codes generated against either ID form validate
+    /// - machine rename / username change do not invalidate an activated license
     /// </summary>
     public static bool IsMachineIdMatch(string storedMachineId)
     {
         if (string.IsNullOrEmpty(storedMachineId)) return false;
 
         var currentId = GetMachineId();
-        if (currentId == storedMachineId) return true;
+        if (string.Equals(currentId, storedMachineId, StringComparison.OrdinalIgnoreCase))
+            return true;
 
         try
         {
             var stableId = GetStableMachineId();
-            if (storedMachineId.Length >= 8 && stableId.Length >= 8)
-            {
-                return storedMachineId[^8..] == stableId[^8..];
-            }
+            if (string.Equals(stableId, storedMachineId, StringComparison.OrdinalIgnoreCase))
+                return true;
         }
         catch { }
 

@@ -1,4 +1,4 @@
-using CommunityToolkit.Mvvm.ComponentModel;
+﻿using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace DwgTranslator.Core.Models;
 
@@ -85,6 +85,10 @@ public partial class TextEntity : ObservableObject
     /// <summary>Whether the original MText had explicit \P line breaks.</summary>
     [ObservableProperty]
     private bool _mTextHasHardBreaks;
+
+    /// <summary>Source DWG/DXF file path (used to scope multi-file import writeback).</summary>
+    [ObservableProperty]
+    private string _sourceFilePath = string.Empty;
 
     /// <summary>Translation status.</summary>
     [ObservableProperty]

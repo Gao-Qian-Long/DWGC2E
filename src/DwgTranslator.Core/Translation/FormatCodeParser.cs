@@ -11,8 +11,15 @@ public partial class FormatCodeParser : IFormatCodeParser
 {
     // Matches format code patterns: \fArial;, \C3;, \H2x;, \P, \U+XXXX, \~, \%, %%c, etc.
     // Does NOT match literal braces {} (stripped separately) to preserve text content inside brace groups.
-    [GeneratedRegex(@"\\[A-Za-z][^;{}]*;|\\U\+[0-9A-Fa-f]{4}|\\[~%%|{}]|%%[cdpuoCDPUO]|\\[A-Za-z]")]
+#if NETFRAMEWORK
+    private static readonly Regex FormatCodePattern = new(
+        @"\\[AaCcFfHhQqSsTtWw][^;{}]*;|\\U\+[0-9A-Fa-f]{4}|\\[PpLlOoKkXx~\\{}]|%%[cdpuoCDPUO]",
+        RegexOptions.Compiled);
+    private static Regex FormatCodeRegex() => FormatCodePattern;
+#else
+    [GeneratedRegex(@"\\[AaCcFfHhQqSsTtWw][^;{}]*;|\\U\+[0-9A-Fa-f]{4}|\\[PpLlOoKkXx~\\{}]|%%[cdpuoCDPUO]")]
     private static partial Regex FormatCodeRegex();
+#endif
 
     private const string PlaceholderPrefix = "__FMT_";
     private const string PlaceholderSuffix = "__";
@@ -80,7 +87,7 @@ public partial class FormatCodeParser : IFormatCodeParser
         for (int i = 0; i < formatCodes.Count; i++)
         {
             var placeholder = $"{PlaceholderPrefix}{i}{PlaceholderSuffix}";
-            result = result.Replace(placeholder, formatCodes[i], StringComparison.Ordinal);
+            result = result.Replace(placeholder, formatCodes[i]);
         }
 
         return result;

@@ -1,11 +1,15 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <!-- GstarCAD 2024 hosts CLR 4.x; AutoCAD builds retain the .NET 8 target. -->
+    <TargetFramework Condition="'$(CadPlatform)' == 'GstarCAD'">net48</TargetFramework>
+    <TargetFramework Condition="'$(CadPlatform)' != 'GstarCAD'">net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
     <RootNamespace>DwgTranslator.Cad</RootNamespace>
     <!-- Ensure NuGet package DLLs are copied to output (needed for NETLOAD in AutoCAD) -->
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <DefineConstants Condition="'$(CadPlatform)' == 'GstarCAD'">$(DefineConstants);GSTARCAD</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
     <!--
@@ -15,27 +19,42 @@
         - Command line: dotnet build -p:AutoCadDir="C:\Program Files\Autodesk\AutoCAD 2026"
         - Create Directory.Build.props.user with <AutoCadDir> override
     -->
-    <Reference Include="AcCoreMgd" Condition="'$(AutoCadDir)' != ''">
+    <Reference Include="AcCoreMgd" Condition="'$(CadPlatform)' == 'AutoCAD'">
       <HintPath>$(AutoCadDir)\accoremgd.dll</HintPath>
       <Private>False</Private>
     </Reference>
-    <Reference Include="AcDbMgd" Condition="'$(AutoCadDir)' != ''">
+    <Reference Include="AcDbMgd" Condition="'$(CadPlatform)' == 'AutoCAD'">
       <HintPath>$(AutoCadDir)\acdbmgd.dll</HintPath>
       <Private>False</Private>
     </Reference>
-    <Reference Include="AcMgd" Condition="'$(AutoCadDir)' != ''">
+    <Reference Include="AcMgd" Condition="'$(CadPlatform)' == 'AutoCAD'">
       <HintPath>$(AutoCadDir)\AcMgd.dll</HintPath>
       <Private>False</Private>
     </Reference>
-    <Reference Include="AcCui" Condition="'$(AutoCadDir)' != ''">
+    <Reference Include="AcCui" Condition="'$(CadPlatform)' == 'AutoCAD'">
       <HintPath>$(AutoCadDir)\AcCui.dll</HintPath>
       <Private>False</Private>
     </Reference>
   </ItemGroup>
+  <ItemGroup Condition="'$(CadPlatform)' == 'GstarCAD'">
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies.net48" Version="1.0.3" PrivateAssets="all" />
+    <Reference Include="System.Web.Extensions" />
+    <Reference Include="GcCoreMgd"><HintPath>$(GstarCadDir)\GcCoreMgd.dll</HintPath><Private>False</Private></Reference>
+    <Reference Include="GcDbMgd"><HintPath>$(GstarCadDir)\GcDbMgd.dll</HintPath><Private>False</Private></Reference>
+    <Reference Include="GcMgd"><HintPath>$(GstarCadDir)\GcMgd.dll</HintPath><Private>False</Private></Reference>
+  </ItemGroup>
+  <ItemGroup Condition="'$(TargetFramework)' == 'net48'">
+    <!-- The desktop app drives GstarCAD through DwgTranslateWrite. Interactive
+         extraction/translation commands depend on the full .NET 8 Core stack. -->
+    <Compile Remove="Commands\DwgTranslatorCommands.cs" />
+    <Compile Remove="Extraction\**\*.cs" />
+  </ItemGroup>
   <!-- Fail build early with a clear message if AutoCAD directory is not configured -->
-  <Target Name="CheckAutoCadDir" BeforeTargets="ResolveAssemblyReferences">
-    <Error Condition="'$(AutoCadDir)' == '' Or !Exists('$(AutoCadDir)')"
-           Text="AutoCAD directory not found. Please set AutoCadDir in Directory.Build.props, via environment variable AUTO_CAD_DIR, or command line: dotnet build -p:AutoCadDir='C:\Program Files\Autodesk\AutoCAD 2026'" />
+  <Target Name="CheckCadSdkDir" BeforeTargets="ResolveAssemblyReferences">
+    <Error Condition="'$(CadPlatform)' == ''"
+           Text="CAD managed API not found. Set AUTO_CAD_DIR for AutoCAD or GSTAR_CAD_DIR for GstarCAD/浩辰CAD." />
+    <Error Condition="'$(CadPlatform)' == 'GstarCAD' And !Exists('$(GstarCadDir)\GcDbMgd.dll')"
+           Text="GstarCAD managed API not found under $(GstarCadDir)." />
   </Target>
   <ItemGroup>
     <ProjectReference Include="..\DwgTranslator.Core\DwgTranslator.Core.csproj" />

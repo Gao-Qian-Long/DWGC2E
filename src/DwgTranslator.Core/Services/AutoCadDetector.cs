@@ -7,7 +7,9 @@ namespace DwgTranslator.Core.Services;
 /// <summary>
 /// AutoCAD installation detector — searches Windows registry for installed AutoCAD versions.
 /// </summary>
+#if !NETFRAMEWORK
 [SupportedOSPlatform("windows")]
+#endif
 public static class AutoCadDetector
 {
     /// <summary>Result of an AutoCAD detection attempt.</summary>
@@ -25,6 +27,32 @@ public static class AutoCadDetector
     /// </summary>
     public static DetectionResult DetectInstallation()
     {
+        foreach (var path in new[]
+        {
+            @"D:\haochenCAD\浩辰CAD 2024",
+            @"C:\Program Files\Gstarsoft\GstarCAD 2024"
+        })
+        {
+            if (IsValidAutoCadPath(path))
+            {
+                return new DetectionResult
+                {
+                    Found = true,
+                    InstallPath = path,
+                    Version = "2024",
+                    ProductName = "GstarCAD/浩辰CAD"
+                };
+            }
+        }
+
+        // GstarCAD/浩辰CAD installations do not always register under Autodesk keys.
+        // Prefer the standard Windows uninstall records when InstallLocation is present.
+        foreach (var view in new[] { RegistryView.Registry64, RegistryView.Registry32 })
+        {
+            var gstarResult = ScanInstalledProducts(view);
+            if (gstarResult.Found) return gstarResult;
+        }
+
         // Priority-ordered registry paths to check
         var registryPaths = new[]
         {
@@ -69,6 +97,63 @@ public static class AutoCadDetector
         return new DetectionResult { Found = false };
     }
 
+    private static DetectionResult ScanInstalledProducts(RegistryView view)
+    {
+        try
+        {
+            using var hklm = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, view);
+            using var uninstall = hklm.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall");
+            if (uninstall == null) return new DetectionResult();
+
+            foreach (var subKeyName in uninstall.GetSubKeyNames())
+            {
+                using var product = uninstall.OpenSubKey(subKeyName);
+                var displayName = product?.GetValue("DisplayName") as string;
+                if (string.IsNullOrWhiteSpace(displayName) ||
+                    (!displayName.Contains("GstarCAD", StringComparison.OrdinalIgnoreCase) &&
+                     !displayName.Contains("浩辰CAD", StringComparison.OrdinalIgnoreCase)))
+                {
+                    continue;
+                }
+
+                var installLocation = product?.GetValue("InstallLocation") as string;
+                if (!string.IsNullOrWhiteSpace(installLocation) && IsValidAutoCadPath(installLocation))
+                {
+                    return new DetectionResult
+                    {
+                        Found = true,
+                        InstallPath = installLocation.TrimEnd(Path.DirectorySeparatorChar),
+                        Version = product?.GetValue("DisplayVersion") as string ?? string.Empty,
+                        ProductName = displayName
+                    };
+                }
+
+                var displayIcon = product?.GetValue("DisplayIcon") as string;
+                if (!string.IsNullOrWhiteSpace(displayIcon))
+                {
+                    var executable = displayIcon.Trim('"').Split(',')[0];
+                    var directory = Path.GetDirectoryName(executable);
+                    if (!string.IsNullOrWhiteSpace(directory) && IsValidAutoCadPath(directory))
+                    {
+                        return new DetectionResult
+                        {
+                            Found = true,
+                            InstallPath = directory,
+                            Version = product?.GetValue("DisplayVersion") as string ?? string.Empty,
+                            ProductName = displayName
+                        };
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Debug(ex, "Failed to scan installed CAD products ({View})", view);
+        }
+
+        return new DetectionResult();
+    }
+
     /// <summary>
     /// Check if the specified path looks like a valid AutoCAD installation
     /// (contains acad.exe).
@@ -78,7 +163,8 @@ public static class AutoCadDetector
         if (string.IsNullOrWhiteSpace(path)) return false;
         try
         {
-            return File.Exists(Path.Combine(path, "acad.exe"));
+            return File.Exists(Path.Combine(path, "acad.exe")) ||
+                   File.Exists(Path.Combine(path, "gcad.exe"));
         }
         catch
         {
@@ -94,9 +180,12 @@ public static class AutoCadDetector
         var appDir = baseDirectory ?? AppDomain.CurrentDomain.BaseDirectory;
         var searchDirs = new List<string>();
 
-        // 1. Same directory as the main app (published or dev)
+        // 1. Bundled plugin directory, then the legacy same-directory layout.
         if (!string.IsNullOrEmpty(appDir))
+        {
+            searchDirs.Add(Path.Combine(appDir, "CadPlugin"));
             searchDirs.Add(appDir);
+        }
 
         // 2. Publish output directory (single-file publish scenario)
         if (!string.IsNullOrEmpty(appDir))
@@ -111,8 +200,11 @@ public static class AutoCadDetector
         if (!string.IsNullOrEmpty(appDir))
         {
             var srcDir = Path.GetFullPath(Path.Combine(appDir, "..", "..", "..", ".."));
-            searchDirs.Add(Path.Combine(srcDir, "DwgTranslator.Cad", "bin", "Debug", "net8.0"));
-            searchDirs.Add(Path.Combine(srcDir, "DwgTranslator.Cad", "bin", "Release", "net8.0"));
+            foreach (var framework in new[] { "net48", "net8.0" })
+            {
+                searchDirs.Add(Path.Combine(srcDir, "DwgTranslator.Cad", "bin", "Debug", framework));
+                searchDirs.Add(Path.Combine(srcDir, "DwgTranslator.Cad", "bin", "Release", framework));
+            }
         }
 
         foreach (var dir in searchDirs)

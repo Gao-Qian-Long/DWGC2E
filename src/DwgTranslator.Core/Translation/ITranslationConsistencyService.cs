@@ -24,6 +24,9 @@ public interface ITranslationConsistencyService
     /// </summary>
     void AddToCache(string sourceText, string translatedText);
 
+    /// <summary>Remove an invalid or stale cached translation.</summary>
+    void RemoveFromCache(string sourceText);
+
     /// <summary>
     /// Batch-add multiple entries to the cache.
     /// </summary>

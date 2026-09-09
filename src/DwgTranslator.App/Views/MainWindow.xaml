@@ -5,7 +5,8 @@
         xmlns:controls="clr-namespace:DwgTranslator.App.Views.Controls"
         xmlns:views="clr-namespace:DwgTranslator.App.Views"
         Title="{conv:Localize AppTitle}" Height="780" Width="1280"
-        Icon="/icon.ico"
+        MinHeight="680" MinWidth="1050"
+        Icon="pack://application:,,,/icon.ico"
         WindowStartupLocation="CenterScreen"
         Topmost="False"
         WindowStyle="None"
@@ -17,7 +18,7 @@
 
     <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="36"/>
+            <RowDefinition Height="40"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -30,13 +31,13 @@
         <controls:TitleBarControl Grid.Row="0"/>
 
         <!-- ═══ Row 1: Toolbar — card-grouped action buttons ═══ -->
-        <controls:MainToolBar Grid.Row="1" Margin="8,4,8,0"/>
+        <controls:MainToolBar Grid.Row="1" Margin="10,6,10,0"/>
 
         <!-- ═══ Row 2: Filter + Stats card ═══ -->
-        <controls:FilterStatsBar Grid.Row="2" Margin="8,4,8,0"/>
+        <controls:FilterStatsBar Grid.Row="2" Margin="10,6,10,0"/>
 
         <!-- ═══ Row 3: Progress Bar card ═══ -->
-        <Border Grid.Row="3" Margin="8,4,8,0"
+        <Border Grid.Row="3" Margin="10,6,10,0"
                 Visibility="{Binding IsProcessing, Converter={StaticResource BoolToVis}}"
                 Style="{StaticResource StripCard}" Padding="6,3">
             <Grid>
@@ -88,12 +89,12 @@
         </Border>
 
         <!-- ═══ Row 4: DataGrid card ═══ -->
-        <controls:TranslationDataGrid Grid.Row="4" Margin="8,4,8,8"/>
+        <controls:TranslationDataGrid Grid.Row="4" Margin="10,6,10,10"/>
 
         <!-- ═══ Row 5: Log Viewer Panel (collapsible) ═══ -->
         <views:LogViewerPanel Grid.Row="5" x:Name="LogPanel"
                               DataContext="{Binding LogViewModel}"
-                              MaxHeight="280" Margin="8,0,8,0"
+                              MaxHeight="280" Margin="10,0,10,0"
                               Visibility="{Binding IsVisible, Converter={StaticResource BoolToVis}}"/>
 
         <!-- ═══ Row 6: Status Bar card ═══ -->
@@ -105,8 +106,6 @@
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
@@ -122,7 +121,7 @@
                                 <BeginStoryboard>
                                     <Storyboard RepeatBehavior="Forever">
                                         <ColorAnimation Storyboard.TargetProperty="Background.Color"
-                                                        From="#D97706" To="#4F46E5" Duration="0:0:0.8"
+                                                        From="#D97706" To="#2563EB" Duration="0:0:0.8"
                                                         AutoReverse="True"/>
                                     </Storyboard>
                                 </BeginStoryboard>
@@ -130,24 +129,25 @@
                         </Border.Triggers>
                     </Border>
                     <TextBlock Text="{Binding StatusMessage}" TextTrimming="CharacterEllipsis"
-                               FontSize="11.5" Foreground="{DynamicResource Brush.TextSecondary}"
+                               FontSize="12" Foreground="{DynamicResource Brush.TextSecondary}"
                                VerticalAlignment="Center"/>
                 </StackPanel>
 
-                <!-- Glossary stats -->
-                <TextBlock Grid.Column="1" Text="{Binding GlossaryStatsText}"
-                           Foreground="{DynamicResource Brush.TextMuted}" FontSize="11"
-                           Margin="0,0,15,0" VerticalAlignment="Center"/>
-
-                <!-- License status -->
-                <TextBlock Grid.Column="2" Text="{Binding LicenseStatusText}"
-                           Foreground="{DynamicResource Brush.Warning}" FontSize="11"
-                           Margin="0,0,15,0" FontWeight="SemiBold" VerticalAlignment="Center"/>
-
-                <!-- Version -->
-                <TextBlock Grid.Column="3" Text="DWG Translator v2.1"
-                           Foreground="{DynamicResource Brush.TextMuted}" FontSize="10"
-                           VerticalAlignment="Center"/>
+                <!-- Glossary stats + Version + License -->
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding GlossaryStatsText}"
+                               Foreground="{DynamicResource Brush.TextMuted}" FontSize="12"
+                               Margin="0,0,15,0" VerticalAlignment="Center"/>
+                    <TextBlock Text="DWG Translator v2.1"
+                               Foreground="{DynamicResource Brush.TextMuted}" FontSize="12"
+                               VerticalAlignment="Center"/>
+                    <TextBlock Text="&#xB7;" Foreground="{DynamicResource Brush.TextMuted}" FontSize="12"
+                               Margin="6,0" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding LicenseStatusText}"
+                               Foreground="{DynamicResource Brush.TextMuted}" FontSize="12"
+                               Visibility="{Binding IsLicensingEnabled, Converter={StaticResource BoolToVis}}"
+                               VerticalAlignment="Center"/>
+                </StackPanel>
             </Grid>
         </Border>
     </Grid>

@@ -81,7 +81,7 @@
                 <TextBlock Style="{StaticResource BodyText}" Text="A: 这是正常现象。请注意：该对话框可能在 AutoCAD 窗口后面！请点击任务栏的 AutoCAD 图标切换过去，然后点击「始终加载」(Always Load)。"/>
 
                 <TextBlock Style="{StaticResource BodyText}" FontWeight="SemiBold" Foreground="{DynamicResource Brush.TextPrimary}" Margin="0,8,0,0" Text="Q: 体验版用完了怎么办？"/>
-                <TextBlock Style="{StaticResource BodyText}" Text="A: 点击工具栏「授权」按钮，输入激活码升级。买断制 ¥699 永久使用，订阅制 ¥49/月。"/>
+                <TextBlock Style="{StaticResource BodyText}" Text="A: 当前版本暂不启用授权限制，可直接使用全部功能。后续商业版本将在设置中提供授权管理。"/>
 
                 <TextBlock Style="{StaticResource BodyText}" FontWeight="SemiBold" Foreground="{DynamicResource Brush.TextPrimary}" Margin="0,8,0,0" Text="Q: 切换翻译方向后之前的译文还在吗？"/>
                 <TextBlock Style="{StaticResource BodyText}" Text="A: 切换方向后，已翻译的条目会被重置为「待翻译」，需重新翻译。建议先导出 Excel 备份。"/>

@@ -53,6 +53,7 @@ public class DwgWriterService : IDwgWriterService, IDxfWriterService
 
         cancellationToken.ThrowIfCancellationRequested();
 
+        string? tempOutputPath = null;
         try
         {
             // 2. Read the original file
@@ -71,16 +72,17 @@ public class DwgWriterService : IDwgWriterService, IDxfWriterService
             Log.Information("Translation map: {Count} entities to replace", translationMap.Count);
 
             // 5. Process all entity collections: ModelSpace, layouts, block definitions
-            var emptyFrames = new List<(double minX, double minY, double maxX, double maxY)>();
+            var modelFrames = DwgFrameDetector.DetectFrames(doc.ModelSpace.Entities, doc);
             int modelSpaceCount = DwgTextReplacer.ProcessEntityCollection(
-                doc.ModelSpace.Entities, translationMap, result, cnToEn, doc, emptyFrames);
+                doc.ModelSpace.Entities, translationMap, result, cnToEn, doc, modelFrames);
             Log.Information("ModelSpace: {Count} replacements", modelSpaceCount);
 
             foreach (var layout in doc.Layouts)
             {
                 if (layout.Name == "Model" || layout.AssociatedBlock == null) continue;
+                var layoutFrames = DwgFrameDetector.DetectFrames(layout.AssociatedBlock.Entities, doc);
                 int layoutCount = DwgTextReplacer.ProcessEntityCollection(
-                    layout.AssociatedBlock.Entities, translationMap, result, cnToEn, doc, emptyFrames);
+                    layout.AssociatedBlock.Entities, translationMap, result, cnToEn, doc, layoutFrames);
                 if (layoutCount > 0)
                     Log.Debug("Layout '{Name}': {Count} replacements", layout.Name, layoutCount);
             }
@@ -90,29 +92,60 @@ public class DwgWriterService : IDwgWriterService, IDxfWriterService
                 if (blockRecord == null) continue;
                 if (blockRecord.Name.StartsWith("*Model_Space", StringComparison.OrdinalIgnoreCase)) continue;
                 if (blockRecord.Name.StartsWith("*Paper_Space", StringComparison.OrdinalIgnoreCase)) continue;
+                var blockFrames = DwgFrameDetector.DetectFrames(blockRecord.Entities, doc);
                 int blockCount = DwgTextReplacer.ProcessEntityCollection(
-                    blockRecord.Entities, translationMap, result, cnToEn, doc, emptyFrames);
+                    blockRecord.Entities, translationMap, result, cnToEn, doc, blockFrames);
                 if (blockCount > 0)
                     Log.Debug("Block '{Name}': {Count} replacements", blockRecord.Name, blockCount);
             }
 
             // 7. Log any unmatched entities
             LogUnmatchedHandles(translationMap);
+            if (translationMap.Count > 0 || result.FailCount > 0 || result.Errors.Count > 0)
+                throw new InvalidOperationException("Writeback incomplete; output was not saved. Unmatched handles: " +
+                    string.Join(", ", translationMap.Keys.Take(20)));
 
             // 8. Save the modified document
             EnsureOutputDirectory(outputFilePath);
             cancellationToken.ThrowIfCancellationRequested();
 
+            if (!isDxfOutput && doc.Header.Version == ACadVersion.AC1021)
+            {
+                Log.Information("Converting unsupported DWG version AC1021 to AC1024 for output");
+                doc.Header.Version = ACadVersion.AC1024;
+            }
+
             Log.Information("Writing {Format} output file...", isDxfOutput ? "DXF" : "DWG");
-            WriteDocument(doc, outputFilePath, isDxfOutput);
+            tempOutputPath = outputFilePath + "." + Guid.NewGuid().ToString("N") + ".tmp";
+            WriteDocument(doc, tempOutputPath, isDxfOutput);
+            if (!File.Exists(tempOutputPath) || new FileInfo(tempOutputPath).Length == 0)
+                throw new IOException("CAD writer produced an empty output file");
+
+            cancellationToken.ThrowIfCancellationRequested();
+            File.Move(tempOutputPath, outputFilePath, overwrite: true);
+            tempOutputPath = null;
 
             Log.Information("{Format} writeback complete: {Success} replaced, {Failed} failed",
                 isDxfOutput ? "DXF" : "DWG", result.SuccessCount, result.FailCount);
         }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
             Log.Error(ex, "{Format} writeback failed", isDxfOutput ? "DXF" : "DWG");
+            result.SuccessCount = 0;
+            result.FailCount = entities.Count;
             result.Errors.Add($"Writeback error: {ex.Message}");
+        }
+        finally
+        {
+            if (!string.IsNullOrEmpty(tempOutputPath))
+            {
+                try { if (File.Exists(tempOutputPath)) File.Delete(tempOutputPath); }
+                catch (Exception cleanupEx) { Log.Debug(cleanupEx, "Failed to remove temporary output {Path}", tempOutputPath); }
+            }
         }
 
         return result;
@@ -162,8 +195,8 @@ public class DwgWriterService : IDwgWriterService, IDxfWriterService
         var map = new Dictionary<string, CoreTextEntity>(StringComparer.OrdinalIgnoreCase);
         foreach (var entity in entities)
         {
-            if (entity.Status == TranslationStatus.Translated ||
-                entity.Status == TranslationStatus.Reviewed)
+            if (entity.Status is TranslationStatus.Translated or TranslationStatus.Reviewed
+                or TranslationStatus.WritebackSuccess or TranslationStatus.WritebackFailed)
             {
                 var handle = CleanHandle(entity.Handle);
                 if (!string.IsNullOrEmpty(handle))

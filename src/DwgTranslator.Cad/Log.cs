@@ -1,4 +1,8 @@
+#if GSTARCAD
+using Gssoft.Gscad.EditorInput;
+#else
 using Autodesk.AutoCAD.EditorInput;
+#endif
 
 namespace DwgTranslator.Cad;
 

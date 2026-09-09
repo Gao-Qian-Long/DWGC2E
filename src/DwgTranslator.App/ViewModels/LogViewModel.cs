@@ -79,8 +79,8 @@ public partial class LogViewModel : ObservableObject, IDisposable
     {
         var dialog = new SaveFileDialog
         {
-            Filter = "Log Files|*.log|Text Files|*.txt|All Files|*.*",
-            Title = "Export Logs",
+            Filter = "日志文件|*.log|文本文件|*.txt|所有文件|*.*",
+            Title = "导出运行日志",
             FileName = $"dwgtranslator_logs_{DateTime.Now:yyyyMMdd_HHmmss}.log"
         };
 
@@ -93,7 +93,7 @@ public partial class LogViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Failed to export logs: {ex.Message.Replace('\\', '/')}", "Export Error",
+            MessageBox.Show($"导出日志失败：{ex.Message.Replace('\\', '/')}", "导出失败",
                 MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }

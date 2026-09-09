@@ -10,24 +10,38 @@ namespace DwgTranslator.App.Views;
 /// </summary>
 public partial class LogViewerPanel : UserControl
 {
+    private LogViewModel? _subscribedViewModel;
+
     public LogViewerPanel()
     {
         InitializeComponent();
         Loaded += OnLoaded;
+        Unloaded += OnUnloaded;
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
         if (DataContext is LogViewModel vm)
         {
-            vm.LogEntries.CollectionChanged += (_, _) =>
-            {
-                if (vm.AutoScroll && LogListView.Items.Count > 0)
-                {
-                    LogListView.ScrollIntoView(LogListView.Items[^1]);
-                }
-            };
+            if (ReferenceEquals(_subscribedViewModel, vm)) return;
+            if (_subscribedViewModel != null)
+                _subscribedViewModel.LogEntries.CollectionChanged -= OnLogEntriesChanged;
+            _subscribedViewModel = vm;
+            vm.LogEntries.CollectionChanged += OnLogEntriesChanged;
         }
+    }
+
+    private void OnUnloaded(object sender, RoutedEventArgs e)
+    {
+        if (_subscribedViewModel != null)
+            _subscribedViewModel.LogEntries.CollectionChanged -= OnLogEntriesChanged;
+        _subscribedViewModel = null;
+    }
+
+    private void OnLogEntriesChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+    {
+        if (_subscribedViewModel?.AutoScroll == true && LogListView.Items.Count > 0)
+            LogListView.ScrollIntoView(LogListView.Items[^1]);
     }
 }
 
@@ -44,7 +58,7 @@ public class StringToVisibilityConverter : System.Windows.Data.IValueConverter
 
     public object ConvertBack(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
     {
-        throw new NotImplementedException();
+        return System.Windows.Data.Binding.DoNothing;
     }
 }
 
@@ -60,7 +74,7 @@ public class DurationToVisibilityConverter : System.Windows.Data.IValueConverter
 
     public object ConvertBack(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
     {
-        throw new NotImplementedException();
+        return System.Windows.Data.Binding.DoNothing;
     }
 }
 
@@ -81,6 +95,6 @@ public class SourceFilterVisibilityConverter : System.Windows.Data.IValueConvert
 
     public object ConvertBack(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
     {
-        throw new NotImplementedException();
+        return System.Windows.Data.Binding.DoNothing;
     }
 }

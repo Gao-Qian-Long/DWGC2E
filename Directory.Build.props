@@ -14,5 +14,12 @@
     <AutoCadDir Condition="'$(AutoCadDir)' == '' And Exists('C:\Program Files\Autodesk\AutoCAD 2026')">C:\Program Files\Autodesk\AutoCAD 2026</AutoCadDir>
     <AutoCadDir Condition="'$(AutoCadDir)' == '' And Exists('C:\Program Files\Autodesk\AutoCAD 2025')">C:\Program Files\Autodesk\AutoCAD 2025</AutoCadDir>
     <AutoCadDir Condition="'$(AutoCadDir)' == '' And Exists('D:\autocad2021\AutoCAD 2021')">D:\autocad2021\AutoCAD 2021</AutoCadDir>
+    <!-- GstarCAD/浩辰 CAD fallback. No download is required when these managed API DLLs exist. -->
+    <GstarCadDir Condition="'$(GstarCadDir)' == ''">$(GSTAR_CAD_DIR)</GstarCadDir>
+    <GstarCadDir Condition="'$(GstarCadDir)' == '' And Exists('D:\haochenCAD\浩辰CAD 2024\GcDbMgd.dll')">D:\haochenCAD\浩辰CAD 2024</GstarCadDir>
+    <CadPlatform Condition="'$(CadPlatform)' == '' And '$(AutoCadDir)' != ''">AutoCAD</CadPlatform>
+    <CadPlatform Condition="'$(CadPlatform)' == '' And '$(GstarCadDir)' != ''">GstarCAD</CadPlatform>
+    <CadPluginTargetFramework Condition="'$(CadPlatform)' == 'GstarCAD'">net48</CadPluginTargetFramework>
+    <CadPluginTargetFramework Condition="'$(CadPlatform)' != 'GstarCAD'">net8.0</CadPluginTargetFramework>
   </PropertyGroup>
 </Project>

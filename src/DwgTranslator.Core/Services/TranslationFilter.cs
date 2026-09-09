@@ -1,4 +1,4 @@
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
 
 namespace DwgTranslator.Core.Services;
 
@@ -8,9 +8,22 @@ namespace DwgTranslator.Core.Services;
 /// </summary>
 internal static class TranslationFilter
 {
+    // Numeric / symbol-only text (dimensions, codes, pure numbers). Includes common
+    // engineering symbols and Chinese numerals that should not be translated alone.
     private static readonly Regex NumericOnlyRegex = new(
-        @"^[\s\d\.\,\+\-\*\/\=<>≤≥±°\#\%‰〇零一二三四五六七八九十百千万亿φΦ⌀ⓧⓓ]+$",
+        @"^[\s\d\.\,\+\-\*\/\=\<\>\(\)\[\]\{\|\\_~`@&\$\^±×÷°\#\%‰∞≈≠≤≥μΩΦφØø⌀′″'""·•–—]+$",
         RegexOptions.Compiled);
+
+    // Common engineering tokens that should never be sent for translation alone
+    // (unit/size/code labels that appear on mechanical drawings).
+    private static readonly HashSet<string> EngineeringTokens = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "KM", "CB", "M", "DN", "PN", "IP", "AC", "DC", "VAC", "VDC", "HZ", "RPM",
+        "NPT", "BSP", "UNC", "UNF", "ISO", "DIN", "GB", "JB", "HRC", "HB", "HV",
+        "Ra", "Rz", "A", "B", "C", "D", "E", "F", "G", "H", "L", "R", "S", "T",
+        "W", "X", "Y", "Z", "N", "P", "Q", "V", "PE", "PEN", "GND", "NC", "NO",
+        "RFS", "MMC", "LMC"
+    };
 
     /// <summary>
     /// Check if text should be skipped from translation (numeric-only, already target language, etc.).
@@ -20,12 +33,16 @@ internal static class TranslationFilter
         if (string.IsNullOrWhiteSpace(text)) return true;
         var trimmed = text.Trim();
 
-        // Engineering labels: short text with digits and few letters (e.g. 24V, Φ12, M8, IP65, 50Hz)
-        if (trimmed.Length <= 15 && trimmed.Any(char.IsDigit) && !HasCjk(trimmed))
-        {
-            var letterCount = trimmed.Count(char.IsLetter);
-            if (letterCount <= 5) return true;
-        }
+        // Pure engineering token (KM, CB, M8 already handled by length/digit rule below)
+        if (IsEngineeringToken(trimmed)) return true;
+
+        // Engineering labels: short text with digits and few letters (e.g. 24V, φ12, M8, IP65, 50Hz)
+        // Do not classify natural labels such as "Motor 2" as engineering codes
+        // merely because they contain a digit and only a few letters.
+
+        // Short all-caps alphanumeric codes without CJK (e.g. KM, CB, GB/T, H7)
+        if (!HasCjk(trimmed) && trimmed.Length <= 15 && IsMostlyCode(trimmed))
+            return true;
 
         // Already target language detection
         if (sourceLang == "ZH" && targetLang == "EN")
@@ -40,9 +57,55 @@ internal static class TranslationFilter
         return false;
     }
 
-    public static bool IsNumericOnly(string text) => NumericOnlyRegex.IsMatch(text.Trim());
-    public static bool HasCjk(string text) => text.Any(c => c >= 0x4E00 && c <= 0x9FFF);
+    public static bool IsNumericOnly(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return true;
+        return NumericOnlyRegex.IsMatch(text.Trim());
+    }
+
+    public static bool HasCjk(string text) => TranslationQualityValidator.ContainsCjk(text);
     public static bool HasAsciiLetters(string text) => text.Any(c => (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z'));
+
+    private static bool IsEngineeringToken(string text)
+    {
+        if (EngineeringTokens.Contains(text)) return true;
+
+        // Patterns like M8, M10x1.5, IP65, DN50, PN16, R3.2, 2xM8
+        if (Regex.IsMatch(text, @"^(?:[0-9]+[xX×])?(?:M|DN|PN|IP|R|G|NPT|UNC|UNF)\d+(?:[.xX×/]\d+)*$", RegexOptions.IgnoreCase))
+            return true;
+
+        // Unit-like: 24V, 50Hz, 3kW, 10mm, 0.5MPa
+        if (Regex.IsMatch(text, @"^\d+(\.\d+)?\s*(V|VAC|VDC|A|mA|kW|W|Hz|rpm|mm|cm|m|kg|N|MPa|kPa|bar|°C|C)?$", RegexOptions.IgnoreCase))
+            return true;
+
+        return false;
+    }
+
+    private static bool IsMostlyCode(string text)
+    {
+        // All caps letters/digits with optional / - . (e.g. GB/T, H7, CB)
+        int letters = 0, others = 0;
+        foreach (var c in text)
+        {
+            if (char.IsLetter(c))
+            {
+                if (char.IsLower(c)) return false;
+                letters++;
+            }
+            else if (char.IsDigit(c) || c is '/' or '-' or '.' or '_')
+            {
+                // allowed separators
+            }
+            else if (!char.IsWhiteSpace(c))
+            {
+                others++;
+            }
+        }
+        // Pure alphabetic uppercase words (MOTOR, VALVE, OPEN...) are language,
+        // not identifiers. Require a digit or an explicit code separator.
+        bool hasCodeMarker = text.Any(char.IsDigit) && !text.Any(char.IsWhiteSpace);
+        return letters > 0 && others == 0 && hasCodeMarker;
+    }
 
     /// <summary>
     /// Clean translation output: trim, strip "Translated:" prefix.
@@ -55,6 +118,13 @@ internal static class TranslationFilter
         {
             var ci = text.IndexOf(':');
             if (ci > 0 && ci < 30) text = text[(ci + 1)..].Trim();
+        }
+        // Strip surrounding markdown code fences some models emit
+        if (text.StartsWith("```") && text.EndsWith("```"))
+        {
+            text = text.Trim('`').Trim();
+            if (text.StartsWith("text", StringComparison.OrdinalIgnoreCase))
+                text = text[4..].TrimStart();
         }
         return text;
     }

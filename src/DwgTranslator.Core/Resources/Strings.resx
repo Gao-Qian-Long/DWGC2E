@@ -224,7 +224,7 @@
     <value>查看授权状态或输入激活码</value>
   </data>
   <data name="TipSettings" xml:space="preserve">
-    <value>配置 API 和 AutoCAD 路径</value>
+    <value>配置 API、浩辰CAD 路径和在线回写插件</value>
   </data>
   <data name="TipLog" xml:space="preserve">
     <value>显示/隐藏日志查看器</value>
@@ -461,7 +461,7 @@
     <value>模型:</value>
   </data>
   <data name="SettingsAutoCadSection" xml:space="preserve">
-    <value>AutoCAD 配置（精确回写模式需要）</value>
+    <value>CAD 在线回写配置（已适配浩辰CAD 2024）</value>
   </data>
   <data name="SettingsInstallPath" xml:space="preserve">
     <value>安装路径:</value>
@@ -485,22 +485,22 @@
     <value>请先填写 API Key</value>
   </data>
   <data name="SettingsDetecting" xml:space="preserve">
-    <value>正在检测 AutoCAD 安装...</value>
+    <value>正在检测浩辰CAD / AutoCAD 安装...</value>
   </data>
   <data name="SettingsDetected" xml:space="preserve">
     <value>已检测到: {0} ({1}) — {2}</value>
   </data>
   <data name="SettingsNotDetected" xml:space="preserve">
-    <value>未检测到 AutoCAD 安装。请手动选择安装目录，或确认 AutoCAD 已安装。</value>
+    <value>未检测到浩辰CAD或 AutoCAD。请手动选择包含 gcad.exe / acad.exe 的安装目录。</value>
   </data>
   <data name="SettingsPathNotConfigured" xml:space="preserve">
-    <value>未配置 AutoCAD 路径 — 精确回写模式不可用，将使用离线回写</value>
+    <value>未配置 CAD 路径 — 在线精确回写不可用，可继续使用离线回写</value>
   </data>
   <data name="SettingsPathValid" xml:space="preserve">
-    <value>AutoCAD 路径有效 (已找到 acad.exe)</value>
+    <value>CAD 路径有效（已找到 gcad.exe / acad.exe）</value>
   </data>
   <data name="SettingsPathInvalid" xml:space="preserve">
-    <value>路径无效 — 未找到 acad.exe，请确认是否为 AutoCAD 安装目录</value>
+    <value>路径无效 — 未找到 gcad.exe / acad.exe，请确认 CAD 安装目录</value>
   </data>
   <data name="SettingsLoadFailed" xml:space="preserve">
     <value>加载设置失败。请检查设置文件是否损坏。</value>
@@ -509,7 +509,7 @@
     <value>保存设置失败。请检查文件权限或磁盘空间。</value>
   </data>
   <data name="SettingsBrowseAutoCad" xml:space="preserve">
-    <value>选择 AutoCAD 安装目录（包含 acad.exe 的文件夹）</value>
+    <value>选择 CAD 安装目录（包含 gcad.exe / acad.exe）</value>
   </data>
   <data name="SettingsBrowsePlugin" xml:space="preserve">
     <value>选择 DwgTranslator.Cad.dll 插件文件</value>
@@ -527,13 +527,13 @@
     <value>根据您的环境选择合适的回写方式</value>
   </data>
   <data name="ExportModeAutoCad" xml:space="preserve">
-    <value>AutoCAD 精确回写</value>
+    <value>CAD 在线精确回写</value>
   </data>
   <data name="ExportModeRecommended" xml:space="preserve">
     <value>推荐</value>
   </data>
   <data name="ExportModeAutoCadFeature1" xml:space="preserve">
-    <value>• 在 AutoCAD 进程内精确替换文字</value>
+    <value>• 在浩辰CAD / AutoCAD 进程内精确替换文字</value>
   </data>
   <data name="ExportModeAutoCadFeature2" xml:space="preserve">
     <value>• 自动检测图框，防止文字溢出</value>
@@ -545,22 +545,22 @@
     <value>• 智能调整文字宽度和字高</value>
   </data>
   <data name="ExportModeAutoCadWarning" xml:space="preserve">
-    <value>⚠ 需要 AutoCAD 正在运行</value>
+    <value>已安装 CAD 即可；软件会自动启动并加载内置插件</value>
   </data>
   <data name="ExportModeOffline" xml:space="preserve">
     <value>离线回写</value>
   </data>
   <data name="ExportModeNoAutoCad" xml:space="preserve">
-    <value>无需 AutoCAD</value>
+    <value>无需启动 CAD</value>
   </data>
   <data name="ExportModeOfflineFeature1" xml:space="preserve">
-    <value>• 直接修改 DWG 文件，无需 AutoCAD</value>
+    <value>• 直接修改 DWG 文件，无需启动 CAD</value>
   </data>
   <data name="ExportModeOfflineFeature2" xml:space="preserve">
     <value>• 排版为估算值，可能需要微调</value>
   </data>
   <data name="ExportModeOfflineFeature3" xml:space="preserve">
-    <value>• 适合没有安装 AutoCAD 的场景</value>
+    <value>• 适合未安装 CAD 或批量快速处理的场景</value>
   </data>
   <data name="ExportModeOfflineFeature4" xml:space="preserve">
     <value>• 智能宽度和字高缩放</value>
@@ -838,12 +838,8 @@ AutoCAD 可能会弹出「是否加载来自非信任路径的程序集」安全
     <value>无法读取 AutoCAD 完成信号文件。</value>
   </data>
   <data name="AutoCadTimeout" xml:space="preserve">
-    <value>AutoCAD 回写超时。可能原因：
-1. 安全对话框未点击「始终加载」
-2. AutoCAD 正在处理大型文件
-3. 命令未成功执行
-4. 请检查 AutoCAD 命令行是否有错误提示
-配置文件位置: {0}</value>
+    <value>CAD 回写等待超时。程序已为大型图纸自动延长等待时间，请检查浩辰CAD命令行和日志后重试。
+诊断配置: {0}</value>
   </data>
   <data name="AutoCadWritebackError" xml:space="preserve">
     <value>AutoCAD 回写失败: {0}</value>

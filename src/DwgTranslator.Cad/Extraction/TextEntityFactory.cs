@@ -1,8 +1,20 @@
+#if GSTARCAD
+using Gssoft.Gscad.DatabaseServices;
+#else
 using Autodesk.AutoCAD.DatabaseServices;
+#endif
+#if GSTARCAD
+using Gssoft.Gscad.Geometry;
+#else
 using Autodesk.AutoCAD.Geometry;
+#endif
 using DwgTranslator.Core.Models;
 using System.Text.RegularExpressions;
+#if GSTARCAD
+using Point3dCad = Gssoft.Gscad.Geometry.Point3d;
+#else
 using Point3dCad = Autodesk.AutoCAD.Geometry.Point3d;
+#endif
 
 namespace DwgTranslator.Cad.Extraction;
 
@@ -95,6 +107,7 @@ internal static class TextEntityFactory
         return new TextEntity
         {
             Handle = $"{attRef.OwnerId.Handle}/{attRef.Tag}",
+            Status = AttributeTranslationPolicy.IsMetadataTag(attRef.Tag) ? TranslationStatus.Skipped : TranslationStatus.Pending,
             RawText = rawText,
             PlainText = plainText,
             FormatTemplate = rawText,
@@ -151,6 +164,8 @@ internal static class TextEntityFactory
             for (int col = 0; col < table.Columns.Count; col++)
             {
                 var cell = table.Cells[row, col];
+                // Preserve cells with multiple independent fields/formulas unchanged.
+                if (cell.Contents == null || cell.Contents.Count != 1) continue;
                 var cellText = GetCellText(cell);
                 if (string.IsNullOrWhiteSpace(cellText)) continue;
 

@@ -8,6 +8,12 @@ namespace DwgTranslator.Core.Models;
 /// </summary>
 public class AppConfig
 {
+    /// <summary>
+    /// Commercial licensing switch. Disabled for the current pre-commercial build;
+    /// the existing licensing implementation remains available for a later release.
+    /// </summary>
+    public bool LicensingEnabled { get; set; } = false;
+
     public string DeepSeekApiKey { get; set; } = string.Empty;
     public string DeepSeekBaseUrl { get; set; } = "https://api.deepseek.com";
     public string DeepSeekModel { get; set; } = "deepseek-chat";
@@ -15,6 +21,11 @@ public class AppConfig
     public string TargetLanguage { get; set; } = "EN";
     public string GlossaryPath { get; set; } = "glossaries/mechanical_zh_en.json";
     public int BatchSize { get; set; } = 50;
+    /// <summary>
+    /// Maximum number of simultaneous translation requests. Translation is I/O-bound,
+    /// so a value above the old fixed limit of 5 substantially improves large drawings.
+    /// </summary>
+    public int MaxTranslationConcurrency { get; set; } = 12;
     public int MaxRetryCount { get; set; } = 3;
     public double AutoScaleThreshold { get; set; } = 1.5;
     public double AutoScaleFactor { get; set; } = 0.95;

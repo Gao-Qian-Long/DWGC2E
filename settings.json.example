@@ -1,4 +1,5 @@
 {
+  "licensingEnabled": false,
   "deepSeekApiKey": "",
   "deepSeekBaseUrl": "https://api.deepseek.com",
   "deepSeekModel": "deepseek-chat",
@@ -6,6 +7,7 @@
   "targetLanguage": "EN",
   "glossaryPath": "glossaries/mechanical_zh_en.json",
   "batchSize": 50,
+  "maxTranslationConcurrency": 12,
   "maxRetryCount": 3,
   "autoScaleThreshold": 1.5,
   "autoScaleFactor": 0.95,

@@ -4,7 +4,9 @@ using DwgTranslator.Core.Models;
 using DwgTranslator.Core.Resources;
 using DwgTranslator.Core.Services;
 using System.IO;
+using System.Diagnostics;
 using System.Net.Http;
+using System.Text;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Media;
@@ -24,19 +26,25 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private string _autoCadPath = string.Empty;
     [ObservableProperty] private string _cadPluginPath = string.Empty;
     [ObservableProperty] private string _selectedLogLevel = "Debug";
+    [ObservableProperty] private int _maxTranslationConcurrency = 12;
     [ObservableProperty] private string _resultText = string.Empty;
     [ObservableProperty] private Brush _resultBrush = Brushes.Gray;
     [ObservableProperty] private string _autoCadStatusText = string.Empty;
     [ObservableProperty] private Brush _autoCadStatusBrush = Brushes.Gray;
     [ObservableProperty] private bool _isTesting;
+    [ObservableProperty] private bool _isTestingCad;
+    [ObservableProperty] private string _cadTestResultText = string.Empty;
+    [ObservableProperty] private Brush _cadTestResultBrush = Brushes.Gray;
 
     public string[] LogLevels { get; } = ["Verbose", "Debug", "Information", "Warning", "Error", "Fatal"];
+    public int[] TranslationConcurrencyChoices { get; } = [4, 8, 12, 16, 20];
 
     public SettingsViewModel(ILocalizationService? localizationService = null)
     {
         _settingsPath = Path.Combine(App.AppDataDir, "settings.json");
         _localizationService = localizationService ?? new LocalizationService();
         LoadSettings();
+        ApplyDetectedCadDefaults();
     }
 
     /// <summary>
@@ -56,6 +64,7 @@ public partial class SettingsViewModel : ObservableObject
             Model = config.DeepSeekModel ?? Model;
             AutoCadPath = config.AutoCadInstallPath ?? string.Empty;
             CadPluginPath = config.CadPluginPath ?? string.Empty;
+            MaxTranslationConcurrency = Math.Clamp(config.MaxTranslationConcurrency, 1, 20);
 
             if (!string.IsNullOrEmpty(config.MinimumLogLevel))
                 SelectedLogLevel = config.MinimumLogLevel;
@@ -85,6 +94,7 @@ public partial class SettingsViewModel : ObservableObject
             config.AutoCadInstallPath = AutoCadPath.Trim();
             config.CadPluginPath = CadPluginPath.Trim();
             config.MinimumLogLevel = SelectedLogLevel;
+            config.MaxTranslationConcurrency = Math.Clamp(MaxTranslationConcurrency, 1, 20);
 
             Directory.CreateDirectory(Path.GetDirectoryName(_settingsPath)!);
             File.WriteAllText(_settingsPath, JsonSerializer.Serialize(config, s_writeIndentedOptions));
@@ -179,12 +189,131 @@ public partial class SettingsViewModel : ObservableObject
             AutoCadStatusBrush = Brushes.Orange;
         }
 
-        if (string.IsNullOrEmpty(CadPluginPath))
+        if (string.IsNullOrEmpty(CadPluginPath) || !File.Exists(CadPluginPath))
         {
             var pluginPath = AutoCadDetector.FindCadPlugin();
             if (pluginPath != null)
                 CadPluginPath = pluginPath;
         }
+
+        UpdateAutoCadStatus();
+    }
+
+    private void ApplyDetectedCadDefaults()
+    {
+        if (!AutoCadDetector.IsValidAutoCadPath(AutoCadPath))
+        {
+            var detected = AutoCadDetector.DetectInstallation();
+            if (detected.Found)
+                AutoCadPath = detected.InstallPath;
+        }
+
+        if (string.IsNullOrWhiteSpace(CadPluginPath) || !File.Exists(CadPluginPath))
+            CadPluginPath = AutoCadDetector.FindCadPlugin() ?? string.Empty;
+
+        UpdateAutoCadStatus();
+    }
+
+    /// <summary>
+    /// Performs a real NETLOAD smoke test in the configured CAD executable.
+    /// This validates the executable path, plugin path, CLR compatibility and
+    /// private dependency closure instead of merely checking that files exist.
+    /// </summary>
+    public async Task TestCadIntegrationAsync()
+    {
+        ApplyDetectedCadDefaults();
+        IsTestingCad = true;
+        CadTestResultText = "正在启动CAD并验证插件…";
+        CadTestResultBrush = Brushes.Gray;
+
+        var scriptPath = Path.Combine(Path.GetTempPath(), $"dwgtranslator_cad_test_{Guid.NewGuid():N}.scr");
+        var markerPath = Path.Combine(Path.GetTempPath(), "DwgTranslator", "plugin_ping.txt");
+        Process? process = null;
+        try
+        {
+            var exePath = ResolveCadExecutable(AutoCadPath);
+            if (exePath == null)
+                throw new InvalidOperationException("CAD安装路径中没有找到 gcad.exe 或 acad.exe。");
+            if (string.IsNullOrWhiteSpace(CadPluginPath) || !File.Exists(CadPluginPath))
+                throw new FileNotFoundException("没有找到随软件发布的CAD插件。", CadPluginPath);
+
+            if (File.Exists(markerPath)) File.Delete(markerPath);
+            var pluginForCad = CadPluginPath.Replace('\\', '/');
+            File.WriteAllLines(scriptPath,
+            [
+                "_.NETLOAD",
+                pluginForCad,
+                "DWGTRANSLATORPING",
+                "_.QUIT",
+                "_N"
+            ], Encoding.Default);
+
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+            process = new Process
+            {
+                StartInfo = new ProcessStartInfo
+                {
+                    FileName = exePath,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    WindowStyle = ProcessWindowStyle.Hidden
+                }
+            };
+            process.StartInfo.ArgumentList.Add("/nologo");
+            process.StartInfo.ArgumentList.Add("/b");
+            process.StartInfo.ArgumentList.Add(scriptPath);
+
+            if (!process.Start())
+                throw new InvalidOperationException("CAD进程启动失败。");
+
+            while (!File.Exists(markerPath) && !process.HasExited)
+                await Task.Delay(250, cts.Token);
+
+            if (!File.Exists(markerPath))
+                throw new InvalidOperationException(
+                    process.HasExited
+                        ? $"CAD已退出且插件没有返回健康检查结果（退出码：{process.ExitCode}）。"
+                        : "CAD已启动，但插件没有返回健康检查结果。");
+
+            var marker = await File.ReadAllTextAsync(markerPath, cts.Token);
+            if (!marker.StartsWith("status=ok", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException($"插件返回异常：{marker}");
+
+            CadTestResultText = $"连接成功：{marker}";
+            CadTestResultBrush = Brushes.Green;
+        }
+        catch (OperationCanceledException)
+        {
+            CadTestResultText = "验证超时，请关闭CAD弹窗后重试。";
+            CadTestResultBrush = Brushes.Red;
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "CAD integration test failed");
+            CadTestResultText = $"验证失败：{ex.Message}";
+            CadTestResultBrush = Brushes.Red;
+        }
+        finally
+        {
+            if (process is { HasExited: false })
+            {
+                try { process.Kill(entireProcessTree: true); } catch { }
+            }
+            process?.Dispose();
+            try { if (File.Exists(scriptPath)) File.Delete(scriptPath); } catch { }
+            IsTestingCad = false;
+        }
+    }
+
+    private static string? ResolveCadExecutable(string installPath)
+    {
+        if (string.IsNullOrWhiteSpace(installPath)) return null;
+        foreach (var name in new[] { "gcad.exe", "acad.exe" })
+        {
+            var path = Path.Combine(installPath, name);
+            if (File.Exists(path)) return path;
+        }
+        return null;
     }
 
     /// <summary>

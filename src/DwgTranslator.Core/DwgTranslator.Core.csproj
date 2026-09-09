@@ -1,9 +1,13 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFrameworks>net8.0;net48</TargetFrameworks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <EnableDefaultCompileItems Condition="'$(TargetFramework)' == 'net48'">false</EnableDefaultCompileItems>
     <RootNamespace>DwgTranslator.Core</RootNamespace>
+    <!-- This product is Windows-only; registry and DPAPI calls are intentional. -->
+    <NoWarn Condition="'$(TargetFramework)' == 'net8.0'">$(NoWarn);CA1416</NoWarn>
   </PropertyGroup>
   <!--
     TODO(architecture): This Core project references infrastructure packages (ACadSharp, ClosedXML)
@@ -15,14 +19,28 @@
       - Make TextEntity a POCO and wrap it with an observable proxy in the UI layer
     Deferred because the move would require touching nearly every project in the solution.
   -->
-  <ItemGroup>
+  <ItemGroup Condition="'$(TargetFramework)' == 'net8.0'">
+    <Compile Remove="Compatibility\TextEntity.NetFramework.cs" />
     <PackageReference Include="ACadSharp" Version="3.6.12" />
-    <PackageReference Include="System.Net.Http.Json" Version="8.0.0" />
     <PackageReference Include="ClosedXML" Version="0.104.2" />
     <PackageReference Include="Serilog" Version="4.2.0" />
     <PackageReference Include="Serilog.Sinks.File" Version="6.0.0" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
-    <PackageReference Include="System.Text.Json" Version="8.0.0" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.2" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(TargetFramework)' == 'net48'">
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies.net48" Version="1.0.3" PrivateAssets="all" />
+  </ItemGroup>
+  <!-- The CLR 4.x CAD host only needs the writeback contract and layout helpers.
+       Keeping this surface small avoids shipping the WPF app's offline DWG/Excel stack in-process. -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net48'">
+    <Compile Include="Compatibility\IsExternalInit.cs" />
+    <Compile Include="Compatibility\TextEntity.NetFramework.cs" />
+    <Compile Include="Models\CadWriteResult.cs" />
+    <Compile Include="Models\AttributeTranslationPolicy.cs" />
+    <Compile Include="Models\WritebackConstants.cs" />
+    <Compile Include="Services\FontMapper.cs" />
+    <Compile Include="Services\TextWidthEstimator.cs" />
+    <Compile Include="Services\VerticalTextLayout.cs" />
   </ItemGroup>
 </Project>

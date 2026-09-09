@@ -1,4 +1,10 @@
+using System;
+using System.IO;
+#if NETFRAMEWORK
+using System.Web.Script.Serialization;
+#else
 using System.Text.Json;
+#endif
 
 namespace DwgTranslator.Cad;
 
@@ -11,12 +17,16 @@ internal static class CadFileLogger
     private const int MaxRetainedFiles = 5;
 
     private static readonly object FileLock = new();
+#if NETFRAMEWORK
+    private static readonly JavaScriptSerializer JsonSerializer = new();
+#else
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = false,
         DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
+#endif
 
     private static StreamWriter? _fileWriter;
     private static string? _logDirectory;
@@ -72,7 +82,7 @@ internal static class CadFileLogger
 
                 if (_fileWriter == null) return;
 
-                var json = JsonSerializer.Serialize(new
+                var entry = new
                 {
                     timestamp = timestamp.ToString("O"),
                     level = levelTag,
@@ -80,7 +90,12 @@ internal static class CadFileLogger
                     category = string.IsNullOrEmpty(category) ? null : category,
                     message,
                     exception
-                }, JsonOptions);
+                };
+#if NETFRAMEWORK
+                var json = JsonSerializer.Serialize(entry);
+#else
+                var json = System.Text.Json.JsonSerializer.Serialize(entry, JsonOptions);
+#endif
 
                 _fileWriter.WriteLine(json);
                 _currentFileSize += System.Text.Encoding.UTF8.GetByteCount(json) + Environment.NewLine.Length;

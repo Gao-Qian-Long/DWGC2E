@@ -1,13 +1,30 @@
+#if GSTARCAD
+using Gssoft.Gscad.DatabaseServices;
+#else
 using Autodesk.AutoCAD.DatabaseServices;
+#endif
+#if GSTARCAD
+using Gssoft.Gscad.Geometry;
+#else
 using Autodesk.AutoCAD.Geometry;
+#endif
 using DwgTranslator.Cad;
+using WBC = DwgTranslator.Core.Models.WritebackConstants;
 
 namespace DwgTranslator.Cad.Replacement;
 
+/// <summary>
+/// Online collision resolution using AutoCAD GeometricExtents + IntersectWith.
+/// Strategy order:
+///   1. Keep original height
+///   2. MText wrap / width constraint
+///   3. Micro-nudge position
+///   4. Height binary-search scale (last resort)
+///   5. Optional DBText -> MText conversion then re-run wrap
+/// Retests after every change.
+/// </summary>
 public static class CollisionResolver
 {
-    private const double MinHeightScale = 0.35;
-
     public static bool Resolve(
         Entity entity,
         BlockTableRecord btr,
@@ -18,74 +35,113 @@ public static class CollisionResolver
     {
         newEntityId = null;
         if (originalHeight <= 0) return true;
-        if (entity is Dimension or MLeader) return true;
+        if (entity is Dimension or MLeader or Table) return true;
 
         try
         {
-            entity.RecordGraphicsModified(true);
-            if (entity is MText mt) mt.RecordGraphicsModified(true);
+            Mark(entity);
 
-            Extents3d initialBounds;
-            try { initialBounds = CollisionDetector.GetCorrectedBounds(entity); }
-            catch { return true; }
+            // If extents cannot be computed, skip rather than destroying layout.
+            if (!TryGetBounds(entity, out _))
+                return true;
 
-            var nearbyEntities = CollisionDetector.CollectNearbyEntities(entity, btr, tr, originalHeight);
-
-            if (!CollisionDetector.HasAnyCollision(entity, nearbyEntities))
+            var nearby = CollisionDetector.CollectNearbyEntities(entity, btr, tr, originalHeight);
+            if (!CollisionDetector.HasAnyCollision(entity, nearby))
             {
-                Log.Debug("CollisionResolver: {Handle} no initial collision", entity.Handle);
+                Log.Debug("CollisionResolver: {Handle} clean", entity.Handle);
                 return true;
             }
 
-            Log.Information("CollisionResolver: {Handle} has collisions, resolving...", entity.Handle);
+            Log.Information("CollisionResolver: {Handle} colliding, resolving (origH={H:F2})",
+                entity.Handle, originalHeight);
 
-            double minHeight = originalHeight * MinHeightScale;
-            var savedState = SaveEntityState(entity);
+            var saved = SaveEntityState(entity);
 
-            // Strategy 1: MText wrap (force line wrapping for long single-line text)
+            // Always restore original height before attempts
+            SetEntityHeight(entity, originalHeight);
+            Mark(entity);
+
+            // Strategy 1: wrap (MText)
             if (entity is MText mtext)
             {
-                if (TryWrapMText(mtext, btr, tr, db, originalHeight))
+                if (TryWrapMText(mtext, btr, tr, originalHeight))
                 {
-                    Log.Information("CollisionResolver: {Handle} resolved by MText wrap", entity.Handle);
+                    Log.Information("CollisionResolver: {Handle} resolved by wrap", entity.Handle);
                     return true;
                 }
             }
 
-            // Strategy 2: Height scaling (binary search down to 35%)
-            entity.RecordGraphicsModified(true);
-            if (entity is MText mt2) mt2.RecordGraphicsModified(true);
-            try { _ = CollisionDetector.GetCorrectedBounds(entity); } catch { goto restoreAndFail; }
-
-            double currentHeight = GetEntityHeight(entity);
-            if (currentHeight > minHeight)
+            // Strategy 2: micro-nudge
+            if (TryNudge(entity, btr, tr, originalHeight))
             {
-                if (TryScaleHeight(entity, btr, tr, db, currentHeight, minHeight, originalHeight))
-                {
-                    Log.Information("CollisionResolver: {Handle} resolved by height scaling", entity.Handle);
-                    return true;
-                }
+                Log.Information("CollisionResolver: {Handle} resolved by nudge", entity.Handle);
+                return true;
             }
 
-            // Strategy 3: DBText -> MText conversion (only for DBText, not AttributeReference)
+            // Strategy 3: height scale (last resort, keep position from best attempt so far)
+            if (TryScaleHeight(entity, btr, tr, originalHeight))
+            {
+                Log.Information("CollisionResolver: {Handle} resolved by scale H={H:F2}",
+                    entity.Handle, GetEntityHeight(entity));
+                return true;
+            }
+
+            // Strategy 4: DBText -> MText then wrap
             if (entity is DBText dbText && entity is not AttributeReference)
             {
-                if (TryConvertDBTextToMText(dbText, btr, tr, originalHeight, out var convertedMTextId))
+                if (TryConvertDBTextToMText(dbText, btr, tr, originalHeight, out var convertedId))
                 {
-                    newEntityId = convertedMTextId;
-                    Log.Information("CollisionResolver: {Handle} converted DBText->MText", entity.Handle);
+                    newEntityId = convertedId;
+                    Log.Information("CollisionResolver: {Handle} converted DBText->MText", dbText.Handle);
                     return true;
                 }
             }
 
-            restoreAndFail:
-            Log.Warning("CollisionResolver: {Handle} all strategies exhausted", entity.Handle);
-            RestoreEntityState(entity, savedState);
-            return false;
+            // Residual: keep best-effort scaled height at original position rather than a large failed nudge.
+            RestoreEntityState(entity, saved);
+            // Apply soft min height only if current still collides and is larger than min
+            SetEntityHeight(entity, originalHeight);
+            Mark(entity);
+            nearby = CollisionDetector.CollectNearbyEntities(entity, btr, tr, originalHeight);
+            if (CollisionDetector.HasAnyCollision(entity, nearby))
+            {
+                // One final gentle scale toward min ratio
+                TryScaleHeight(entity, btr, tr, originalHeight);
+            }
+
+            nearby = CollisionDetector.CollectNearbyEntities(entity, btr, tr, originalHeight);
+            bool clean = !CollisionDetector.HasAnyCollision(entity, nearby);
+            if (!clean)
+                Log.Warning("CollisionResolver: {Handle} residual collision remains", entity.Handle);
+            return clean;
         }
         catch (Exception ex)
         {
             Log.Warning(ex, "CollisionResolver: unexpected error for {Handle}", entity.Handle);
+            return false;
+        }
+    }
+
+    private static void Mark(Entity entity)
+    {
+        try
+        {
+            entity.RecordGraphicsModified(true);
+            if (entity is MText mt) mt.RecordGraphicsModified(true);
+        }
+        catch { }
+    }
+
+    private static bool TryGetBounds(Entity entity, out Extents3d bounds)
+    {
+        bounds = default;
+        try
+        {
+            bounds = CollisionDetector.GetCorrectedBounds(entity);
+            return true;
+        }
+        catch
+        {
             return false;
         }
     }
@@ -106,6 +162,26 @@ public static class CollisionResolver
             case DBText t: t.Height = height; break;
             case MText m: m.TextHeight = height; break;
         }
+        Mark(entity);
+    }
+
+    private static Point3d? GetPosition(Entity entity) => entity switch
+    {
+        AttributeReference a => a.Position,
+        DBText t => t.Position,
+        MText m => m.Location,
+        _ => null
+    };
+
+    private static void SetPosition(Entity entity, Point3d p)
+    {
+        switch (entity)
+        {
+            case AttributeReference a: a.Position = p; break;
+            case DBText t: t.Position = p; break;
+            case MText m: m.Location = p; break;
+        }
+        Mark(entity);
     }
 
     private static Dictionary<string, object> SaveEntityState(Entity entity)
@@ -150,8 +226,7 @@ public static class CollisionResolver
                     if (state.TryGetValue("Width", out var w)) m.Width = (double)w;
                     break;
             }
-            entity.RecordGraphicsModified(true);
-            if (entity is MText mt) mt.RecordGraphicsModified(true);
+            Mark(entity);
         }
         catch (Exception ex)
         {
@@ -159,53 +234,64 @@ public static class CollisionResolver
         }
     }
 
-    private static bool TryWrapMText(
-        MText mtext,
-        BlockTableRecord btr,
-        Transaction tr,
-        Database db,
-        double originalHeight)
+    private static bool IsClean(Entity entity, BlockTableRecord btr, Transaction tr, double originalHeight)
     {
         try
         {
-            mtext.RecordGraphicsModified(true);
-            mtext.RecordGraphicsModified(true);
-            bool isSingleLine = !mtext.Contents.Contains("\\P");
-            if (!isSingleLine) return false;
+            Mark(entity);
+            var nearby = CollisionDetector.CollectNearbyEntities(entity, btr, tr, originalHeight);
+            return !CollisionDetector.HasAnyCollision(entity, nearby);
+        }
+        catch
+        {
+            return false;
+        }
+    }
 
-            Extents3d currentBounds;
-            try { currentBounds = CollisionDetector.GetCorrectedBounds(mtext); }
-            catch { return false; }
+    private static bool TryWrapMText(MText mtext, BlockTableRecord btr, Transaction tr, double originalHeight)
+    {
+        try
+        {
+            mtext.TextHeight = originalHeight;
+            Mark(mtext);
+
+            if (!TryGetBounds(mtext, out var currentBounds))
+                return false;
 
             double currentWidth = currentBounds.MaxPoint.X - currentBounds.MinPoint.X;
             double originalWidth = mtext.Width > 0 ? mtext.Width : currentWidth;
+            if (currentWidth <= 0) return false;
 
-            if (currentWidth <= originalWidth * 1.2) return false;
+            double savedWidth = mtext.Width;
+            var candidates = new List<double>();
 
-            double wrapWidth = Math.Max(originalWidth * 0.85, currentWidth * 0.5);
-            if (wrapWidth < 10.0) wrapWidth = 10.0;
-
-            mtext.Width = wrapWidth;
-            mtext.ColumnType = ColumnType.NoColumns;
-            mtext.RecordGraphicsModified(true);
-            mtext.RecordGraphicsModified(true);
-
-            var nearbyEntities = CollisionDetector.CollectNearbyEntities(mtext, btr, tr, originalHeight);
-
-            try
+            if (originalWidth > 0)
             {
-                if (!CollisionDetector.HasAnyCollision(mtext, nearbyEntities))
+                candidates.Add(originalWidth);
+                candidates.Add(originalWidth * 0.95);
+                candidates.Add(originalWidth * 0.85);
+                candidates.Add(originalWidth * 0.75);
+            }
+            candidates.Add(Math.Max(currentWidth * 0.85, originalHeight * 6));
+            candidates.Add(Math.Max(currentWidth * 0.70, originalHeight * 5));
+            candidates.Add(Math.Max(currentWidth * 0.55, originalHeight * 4));
+
+            foreach (var raw in candidates.Distinct().OrderByDescending(x => x))
+            {
+                double wrapWidth = Math.Max(raw, WBC.MinMTextRectangleWidth);
+                mtext.Width = wrapWidth;
+                mtext.ColumnType = ColumnType.NoColumns;
+                Mark(mtext);
+
+                if (IsClean(mtext, btr, tr, originalHeight))
                 {
-                    Log.Information("MText {Handle}: wrapped to width={W:F1} (was {Orig:F1})",
-                        mtext.Handle, wrapWidth, currentWidth);
+                    Log.Information("MText {Handle}: wrapped width={W:F1}", mtext.Handle, wrapWidth);
                     return true;
                 }
             }
-            catch { }
 
-            mtext.Width = 0;
-            mtext.RecordGraphicsModified(true);
-            mtext.RecordGraphicsModified(true);
+            mtext.Width = savedWidth;
+            Mark(mtext);
             return false;
         }
         catch (Exception ex)
@@ -215,57 +301,91 @@ public static class CollisionResolver
         }
     }
 
-    private static bool TryScaleHeight(
-        Entity entity,
-        BlockTableRecord btr,
-        Transaction tr,
-        Database db,
-        double currentHeight,
-        double minHeight,
-        double originalHeight)
+    private static bool TryNudge(Entity entity, BlockTableRecord btr, Transaction tr, double originalHeight)
     {
-        double lo = minHeight;
-        double hi = currentHeight;
-        double bestHeight = -1;
+        var origin = GetPosition(entity);
+        if (!origin.HasValue) return false;
 
-        for (int i = 0; i < 20; i++)
+        SetEntityHeight(entity, originalHeight);
+        Mark(entity);
+
+        double step = originalHeight * 0.35;
+        double maxNudge = originalHeight * WBC.MaxNudgeRatio;
+        var dirs = new (double dx, double dy)[]
+        {
+            (1, 0), (-1, 0), (0, 1), (0, -1),
+            (1, 1), (1, -1), (-1, 1), (-1, -1)
+        };
+
+        foreach (double scale in new[] { 1.0, 1.5, 2.0, 2.5 })
+        {
+            double dist = step * scale;
+            if (dist > maxNudge) break;
+
+            foreach (var (dx, dy) in dirs)
+            {
+                double len = Math.Sqrt(dx * dx + dy * dy);
+                var p = new Point3d(
+                    origin.Value.X + dx / len * dist,
+                    origin.Value.Y + dy / len * dist,
+                    origin.Value.Z);
+                SetPosition(entity, p);
+
+                if (IsClean(entity, btr, tr, originalHeight))
+                    return true;
+            }
+        }
+
+        SetPosition(entity, origin.Value);
+        return false;
+    }
+
+    private static bool TryScaleHeight(Entity entity, BlockTableRecord btr, Transaction tr, double originalHeight)
+    {
+        double minHeight = originalHeight * WBC.MinHeightRatio;
+        double hardMin = originalHeight * WBC.HardMinHeightRatio;
+        double current = GetEntityHeight(entity);
+        if (current <= 0) current = originalHeight;
+
+        if (current <= minHeight)
+        {
+            if (!IsClean(entity, btr, tr, originalHeight) && current > hardMin)
+            {
+                SetEntityHeight(entity, hardMin);
+                return IsClean(entity, btr, tr, originalHeight);
+            }
+            return IsClean(entity, btr, tr, originalHeight);
+        }
+
+        double lo = minHeight;
+        double hi = current;
+        double best = -1;
+
+        for (int i = 0; i < WBC.MaxBinarySearchIterations; i++)
         {
             if (hi - lo < 0.005) break;
             double mid = (lo + hi) / 2.0;
             SetEntityHeight(entity, mid);
-            entity.RecordGraphicsModified(true);
-            if (entity is MText mt) mt.RecordGraphicsModified(true);
 
-            try
+            if (IsClean(entity, btr, tr, originalHeight))
             {
-                var nearbyEntities = CollisionDetector.CollectNearbyEntities(entity, btr, tr, originalHeight);
-                if (!CollisionDetector.HasAnyCollision(entity, nearbyEntities))
-                {
-                    bestHeight = mid;
-                    lo = mid;
-                }
-                else
-                {
-                    hi = mid;
-                }
+                best = mid;
+                lo = mid;
             }
-            catch { hi = mid; }
+            else
+            {
+                hi = mid;
+            }
         }
 
-        if (bestHeight > 0)
+        if (best > 0)
         {
-            SetEntityHeight(entity, bestHeight);
-            entity.RecordGraphicsModified(true);
-            if (entity is MText mt) mt.RecordGraphicsModified(true);
-            Log.Information("Entity {Handle}: height scaled {Old:F2} -> {New:F2}",
-                entity.Handle, currentHeight, bestHeight);
+            SetEntityHeight(entity, best);
             return true;
         }
 
-        SetEntityHeight(entity, currentHeight);
-        entity.RecordGraphicsModified(true);
-        if (entity is MText mt2) mt2.RecordGraphicsModified(true);
-        return false;
+        SetEntityHeight(entity, Math.Max(hardMin, minHeight));
+        return IsClean(entity, btr, tr, originalHeight);
     }
 
     private static bool TryConvertDBTextToMText(
@@ -281,7 +401,7 @@ public static class CollisionResolver
             var mtext = new MText
             {
                 Location = dbText.Position,
-                TextHeight = dbText.Height,
+                TextHeight = originalHeight > 0 ? originalHeight : dbText.Height,
                 TextStyleId = dbText.TextStyleId,
                 Rotation = dbText.Rotation,
                 Contents = dbText.TextString,
@@ -293,32 +413,37 @@ public static class CollisionResolver
             catch { mtext.Dispose(); return false; }
 
             double textWidth = dbBounds.MaxPoint.X - dbBounds.MinPoint.X;
-            double wrapWidth = Math.Max(textWidth * 0.7, originalHeight * 8);
+            double wrapWidth = Math.Max(textWidth * 0.85, originalHeight * 8);
+            if (wrapWidth < WBC.MinMTextRectangleWidth) wrapWidth = WBC.MinMTextRectangleWidth;
             mtext.Width = wrapWidth;
 
             btr.AppendEntity(mtext);
             tr.AddNewlyCreatedDBObject(mtext, true);
+            Mark(mtext);
 
-            mtext.RecordGraphicsModified(true);
-            mtext.RecordGraphicsModified(true);
-
-            var nearbyEntities = CollisionDetector.CollectNearbyEntities(mtext, btr, tr, originalHeight);
-
-            try
+            // Try wrap candidates if still colliding
+            if (!IsClean(mtext, btr, tr, originalHeight))
             {
-                if (!CollisionDetector.HasAnyCollision(mtext, nearbyEntities))
+                if (!TryWrapMText(mtext, btr, tr, originalHeight) &&
+                    !TryNudge(mtext, btr, tr, originalHeight) &&
+                    !TryScaleHeight(mtext, btr, tr, originalHeight))
                 {
-                    dbText.Erase();
-                    newMTextId = mtext.ObjectId;
-                    Log.Information("DBText {Handle} -> MText {NewHandle} (width={W:F1})",
-                        dbText.Handle, mtext.Handle, wrapWidth);
-                    return true;
+                    mtext.Erase();
+                    return false;
                 }
             }
-            catch { }
 
-            mtext.Erase();
-            return false;
+            if (!IsClean(mtext, btr, tr, originalHeight))
+            {
+                mtext.Erase();
+                return false;
+            }
+
+            dbText.Erase();
+            newMTextId = mtext.ObjectId;
+            Log.Information("DBText {Handle} -> MText {NewHandle} (width={W:F1})",
+                dbText.Handle, mtext.Handle, mtext.Width);
+            return true;
         }
         catch (Exception ex)
         {

@@ -109,11 +109,6 @@ public partial class App : Application
         CadLogReader = new CadLogReaderService(LogStore, cadLogDir);
         Log.Information("CAD log reader started. Monitoring: {Dir}", cadLogDir);
 
-        // Initialize license service
-        LicenseService = new LicenseService(AppDataDir);
-        LicenseService.LoadLicense();
-        Log.Information("License status: {Status}", LicenseService.CurrentLicense.GetDisplayStatus());
-
         // First-launch: copy default settings if not present
         var settingsPath = Path.Combine(AppDataDir, "settings.json");
         if (!File.Exists(settingsPath))
@@ -124,6 +119,19 @@ public partial class App : Application
                 File.Copy(bundledSettings, settingsPath);
                 Log.Information("Copied default settings to {Path}", settingsPath);
             }
+        }
+
+        // Keep the licensing component available for a future commercial switch,
+        // but do not load, validate or mutate license state while it is disabled.
+        LicenseService = new LicenseService(AppDataDir);
+        if (ReadLicensingEnabled(settingsPath))
+        {
+            LicenseService.LoadLicense();
+            Log.Information("License status: {Status}", LicenseService.CurrentLicense.GetDisplayStatus());
+        }
+        else
+        {
+            Log.Information("Licensing is disabled for this build configuration");
         }
 
         // First-launch: prompt for API key if not configured
@@ -191,6 +199,22 @@ public partial class App : Application
             // Fall back to Debug on any error
         }
         return LogEventLevel.Debug;
+    }
+
+    private static bool ReadLicensingEnabled(string settingsPath)
+    {
+        try
+        {
+            if (!File.Exists(settingsPath)) return false;
+            var json = File.ReadAllText(settingsPath);
+            var config = System.Text.Json.JsonSerializer.Deserialize<DwgTranslator.Core.Models.AppConfig>(json);
+            return config?.LicensingEnabled == true;
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Failed to read licensing switch; keeping licensing disabled");
+            return false;
+        }
     }
 
     private static void ConfigureServices(IServiceCollection services)

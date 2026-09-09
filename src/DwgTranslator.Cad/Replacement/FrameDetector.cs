@@ -1,5 +1,13 @@
+#if GSTARCAD
+using Gssoft.Gscad.DatabaseServices;
+#else
 using Autodesk.AutoCAD.DatabaseServices;
+#endif
+#if GSTARCAD
+using Gssoft.Gscad.Geometry;
+#else
 using Autodesk.AutoCAD.Geometry;
+#endif
 using DwgTranslator.Cad;
 
 namespace DwgTranslator.Cad.Replacement;
@@ -25,7 +33,7 @@ public static class FrameDetector
     /// <summary>
     /// Detects all candidate frame boundaries in the given database.
     /// Searches ModelSpace, all PaperSpace layouts, and recursively scans
-    /// BlockReference (INSERT) entities — which is how 85-95% of real-world
+    /// BlockReference (INSERT) entities 鈥?which is how 85-95% of real-world
     /// DWG files store their drawing frames / title blocks.
     /// </summary>
     public static List<Extents3d> DetectFrames(Database db)
@@ -80,7 +88,7 @@ public static class FrameDetector
             }
             if (entity == null) continue;
 
-            // ── NEW: Recurse into BlockReference to find frame polylines
+            // 鈹€鈹€ NEW: Recurse into BlockReference to find frame polylines
             //    hidden inside block definitions (the standard pattern in
             //    professional DWG files where title blocks are INSERT entities).
             if (entity is BlockReference br)
@@ -91,7 +99,7 @@ public static class FrameDetector
                         br.BlockTableRecord, OpenMode.ForRead);
                     if (nestedBtr != null && !nestedBtr.IsAnonymous)
                     {
-                        // Combine transforms: parent → this BlockReference → nested
+                        // Combine transforms: parent 鈫?this BlockReference 鈫?nested
                         var combined = br.BlockTransform.PreMultiplyBy(parentTransform);
                         DetectFramesInBlock(nestedBtr, tr, frames, combined, depth + 1);
                     }

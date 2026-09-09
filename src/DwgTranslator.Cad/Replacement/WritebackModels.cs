@@ -1,4 +1,8 @@
+#if GSTARCAD
+using Gssoft.Gscad.DatabaseServices;
+#else
 using Autodesk.AutoCAD.DatabaseServices;
+#endif
 
 namespace DwgTranslator.Cad.Replacement;
 

@@ -10,17 +10,18 @@
     <!-- Converters -->
     <conv:StatusToBrushConverter x:Key="StatusBrush"/>
     <conv:BoolToVisibilityConverter x:Key="BoolToVis"/>
+    <conv:InverseBoolConverter x:Key="InverseBoolConverter"/>
 
     <!-- Drop Shadow Effect -->
-    <DropShadowEffect x:Key="CardShadow" ShadowDepth="1" BlurRadius="8" Opacity="0.08" Direction="270"/>
+    <DropShadowEffect x:Key="CardShadow" ShadowDepth="1" BlurRadius="8" Opacity="0.10" Direction="270"/>
 
     <!-- ── ToolButton (Ghost/Transparent) ── -->
     <Style x:Key="ToolButton" TargetType="Button">
-        <Setter Property="Padding" Value="12,6"/>
+        <Setter Property="Padding" Value="14,8"/>
         <Setter Property="Margin" Value="2"/>
         <Setter Property="BorderThickness" Value="0"/>
         <Setter Property="Cursor" Value="Hand"/>
-        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="FontSize" Value="13"/>
         <Setter Property="FontWeight" Value="Medium"/>
         <Setter Property="Foreground" Value="{DynamicResource Brush.TextSecondary}"/>
         <Setter Property="Background" Value="Transparent"/>
@@ -128,7 +129,7 @@
 
     <!-- ── Section Header ── -->
     <Style x:Key="SectionHeader" TargetType="TextBlock">
-        <Setter Property="FontSize" Value="14"/>
+        <Setter Property="FontSize" Value="15"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
         <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}"/>
         <Setter Property="Margin" Value="0,0,0,8"/>
@@ -140,20 +141,20 @@
         <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="CornerRadius" Value="{DynamicResource CornerRadius.Large}"/>
-        <Setter Property="Padding" Value="16"/>
+        <Setter Property="Padding" Value="18"/>
         <Setter Property="Effect" Value="{StaticResource CardShadow}"/>
     </Style>
 
     <!-- ── Input Label ── -->
     <Style x:Key="InputLabel" TargetType="TextBlock">
-        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="FontSize" Value="13"/>
         <Setter Property="FontWeight" Value="Medium"/>
         <Setter Property="Foreground" Value="{DynamicResource Brush.TextSecondary}"/>
     </Style>
 
     <!-- ── Description Text ── -->
     <Style x:Key="DescriptionText" TargetType="TextBlock">
-        <Setter Property="FontSize" Value="11"/>
+        <Setter Property="FontSize" Value="12"/>
         <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}"/>
         <Setter Property="TextWrapping" Value="Wrap"/>
     </Style>
@@ -163,16 +164,16 @@
         <Setter Property="Background" Value="{DynamicResource Brush.DataGridHeader}"/>
         <Setter Property="Foreground" Value="White"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
-        <Setter Property="FontSize" Value="12"/>
-        <Setter Property="Padding" Value="8,6"/>
+        <Setter Property="FontSize" Value="13"/>
+        <Setter Property="Padding" Value="10,8"/>
         <Setter Property="BorderThickness" Value="0,0,1,0"/>
         <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border}"/>
     </Style>
 
     <!-- ── DataGrid Cell ── -->
     <Style x:Key="DataGridCellStyle" TargetType="DataGridCell">
-        <Setter Property="Padding" Value="6,3"/>
-        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="Padding" Value="8,4"/>
+        <Setter Property="FontSize" Value="13"/>
         <Setter Property="BorderThickness" Value="0"/>
         <Style.Triggers>
             <Trigger Property="IsSelected" Value="True">
@@ -184,8 +185,8 @@
 
     <!-- ── DataGrid Row (Translation) ── -->
     <Style x:Key="TranslationRowStyle" TargetType="DataGridRow">
-        <Setter Property="Height" Value="34"/>
-        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="Height" Value="38"/>
+        <Setter Property="FontSize" Value="13"/>
         <Style.Triggers>
             <Trigger Property="AlternationIndex" Value="0">
                 <Setter Property="Background" Value="{DynamicResource Brush.Surface}"/>
@@ -215,13 +216,13 @@
     <Style x:Key="CenteredCellStyle" TargetType="TextBlock">
         <Setter Property="TextAlignment" Value="Center"/>
         <Setter Property="VerticalAlignment" Value="Center"/>
-        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="FontSize" Value="13"/>
     </Style>
 
     <Style x:Key="WrapCellStyle" TargetType="TextBlock">
         <Setter Property="TextWrapping" Value="Wrap"/>
         <Setter Property="VerticalAlignment" Value="Center"/>
-        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="FontSize" Value="13"/>
     </Style>
 
     <!-- ── Stats Badge ── -->
@@ -237,7 +238,7 @@
 
     <!-- Card header label — small, muted, for card title bars -->
     <Style x:Key="CardHeader" TargetType="TextBlock">
-        <Setter Property="FontSize" Value="11"/>
+        <Setter Property="FontSize" Value="12"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
         <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}"/>
         <Setter Property="Margin" Value="0,0,0,6"/>
@@ -249,7 +250,7 @@
         <Setter Property="BorderBrush" Value="{DynamicResource Brush.BorderLight}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="CornerRadius" Value="{DynamicResource CornerRadius.Medium}"/>
-        <Setter Property="Padding" Value="10,7"/>
+        <Setter Property="Padding" Value="12,8"/>
         <Setter Property="Effect" Value="{StaticResource CardShadow}"/>
     </Style>
 
@@ -259,7 +260,7 @@
         <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="CornerRadius" Value="{DynamicResource CornerRadius.Large}"/>
-        <Setter Property="Padding" Value="12"/>
+        <Setter Property="Padding" Value="14"/>
         <Setter Property="Effect" Value="{StaticResource CardShadow}"/>
     </Style>
 
@@ -279,7 +280,7 @@
         <Setter Property="BorderBrush" Value="{DynamicResource Brush.BorderLight}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="CornerRadius" Value="{DynamicResource CornerRadius.Small}"/>
-        <Setter Property="Padding" Value="8,4"/>
+        <Setter Property="Padding" Value="10,5"/>
     </Style>
 
     <!-- Card header bar — thin accent strip with bottom border -->
@@ -287,7 +288,7 @@
         <Setter Property="Background" Value="{DynamicResource Brush.SurfaceAlt}"/>
         <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border}"/>
         <Setter Property="BorderThickness" Value="0,0,0,1"/>
-        <Setter Property="Padding" Value="12,6"/>
+        <Setter Property="Padding" Value="14,8"/>
     </Style>
 
     <!-- Vertical divider between toolbar card groups -->
@@ -298,24 +299,164 @@
         <Setter Property="VerticalAlignment" Value="Stretch"/>
     </Style>
 
+    <!-- ═══ Ribbon-Style Styles ═══ -->
+
+    <!-- Ribbon primary button — large filled CTA for Translate -->
+    <Style x:Key="RibbonPrimaryButton" TargetType="Button">
+        <Setter Property="Height" Value="38"/>
+        <Setter Property="Padding" Value="20,0"/>
+        <Setter Property="Margin" Value="2"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="FontSize" Value="13"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Foreground" Value="White"/>
+        <Setter Property="Background" Value="{DynamicResource Brush.Primary}"/>
+        <Setter Property="HorizontalContentAlignment" Value="Center"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                            CornerRadius="{DynamicResource CornerRadius.Medium}"
+                            Padding="{TemplateBinding Padding}"
+                            SnapsToDevicePixels="True"
+                            Effect="{StaticResource CardShadow}">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Brush.PrimaryHover}"/>
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter Property="Opacity" Value="0.85"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Foreground" Value="{DynamicResource Brush.TextDisabled}"/>
+                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Brush.BackgroundAlt}"/>
+                            <Setter Property="Cursor" Value="Arrow"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Ribbon secondary button — outlined for file actions -->
+    <Style x:Key="RibbonSecondaryButton" TargetType="Button">
+        <Setter Property="Height" Value="34"/>
+        <Setter Property="Padding" Value="14,0"/>
+        <Setter Property="Margin" Value="2"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="FontWeight" Value="Medium"/>
+        <Setter Property="Foreground" Value="{DynamicResource Brush.TextSecondary}"/>
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="HorizontalContentAlignment" Value="Center"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="{DynamicResource CornerRadius.Medium}"
+                            Padding="{TemplateBinding Padding}"
+                            SnapsToDevicePixels="True">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Brush.SurfaceAlt}"/>
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Brush.BackgroundAlt}"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Foreground" Value="{DynamicResource Brush.TextDisabled}"/>
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource Brush.BorderLight}"/>
+                            <Setter Property="Cursor" Value="Arrow"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Ribbon tertiary button — ghost/icon+text for tools -->
+    <Style x:Key="RibbonTertiaryButton" TargetType="Button">
+        <Setter Property="Height" Value="34"/>
+        <Setter Property="Padding" Value="12,0"/>
+        <Setter Property="Margin" Value="2"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="FontWeight" Value="Medium"/>
+        <Setter Property="Foreground" Value="{DynamicResource Brush.TextSecondary}"/>
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="HorizontalContentAlignment" Value="Center"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                            CornerRadius="{DynamicResource CornerRadius.Medium}"
+                            Padding="{TemplateBinding Padding}"
+                            SnapsToDevicePixels="True">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="#F3F4F6"/>
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Brush.BackgroundAlt}"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Foreground" Value="{DynamicResource Brush.TextDisabled}"/>
+                            <Setter Property="Cursor" Value="Arrow"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Ribbon divider — vertical 1px line between groups -->
+    <Style x:Key="RibbonDivider" TargetType="Border">
+        <Setter Property="Width" Value="1"/>
+        <Setter Property="Background" Value="#E5E7EB"/>
+        <Setter Property="Margin" Value="12,6"/>
+        <Setter Property="VerticalAlignment" Value="Stretch"/>
+    </Style>
+
+    <!-- Stat inline text — monospace numbers -->
+    <Style x:Key="StatInlineText" TargetType="Run">
+        <Setter Property="FontFamily" Value="Consolas"/>
+        <Setter Property="FontSize" Value="13"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+    </Style>
+
     <!-- Compact tool button for inside cards -->
     <Style x:Key="CompactToolButton" TargetType="Button" BasedOn="{StaticResource ToolButton}">
         <Setter Property="Padding" Value="8,4"/>
-        <Setter Property="FontSize" Value="11.5"/>
+        <Setter Property="FontSize" Value="12.5"/>
         <Setter Property="Margin" Value="1"/>
     </Style>
 
     <!-- Compact primary button for inside cards -->
     <Style x:Key="CompactPrimaryButton" TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
         <Setter Property="Padding" Value="10,4"/>
-        <Setter Property="FontSize" Value="11.5"/>
+        <Setter Property="FontSize" Value="12.5"/>
         <Setter Property="Margin" Value="1"/>
     </Style>
 
     <!-- Compact danger button for inside cards -->
     <Style x:Key="CompactDangerButton" TargetType="Button" BasedOn="{StaticResource DangerButton}">
         <Setter Property="Padding" Value="10,4"/>
-        <Setter Property="FontSize" Value="11.5"/>
+        <Setter Property="FontSize" Value="12.5"/>
         <Setter Property="Margin" Value="1"/>
     </Style>
 

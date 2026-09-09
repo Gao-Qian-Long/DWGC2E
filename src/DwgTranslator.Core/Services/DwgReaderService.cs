@@ -13,6 +13,7 @@ using CadDimension = ACadSharp.Entities.Dimension;
 using CadMultiLeader = ACadSharp.Entities.MultiLeader;
 using CadInsert = ACadSharp.Entities.Insert;
 using CadAttributeEntity = ACadSharp.Entities.AttributeEntity;
+using CadTable = ACadSharp.Entities.TableEntity;
 using CadBlockRecord = ACadSharp.Tables.BlockRecord;
 using OurTextEntity = DwgTranslator.Core.Models.TextEntity;
 
@@ -25,7 +26,7 @@ namespace DwgTranslator.Core.Services;
 public class DwgReaderService : IDwgReaderService, IDxfReaderService
 {
     private static readonly Regex MTextFormatRegex = new(
-        @"\\[A-Za-z][^;{}]*;|\\U\+[0-9A-Fa-f]{4}|\\[~%%|{}]|%%[cdpuoCDPUO]|\\[A-Za-z]",
+        @"\\[AaCcFfHhQqSsTtWw][^;{}]*;|\\U\+[0-9A-Fa-f]{4}|\\[PpLlOoKkXx~\\{}]|%%[cdpuoCDPUO]",
         RegexOptions.Compiled);
 
     public List<OurTextEntity> ExtractFromFile(string filePath)
@@ -50,21 +51,26 @@ public class DwgReaderService : IDwgReaderService, IDxfReaderService
             doc = DwgReader.Read(filePath);
         }
         var rawEntities = new List<OurTextEntity>();
+        // Block definitions are shared by all inserts. Extract each definition once;
+        // insert attributes remain instance-specific and are still visited per insert.
+        var visitedBlocks = new HashSet<ulong>();
 
-        rawEntities.AddRange(ExtractFromBlock(doc.ModelSpace, string.Empty, 0, 10));
+        rawEntities.AddRange(ExtractFromBlock(doc.ModelSpace, string.Empty, 0, 10, visitedBlocks));
         foreach (var layout in doc.Layouts)
         {
             if (layout.Name == "Model") continue;
             if (layout.AssociatedBlock != null)
-                rawEntities.AddRange(ExtractFromBlock(layout.AssociatedBlock, string.Empty, 0, 10));
+                rawEntities.AddRange(ExtractFromBlock(layout.AssociatedBlock, string.Empty, 0, 10, visitedBlocks));
         }
 
         // Filter: skip entities with empty PlainText (pure format codes, blanks)
         var fileName = Path.GetFileNameWithoutExtension(filePath);
+        var fullPath = Path.GetFullPath(filePath);
         var entities = new List<OurTextEntity>();
         int skipped = 0;
         foreach (var e in rawEntities)
         {
+            e.SourceFilePath = fullPath;
             if (string.IsNullOrWhiteSpace(e.PlainText))
             {
                 // Keep in list but mark as Skipped so user can see it
@@ -99,15 +105,24 @@ public class DwgReaderService : IDwgReaderService, IDxfReaderService
         return result;
     }
 
-    private List<OurTextEntity> ExtractFromBlock(CadBlockRecord block, string parentBlockName, int depth, int maxDepth)
+    private List<OurTextEntity> ExtractFromBlock(CadBlockRecord block, string parentBlockName, int depth, int maxDepth,
+        HashSet<ulong> visitedBlocks)
     {
         var entities = new List<OurTextEntity>();
         if (depth > maxDepth) return entities;
+        if (!visitedBlocks.Add(block.Handle)) return entities;
 
         foreach (var entity in block.Entities)
         {
             switch (entity)
             {
+                case ACadSharp.Entities.AttributeDefinition definition when ((int)definition.Flags & 2) == 0:
+                    // Non-constant ATTDEF is a default for future inserts, not
+                    // displayed text. Existing INSERT attributes are extracted separately.
+                    var template = CreateTextEntity(definition, "AttributeDefinition", parentBlockName);
+                    template.Status = TranslationStatus.Skipped;
+                    entities.Add(template);
+                    break;
                 case CadTextEntity textEntity when entity is not CadMText:
                     entities.Add(CreateTextEntity(textEntity, "DBText", parentBlockName)); break;
                 case CadMText mtext:
@@ -116,13 +131,15 @@ public class DwgReaderService : IDwgReaderService, IDxfReaderService
                     entities.Add(CreateDimensionEntity(dim, parentBlockName)); break;
                 case CadMultiLeader mleader:
                     entities.AddRange(CreateMultiLeaderEntities(mleader, parentBlockName)); break;
+                case CadTable table:
+                    entities.AddRange(CreateTableEntities(table, parentBlockName)); break;
                 case CadInsert insert:
                     var bn = string.IsNullOrEmpty(parentBlockName) ? insert.Block?.Name ?? "" : parentBlockName;
                     foreach (var att in insert.Attributes)
                         if (att is CadAttributeEntity attEntity)
                             entities.Add(CreateAttributeEntity(attEntity, bn));
                     if (insert.Block != null && !IsExternalReference(insert.Block))
-                        entities.AddRange(ExtractFromBlock(insert.Block, bn, depth + 1, maxDepth));
+                        entities.AddRange(ExtractFromBlock(insert.Block, bn, depth + 1, maxDepth, visitedBlocks));
                     break;
             }
         }
@@ -224,12 +241,98 @@ public class DwgReaderService : IDwgReaderService, IDxfReaderService
         PlainText = StripFormatCodes(att.Value ?? string.Empty),
         FormatTemplate = att.Value ?? string.Empty,
         EntityType = "AttributeReference", Height = att.Height, Rotation = att.Rotation,
+        Status = AttributeTranslationPolicy.IsMetadataTag(att.Tag) ? TranslationStatus.Skipped : TranslationStatus.Pending,
         TextStyleName = att.Style?.Name ?? "Standard", BlockName = blockName, IsXref = false,
         Position = new Point3d(att.InsertPoint.X, att.InsertPoint.Y, att.InsertPoint.Z),
         OriginalHeight = att.Height,
         OriginalWidth = EstimateTextWidth(att.Value ?? string.Empty, att.Height)
     };
 
+
+    private static List<OurTextEntity> CreateTableEntities(CadTable table, string blockName)
+    {
+        var entities = new List<OurTextEntity>();
+        try
+        {
+            for (int row = 0; row < table.Rows.Count; row++)
+            {
+                var rowObj = table.Rows[row];
+                if (rowObj?.Cells == null) continue;
+                for (int col = 0; col < rowObj.Cells.Count; col++)
+                {
+                    var cell = rowObj.Cells[col];
+                    // Multi-content cells may contain independent fields/formulas/styles.
+                    // Treat them as opaque until content-level round-trip support exists.
+                    if (cell.HasMultipleContent) continue;
+                    var cellText = GetTableCellText(cell);
+                    if (string.IsNullOrWhiteSpace(cellText)) continue;
+
+                    double height = 2.5;
+                    try
+                    {
+                        if (cell.Geometry != null && cell.Geometry.ContentHeight > 0)
+                            height = cell.Geometry.ContentHeight;
+                    }
+                    catch { }
+
+                    entities.Add(new OurTextEntity
+                    {
+                        Handle = $"{table.Handle:X}:{row}:{col}",
+                        RawText = cellText,
+                        PlainText = StripFormatCodes(cellText),
+                        FormatTemplate = cellText,
+                        EntityType = "Table",
+                        Height = height,
+                        Rotation = 0,
+                        TextStyleName = "Standard",
+                        BlockName = blockName,
+                        IsXref = false,
+                        Position = new Point3d(0, 0, 0),
+                        OriginalWidth = 0,
+                        OriginalHeight = height
+                    });
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Failed to extract table cells from handle {Handle}", table.Handle);
+        }
+        return entities;
+    }
+
+    private static string GetTableCellText(CadTable.Cell cell)
+    {
+        try
+        {
+            if (cell.HasMultipleContent && cell.Contents != null && cell.Contents.Count > 0)
+            {
+                var parts = new List<string>();
+                foreach (var content in cell.Contents)
+                {
+                    var text = content?.CadValue?.ToString();
+                    if (!string.IsNullOrWhiteSpace(text)) parts.Add(text!);
+                }
+                if (parts.Count > 0) return string.Join("\\P", parts);
+            }
+
+            var value = cell.Content?.CadValue;
+            if (value != null)
+            {
+                if (!string.IsNullOrWhiteSpace(value.FormattedValue)) return value.FormattedValue;
+                if (value.Value != null)
+                {
+                    var text = value.Value.ToString();
+                    if (!string.IsNullOrWhiteSpace(text)) return text;
+                }
+                var asString = value.ToString();
+                if (!string.IsNullOrWhiteSpace(asString) && asString != value.GetType().FullName)
+                    return asString;
+            }
+        }
+        catch { }
+        return string.Empty;
+    }
     private static string StripFormatCodes(string text)
     {
         if (string.IsNullOrEmpty(text)) return string.Empty;

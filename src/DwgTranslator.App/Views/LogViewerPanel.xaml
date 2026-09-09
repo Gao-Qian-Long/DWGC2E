@@ -49,7 +49,7 @@
             <DockPanel>
                 <!-- Left: Controls -->
                 <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
-                    <TextBlock Text="LOG VIEWER" Foreground="#808080" FontSize="11" FontWeight="Bold"
+                    <TextBlock Text="运行日志" Foreground="#A0A0A0" FontSize="11" FontWeight="Bold"
                                VerticalAlignment="Center" Margin="0,0,12,0"
                                FontFamily="Cascadia Code, Consolas"/>
 
@@ -58,23 +58,23 @@
                               Width="75" Height="24" FontSize="11" Margin="0,0,6,0"
                               Background="#3C3C3C" Foreground="#D4D4D4"
                               BorderBrush="#505050"
-                              ToolTip="Filter by log level"/>
+                              ToolTip="按日志级别筛选"/>
 
                     <ComboBox ItemsSource="{Binding SourceFilters}"
                               SelectedItem="{Binding SelectedSourceFilter}"
                               Width="65" Height="24" FontSize="11" Margin="0,0,6,0"
                               Background="#3C3C3C" Foreground="#D4D4D4"
                               BorderBrush="#505050"
-                              ToolTip="Filter by source (APP/CAD/Translation)"/>
+                              ToolTip="按来源筛选（应用/CAD/翻译）"/>
 
                     <TextBox Text="{Binding SearchFilter, UpdateSourceTrigger=PropertyChanged}"
                              Width="180" Height="24" FontSize="11"
                              Background="#3C3C3C" Foreground="#D4D4D4"
                              BorderBrush="#505050" Padding="6,0"
                              VerticalContentAlignment="Center"
-                             ToolTip="Search in log messages"/>
+                             ToolTip="搜索日志内容"/>
 
-                    <CheckBox Content="Auto-scroll" IsChecked="{Binding AutoScroll}"
+                    <CheckBox Content="自动滚动" IsChecked="{Binding AutoScroll}"
                               Foreground="#808080" FontSize="11" VerticalAlignment="Center"
                               Margin="10,0,0,0"/>
                 </StackPanel>
@@ -84,37 +84,37 @@
                     <TextBlock Text="{Binding LevelSummary}" Foreground="#808080" FontSize="11"
                                VerticalAlignment="Center" Margin="0,0,12,0"
                                FontFamily="Cascadia Code, Consolas"/>
-                    <TextBlock Text="{Binding TotalLogCount, StringFormat='Total: {0}'}"
+                    <TextBlock Text="{Binding TotalLogCount, StringFormat='共 {0} 条'}"
                                Foreground="#606060" FontSize="10" VerticalAlignment="Center"
                                Margin="0,0,12,0"/>
 
-                    <Button Command="{Binding TogglePauseCommand}" ToolTip="Pause/Resume log streaming"
+                    <Button Command="{Binding TogglePauseCommand}" ToolTip="暂停或继续刷新日志"
                             Background="Transparent" Foreground="#808080" BorderThickness="0"
                             FontSize="12" Padding="6,2" Cursor="Hand">
                         <Button.Style>
                             <Style TargetType="Button">
-                                <Setter Property="Content" Value="Pause"/>
+                                <Setter Property="Content" Value="暂停"/>
                                 <Style.Triggers>
                                     <DataTrigger Binding="{Binding IsPaused}" Value="True">
-                                        <Setter Property="Content" Value="Resume"/>
+                                        <Setter Property="Content" Value="继续"/>
                                         <Setter Property="Foreground" Value="#FF9800"/>
                                     </DataTrigger>
                                 </Style.Triggers>
                             </Style>
                         </Button.Style>
                     </Button>
-                    <Button Command="{Binding CopyLogsCommand}" ToolTip="Copy logs to clipboard"
+                    <Button Command="{Binding CopyLogsCommand}" ToolTip="复制日志到剪贴板"
                             Background="Transparent" Foreground="#808080" BorderThickness="0"
-                            FontSize="12" Padding="6,2" Cursor="Hand" Content="Copy"/>
-                    <Button Command="{Binding ExportLogsCommand}" ToolTip="Export logs to file"
+                            FontSize="12" Padding="6,2" Cursor="Hand" Content="复制"/>
+                    <Button Command="{Binding ExportLogsCommand}" ToolTip="导出日志文件"
                             Background="Transparent" Foreground="#808080" BorderThickness="0"
-                            FontSize="12" Padding="6,2" Cursor="Hand" Content="Export"/>
-                    <Button Command="{Binding ClearLogsCommand}" ToolTip="Clear log entries"
+                            FontSize="12" Padding="6,2" Cursor="Hand" Content="导出"/>
+                    <Button Command="{Binding ClearLogsCommand}" ToolTip="清空当前日志"
                             Background="Transparent" Foreground="#808080" BorderThickness="0"
-                            FontSize="12" Padding="6,2" Cursor="Hand" Content="Clear"/>
-                    <Button Command="{Binding OpenLogFolderCommand}" ToolTip="Open log folder"
+                            FontSize="12" Padding="6,2" Cursor="Hand" Content="清空"/>
+                    <Button Command="{Binding OpenLogFolderCommand}" ToolTip="打开日志文件夹"
                             Background="Transparent" Foreground="#808080" BorderThickness="0"
-                            FontSize="12" Padding="6,2" Cursor="Hand" Content="Folder"/>
+                            FontSize="12" Padding="6,2" Cursor="Hand" Content="文件夹"/>
                 </StackPanel>
             </DockPanel>
         </Border>

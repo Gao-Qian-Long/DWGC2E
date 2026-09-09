@@ -10,6 +10,7 @@ using CadText = ACadSharp.Entities.TextEntity;
 using CadMText = ACadSharp.Entities.MText;
 using CadDimension = ACadSharp.Entities.Dimension;
 using CadMultiLeader = ACadSharp.Entities.MultiLeader;
+using CadTable = ACadSharp.Entities.TableEntity;
 using CoreTextEntity = DwgTranslator.Core.Models.TextEntity;
 
 namespace DwgTranslator.Core.Services;
@@ -50,7 +51,7 @@ internal static class DwgTextReplacer
 
             if (translationMap.TryGetValue(handleStr, out var translatedEntity))
             {
-                var success = ReplaceEntityText(cadEntity, translatedEntity, cnToEn, doc, frames);
+                var success = ReplaceEntityText(cadEntity, translatedEntity, cnToEn, doc, frames, entityList);
                 if (success)
                 {
                     result.SuccessCount++;
@@ -69,6 +70,13 @@ internal static class DwgTextReplacer
             if (cadEntity is CadInsert insert)
             {
                 ProcessInsertAttributes(insert, translationMap, result, ref replacedCount);
+                if (translationMap.Count == 0) break;
+            }
+
+            // Handle table cells via compound handles "HANDLE:row:col"
+            if (cadEntity is CadTable table)
+            {
+                ProcessTableCells(table, translationMap, result, ref replacedCount);
                 if (translationMap.Count == 0) break;
             }
         }
@@ -96,7 +104,8 @@ internal static class DwgTextReplacer
                 if (string.IsNullOrEmpty(translatedEntity.TranslatedText)) continue;
                 // Note: Attributes skip font mapping and scaling intentionally —
                 // they inherit their parent block insert's style/scale transform.
-                attEntity.Value = translatedEntity.TranslatedText;
+                if (!AttributeTranslationPolicy.IsMetadataTag(attEntity.Tag))
+                    attEntity.Value = translatedEntity.TranslatedText;
                 result.SuccessCount++;
                 translationMap.Remove(compoundHandle);
                 replacedCount++;
@@ -104,11 +113,85 @@ internal static class DwgTextReplacer
         }
     }
 
+
+    /// <summary>
+    /// Replace text for cells inside a TABLE entity using compound handles "HANDLE:row:col".
+    /// </summary>
+    private static void ProcessTableCells(
+        CadTable table,
+        Dictionary<string, CoreTextEntity> translationMap,
+        CadWriteResult result,
+        ref int replacedCount)
+    {
+        var tableHandle = FormatHandle(table.Handle);
+        // Snapshot keys that belong to this table to avoid modifying while iterating.
+        var keys = translationMap.Keys
+            .Where(k => k.StartsWith(tableHandle + ":", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        foreach (var key in keys)
+        {
+            if (!translationMap.TryGetValue(key, out var translatedEntity)) continue;
+            if (string.IsNullOrEmpty(translatedEntity.TranslatedText)) continue;
+
+            var parts = key.Split(':');
+            if (parts.Length != 3) continue;
+            if (!int.TryParse(parts[1], out var row) || !int.TryParse(parts[2], out var col)) continue;
+            if (row < 0 || row >= table.Rows.Count) continue;
+
+            try
+            {
+                var rowObj = table.Rows[row];
+                if (rowObj?.Cells == null || col < 0 || col >= rowObj.Cells.Count) continue;
+                var cell = rowObj.Cells[col];
+                if (!TrySetTableCellText(cell, translatedEntity.TranslatedText))
+                {
+                    result.FailCount++;
+                    result.Errors.Add($"Failed to replace table cell {key}");
+                    continue;
+                }
+
+                result.SuccessCount++;
+                translationMap.Remove(key);
+                replacedCount++;
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Failed to replace table cell {Key}", key);
+                result.FailCount++;
+                result.Errors.Add($"Failed to replace table cell {key}: {ex.Message}");
+            }
+        }
+    }
+
+    private static bool TrySetTableCellText(CadTable.Cell cell, string text)
+    {
+        try
+        {
+            if (cell.HasMultipleContent && cell.Contents != null && cell.Contents.Count > 0)
+            {
+                // Never flatten multiple independently formatted/formula contents.
+                return false;
+            }
+
+            if (cell.Content?.CadValue != null)
+            {
+                cell.Content.CadValue.SetValue(text);
+                return true;
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "TrySetTableCellText failed");
+        }
+        return false;
+    }
     /// <summary>
     /// Replace text content of a CAD entity with translated text, applying font mapping and scaling.
     /// </summary>
     public static bool ReplaceEntityText(CadEntity entity, CoreTextEntity ourEntity, bool cnToEn, CadDocument doc,
-        List<(double minX, double minY, double maxX, double maxY)> frames)
+        List<(double minX, double minY, double maxX, double maxY)> frames,
+        List<CadEntity> allEntities)
     {
         try
         {
@@ -122,20 +205,26 @@ internal static class DwgTextReplacer
                 case CadText textEntity when entity is not CadMText:
                     textEntity.Value = translatedText;
                     // Restore original text height before font mapping.
-                    // Font mapping may change the text style, which could alter
-                    // the entity's effective height. We explicitly reset to
-                    // extraction-time height so it stays unchanged.
                     if (originalHeight > 0)
                         textEntity.Height = originalHeight;
                     DwgFontManager.ApplyFontMapping(textEntity, ourEntity.TextStyleName, cnToEn, doc);
-                    // Re-apply height after font mapping in case the new style
-                    // has a fixed height that overrode our setting.
                     if (originalHeight > 0)
                         textEntity.Height = originalHeight;
+
+                    // Pre-layout: keep original height (no aggressive pre-shrink)
+                    DwgTextScaler.ApplyScaling(textEntity, translatedText, ourEntity);
+
+                    // Collision resolution: wrap -> nudge -> scale, retest each step
+                    if (allEntities.Count > 0 && originalHeight > 0)
+                        DwgCollisionDetector.ResolveCollisions(textEntity, originalHeight, allEntities, ourEntity);
+
+                    // Frame-boundary safety last (after collision resolution)
+                    if (frames.Count > 0 && originalHeight > 0)
+                        DwgFrameDetector.CheckAndScaleToFitFrame(textEntity, frames, originalHeight);
                     return true;
 
                 case CadMText mtext:
-                    mtext.Value = translatedText.Replace("\r\n", "\\P").Replace("\n", "\\P").Replace("\r", "\\P");
+                    mtext.Value = FontMapper.MapInlineFonts(translatedText,cnToEn).Replace("\r\n", "\\P").Replace("\n", "\\P").Replace("\r", "\\P");
                     if (mtext.HasColumns && mtext.ColumnData != null)
                         mtext.ColumnData.ColumnType = ACadSharp.Entities.ColumnType.NoColumns;
                     if (originalHeight > 0)
@@ -143,13 +232,20 @@ internal static class DwgTextReplacer
                     DwgFontManager.ApplyFontMapping(mtext, ourEntity.TextStyleName, cnToEn, doc);
                     if (originalHeight > 0)
                         mtext.Height = originalHeight;
+
+                    // Pre-layout: keep original height + gentle wrap width
+                    DwgTextScaler.ApplyScaling(mtext, translatedText, ourEntity);
+
+                    // Collision resolution: wrap -> nudge -> scale, retest each step
+                    if (allEntities.Count > 0 && originalHeight > 0)
+                        DwgCollisionDetector.ResolveCollisions(mtext, originalHeight, allEntities, ourEntity);
+
+                    // Frame-boundary safety last
+                    if (frames.Count > 0 && originalHeight > 0)
+                        DwgFrameDetector.CheckAndScaleToFitFrame(mtext, frames, originalHeight);
                     return true;
 
                 case CadDimension dim:
-                    // TODO: Add ApplyFontMapping overload for CadDimension.
-                    // DwgFontManager only has overloads for CadText and CadMText;
-                    // Dimension.Style is DimensionStyle (not TextStyle), so a
-                    // dedicated overload or different approach is needed.
                     dim.Text = translatedText;
                     return true;
 

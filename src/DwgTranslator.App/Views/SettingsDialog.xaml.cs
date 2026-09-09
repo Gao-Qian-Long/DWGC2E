@@ -89,6 +89,13 @@ public partial class SettingsDialog : Window
         await _viewModel.DetectAutoCadAsync();
     }
 
+    private async void TestCadIntegration_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button button) button.IsEnabled = false;
+        await _viewModel.TestCadIntegrationAsync();
+        if (sender is Button completedButton) completedButton.IsEnabled = true;
+    }
+
     private void BrowseCadPlugin_Click(object sender, RoutedEventArgs e)
     {
         var dialog = new OpenFileDialog
@@ -108,8 +115,12 @@ public partial class SettingsDialog : Window
             var srcDir = Path.GetFullPath(Path.Combine(appDir, "..", "..", "..", ".."));
             foreach (var config in new[] { "Debug", "Release" })
             {
-                var candidate = Path.Combine(srcDir, "DwgTranslator.Cad", "bin", config, "net8.0");
-                if (Directory.Exists(candidate)) { initialDir = candidate; break; }
+                foreach (var framework in new[] { "net48", "net8.0" })
+                {
+                    var candidate = Path.Combine(srcDir, "DwgTranslator.Cad", "bin", config, framework);
+                    if (Directory.Exists(candidate)) { initialDir = candidate; break; }
+                }
+                if (!string.IsNullOrEmpty(initialDir)) break;
             }
         }
 

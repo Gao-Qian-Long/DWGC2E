@@ -60,6 +60,7 @@ Thumbs.db
 Desktop.ini
 
 # ===== Publish / Backup / Build Artifacts =====
+/artifacts/
 publish/
 publish_backup/
 build_out/
@@ -79,3 +80,5 @@ dev.bat
 建议.md
 启动
 UI布局意见.md
+AGENTS.md
+.omo/

@@ -1,5 +1,13 @@
+#if GSTARCAD
+using Gssoft.Gscad.DatabaseServices;
+#else
 using Autodesk.AutoCAD.DatabaseServices;
+#endif
+#if GSTARCAD
+using Gssoft.Gscad.Geometry;
+#else
 using Autodesk.AutoCAD.Geometry;
+#endif
 
 namespace DwgTranslator.Cad.Replacement;
 
@@ -42,14 +50,14 @@ internal static class ColliderCollector
             {
                 try
                 {
-                    var insPt = nestedBr.Position;
-                    if (insPt.X < searchMinX - 100 || insPt.X > searchMaxX + 100 ||
-                        insPt.Y < searchMinY - 100 || insPt.Y > searchMaxY + 100)
+                    // BlockReference.GeometricExtents is expressed in the owning BTR's
+                    // coordinate space and includes its insertion/rotation/scale. Do not
+                    // recurse into raw block-definition entities, whose extents are local.
+                    var blockBounds = nestedBr.GeometricExtents;
+                    if (blockBounds.MaxPoint.X < searchMinX || blockBounds.MinPoint.X > searchMaxX ||
+                        blockBounds.MaxPoint.Y < searchMinY || blockBounds.MinPoint.Y > searchMaxY)
                         continue;
-
-                    var nestedBtr = (BlockTableRecord)tr.GetObject(nestedBr.BlockTableRecord, OpenMode.ForRead);
-                    CollectPotentialColliders(tr, nestedBtr, skipId, textBounds, proximityPadding,
-                        result, depth + 1);
+                    result.Add(nestedBr);
                 }
                 catch (System.Exception ex) { System.Diagnostics.Debug.WriteLine($"ColliderCollector: {ex.Message}"); }
                 continue;

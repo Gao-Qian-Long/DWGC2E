@@ -22,5 +22,6 @@ public interface IAutoCadInteropService
         List<TextEntity> entities,
         bool cnToEn,
         AppConfig config,
-        IProgress<string>? progress = null);
+        IProgress<string>? progress = null,
+        CancellationToken cancellationToken = default);
 }

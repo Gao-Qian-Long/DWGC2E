@@ -11,3 +11,5 @@ Translate the following text precisely according to these rules:
 8. If the text is already in the target language, return it unchanged.
 9. Keep abbreviations as they appear (e.g., "PN16", "DN50", "M10", "ø25").
 10. Do not translate proper nouns, part numbers, or material codes (e.g., "Q235", "45#", "HT200").
+11. Translate every source-language word. Never return the original source-language phrase as the answer.
+12. Labels must fit constrained CAD cells. Prefer the shortest standard technical wording; use common unambiguous abbreviations such as FB for feedback, Temp. for temperature, and Aux. for auxiliary.

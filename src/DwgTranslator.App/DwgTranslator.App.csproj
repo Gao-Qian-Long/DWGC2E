@@ -14,9 +14,15 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Content Include="icon.ico">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
+    <!-- Embed the WPF window icon. A loose Content file is not reliable in
+         compressed single-file publishes because no physical base path exists. -->
+    <Resource Include="icon.ico" />
+    <Content Include="..\..\settings.json.example" Link="settings.json"
+             CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\glossaries\mechanical_zh_en.json" Link="glossaries\mechanical_zh_en.json"
+             CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\prompts\deepl_context.txt" Link="prompts\deepl_context.txt"
+             CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
   <!-- Self-contained publish profile -->
@@ -37,6 +43,37 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\DwgTranslator.Core\DwgTranslator.Core.csproj" />
+    <!-- Build the in-CAD plugin together with the desktop app without linking it
+         into the WPF process. Its complete private dependency set is copied below. -->
   </ItemGroup>
+
+  <Target Name="BuildCadPlugin" BeforeTargets="Build">
+    <MSBuild Projects="..\DwgTranslator.Cad\DwgTranslator.Cad.csproj"
+             Targets="Build"
+             RemoveProperties="RuntimeIdentifier;SelfContained;PublishSingleFile;PublishDir"
+             Properties="Configuration=$(Configuration);NuGetAudit=false" />
+  </Target>
+
+  <Target Name="CopyCadPluginToBuildOutput" AfterTargets="Build">
+    <ItemGroup>
+      <_CadPluginBuildFiles Include="..\DwgTranslator.Cad\bin\$(Configuration)\$(CadPluginTargetFramework)\**\*"
+                            Exclude="..\DwgTranslator.Cad\bin\$(Configuration)\$(CadPluginTargetFramework)\**\*.pdb" />
+    </ItemGroup>
+    <RemoveDir Directories="$(OutDir)CadPlugin" />
+    <Copy SourceFiles="@(_CadPluginBuildFiles)"
+          DestinationFiles="@(_CadPluginBuildFiles->'$(OutDir)CadPlugin\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="CopyCadPluginToPublishOutput" AfterTargets="Publish">
+    <ItemGroup>
+      <_CadPluginPublishFiles Include="..\DwgTranslator.Cad\bin\$(Configuration)\$(CadPluginTargetFramework)\**\*"
+                              Exclude="..\DwgTranslator.Cad\bin\$(Configuration)\$(CadPluginTargetFramework)\**\*.pdb" />
+    </ItemGroup>
+    <RemoveDir Directories="$(PublishDir)CadPlugin" />
+    <Copy SourceFiles="@(_CadPluginPublishFiles)"
+          DestinationFiles="@(_CadPluginPublishFiles->'$(PublishDir)CadPlugin\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+  </Target>
 
 </Project>

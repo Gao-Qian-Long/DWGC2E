@@ -21,7 +21,11 @@ public class LocalizationService : ILocalizationService
 
     public IReadOnlyList<LanguageInfo> AvailableLanguages => SupportedLanguages;
 
-    public event EventHandler? LanguageChanged;
+    public event EventHandler? LanguageChanged
+    {
+        add { }
+        remove { }
+    }
 
     public LocalizationService()
     {

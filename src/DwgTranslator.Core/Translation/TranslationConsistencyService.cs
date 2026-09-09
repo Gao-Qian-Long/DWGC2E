@@ -101,6 +101,18 @@ public class TranslationConsistencyService : ITranslationConsistencyService
         }
     }
 
+    public void RemoveFromCache(string sourceText)
+    {
+        if (string.IsNullOrEmpty(sourceText)) return;
+        var normalized = NormalizeForCache(sourceText);
+        lock (_lock)
+        {
+            if (_cache.Remove(normalized))
+                Log.Warning("Removed invalid translation cache entry for '{Src}'",
+                    sourceText.Length > 40 ? sourceText[..40] + "..." : sourceText);
+        }
+    }
+
     /// <summary>
     /// Batch-add multiple entries to the cache.
     /// </summary>

@@ -2,7 +2,8 @@
 echo Publishing DWG Translator as self-contained single-file...
 echo.
 
-set PUBDIR=src\DwgTranslator.App\bin\Release\net8.0-windows\win-x64\publish
+set PUBDIR=artifacts\publish
+set ZIPFILE=artifacts\DwgTranslator-win-x64-GstarCAD2024.zip
 
 dotnet publish src/DwgTranslator.App/DwgTranslator.App.csproj ^
     -c Release ^
@@ -11,30 +12,37 @@ dotnet publish src/DwgTranslator.App/DwgTranslator.App.csproj ^
     -p:PublishSingleFile=true ^
     -p:IncludeNativeLibrariesForSelfExtract=true ^
     -p:EnableCompressionInSingleFile=true ^
+    -p:NuGetAudit=false ^
     -o %PUBDIR%
 
 if %ERRORLEVEL% NEQ 0 (
     echo Publish failed with error code %ERRORLEVEL%
-    pause
     exit /b %ERRORLEVEL%
 )
 
-:: Copy the Cad plugin DLL so AutoCAD NETLOAD can find it
-echo.
-echo Copying DwgTranslator.Cad.dll to publish directory...
-copy /Y "src\DwgTranslator.Cad\bin\Release\net8.0\DwgTranslator.Cad.dll" "%PUBDIR%\"
-if %ERRORLEVEL% == 0 (
-    echo Copied successfully.
-) else (
-    echo WARNING: Failed to copy DwgTranslator.Cad.dll. Make sure Cad project is built in Release first.
+:: The App project builds the CAD plugin and copies its complete private dependency
+:: closure to CadPlugin. CAD-host API DLLs (Ac*/Gc*) are intentionally supplied by
+:: the installed CAD product and are not redistributed.
+if not exist "%PUBDIR%\CadPlugin\DwgTranslator.Cad.dll" (
+    echo ERROR: CAD plugin package was not produced.
+    exit /b 2
 )
+
+powershell -NoProfile -ExecutionPolicy Bypass -File "tools\Verify-ReleasePackage.ps1" -PublishDir "%PUBDIR%"
+if %ERRORLEVEL% NEQ 0 (
+    echo ERROR: CAD plugin dependency verification failed.
+    exit /b %ERRORLEVEL%
+)
+
+if exist "%ZIPFILE%" del /q "%ZIPFILE%"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Compress-Archive -Path '%PUBDIR%\*' -DestinationPath '%ZIPFILE%' -CompressionLevel Optimal"
+if %ERRORLEVEL% NEQ 0 exit /b %ERRORLEVEL%
 
 echo.
 echo Publish successful!
 echo Output: %PUBDIR%\DwgTranslator.exe
 echo.
-echo IMPORTANT: For AutoCAD precise writeback, the Cad plugin is at:
-echo   %PUBDIR%\DwgTranslator.Cad.dll
-echo You can also configure the path in Settings -^> AutoCAD Configuration.
-
-pause
+echo GstarCAD/AutoCAD online writeback plugin:
+echo   %PUBDIR%\CadPlugin\DwgTranslator.Cad.dll
+echo Package: %ZIPFILE%
+echo The application auto-detects GstarCAD/AutoCAD and this bundled plugin.

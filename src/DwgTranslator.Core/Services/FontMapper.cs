@@ -6,6 +6,19 @@ namespace DwgTranslator.Core.Services;
 /// </summary>
 public static class FontMapper
 {
+    public static string MapInlineFonts(string content, bool cnToEn)
+    {
+        return System.Text.RegularExpressions.Regex.Replace(content, @"\\[fF]([^;]+);", match =>
+        {
+            var fields=match.Groups[1].Value.Split('|');
+            var mapped=MapFontName(fields[0],cnToEn);
+            if(mapped==null)return match.Value;
+            // Keep bold/italic, but do not carry a CJK charset or font-family
+            // classification into the replacement Latin font.
+            var emphasis=string.Join("",fields.Skip(1).Where(x=>x.StartsWith("b") || x.StartsWith("i")).Select(x=>"|"+x));
+            return "\\f"+mapped+emphasis+";";
+        });
+    }
     private static readonly Dictionary<string, string> CnToEnFonts = new(StringComparer.OrdinalIgnoreCase)
     {
         { "SimHei", "Arial" },
@@ -36,7 +49,7 @@ public static class FontMapper
         {
             foreach (var kv in CnToEnFonts)
             {
-                if (currentStyleName.Contains(kv.Key, StringComparison.OrdinalIgnoreCase))
+                if (currentStyleName.IndexOf(kv.Key, StringComparison.OrdinalIgnoreCase) >= 0)
                     return kv.Value;
             }
         }
@@ -44,7 +57,7 @@ public static class FontMapper
         {
             foreach (var kv in EnToCnFonts)
             {
-                if (currentStyleName.Contains(kv.Key, StringComparison.OrdinalIgnoreCase))
+                if (currentStyleName.IndexOf(kv.Key, StringComparison.OrdinalIgnoreCase) >= 0)
                     return kv.Value;
             }
         }
@@ -57,10 +70,10 @@ public static class FontMapper
     public static bool IsCjkFont(string styleName)
     {
         if (string.IsNullOrEmpty(styleName)) return false;
-        return styleName.Contains("SimHei", StringComparison.OrdinalIgnoreCase)
-            || styleName.Contains("SimSun", StringComparison.OrdinalIgnoreCase)
-            || styleName.Contains("宋体", StringComparison.OrdinalIgnoreCase)
-            || styleName.Contains("黑体", StringComparison.OrdinalIgnoreCase)
-            || styleName.Contains("gbcbig", StringComparison.OrdinalIgnoreCase);
+        return styleName.IndexOf("SimHei", StringComparison.OrdinalIgnoreCase) >= 0
+            || styleName.IndexOf("SimSun", StringComparison.OrdinalIgnoreCase) >= 0
+            || styleName.IndexOf("宋体", StringComparison.OrdinalIgnoreCase) >= 0
+            || styleName.IndexOf("黑体", StringComparison.OrdinalIgnoreCase) >= 0
+            || styleName.IndexOf("gbcbig", StringComparison.OrdinalIgnoreCase) >= 0;
     }
 }

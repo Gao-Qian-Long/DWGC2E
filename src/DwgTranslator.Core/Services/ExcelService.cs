@@ -31,9 +31,10 @@ public class ExcelService : IExcelService
             worksheet.Cell(1, 4).Value = Strings.Get("ColGlossary");
             worksheet.Cell(1, 5).Value = Strings.Get("ColStatus");
             worksheet.Cell(1, 6).Value = Strings.Get("ColNotes");
+            worksheet.Cell(1, 7).Value = "SourceFile";
 
             // Style headers
-            var headerRange = worksheet.Range(1, 1, 1, 6);
+            var headerRange = worksheet.Range(1, 1, 1, 7);
             headerRange.Style.Font.Bold = true;
             headerRange.Style.Fill.BackgroundColor = XLColor.LightGray;
 
@@ -51,6 +52,7 @@ public class ExcelService : IExcelService
                 worksheet.Cell(row, 4).Value = entity.GlossaryHit ? "Y" : "N";
                 worksheet.Cell(row, 5).Value = entity.Status.ToString();
                 worksheet.Cell(row, 6).Value = entity.Notes;
+                worksheet.Cell(row, 7).Value = entity.SourceFilePath;
             }
 
             // Auto-fit columns
@@ -96,7 +98,9 @@ public class ExcelService : IExcelService
                     GlossaryHit = worksheet.Row(row).Cell(4).GetString() == "Y",
                     Status = Enum.TryParse<TranslationStatus>(worksheet.Row(row).Cell(5).GetString(), out var status)
                         ? status : TranslationStatus.Pending,
-                    Notes = worksheet.Row(row).Cell(6).GetString()
+                    Notes = worksheet.Row(row).Cell(6).GetString(),
+                    // Column 7 is optional for backward compatibility with older Excel exports.
+                    SourceFilePath = worksheet.Row(row).Cell(7).GetString()
                 };
 
                 if (string.IsNullOrEmpty(entity.TranslatedText))

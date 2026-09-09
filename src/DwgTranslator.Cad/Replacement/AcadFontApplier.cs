@@ -1,5 +1,14 @@
+#if GSTARCAD
+using Gssoft.Gscad.DatabaseServices;
+#else
 using Autodesk.AutoCAD.DatabaseServices;
+#endif
 using DwgTranslator.Core.Services;
+#if GSTARCAD
+using Gssoft.Gscad.GraphicsInterface;
+#else
+using Autodesk.AutoCAD.GraphicsInterface;
+#endif
 
 namespace DwgTranslator.Cad.Replacement;
 
@@ -66,7 +75,7 @@ internal static class AcadFontApplier
             {
                 textStyleTable.UpgradeOpen();
                 var newStyle = new TextStyleTableRecord { Name = targetFont };
-                bool isShx = targetFont.EndsWith(".shx", StringComparison.OrdinalIgnoreCase);
+                bool isShx = targetFont!.EndsWith(".shx", StringComparison.OrdinalIgnoreCase);
                 if (isShx)
                 {
                     newStyle.FileName = targetFont;
@@ -74,7 +83,7 @@ internal static class AcadFontApplier
                 }
                 else
                 {
-                    newStyle.Font = new Autodesk.AutoCAD.GraphicsInterface.FontDescriptor(
+                    newStyle.Font = new FontDescriptor(
                         targetFont, false, false, 0, 0);
                 }
                 styleId = textStyleTable.Add(newStyle);

@@ -1,17 +1,26 @@
+#if GSTARCAD
+using Gssoft.Gscad.DatabaseServices;
+#else
 using Autodesk.AutoCAD.DatabaseServices;
+#endif
+#if GSTARCAD
+using Gssoft.Gscad.Geometry;
+#else
 using Autodesk.AutoCAD.Geometry;
+#endif
 using DwgTranslator.Cad;
+using WBC = DwgTranslator.Core.Models.WritebackConstants;
 
 namespace DwgTranslator.Cad.Replacement;
 
 /// <summary>
 /// Optimizes MText layout using AutoCAD's precise GeometricExtents.
 ///
-/// Width rules (IMPROVED — NEVER set Width=0 for fixed-width MText):
+/// Width rules (IMPROVED 鈥?NEVER set Width=0 for fixed-width MText):
 ///   AutoCAD official docs: "If Width = 0.0, word wrap is currently disabled."
 ///   Setting Width=0 disables all word wrapping, turning multi-line text into
 ///   a single very long line. We now use a tight non-zero width instead.
-/// - Fixed width MText: if narrow (<0.75) → tight width (never 0); if medium (<0.95) → proportional; else → keep
+/// - Fixed width MText: if narrow (<0.75) 鈫?tight width (never 0); if medium (<0.95) 鈫?proportional; else 鈫?keep
 /// - Free width MText: only constrain if overflowing (>1.2x original)
 ///
 /// Height rules:
@@ -21,7 +30,7 @@ namespace DwgTranslator.Cad.Replacement;
 /// </summary>
 public static class LayoutOptimizer
 {
-    private const double MinHeightRatio = 0.80;  // 80% floor — text readability first
+    private static readonly double MinHeightRatio = WBC.MinHeightRatio;
 
     public static void OptimizeMText(
         MText mtext,
@@ -43,7 +52,7 @@ public static class LayoutOptimizer
         if (ourEntity.MTextLineSpacingStyle > 0)
             mtext.LineSpacingStyle = (LineSpacingStyle)ourEntity.MTextLineSpacingStyle;
 
-        // Determine analysis text — prefer mtext.Contents with \P breaks
+        // Determine analysis text 鈥?prefer mtext.Contents with \P breaks
         string analysisText;
         if (mtext.Contents.Contains("\\P"))
             analysisText = mtext.Contents;
@@ -75,30 +84,30 @@ public static class LayoutOptimizer
             // Adjust rectangle width proportionally to match translated text.
             // KEY CHANGE: minimum clamp raised from 0.40 to 0.70.
             // - 0.40 was too aggressive: text that could fit in 1 line became 3 lines
-            //   (especially for EN→CN where Chinese is naturally more compact).
+            //   (especially for EN鈫扖N where Chinese is naturally more compact).
             // - 0.70 preserves more of the original column width, reducing unnecessary
             //   line wrapping while still allowing reasonable narrowing.
             // - When text is very narrow (widthRatio < 0.70), use a content-aware
-            //   width: maxLineWidth with 25% headroom, clamped to [0.50, 1.0] × original.
+            //   width: maxLineWidth with 25% headroom, clamped to [0.50, 1.0] 脳 original.
             double widthRatio = effectiveWidth / Math.Max(originalWidth, 1.0);
             double targetWidth;
             if (widthRatio < 0.70)
             {
-                // Content is much narrower than original column — use content-based
+                // Content is much narrower than original column 鈥?use content-based
                 // width to avoid forcing text into too many short lines.
                 double contentWidth = maxLineWidth * 1.25; // 25% headroom
-                targetWidth = Math.Clamp(contentWidth,
+                targetWidth = DwgTranslator.Cad.Compat.Clamp(contentWidth,
                     originalRectWidth * 0.50,
                     originalRectWidth * 0.95);
             }
             else
             {
-                double clampedRatio = Math.Clamp(widthRatio, 0.70, 1.30);
+                double clampedRatio = DwgTranslator.Cad.Compat.Clamp(widthRatio, 0.70, 1.30);
                 targetWidth = originalRectWidth * clampedRatio;
             }
             if (targetWidth < 10.0) targetWidth = 10.0;
             mtext.Width = targetWidth;
-            Log.Debug("MText {Handle}: scaled width {OrigW:F1}→{NewW:F1} (ratio={R:F2})",
+            Log.Debug("MText {Handle}: scaled width {OrigW:F1}鈫抺NewW:F1} (ratio={R:F2})",
                 mtext.Handle, originalRectWidth, targetWidth, widthRatio);
         }
         else
@@ -108,7 +117,7 @@ public static class LayoutOptimizer
             // excessively long single lines.
             if (effectiveWidth > Math.Max(originalWidth * 1.05, 50.0))
             {
-                // Use a width based on the content — never narrower than original
+                // Use a width based on the content 鈥?never narrower than original
                 // width, and use 80% of effective width (was 55%) to allow natural
                 // wrapping without creating excessive line breaks.
                 double targetWidth = Math.Max(originalWidth * 1.1, effectiveWidth * 0.80);
@@ -155,7 +164,7 @@ public static class LayoutOptimizer
         }
 
         // ===== HEIGHT CAP: collision avoidance (matches offline) =====
-        // Never let height grow beyond original + 5% — translated text is
+        // Never let height grow beyond original + 5% 鈥?translated text is
         // usually longer (more chars), not taller.
         if (mtext.TextHeight > originalHeight * 1.05)
         {
@@ -179,7 +188,7 @@ public static class LayoutOptimizer
         {
             var bounds = mtext.GeometricExtents;
             if (!CollisionDetector.ExceedsFrame(bounds, frame))
-                return; // fits — done
+                return; // fits 鈥?done
         }
         catch { /* GeometricExtents may fail; continue to adjustment */ }
 
@@ -197,7 +206,7 @@ public static class LayoutOptimizer
                 if (!CollisionDetector.ExceedsFrame(testBounds, frame))
                 {
                     Log.Debug("MText {Handle}: height {H:F2} fits frame", mtext.Handle, testHeight);
-                    return; // fits — done
+                    return; // fits 鈥?done
                 }
             }
             catch { break; /* stop on error */ }
@@ -228,7 +237,7 @@ public static class LayoutOptimizer
         if (newWidth > originalWidth)
         {
             double scale = originalWidth / newWidth;
-            if (scale < 0.80) scale = 0.80;  // Consistent with MText MinHeightRatio
+            if (scale < MinHeightRatio) scale = MinHeightRatio;
             dbText.Height = originalHeight * scale;
         }
 
@@ -245,7 +254,7 @@ public static class LayoutOptimizer
                 {
                     double overflowRatio = CollisionDetector.ComputeOverflowRatio(bounds, frame.Value);
                     double scale = 1.0 / (1.0 + overflowRatio);
-                    if (scale < 0.75) scale = 0.75;
+                    if (scale < MinHeightRatio) scale = MinHeightRatio;
                     dbText.Height *= scale;
                     dbText.RecordGraphicsModified(true);
 
@@ -257,7 +266,7 @@ public static class LayoutOptimizer
                         {
                             double ratio2 = CollisionDetector.ComputeOverflowRatio(newBounds, frame.Value);
                             double scale2 = 1.0 / (1.0 + ratio2);
-                            if (scale2 < 0.75) scale2 = 0.75;
+                            if (scale2 < MinHeightRatio) scale2 = MinHeightRatio;
                             dbText.Height *= scale2;
                         }
                     }

@@ -52,12 +52,15 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty] private string _operationLabel = string.Empty;
     [ObservableProperty] private bool _isIndeterminate;
     [ObservableProperty] private bool _isCancellationRequested;
+    [ObservableProperty] private bool _isTranslating;
+    [ObservableProperty] private bool _isExporting;
     [ObservableProperty] private bool _isCnToEn = true;
     [ObservableProperty] private string _languageDirection = Strings.Get("LangCnToEn");
     [ObservableProperty] private string _currentSourceLang = "ZH";
     [ObservableProperty] private string _currentTargetLang = "EN";
     [ObservableProperty] private string _glossaryStatsText = Strings.Get("StatsGlossaryCount", 0);
     [ObservableProperty] private string _licenseStatusText = Strings.Get("LicenseNotActivated");
+    [ObservableProperty] private bool _isLicensingEnabled;
 
     #endregion
 
@@ -125,7 +128,10 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     private void RefreshLicenseStatus()
     {
-        LicenseStatusText = _licenseService.CurrentLicense.GetDisplayStatus();
+        IsLicensingEnabled = _config.LicensingEnabled;
+        LicenseStatusText = IsLicensingEnabled
+            ? _licenseService.CurrentLicense.GetDisplayStatus()
+            : "免授权版本";
     }
 
     public void Dispose()

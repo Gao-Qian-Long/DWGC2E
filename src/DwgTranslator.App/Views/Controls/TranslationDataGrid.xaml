@@ -3,7 +3,6 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:conv="clr-namespace:DwgTranslator.App.Converters">
 
-    <!-- Card wrapper with shadow, no internal padding — DataGrid fills edge-to-edge -->
     <Border Style="{StaticResource ContentCardNoPad}">
         <Grid>
             <Grid.RowDefinitions>
@@ -11,7 +10,7 @@
                 <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
 
-            <!-- Card header bar: file info + entity count -->
+            <!-- Row 0: Compact header bar -->
             <Border Grid.Row="0" Style="{StaticResource CardHeaderBar}">
                 <Grid>
                     <Grid.ColumnDefinitions>
@@ -20,55 +19,53 @@
                     </Grid.ColumnDefinitions>
 
                     <StackPanel Grid.Column="0" Orientation="Horizontal">
-                        <TextBlock Text="&#x1F4DD;" FontSize="12" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                        <TextBlock FontSize="11.5" FontWeight="SemiBold"
+                        <TextBlock FontSize="13" FontWeight="SemiBold"
                                    Foreground="{DynamicResource Brush.TextPrimary}"
                                    VerticalAlignment="Center">
-                            <Run Text="翻译列表"/>
+                            <Run Text="{conv:Localize ColOriginal}"/>
                         </TextBlock>
-                        <TextBlock FontSize="11" Foreground="{DynamicResource Brush.TextMuted}"
+                        <TextBlock FontSize="13" Foreground="{DynamicResource Brush.TextMuted}"
                                    VerticalAlignment="Center" Margin="8,0,0,0"
                                    TextTrimming="CharacterEllipsis"
                                    Text="{Binding SelectedFilePath}"/>
                     </StackPanel>
 
-                    <StackPanel Grid.Column="1" Orientation="Horizontal">
-                        <TextBlock FontSize="11" Foreground="{DynamicResource Brush.TextMuted}"
-                                   VerticalAlignment="Center">
-                            <Run Text="{Binding VisibleCount, StringFormat='显示 {0} /'}"/>
-                            <Run Text="{Binding TotalCount, StringFormat='共 {0} 条'}"/>
-                        </TextBlock>
-                    </StackPanel>
+                    <TextBlock Grid.Column="1" FontSize="13" Foreground="{DynamicResource Brush.TextMuted}"
+                               VerticalAlignment="Center">
+                        <Run Text="{Binding VisibleCount, Mode=OneWay, StringFormat='显示 {0} /'}"/>
+                        <Run Text="{Binding TotalCount, Mode=OneWay, StringFormat='共 {0} 条'}"/>
+                    </TextBlock>
                 </Grid>
             </Border>
 
-            <!-- DataGrid -->
-            <DataGrid Grid.Row="1" Margin="0"
-                      ItemsSource="{Binding FilteredEntities}"
-                      AutoGenerateColumns="False"
-                      CanUserAddRows="False"
-                      SelectionMode="Single"
-                      CanUserSortColumns="True"
-                      GridLinesVisibility="Horizontal"
-                      RowStyle="{StaticResource TranslationRowStyle}"
-                      AlternationCount="2"
-                      CanUserResizeColumns="True"
-                      EnableRowVirtualization="True"
-                      IsReadOnly="False"
-                      RowHeight="32"
-                      FontSize="12"
-                      HeadersVisibility="Column"
-                      ColumnHeaderStyle="{StaticResource DataGridHeaderStyle}"
-                      CellStyle="{StaticResource DataGridCellStyle}"
-                      HorizontalGridLinesBrush="{DynamicResource Brush.BorderLight}"
-                      BorderBrush="Transparent" BorderThickness="0">
-                <DataGrid.Columns>
+            <!-- Row 1: DataGrid + Empty state overlay -->
+            <Grid Grid.Row="1">
+                <DataGrid Margin="0"
+                          ItemsSource="{Binding FilteredEntities}"
+                          AutoGenerateColumns="False"
+                          CanUserAddRows="False"
+                          SelectionMode="Single"
+                          CanUserSortColumns="True"
+                          GridLinesVisibility="Horizontal"
+                          RowStyle="{StaticResource TranslationRowStyle}"
+                          AlternationCount="2"
+                          CanUserResizeColumns="True"
+                          EnableRowVirtualization="True"
+                          IsReadOnly="False"
+                          RowHeight="36"
+                          FontSize="13"
+                          HeadersVisibility="Column"
+                          ColumnHeaderStyle="{StaticResource DataGridHeaderStyle}"
+                          CellStyle="{StaticResource DataGridCellStyle}"
+                          HorizontalGridLinesBrush="{DynamicResource Brush.BorderLight}"
+                          BorderBrush="Transparent" BorderThickness="0">
+                    <DataGrid.Columns>
                     <DataGridTextColumn Header="Handle" Binding="{Binding Handle}" Width="70" IsReadOnly="True"
                                         CanUserSort="True" SortMemberPath="Handle">
                         <DataGridTextColumn.ElementStyle>
                             <Style TargetType="TextBlock" BasedOn="{StaticResource CenteredCellStyle}">
                                 <Setter Property="FontFamily" Value="Consolas"/>
-                                <Setter Property="FontSize" Value="10"/>
+                                <Setter Property="FontSize" Value="11"/>
                                 <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}"/>
                             </Style>
                         </DataGridTextColumn.ElementStyle>
@@ -88,7 +85,7 @@
                                 <TextBox Text="{Binding TranslatedText, UpdateSourceTrigger=LostFocus}"
                                          TextWrapping="Wrap" AcceptsReturn="True" MinHeight="24"
                                          BorderBrush="{DynamicResource Brush.Border}" Background="Transparent"
-                                         FontSize="12" VerticalContentAlignment="Center"
+                                          FontSize="13" VerticalContentAlignment="Center"
                                          Padding="4,2"
                                          ToolTip="{conv:Localize TipEditTranslation}"/>
                             </DataTemplate>
@@ -119,13 +116,33 @@
                     <DataGridTemplateColumn Header="{conv:Localize ColStatus}" Width="90" SortMemberPath="Status" CanUserSort="True">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
-                                <Border CornerRadius="4" Padding="6,2" Margin="2,0"
-                                        Background="{Binding Status, Converter={StaticResource StatusBrush}}"
-                                        ToolTip="{Binding Status}">
-                                    <TextBlock Text="{Binding Status}" FontSize="11" FontWeight="SemiBold"
-                                               Foreground="White"
-                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                </Border>
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <Ellipse Width="6" Height="6" Margin="0,0,4,0">
+                                        <Ellipse.Style>
+                                            <Style TargetType="Ellipse">
+                                                <Setter Property="Fill" Value="{DynamicResource Brush.TextMuted}"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding Status}" Value="Translated">
+                                                        <Setter Property="Fill" Value="{DynamicResource Brush.Success}"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding Status}" Value="Reviewed">
+                                                        <Setter Property="Fill" Value="#059669"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding Status}" Value="TranslationFailed">
+                                                        <Setter Property="Fill" Value="{DynamicResource Brush.Danger}"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding Status}" Value="Pending">
+                                                        <Setter Property="Fill" Value="{DynamicResource Brush.Warning}"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding Status}" Value="Skipped">
+                                                        <Setter Property="Fill" Value="{DynamicResource Brush.TextMuted}"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Ellipse.Style>
+                                    </Ellipse>
+                                    <TextBlock Text="{Binding Status}" FontSize="13" VerticalAlignment="Center"/>
+                                </StackPanel>
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
@@ -139,6 +156,32 @@
                                         ElementStyle="{StaticResource WrapCellStyle}"/>
                 </DataGrid.Columns>
             </DataGrid>
+
+            <!-- Empty state overlay (on top of DataGrid) -->
+            <Grid x:Name="EmptyStatePanel" Visibility="Collapsed"
+                  Background="{DynamicResource Brush.Surface}">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,40,0,40">
+                    <TextBlock x:Name="EmptyStateIcon" Text="&#x1F4C2;" FontSize="40"
+                               HorizontalAlignment="Center" Margin="0,0,0,12"/>
+                    <TextBlock x:Name="EmptyStateTitle" FontSize="18" FontWeight="SemiBold"
+                               Foreground="{DynamicResource Brush.TextPrimary}"
+                               HorizontalAlignment="Center" Margin="0,0,0,8"/>
+                    <TextBlock x:Name="EmptyStateDescription" FontSize="13"
+                               Foreground="{DynamicResource Brush.TextMuted}"
+                               HorizontalAlignment="Center" TextWrapping="Wrap" MaxWidth="360"
+                               Margin="0,0,0,20"/>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                        <Button x:Name="EmptyStatePrimaryButton"
+                                Style="{StaticResource PrimaryButton}"
+                                Padding="20,8" Margin="4,0"/>
+                        <Button x:Name="EmptyStateSecondaryButton"
+                                Style="{StaticResource ToolButton}"
+                                Padding="16,6" Margin="4,0"
+                                Visibility="Collapsed"/>
+                    </StackPanel>
+                </StackPanel>
+            </Grid>
+            </Grid>
         </Grid>
     </Border>
 </UserControl>
