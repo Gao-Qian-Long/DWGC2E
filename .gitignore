@@ -71,6 +71,10 @@ installer/Output/
 *.exe
 !DwgTranslator.iss
 
+# ===== Runnable Release =====
+!/release/
+!/release/**
+
 # ===== Development Notes & Temp Files =====
 .codegraph/
 功能开发.md
