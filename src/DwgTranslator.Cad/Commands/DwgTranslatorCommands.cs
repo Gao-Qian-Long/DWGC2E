@@ -207,7 +207,7 @@ public class DwgTranslatorCommands
             var entities = excelService.ImportFromExcelAsync(filePath).GetAwaiter().GetResult();
 
             // Write back
-            var replacer = new TextReplacer(cnToEn: true);
+            var replacer = new TextReplacer(targetIsCjk: true);
             var result = replacer.ReplaceAll(doc.Database, entities);
 
             editor.WriteMessage($"\n[DwgTranslator] Writeback complete:");

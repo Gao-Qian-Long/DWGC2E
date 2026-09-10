@@ -1,4 +1,4 @@
-﻿using System.Text.RegularExpressions;
+using System.Text.RegularExpressions;
 using DwgTranslator.Core.Models;
 using DwgTranslator.Core.Translation;
 using Serilog;
@@ -384,8 +384,8 @@ public class TranslationService : ITranslationService
 
     private static string BuildUserMessage(string text, string src, string tgt)
     {
-        var sn = src switch { "ZH" => "Chinese", "EN" => "English", "JA" => "Japanese", "KO" => "Korean", _ => src };
-        var tn = tgt switch { "ZH" => "Chinese", "EN" => "English", "JA" => "Japanese", "KO" => "Korean", _ => tgt };
+        var sn = DwgTranslator.Core.Models.TranslationLanguages.Name(src);
+        var tn = DwgTranslator.Core.Models.TranslationLanguages.Name(tgt);
         return $"Translate the following CAD drawing text from {sn} to {tn}:\n\n---TEXT START---\n{text}\n---TEXT END---\n\nOutput ONLY the translated text. No explanations. Translate every source-language word. Keep the result as short as possible for a constrained CAD label. Use standard drawing abbreviations such as FB for feedback when unambiguous. Keep engineering symbols/units (KM, CB, M8, IP65, 24V, etc.) unchanged when they appear as tokens.";
     }
 

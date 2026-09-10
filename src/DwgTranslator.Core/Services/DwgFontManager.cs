@@ -16,11 +16,11 @@ internal static class DwgFontManager
     /// <summary>
     /// Pre-create target font styles in the document so entities can reference them.
     /// </summary>
-    public static void EnsureFontStyles(CadDocument doc, bool cnToEn)
+    public static void EnsureFontStyles(CadDocument doc, bool targetIsCjk)
     {
         try
         {
-            if (cnToEn)
+            if (targetIsCjk)
             {
                 EnsureStyle(doc, "Arial");
                 EnsureStyle(doc, "Helvetica");
@@ -60,9 +60,9 @@ internal static class DwgFontManager
     /// Resolves a TextStyle by mapped font name: looks up an existing style
     /// or creates a new one. Returns null when the original style maps to nothing.
     /// </summary>
-    public static TextStyle? ResolveTextStyle(string originalStyleName, bool cnToEn, CadDocument doc)
+    public static TextStyle? ResolveTextStyle(string originalStyleName, bool targetIsCjk, CadDocument doc)
     {
-        var targetFont = FontMapper.MapFontName(originalStyleName, cnToEn);
+        var targetFont = FontMapper.MapFontName(originalStyleName, targetIsCjk);
         if (string.IsNullOrEmpty(targetFont)) return null;
 
         foreach (var ts in doc.TextStyles)
@@ -91,11 +91,11 @@ internal static class DwgFontManager
     /// <summary>
     /// Map Chinese fonts to English fonts and vice versa for single-line text.
     /// </summary>
-    public static void ApplyFontMapping(CadText textEntity, string originalStyleName, bool cnToEn, CadDocument doc)
+    public static void ApplyFontMapping(CadText textEntity, string originalStyleName, bool targetIsCjk, CadDocument doc)
     {
         try
         {
-            var style = ResolveTextStyle(originalStyleName, cnToEn, doc);
+            var style = ResolveTextStyle(originalStyleName, targetIsCjk, doc);
             if (style != null) textEntity.Style = style;
         }
         catch (Exception ex)
@@ -107,11 +107,11 @@ internal static class DwgFontManager
     /// <summary>
     /// Map Chinese fonts to English fonts and vice versa for multi-line text.
     /// </summary>
-    public static void ApplyFontMapping(CadMText mtext, string originalStyleName, bool cnToEn, CadDocument doc)
+    public static void ApplyFontMapping(CadMText mtext, string originalStyleName, bool targetIsCjk, CadDocument doc)
     {
         try
         {
-            var style = ResolveTextStyle(originalStyleName, cnToEn, doc);
+            var style = ResolveTextStyle(originalStyleName, targetIsCjk, doc);
             if (style != null) mtext.Style = style;
         }
         catch (Exception ex)

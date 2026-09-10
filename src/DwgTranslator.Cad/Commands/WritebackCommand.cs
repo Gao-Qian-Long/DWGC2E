@@ -37,7 +37,19 @@ public class WritebackCommand
         public string SourceDwgPath { get; set; } = "";
         public string OutputDwgPath { get; set; } = "";
         public List<TextEntity> Entities { get; set; } = new();
-        public bool CnToEn { get; set; } = true;
+
+        /// <summary>
+        /// True when the translation is written into a CJK language, so the font mapping keeps a
+        /// CJK-capable text style. Nullable so an older app that only sends the legacy "cnToEn"
+        /// field still resolves; both spellings are accepted because JavaScriptSerializer matches
+        /// property names case-insensitively.
+        /// </summary>
+        public bool? TargetIsCjk { get; set; }
+        public bool? CnToEn { get; set; }
+
+        /// <summary>Resolved direction flag, defaulting to CJK output for a config with neither field.</summary>
+        public bool WritesCjkText => TargetIsCjk ?? CnToEn ?? true;
+
         public string? SessionId { get; set; }
         public string? DoneSignalPath { get; set; }
     }
@@ -121,7 +133,7 @@ public class WritebackCommand
             var engine = new AcadWriterEngine();
             var result = engine.WriteTranslations(
                 config.SourceDwgPath, config.OutputDwgPath,
-                config.Entities, config.CnToEn);
+                config.Entities, config.WritesCjkText);
 
             if (result.SuccessCount > 0)
             {
@@ -146,8 +158,12 @@ public class WritebackCommand
         }
         catch (System.Exception ex)
         {
+            // Log the failure as well as reporting it on the command line: a batch writeback runs
+            // with its console hidden, so without this the only trace of a broken config or a
+            // missing dependency is the terse done-signal status.
+            Log.Error(ex, "DwgTranslateWrite failed for config {Config}: {Message}", configPath, ex.Message);
             ed.WriteMessage($"\nCommand error: {ex.Message}");
-            SignalDone(donePath, "error", sessionId);
+            SignalDone(donePath, "error", sessionId, 0, 0, ex.Message);
         }
     }
 

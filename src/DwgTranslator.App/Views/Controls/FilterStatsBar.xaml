@@ -3,10 +3,40 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:conv="clr-namespace:DwgTranslator.App.Converters">
 
-    <Border Background="{DynamicResource Brush.Surface}"
-            BorderBrush="{DynamicResource Brush.Border}"
-            BorderThickness="0,0,0,1"
-            Padding="12,8">
+    <UserControl.Resources>
+        <!-- One stat = icon + count. Icons are vector shapes in a shared colour so the row reads as
+             a single line instead of a row of unrelated emoji glyphs. -->
+        <Style x:Key="StatIcon" TargetType="Path">
+            <Setter Property="Width" Value="13"/>
+            <Setter Property="Height" Value="13"/>
+            <Setter Property="Stretch" Value="Uniform"/>
+            <Setter Property="Fill" Value="Transparent"/>
+            <Setter Property="StrokeThickness" Value="1.25"/>
+            <Setter Property="StrokeStartLineCap" Value="Round"/>
+            <Setter Property="StrokeEndLineCap" Value="Round"/>
+            <Setter Property="StrokeLineJoin" Value="Round"/>
+            <Setter Property="Margin" Value="0,0,5,0"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+
+        <Style x:Key="StatCount" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="FontFamily" Value="Consolas, Microsoft YaHei UI"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Margin" Value="0,0,16,0"/>
+        </Style>
+
+        <Style x:Key="StatLabel" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Margin" Value="0,0,5,0"/>
+        </Style>
+    </UserControl.Resources>
+
+    <!-- No bottom border: this row lives inside the same card as the toolbar. -->
+    <Border Background="{DynamicResource Brush.Surface}" Padding="12,7">
         <Grid>
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
@@ -14,68 +44,94 @@
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
 
-            <!-- Left: Inline stats -->
+            <!-- ═══ Left: translation progress at a glance ═══ -->
             <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                <TextBlock VerticalAlignment="Center" FontSize="13" Margin="0,0,4,0">
-                    <Run Text="{conv:Localize StatsTotal}" Foreground="{DynamicResource Brush.TextMuted}"/>
-                    <Run Text="{Binding TotalCount, Mode=OneWay}" Foreground="{DynamicResource Brush.TextPrimary}"
-                         FontFamily="Consolas" FontWeight="SemiBold"/>
-                </TextBlock>
+                <Path Style="{StaticResource StatIcon}" Data="{StaticResource Icon.Excel}"
+                      Stroke="{DynamicResource Brush.TextMuted}"/>
+                <TextBlock Style="{StaticResource StatLabel}" Text="{conv:Localize StatsTotal}"/>
+                <TextBlock Style="{StaticResource StatCount}" Text="{Binding TotalCount, Mode=OneWay}"
+                           Foreground="{DynamicResource Brush.TextPrimary}"/>
 
-                <TextBlock Text="&#x2002;" Margin="2,0"/>
+                <Path Style="{StaticResource StatIcon}" Data="{StaticResource Icon.Check}"
+                      Stroke="{DynamicResource Brush.Success}"/>
+                <TextBlock Style="{StaticResource StatLabel}" Text="已翻译"/>
+                <TextBlock Style="{StaticResource StatCount}" Text="{Binding TranslatedCount, Mode=OneWay}"
+                           Foreground="{DynamicResource Brush.Success}"/>
 
-                <TextBlock VerticalAlignment="Center" FontSize="13" Margin="0,0,4,0">
-                    <Run Text="&#x2713;" Foreground="{DynamicResource Brush.Success}"/>
-                    <Run Text="{Binding TranslatedCount, Mode=OneWay}" Foreground="{DynamicResource Brush.Success}"
-                         FontFamily="Consolas" FontWeight="SemiBold"/>
-                </TextBlock>
+                <Path Style="{StaticResource StatIcon}" Data="{StaticResource Icon.Warning}"
+                      Stroke="{DynamicResource Brush.Danger}"/>
+                <TextBlock Style="{StaticResource StatLabel}" Text="失败"/>
+                <TextBlock Style="{StaticResource StatCount}" Text="{Binding FailedCount, Mode=OneWay}"
+                           Foreground="{DynamicResource Brush.Danger}"/>
 
-                <TextBlock Text="&#x2002;" Margin="2,0"/>
+                <Path Style="{StaticResource StatIcon}" Data="{StaticResource Icon.Glossary}"
+                      Stroke="{DynamicResource Brush.Info}"/>
+                <TextBlock Style="{StaticResource StatLabel}" Text="术语命中"/>
+                <TextBlock Style="{StaticResource StatCount}" Text="{Binding GlossaryHitCount, Mode=OneWay}"
+                           Foreground="{DynamicResource Brush.Info}"/>
 
-                <TextBlock VerticalAlignment="Center" FontSize="13" Margin="0,0,4,0">
-                    <Run Text="&#x26A0;" Foreground="{DynamicResource Brush.Danger}"/>
-                    <Run Text="{Binding FailedCount, Mode=OneWay}" Foreground="{DynamicResource Brush.Danger}"
-                         FontFamily="Consolas" FontWeight="SemiBold"/>
-                </TextBlock>
-
-                <TextBlock Text="&#x2002;" Margin="2,0"/>
-
-                <TextBlock VerticalAlignment="Center" FontSize="13" Margin="0,0,4,0">
-                    <Run Text="&#x1F4D6;" Foreground="{DynamicResource Brush.Info}"/>
-                    <Run Text="{Binding GlossaryHitCount, Mode=OneWay}" Foreground="{DynamicResource Brush.Info}"
-                         FontFamily="Consolas" FontWeight="SemiBold"/>
-                </TextBlock>
-
-                <TextBlock Text="&#xB7;" Margin="4,0" Foreground="{DynamicResource Brush.TextMuted}" VerticalAlignment="Center"/>
-
-                <TextBlock VerticalAlignment="Center" FontSize="13">
-                    <Run Text="{conv:Localize StatsCache}" Foreground="{DynamicResource Brush.TextMuted}"/>
-                    <Run Text="{Binding CacheHitCount, Mode=OneWay}" Foreground="{DynamicResource Brush.TextMuted}"
-                         FontFamily="Consolas" FontWeight="SemiBold"/>
-                </TextBlock>
+                <Path Style="{StaticResource StatIcon}" Data="{StaticResource Icon.Cache}"
+                      Stroke="{DynamicResource Brush.TextMuted}"/>
+                <TextBlock Style="{StaticResource StatLabel}" Text="{conv:Localize StatsCache}"/>
+                <TextBlock Style="{StaticResource StatCount}" Text="{Binding CacheHitCount, Mode=OneWay}"
+                           Foreground="{DynamicResource Brush.TextSecondary}" Margin="0"/>
             </StackPanel>
 
-            <!-- Separator -->
-            <Border Grid.Column="1" Width="1" Height="20"
-                    Background="{DynamicResource Brush.Border}"
-                    Margin="10,0" VerticalAlignment="Center"/>
+            <Border Grid.Column="1" Width="1" Height="20" Margin="14,0"
+                    Background="{DynamicResource Brush.Border}" VerticalAlignment="Center"/>
 
-            <!-- Right: Search + Filter -->
+            <!-- ═══ Right: search + filter ═══ -->
             <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                 <Border Background="{DynamicResource Brush.Background}"
                         BorderBrush="{DynamicResource Brush.Border}"
-                        BorderThickness="1" CornerRadius="4" Padding="0" Margin="0,0,6,0">
-                    <TextBox x:Name="SearchBox"
-                             Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
-                             Width="200" Height="30"
-                             ToolTip="{conv:Localize TipSearch}" FontSize="13"
-                             VerticalContentAlignment="Center"
-                             Padding="8,0" Background="Transparent" BorderThickness="0"
-                             KeyDown="SearchBox_KeyDown"/>
+                        BorderThickness="1" CornerRadius="6" Margin="0,0,8,0">
+                    <Grid>
+                        <TextBox x:Name="SearchBox"
+                                 Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                                 Width="230" Height="30"
+                                 ToolTip="{conv:Localize TipSearch}" FontSize="13"
+                                 VerticalContentAlignment="Center"
+                                 Padding="30,0,28,0" Background="Transparent" BorderThickness="0"
+                                 KeyDown="SearchBox_KeyDown"/>
+                        <Path Data="{StaticResource Icon.Search}"
+                              Width="13" Height="13" Stretch="Uniform" Margin="10,0,0,0"
+                              HorizontalAlignment="Left" VerticalAlignment="Center"
+                              IsHitTestVisible="False"
+                              Stroke="{DynamicResource Brush.TextDisabled}" StrokeThickness="1.3"/>
+                        <!-- Watermark: WPF has no built-in placeholder. -->
+                        <TextBlock Text="搜索原文或译文…" Margin="30,0,0,0"
+                                   VerticalAlignment="Center" IsHitTestVisible="False"
+                                   FontSize="13"
+                                   Foreground="{DynamicResource Brush.TextDisabled}">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Text, ElementName=SearchBox}" Value="">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                        <Button x:Name="ClearSearchButton"
+                                Click="ClearSearch_Click"
+                                ToolTip="清除搜索"
+                                HorizontalAlignment="Right" VerticalAlignment="Center"
+                                Margin="0,0,6,0" Width="20" Height="20"
+                                Background="Transparent" BorderThickness="0" Cursor="Hand">
+                            <Path Data="{StaticResource Icon.Close}"
+                                  Width="9" Height="9" Stretch="Uniform"
+                                  Stroke="{DynamicResource Brush.TextMuted}" StrokeThickness="1.4"
+                                  StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                        </Button>
+                    </Grid>
                 </Border>
+
                 <ComboBox ItemsSource="{Binding FilterOptions}"
                           SelectedItem="{Binding FilterStatusText, UpdateSourceTrigger=PropertyChanged}"
-                          Width="90" Height="30" FontSize="13"
+                          Width="104" Height="30" FontSize="13"
+                          VerticalContentAlignment="Center"
                           Background="{DynamicResource Brush.Background}"
                           BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1"/>
             </StackPanel>

@@ -15,7 +15,7 @@ namespace DwgTranslator.Core.Services;
 public class DwgWriterService : IDwgWriterService, IDxfWriterService
 {
     /// <inheritdoc/>
-    public CadWriteResult WriteTranslations(string sourceFilePath, string outputFilePath, List<CoreTextEntity> entities, bool cnToEn = true, CancellationToken cancellationToken = default)
+    public CadWriteResult WriteTranslations(string sourceFilePath, string outputFilePath, List<CoreTextEntity> entities, bool targetIsCjk = true, CancellationToken cancellationToken = default)
     {
         var result = new CadWriteResult();
 
@@ -48,8 +48,8 @@ public class DwgWriterService : IDwgWriterService, IDxfWriterService
             Log.Information("Source DXF format: {Type}", isBinary ? "Binary" : "ASCII");
         }
 
-        Log.Information("Writing translations to {Format}: {Source} -> {Output} ({Count} entities, CnToEn={Dir})",
-            isDxfOutput ? "DXF" : "DWG", sourceFilePath, outputFilePath, entities.Count, cnToEn);
+        Log.Information("Writing translations to {Format}: {Source} -> {Output} ({Count} entities, targetIsCjk={Dir})",
+            isDxfOutput ? "DXF" : "DWG", sourceFilePath, outputFilePath, entities.Count, targetIsCjk);
 
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -65,7 +65,7 @@ public class DwgWriterService : IDwgWriterService, IDxfWriterService
             }
 
             // 3. Ensure output font styles exist in document
-            DwgFontManager.EnsureFontStyles(doc, cnToEn);
+            DwgFontManager.EnsureFontStyles(doc, targetIsCjk);
 
             // 4. Build lookup: handle → translated text
             var translationMap = BuildTranslationMap(entities);
@@ -74,7 +74,7 @@ public class DwgWriterService : IDwgWriterService, IDxfWriterService
             // 5. Process all entity collections: ModelSpace, layouts, block definitions
             var modelFrames = DwgFrameDetector.DetectFrames(doc.ModelSpace.Entities, doc);
             int modelSpaceCount = DwgTextReplacer.ProcessEntityCollection(
-                doc.ModelSpace.Entities, translationMap, result, cnToEn, doc, modelFrames);
+                doc.ModelSpace.Entities, translationMap, result, targetIsCjk, doc, modelFrames);
             Log.Information("ModelSpace: {Count} replacements", modelSpaceCount);
 
             foreach (var layout in doc.Layouts)
@@ -82,7 +82,7 @@ public class DwgWriterService : IDwgWriterService, IDxfWriterService
                 if (layout.Name == "Model" || layout.AssociatedBlock == null) continue;
                 var layoutFrames = DwgFrameDetector.DetectFrames(layout.AssociatedBlock.Entities, doc);
                 int layoutCount = DwgTextReplacer.ProcessEntityCollection(
-                    layout.AssociatedBlock.Entities, translationMap, result, cnToEn, doc, layoutFrames);
+                    layout.AssociatedBlock.Entities, translationMap, result, targetIsCjk, doc, layoutFrames);
                 if (layoutCount > 0)
                     Log.Debug("Layout '{Name}': {Count} replacements", layout.Name, layoutCount);
             }
@@ -94,7 +94,7 @@ public class DwgWriterService : IDwgWriterService, IDxfWriterService
                 if (blockRecord.Name.StartsWith("*Paper_Space", StringComparison.OrdinalIgnoreCase)) continue;
                 var blockFrames = DwgFrameDetector.DetectFrames(blockRecord.Entities, doc);
                 int blockCount = DwgTextReplacer.ProcessEntityCollection(
-                    blockRecord.Entities, translationMap, result, cnToEn, doc, blockFrames);
+                    blockRecord.Entities, translationMap, result, targetIsCjk, doc, blockFrames);
                 if (blockCount > 0)
                     Log.Debug("Block '{Name}': {Count} replacements", blockRecord.Name, blockCount);
             }
@@ -152,9 +152,9 @@ public class DwgWriterService : IDwgWriterService, IDxfWriterService
     }
 
     /// <inheritdoc/>
-    CadWriteResult IDxfWriterService.WriteTranslations(string sourceFilePath, string outputFilePath, List<CoreTextEntity> entities, bool cnToEn, CancellationToken cancellationToken)
+    CadWriteResult IDxfWriterService.WriteTranslations(string sourceFilePath, string outputFilePath, List<CoreTextEntity> entities, bool targetIsCjk, CancellationToken cancellationToken)
     {
-        return WriteTranslations(sourceFilePath, outputFilePath, entities, cnToEn, cancellationToken);
+        return WriteTranslations(sourceFilePath, outputFilePath, entities, targetIsCjk, cancellationToken);
     }
 
     // ───────────────────── Private orchestration helpers ─────────────────────

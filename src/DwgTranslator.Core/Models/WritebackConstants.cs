@@ -1,4 +1,4 @@
-﻿namespace DwgTranslator.Core.Models;
+namespace DwgTranslator.Core.Models;
 
 /// <summary>
 /// Shared constants for the DWG writeback collision/layout pipeline.
@@ -17,6 +17,24 @@ public static class WritebackConstants
     /// Never go below this even if residual overlap remains.
     /// </summary>
     public const double HardMinHeightRatio = 0.75;
+
+    /// <summary>
+    /// Preferred minimum text height ratio when fitting a translation back into the
+    /// space measured for the original text. A fit at or above this is "clean".
+    /// </summary>
+    public const double PreferredFitHeightRatio = 0.70;
+
+    /// <summary>
+    /// Absolute minimum text height ratio accepted by the envelope fit before the
+    /// translation is given up and the original text is kept.
+    ///
+    /// Below <see cref="PreferredFitHeightRatio"/> the fit is still accepted (so the
+    /// drawing ends up translated instead of silently reverting to the source
+    /// language) but it is reported as a shrunk fit. Rotated labels are the common
+    /// case: their available-space measurement degrades to the original bounding
+    /// box, so longer translations can only be made to fit by shrinking further.
+    /// </summary>
+    public const double AbsoluteMinFitHeightRatio = 0.40;
 
     /// <summary>
     /// Collision margin as a ratio of original text height for proximity search.
@@ -44,6 +62,18 @@ public static class WritebackConstants
     /// Width=0 disables AutoCAD word wrap.
     /// </summary>
     public const double MinMTextRectangleWidth = 8.0;
+
+    /// <summary>
+    /// Condensation floor for the last-resort DBText tier.
+    ///
+    /// The DBText fit first searches a uniform scale, which preserves the glyph aspect ratio and is
+    /// therefore the preferred answer ("as large as the cell allows, not distorted"). Only when no
+    /// uniform scale fits does it condense the glyphs, searching for the largest width factor that
+    /// fits and never going below this fraction of the source width factor. 0.40 matches the
+    /// historical behaviour; reaching it means the cell is genuinely too small, and the original
+    /// text is kept only if even this fails.
+    /// </summary>
+    public const double FallbackWidthFactorRetention = 0.40;
 
     /// <summary>
     /// Minimum scale when fitting into a frame boundary.

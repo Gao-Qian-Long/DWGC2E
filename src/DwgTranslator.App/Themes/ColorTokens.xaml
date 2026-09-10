@@ -65,6 +65,9 @@
     <!-- ── Semantic: Card ── -->
     <SolidColorBrush x:Key="Brush.Card"           Color="#FFFFFF" />
 
+    <!-- ── Semantic: Drag & drop scrim ── -->
+    <Color x:Key="Color.DropScrim">#0F172A</Color>
+
     <!-- ── CornerRadius Constants ── -->
     <CornerRadius x:Key="CornerRadius.Small"  TopLeft="4" TopRight="4" BottomLeft="4" BottomRight="4" />
     <CornerRadius x:Key="CornerRadius.Medium" TopLeft="6" TopRight="6" BottomLeft="6" BottomRight="6" />

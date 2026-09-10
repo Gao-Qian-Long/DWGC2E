@@ -1,4 +1,4 @@
-﻿using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace DwgTranslator.Core.Models;
 
@@ -30,6 +30,7 @@ public partial class TextEntity : ObservableObject
 
     /// <summary>Entity type: DBText, MText, AttributeReference, Dimension, MLeader, Table, ArcAlignedText.</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(EntityTypeText))]
     private string _entityType = string.Empty;
 
     /// <summary>Text height.</summary>
@@ -92,6 +93,7 @@ public partial class TextEntity : ObservableObject
 
     /// <summary>Translation status.</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(StatusText))]
     private TranslationStatus _status = TranslationStatus.Pending;
 
     /// <summary>Translated text (filled after translation).</summary>
@@ -105,6 +107,38 @@ public partial class TextEntity : ObservableObject
     /// <summary>User notes from Excel review.</summary>
     [ObservableProperty]
     private string _notes = string.Empty;
+
+    /// <summary>
+    /// Status as shown in the grid. The raw enum name used to reach the interface, so a Chinese UI
+    /// displayed "Pending" / "TranslationFailed" in the status column.
+    /// </summary>
+    public string StatusText => Status switch
+    {
+        TranslationStatus.Pending => "待翻译",
+        TranslationStatus.GlossaryMatched => "术语命中",
+        TranslationStatus.Translated => "已翻译",
+        TranslationStatus.TranslationFailed => "翻译失败",
+        TranslationStatus.Reviewed => "已审阅",
+        TranslationStatus.WritebackSuccess => "已写回",
+        TranslationStatus.WritebackFailed => "写回失败",
+        TranslationStatus.Skipped => "已跳过",
+        _ => Status.ToString()
+    };
+
+    /// <summary>Entity type as a short label for the grid, instead of the CLR type name.</summary>
+    public string EntityTypeText => EntityType switch
+    {
+        "DBText" => "单行文字",
+        "MText" => "多行文字",
+        "AttributeReference" => "属性参照",
+        "AttributeDefinition" => "属性定义",
+        "Dimension" => "标注",
+        "MLeader" => "多重引线",
+        "Table" => "表格",
+        "ArcAlignedText" => "弧线文字",
+        "" => "-",
+        _ => EntityType
+    };
 }
 
 /// <summary>

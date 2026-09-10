@@ -26,6 +26,24 @@ public partial class App : Application
     public static ILogStore LogStore { get; private set; } = null!;
     public static CadLogReaderService? CadLogReader { get; private set; }
 
+    /// <summary>
+    /// Files passed on the command line, imported by <c>MainWindow</c> once it is loaded.
+    /// Cleared after the first import so a second window (if one is ever opened) does not
+    /// import them again.
+    /// </summary>
+    public static string[] StartupFiles { get; private set; } = [];
+
+    /// <summary>
+    /// True when the program was started with <c>--env-check</c>, which opens the environment
+    /// self-check as soon as the main window is ready. The installers pass it so a fresh install
+    /// leads straight to the CAD plugin step.
+    /// </summary>
+    public static bool OpenEnvironmentCheckOnStart { get; private set; }
+
+    public static void ClearEnvironmentCheckRequest() => OpenEnvironmentCheckOnStart = false;
+
+    public static void ClearStartupFiles() => StartupFiles = [];
+
     public App()
     {
         DispatcherUnhandledException += OnDispatcherUnhandledException;
@@ -73,6 +91,21 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+
+        // Files handed to us by the shell ("Open with" / command line). Keep only ones that
+        // exist and that the app can actually import.
+        StartupFiles = e.Args
+            .Where(arg => !string.IsNullOrWhiteSpace(arg) && arg[0] != '-' && File.Exists(arg))
+            .ToArray();
+        if (StartupFiles.Length > 0)
+            Log.Information("Startup files: {Count}", StartupFiles.Length);
+
+        // "DwgTranslator.exe --env-check" opens straight into the environment self-check. The
+        // installers use it right after installing, because that screen carries the one step that
+        // has to run on the receiving machine: putting the CAD plugin into the CAD.
+        OpenEnvironmentCheckOnStart = e.Args.Any(arg =>
+            string.Equals(arg, "--env-check", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(arg, "-e", StringComparison.OrdinalIgnoreCase));
 
         // Ensure app data directories exist
         Directory.CreateDirectory(AppDataDir);

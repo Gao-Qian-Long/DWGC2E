@@ -27,8 +27,75 @@ public partial class MainViewModel
         };
         if (dialog.ShowDialog() != true) return;
 
-        var filePaths = dialog.FileNames;
-        if (filePaths.Length == 0) return;
+        await ImportCadFilesAsync(dialog.FileNames).ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// File types accepted by drag-and-drop and by the command line.
+    /// </summary>
+    public static readonly string[] SupportedCadExtensions = [".dwg", ".dxf"];
+    public static readonly string[] SupportedExcelExtensions = [".xlsx", ".xls"];
+
+    /// <summary>
+    /// True when a dropped path has an extension the application can import.
+    /// </summary>
+    public static bool IsSupportedFile(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return false;
+        var extension = Path.GetExtension(path).ToLowerInvariant();
+        return SupportedCadExtensions.Contains(extension) || SupportedExcelExtensions.Contains(extension);
+    }
+
+    /// <summary>
+    /// Entry point shared by drag-and-drop and by files passed on the command line: splits
+    /// the dropped paths by type and imports each group. Unknown extensions are reported
+    /// instead of being silently ignored, so a wrong drop is never a no-op.
+    /// </summary>
+    public async Task ImportDroppedFilesAsync(IReadOnlyList<string> paths)
+    {
+        if (IsProcessing) return;
+
+        var cadFiles = new List<string>();
+        var excelFiles = new List<string>();
+        var unsupported = new List<string>();
+
+        foreach (var path in paths)
+        {
+            if (string.IsNullOrWhiteSpace(path)) continue;
+            if (File.Exists(path) == false) { unsupported.Add(Path.GetFileName(path)); continue; }
+            var extension = Path.GetExtension(path).ToLowerInvariant();
+            if (SupportedCadExtensions.Contains(extension)) cadFiles.Add(path);
+            else if (SupportedExcelExtensions.Contains(extension)) excelFiles.Add(path);
+            else unsupported.Add(Path.GetFileName(path));
+        }
+
+        if (cadFiles.Count == 0 && excelFiles.Count == 0)
+        {
+            StatusMessage = unsupported.Count > 0
+                ? Strings.Get("StatusDropUnsupported", string.Join(", ", unsupported.Take(3)))
+                : Strings.Get("StatusDropNothing");
+            return;
+        }
+
+        if (cadFiles.Count > 0)
+            await ImportCadFilesAsync(cadFiles).ConfigureAwait(true);
+
+        // Excel translations are matched against the entities that were just imported, so
+        // they always run after the CAD pass.
+        if (excelFiles.Count > 0 && !IsProcessing)
+            await ImportExcelFilesAsync(excelFiles[0]).ConfigureAwait(true);
+
+        if (unsupported.Count > 0)
+            Log.Warning("Dropped files ignored ({Count}): {Files}", unsupported.Count, string.Join("; ", unsupported));
+    }
+
+    /// <summary>
+    /// Imports one or more DWG/DXF files. Shared by the toolbar dialog and drag-and-drop.
+    /// </summary>
+    public async Task ImportCadFilesAsync(IReadOnlyList<string> filePaths)
+    {
+        if (IsProcessing) return;
+        if (filePaths.Count == 0) return;
 
         // Resolve DXF reader before entering background thread
         var dxfReader = App.Services?.GetService<IDxfReaderService>();
@@ -86,7 +153,7 @@ public partial class MainViewModel
             }
             else
             {
-                StatusMessage = Strings.Get("StatusImported", allEntities.Count, filePaths.Length);
+                StatusMessage = Strings.Get("StatusImported", allEntities.Count, filePaths.Count);
             }
         }, Strings.Get("OperationImporting"), "StatusCadImportFailed", "MsgCadImportError");
     }
@@ -141,6 +208,21 @@ public partial class MainViewModel
             StatusMessage = Strings.Get("StatusNoTranslatedText");
             MessageBox.Show(Strings.Get("MsgNoTranslatedData"),
                 Strings.Get("MsgTitleNoData"), MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        // Several drawings loaded at once: the export flow forces ONE source drawing and ONE
+        // destination name, so a folder of drawings could only be written one dialog-pair at a
+        // time and looked un-exportable. Write every imported drawing into one chosen folder
+        // instead, one "<name>_translated" file each.
+        var distinctSources = translatedEntities
+            .Select(e => NormalizeSourcePath(e.SourceFilePath))
+            .Where(p => !string.IsNullOrWhiteSpace(p))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (distinctSources.Count > 1)
+        {
+            await ExportAllSourcesAsync(distinctSources!, translatedEntities);
             return;
         }
 
@@ -202,6 +284,164 @@ public partial class MainViewModel
                 if (cancelled) return;
                 ProgressValue = 100;
                 HandleExportResult(result, usedAcadInterop, isDxfSource, destFilePath!, entitiesToWrite);
+            }, Strings.Get("OperationExporting"), "StatusCadExportFailed", "MsgCadExportError");
+        }
+        finally
+        {
+            IsExporting = false;
+        }
+    }
+
+    /// <summary>
+    /// Exports every imported drawing that has translations, writing one "_translated" file per
+    /// source into a single chosen folder.
+    ///
+    /// A drawing that is not fully translated, has no translations, or would overwrite its own
+    /// source is reported and skipped rather than stopping the rest of the batch: blocking the
+    /// whole set was what made a multi-drawing import unusable.
+    /// </summary>
+    private async Task ExportAllSourcesAsync(List<string> sources, List<TextEntity> translatedEntities)
+    {
+        var targets = sources.Where(File.Exists).ToList();
+        if (targets.Count == 0)
+        {
+            StatusMessage = Strings.Get("StatusNoTranslatedText");
+            MessageBox.Show(Strings.Get("MsgNoTranslatedData"),
+                Strings.Get("MsgTitleNoData"), MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var folderDialog = new OpenFolderDialog
+        {
+            Title = $"选择导出文件夹（将导出 {targets.Count} 张图纸）",
+            InitialDirectory = Path.GetDirectoryName(targets[0]) ?? string.Empty
+        };
+        if (folderDialog.ShowDialog() != true) return;
+        var targetFolder = folderDialog.FolderName;
+
+        var modeDialog = new Views.ExportModeDialog(_autoCadInteropService.IsAutoCADAvailable(_config))
+        {
+            Owner = Application.Current.MainWindow
+        };
+        if (modeDialog.ShowDialog() != true)
+        {
+            StatusMessage = Strings.Get("StatusExportCancelled");
+            return;
+        }
+        var mode = modeDialog.SelectedMode;
+
+        var written = new List<(string Path, int Count)>();
+        var failed = new List<string>();
+        var skipped = new List<string>();
+
+        IsExporting = true;
+        try
+        {
+            await RunWithProgress(async () =>
+            {
+                IsCancellationRequested = false;
+                _exportCts = new CancellationTokenSource();
+                ProgressValue = 0;
+                double step = 100.0 / targets.Count;
+
+                for (int index = 0; index < targets.Count; index++)
+                {
+                    if (_exportCts.IsCancellationRequested) break;
+                    var source = targets[index];
+                    var name = Path.GetFileName(source);
+                    StatusMessage = $"正在导出 {index + 1}/{targets.Count}：{name}";
+                    ProgressValue = index * step;
+
+                    var mine = translatedEntities
+                        .Where(e => string.Equals(
+                            NormalizeSourcePath(e.SourceFilePath), source, StringComparison.OrdinalIgnoreCase))
+                        .ToList();
+                    if (mine.Count == 0)
+                    {
+                        skipped.Add($"{name}（没有可写入的译文）");
+                        ProgressValue = (index + 1) * step;
+                        continue;
+                    }
+
+                    var unfinished = Entities.Count(e =>
+                        string.Equals(NormalizeSourcePath(e.SourceFilePath), source, StringComparison.OrdinalIgnoreCase) &&
+                        e.Status is TranslationStatus.Pending or TranslationStatus.TranslationFailed
+                            or TranslationStatus.GlossaryMatched);
+                    if (unfinished > 0)
+                    {
+                        skipped.Add($"{name}（仍有 {unfinished} 条未完成翻译）");
+                        Log.Warning("Batch export skipped {File}: {Count} unfinished entities", name, unfinished);
+                        ProgressValue = (index + 1) * step;
+                        continue;
+                    }
+
+                    var extension = Path.GetExtension(source);
+                    var dest = Path.Combine(
+                        targetFolder,
+                        Path.GetFileNameWithoutExtension(source) + "_translated" + extension);
+                    if (string.Equals(Path.GetFullPath(source), Path.GetFullPath(dest),
+                            StringComparison.OrdinalIgnoreCase))
+                    {
+                        skipped.Add($"{name}（输出文件名与源文件相同）");
+                        ProgressValue = (index + 1) * step;
+                        continue;
+                    }
+
+                    try
+                    {
+                        var (result, _, cancelled) = await ExecuteWritebackWithMode(mode, source, dest, mine);
+                        if (cancelled) break;
+                        if (result.SuccessCount > 0)
+                        {
+                            if (result.FailCount == 0 && result.SuccessCount >= mine.Count)
+                                foreach (var entity in mine)
+                                    entity.Status = TranslationStatus.WritebackSuccess;
+                            written.Add((dest, result.SuccessCount));
+                            if (result.FailCount > 0)
+                                failed.Add($"{name}：{result.FailCount} 条未写入 —— {string.Join("; ", result.Errors.Take(2))}");
+                        }
+                        else
+                        {
+                            failed.Add($"{name}：{string.Join("; ", result.Errors.Take(2))}");
+                        }
+                    }
+                    catch (OperationCanceledException) { break; }
+                    catch (Exception ex)
+                    {
+                        failed.Add($"{name}：{ex.Message}");
+                        Log.Error(ex, "Batch export failed for {File}", source);
+                    }
+
+                    ProgressValue = (index + 1) * step;
+                }
+
+                if (written.Count > 0 && _config.LicensingEnabled)
+                    ConsumeLicenseForExport();
+                ProgressValue = 100;
+
+                var summary = new System.Text.StringBuilder();
+                summary.AppendLine($"已导出 {written.Count} 张图纸到：{targetFolder.Replace('\\', '/')}");
+                foreach (var (path, count) in written)
+                    summary.AppendLine($"    ✓ {Path.GetFileName(path)}（{count} 条译文）");
+                if (skipped.Count > 0)
+                {
+                    summary.AppendLine().AppendLine($"跳过 {skipped.Count} 张：");
+                    foreach (var item in skipped) summary.AppendLine($"    – {item}");
+                }
+                if (failed.Count > 0)
+                {
+                    summary.AppendLine().AppendLine($"失败 {failed.Count} 张：");
+                    foreach (var item in failed) summary.AppendLine($"    ✗ {item}");
+                }
+
+                StatusMessage = $"批量导出完成：成功 {written.Count} 张，跳过 {skipped.Count} 张，失败 {failed.Count} 张";
+                MessageBox.Show(summary.ToString(),
+                    Strings.Get(written.Count > 0 ? "MsgTitleExportSuccess" : "MsgTitleExportError"),
+                    MessageBoxButton.OK,
+                    failed.Count > 0 || written.Count == 0 ? MessageBoxImage.Warning : MessageBoxImage.Information);
+
+                ApplyFilter();
+                UpdateStatistics();
             }, Strings.Get("OperationExporting"), "StatusCadExportFailed", "MsgCadExportError");
         }
         finally
@@ -303,12 +543,24 @@ public partial class MainViewModel
             return (new CadWriteResult(), false, true);
         }
 
-        if (modeDialog.SelectedMode == Views.ExportModeDialog.ExportMode.AutoCAD)
+        return await ExecuteWritebackWithMode(
+            modeDialog.SelectedMode, sourceFilePath, destFilePath, entitiesToWrite);
+    }
+
+    /// <summary>
+    /// Executes the writeback in an already chosen mode, so a batch export asks once instead of
+    /// once per drawing.
+    /// </summary>
+    private async Task<(CadWriteResult result, bool usedAcadInterop, bool cancelled)> ExecuteWritebackWithMode(
+        Views.ExportModeDialog.ExportMode mode, string sourceFilePath, string destFilePath,
+        List<TextEntity> entitiesToWrite)
+    {
+        if (mode == Views.ExportModeDialog.ExportMode.AutoCAD)
         {
             var progress = new Progress<string>(msg => StatusMessage = msg);
             var result = await Task.Run(async () =>
                 await _autoCadInteropService.WritebackViaAutoCadAsync(
-                    sourceFilePath, destFilePath, entitiesToWrite, IsCnToEn, _config, progress,
+                    sourceFilePath, destFilePath, entitiesToWrite, TargetIsCjk, _config, progress,
                     _exportCts!.Token), _exportCts!.Token);
             return (result, true, false);
         }
@@ -316,7 +568,7 @@ public partial class MainViewModel
         {
             var result = await Task.Run(() =>
                 _dwgWriterService.WriteTranslations(
-                    sourceFilePath, destFilePath, entitiesToWrite, IsCnToEn, _exportCts!.Token),
+                    sourceFilePath, destFilePath, entitiesToWrite, TargetIsCjk, _exportCts!.Token),
                 _exportCts!.Token);
             return (result, false, false);
         }
@@ -400,9 +652,19 @@ public partial class MainViewModel
         };
         if (dialog.ShowDialog() != true) return;
 
+        await ImportExcelFilesAsync(dialog.FileName).ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Imports a reviewed Excel translation table. Shared by the toolbar dialog and drag-and-drop.
+    /// </summary>
+    public async Task ImportExcelFilesAsync(string filePath)
+    {
+        if (IsProcessing) return;
+
         await RunWithProgress(async () =>
         {
-            var importedEntities = await _excelService.ImportFromExcelAsync(dialog.FileName);
+            var importedEntities = await _excelService.ImportFromExcelAsync(filePath);
             int updatedCount = 0;
             foreach (var imported in importedEntities)
             {

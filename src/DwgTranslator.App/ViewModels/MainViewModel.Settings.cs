@@ -26,60 +26,60 @@ public partial class MainViewModel
     }
 
     [RelayCommand]
-    private async Task ToggleLanguageDirectionAsync()
+    private void SwapLanguages()
+    {
+        if (IsProcessing) return;
+        if (!ConfirmDiscardTranslations()) return;
+
+        // One assignment would fire the change handler twice, so the swap is applied in one step.
+        _applyingLanguagePair = true;
+        (CurrentSourceLang, CurrentTargetLang) = (CurrentTargetLang, CurrentSourceLang);
+        _applyingLanguagePair = false;
+        LanguagePairChanged();
+    }
+
+    /// <summary>
+    /// Opens the language chooser. Any language may be translated into any other, so this dialog is
+    /// the only place the direction is decided; the title bar shows the current pair and reopens it.
+    /// </summary>
+    [RelayCommand]
+    private void ChooseLanguages()
     {
         if (IsProcessing) return;
 
+        var dialog = new Views.LanguagePairDialog(CurrentSourceLang, CurrentTargetLang)
+        {
+            Owner = Application.Current.MainWindow
+        };
+        if (dialog.ShowDialog() != true) return;
+        if (string.Equals(dialog.SourceCode, CurrentSourceLang, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(dialog.TargetCode, CurrentTargetLang, StringComparison.OrdinalIgnoreCase))
+            return;
+
+        if (!ConfirmDiscardTranslations()) return;
+
+        _applyingLanguagePair = true;
+        CurrentSourceLang = dialog.SourceCode;
+        CurrentTargetLang = dialog.TargetCode;
+        _applyingLanguagePair = false;
+        LanguagePairChanged();
+    }
+
+    /// <summary>
+    /// Asks before dropping translations that belong to the previous language pair.
+    /// </summary>
+    private bool ConfirmDiscardTranslations()
+    {
         var translatedCount = Entities.Count(e =>
-            e.Status == TranslationStatus.Translated ||
-            e.Status == TranslationStatus.Reviewed ||
-            e.Status == TranslationStatus.WritebackSuccess);
-        if (translatedCount > 0)
-        {
-            var confirmResult = MessageBox.Show(
-                Strings.Get("MsgDirectionSwitchConfirm", translatedCount),
-                Strings.Get("MsgTitleConfirm"),
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Question);
-            if (confirmResult != MessageBoxResult.Yes) return;
-        }
+            e.Status is TranslationStatus.Translated or TranslationStatus.Reviewed
+                or TranslationStatus.WritebackSuccess);
+        if (translatedCount == 0) return true;
 
-        IsCnToEn = !IsCnToEn;
-
-        if (IsCnToEn)
-        {
-            LanguageDirection = Strings.Get("LangCnToEn");
-            CurrentSourceLang = "ZH";
-            CurrentTargetLang = "EN";
-            _config.SourceLanguage = "ZH";
-            _config.TargetLanguage = "EN";
-        }
-        else
-        {
-            LanguageDirection = Strings.Get("LangEnToCn");
-            CurrentSourceLang = "EN";
-            CurrentTargetLang = "ZH";
-            _config.SourceLanguage = "EN";
-            _config.TargetLanguage = "ZH";
-        }
-
-        await RefreshGlossaryDataAsync();
-
-        foreach (var entity in Entities)
-        {
-            if (entity.Status == TranslationStatus.Translated ||
-                entity.Status == TranslationStatus.Reviewed ||
-                entity.Status == TranslationStatus.WritebackSuccess)
-            {
-                entity.Status = TranslationStatus.Pending;
-                entity.TranslatedText = string.Empty;
-                entity.GlossaryHit = false;
-            }
-        }
-
-        ApplyFilter();
-        UpdateStatistics();
-        StatusMessage = Strings.Get("StatusDirectionSwitched", LanguageDirection);
+        return MessageBox.Show(
+            Strings.Get("MsgDirectionSwitchConfirm", translatedCount),
+            Strings.Get("MsgTitleConfirm"),
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question) == MessageBoxResult.Yes;
     }
 
     #endregion

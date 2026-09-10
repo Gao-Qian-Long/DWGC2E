@@ -24,11 +24,11 @@ public class TextReplacer
 {
     private const double DefaultTextHeight = 2.5;
 
-    private readonly bool _cnToEn;
+    private readonly bool _targetIsCjk;
 
-    public TextReplacer(bool cnToEn = true)
+    public TextReplacer(bool targetIsCjk = true)
     {
-        _cnToEn = cnToEn;
+        _targetIsCjk = targetIsCjk;
     }
 
     public WritebackResult ReplaceAll(Database db, List<TextEntity> entities)
@@ -249,7 +249,7 @@ public class TextReplacer
         try
         {
             var style = (TextStyleTableRecord)styleId.GetObject(OpenMode.ForWrite);
-            var mappedFontName = FontMapper.MapFontName(style.Name, _cnToEn);
+            var mappedFontName = FontMapper.MapFontName(style.Name, _targetIsCjk);
             if (string.IsNullOrEmpty(mappedFontName)) return;
 
             bool isShx = mappedFontName!.EndsWith(".shx", StringComparison.OrdinalIgnoreCase);

@@ -1,5 +1,7 @@
 namespace DwgTranslator.Core.Services;
 
+using DwgTranslator.Core.Models;
+
 /// <summary>
 /// Rejects empty, echoed, or source-language responses before they can be cached
 /// or written back to a drawing.
@@ -14,22 +16,23 @@ public static class TranslationQualityValidator
             return TranslationFilter.IsNumericOnly(source) ||
                 TranslationFilter.ShouldSkipTranslation(source, sourceLanguage, targetLanguage);
 
-        int sourceCjk = source.Count(IsCjk);
-        int translatedCjk = translated.Count(IsCjk);
-        if (string.Equals(targetLanguage, "EN", StringComparison.OrdinalIgnoreCase) && sourceCjk > 0)
-            return translatedCjk == 0;
+        if (string.Equals(sourceLanguage, targetLanguage, StringComparison.OrdinalIgnoreCase)) return true;
 
-        if (string.Equals(targetLanguage, "ZH", StringComparison.OrdinalIgnoreCase) &&
-            source.Any(char.IsLetter) && !source.Any(IsCjk))
-            return translatedCjk > 0;
+        // A response that still carries the SOURCE script is an echo, unless the two languages share
+        // that script: Chinese into Japanese legitimately keeps Han characters.
+        if (TranslationLanguages.ContainsScriptOf(translated, sourceLanguage) &&
+            !TranslationLanguages.SharesScript(sourceLanguage, targetLanguage))
+            return false;
+
+        // Producing none of the target language's own script means the label was answered in
+        // another script, typically the source one or plain Latin.
+        if (TranslationLanguages.RequiresOwnScript(targetLanguage) &&
+            !TranslationLanguages.ContainsScriptOf(translated, targetLanguage))
+            return false;
 
         return true;
     }
 
-    public static bool ContainsCjk(string text) => text.Any(IsCjk);
-
-    private static bool IsCjk(char c) =>
-        (c >= '\u3400' && c <= '\u4DBF') ||
-        (c >= '\u4E00' && c <= '\u9FFF') ||
-        (c >= '\uF900' && c <= '\uFAFF');
+    public static bool ContainsCjk(string text) => TranslationLanguages.ContainsHan(text);
 }
+

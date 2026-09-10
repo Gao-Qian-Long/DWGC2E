@@ -21,4 +21,14 @@ public partial class FilterStatsBar : UserControl
             e.Handled = true;
         }
     }
+
+    private void ClearSearch_Click(object sender, System.Windows.RoutedEventArgs e)
+    {
+        if (DataContext is ViewModels.MainViewModel vm)
+        {
+            vm.SearchText = string.Empty;
+            vm.ApplySearchCommand.Execute(null);
+        }
+        SearchBox.Focus();
+    }
 }

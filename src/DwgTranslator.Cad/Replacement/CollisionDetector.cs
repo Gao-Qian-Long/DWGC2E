@@ -74,6 +74,68 @@ public static class CollisionDetector
         finally { HostApplicationServices.WorkingDatabase=previous; }
     }
 
+    /// <summary>
+    /// The four corners of a text entity's rendered rectangle, in world coordinates, or null when
+    /// the shape cannot be reconstructed (callers then fall back to the axis-aligned box).
+    ///
+    /// The AutoCAD managed API only exposes axis-aligned <c>Extents3d</c>, which over-estimates
+    /// rotated text badly: the bounding box of a 45-degree label is a diagonal square covering
+    /// about twice the label's own area. Comparing those boxes reports overlaps between labels
+    /// that never touch, which is what forced rotated labels through an unnecessary shrink (or a
+    /// revert to the source text). Rotation-aware callers need the real rectangle.
+    /// </summary>
+    public static Point3d[]? TryGetOrientedCorners(Entity entity)
+    {
+        if (entity is not MText mtext) return null;
+        try
+        {
+            double w = mtext.ActualWidth, h = mtext.ActualHeight;
+            if (w <= 0 || h <= 0) return null;
+            int attachment = (int)mtext.Attachment - 1;
+            if (attachment < 0 || attachment > 8) return null;
+
+            // Same attachment maths as MeasureInk's layout-advance rectangle, except the corners
+            // are returned instead of being merged into an axis-aligned union.
+            double x0 = -(attachment % 3) * w / 2, y0 = (attachment / 3) * h / 2;
+            var u = mtext.Direction.GetNormal();
+            var v = mtext.Normal.CrossProduct(u).GetNormal();
+            var corners = new Point3d[4];
+            int i = 0;
+            foreach (var x in new[] { x0, x0 + w })
+            foreach (var y in new[] { y0, y0 - h })
+                corners[i++] = mtext.Location + u * x + v * y;
+            return corners;
+        }
+        catch { return null; }
+    }
+
+    /// <summary>
+    /// Separating-axis test for two convex quads. Returns false when the quads are apart, or when
+    /// they overlap by less than <paramref name="tolerance"/> (a hairline touch is not a clash).
+    /// </summary>
+    public static bool QuadsOverlap(Point3d[] a, Point3d[] b, double tolerance = 0.01)
+        => a.Length >= 3 && b.Length >= 3
+           && !HasSeparatingAxis(a, b, tolerance)
+           && !HasSeparatingAxis(b, a, tolerance);
+
+    private static bool HasSeparatingAxis(Point3d[] from, Point3d[] other, double tolerance)
+    {
+        for (int i = 0; i < from.Length; i++)
+        {
+            var p = from[i];
+            var q = from[(i + 1) % from.Length];
+            double nx = -(q.Y - p.Y), ny = q.X - p.X;
+            if (Math.Abs(nx) < 1e-12 && Math.Abs(ny) < 1e-12) continue;
+
+            double minA = double.MaxValue, maxA = double.MinValue, minB = double.MaxValue, maxB = double.MinValue;
+            foreach (var pt in from) { double d = pt.X * nx + pt.Y * ny; if (d < minA) minA = d; if (d > maxA) maxA = d; }
+            foreach (var pt in other) { double d = pt.X * nx + pt.Y * ny; if (d < minB) minB = d; if (d > maxB) maxB = d; }
+
+            if (maxA <= minB + tolerance || maxB <= minA + tolerance) return true;
+        }
+        return false;
+    }
+
     private static Extents3d MeasureInk(Entity entity, bool includeLayoutAdvance)
     {
         entity.RecordGraphicsModified(true);

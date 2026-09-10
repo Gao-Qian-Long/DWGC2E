@@ -84,83 +84,115 @@
                        VerticalAlignment="Center"
                        Margin="12,0,0,0" HorizontalAlignment="Left"/>
 
-            <!-- Center: Language direction -->
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
-                <Button Command="{Binding ToggleLanguageDirectionCommand}"
-                        ToolTip="{conv:Localize TipToggleDirection}"
-                        WindowChrome.IsHitTestVisibleInChrome="True"
-                        Cursor="Hand" Background="Transparent" BorderThickness="0"
-                        Padding="6,2">
-                    <Button.Style>
-                        <Style TargetType="Button">
-                            <Setter Property="Background" Value="Transparent"/>
-                            <Setter Property="BorderThickness" Value="0"/>
-                            <Setter Property="Cursor" Value="Hand"/>
-                            <Setter Property="Template">
-                                <Setter.Value>
-                                    <ControlTemplate TargetType="Button">
-                                        <Border x:Name="Bd" Background="{TemplateBinding Background}"
-                                                CornerRadius="4" Padding="8,4" SnapsToDevicePixels="True">
-                                            <StackPanel Orientation="Horizontal">
-                                                <TextBlock Text="{Binding LanguageDirection}"
-                                                           Foreground="White" Opacity="0.9"
-                                                           FontSize="14" FontWeight="SemiBold"
-                                                           VerticalAlignment="Center"/>
-                                                <TextBlock Text="&#x21C4;" Margin="6,0,0,0"
-                                                           Foreground="White" Opacity="0.6"
-                                                           FontSize="13" VerticalAlignment="Center"/>
-                                            </StackPanel>
-                                        </Border>
-                                        <ControlTemplate.Triggers>
-                                            <Trigger Property="IsMouseOver" Value="True">
-                                                <Setter TargetName="Bd" Property="Background">
-                                                    <Setter.Value>
-                                                        <SolidColorBrush Color="White" Opacity="0.15"/>
-                                                    </Setter.Value>
-                                                </Setter>
-                                            </Trigger>
-                                        </ControlTemplate.Triggers>
-                                    </ControlTemplate>
-                                </Setter.Value>
-                            </Setter>
-                        </Style>
-                    </Button.Style>
-                </Button>
-            </StackPanel>
+            <!-- Center: current language pair. Clicking opens the language chooser; the pair used to
+                 be a fixed ZH-EN label with no way to reach any other language.
+                 A Grid child stretches by default, which turned the pill into a full-width band
+                 that overlapped the app title, so it is centered explicitly. -->
+            <Button Command="{Binding ChooseLanguagesCommand}"
+                    ToolTip="选择翻译语言（原文语言 → 目标语言）"
+                    AutomationProperties.Name="选择翻译语言"
+                    AutomationProperties.AutomationId="LanguagePairButton"
+                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                    WindowChrome.IsHitTestVisibleInChrome="True"
+                    Cursor="Hand">
+                <Button.Style>
+                    <Style TargetType="Button">
+                        <Setter Property="Background" Value="#33FFFFFF"/>
+                        <Setter Property="BorderBrush" Value="#59FFFFFF"/>
+                        <Setter Property="BorderThickness" Value="1"/>
+                        <Setter Property="Cursor" Value="Hand"/>
+                        <Setter Property="Foreground" Value="White"/>
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="Button">
+                                    <Border x:Name="Bd"
+                                            Background="{TemplateBinding Background}"
+                                            BorderBrush="{TemplateBinding BorderBrush}"
+                                            BorderThickness="{TemplateBinding BorderThickness}"
+                                            CornerRadius="13"
+                                            Padding="14,4"
+                                            SnapsToDevicePixels="True">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="{Binding LanguageDirection}"
+                                                       Foreground="White"
+                                                       FontSize="13" FontWeight="SemiBold"
+                                                       VerticalAlignment="Center"/>
+                                            <!-- Vector caret: the ▾ glyph is missing from the
+                                                 console fonts on some machines and rendered as a dot. -->
+                                            <Path Data="M 0,0 L 8,0 L 4,4.6 Z"
+                                                  Fill="White" Opacity="0.8"
+                                                  Margin="9,1,0,0"
+                                                  VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="Bd" Property="Background" Value="#4DFFFFFF"/>
+                                        </Trigger>
+                                        <Trigger Property="IsPressed" Value="True">
+                                            <Setter TargetName="Bd" Property="Background" Value="#66FFFFFF"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </Button.Style>
+            </Button>
 
-            <!-- Right: Settings + Window buttons -->
+            <!-- Right: view options + window buttons. Glyphs are plain vector shapes so they stay
+                 crisp and consistent instead of mixing emoji-style fonts. -->
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                <Button Command="{Binding SettingsCommand}"
-                        ToolTip="{conv:Localize TipSettings}"
-                        Content="&#x2699;"
-                        FontSize="14" Width="40" Height="40"
-                        Style="{StaticResource TitleBarButton}"/>
-
                 <Button Command="{Binding ToggleTopmostCommand}"
-                        ToolTip="{conv:Localize TipTopmostToggle}">
+                        ToolTip="{conv:Localize TipTopmostToggle}"
+                        AutomationProperties.AutomationId="TopmostButton"
+                        AutomationProperties.Name="窗口置顶">
                     <Button.Style>
                         <Style TargetType="Button" BasedOn="{StaticResource TitleBarButton}">
-                            <Setter Property="Content" Value="&#x2912;"/>
-                            <Setter Property="FontSize" Value="15"/>
+                            <Setter Property="Content">
+                                <Setter.Value>
+                                    <Path Data="M 8,1 L 12,5 L 11,6 L 11,9 L 13,11 L 13,12 L 8.6,12 L 8.6,15 L 8,16 L 7.4,15 L 7.4,12 L 3,12 L 3,11 L 5,9 L 5,6 L 4,5 Z"
+                                          Fill="White" Stretch="None" />
+                                </Setter.Value>
+                            </Setter>
+                            <Setter Property="ToolTip" Value="窗口置顶" />
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding IsTopmost}" Value="True">
-                                    <Setter Property="Background" Value="#2563EB"/>
-                                    <Setter Property="Foreground" Value="White"/>
+                                    <Setter Property="Background" Value="#4DFFFFFF"/>
                                 </DataTrigger>
                             </Style.Triggers>
                         </Style>
                     </Button.Style>
                 </Button>
 
-                <Button x:Name="MinimizeButton" Content="&#x2500;"
+                <Button Command="{Binding SettingsCommand}"
+                        ToolTip="{conv:Localize TipSettings}"
+                        AutomationProperties.AutomationId="SettingsButton"
+                        AutomationProperties.Name="设置">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource TitleBarButton}">
+                            <Setter Property="Content">
+                                <Setter.Value>
+                                    <Path Data="M 8,5.2 A 2.8,2.8 0 1 1 7.99,5.2 Z M 8,6.4 A 1.6,1.6 0 1 0 8.01,6.4 Z M 7.2,1 L 8.8,1 L 9.1,2.6 L 10.4,3.1 L 11.7,2.1 L 12.8,3.2 L 11.8,4.5 L 12.3,5.8 L 13.9,6.1 L 13.9,7.7 L 12.3,8 L 11.8,9.3 L 12.8,10.6 L 11.7,11.7 L 10.4,10.7 L 9.1,11.2 L 8.8,12.8 L 7.2,12.8 L 6.9,11.2 L 5.6,10.7 L 4.3,11.7 L 3.2,10.6 L 4.2,9.3 L 3.7,8 L 2.1,7.7 L 2.1,6.1 L 3.7,5.8 L 4.2,4.5 L 3.2,3.2 L 4.3,2.1 L 5.6,3.1 L 6.9,2.6 Z"
+                                          Fill="White" Stretch="None" />
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+                    </Button.Style>
+                </Button>
+
+                <Button x:Name="MinimizeButton" Content="&#x2500;" ToolTip="最小化"
                         Click="MinimizeButton_Click"
                         Style="{StaticResource TitleBarButton}"/>
 
-                <Button x:Name="MaximizeButton" Content="&#x25A1;"
+                <Button x:Name="MaxRestoreButton" ToolTip="最大化 / 还原"
                         Click="MaximizeButton_Click"
-                        Style="{StaticResource TitleBarButton}"/>
+                        Style="{StaticResource TitleBarButton}">
+                    <Path x:Name="MaximizeGlyph" Data="M 0,0 L 10,0 L 10,10 L 0,10 Z"
+                          Stroke="White" StrokeThickness="1" Fill="Transparent" Stretch="None" />
+                </Button>
 
-                <Button x:Name="CloseButton" Content="&#x2715;"
+                <Button x:Name="CloseButton" Content="&#x2715;" ToolTip="关闭"
                         Click="CloseButton_Click"
                         Style="{StaticResource CloseButtonStyle}"/>
             </StackPanel>

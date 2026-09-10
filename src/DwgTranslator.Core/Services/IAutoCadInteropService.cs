@@ -20,7 +20,7 @@ public interface IAutoCadInteropService
         string sourceFilePath,
         string outputFilePath,
         List<TextEntity> entities,
-        bool cnToEn,
+        bool targetIsCjk,
         AppConfig config,
         IProgress<string>? progress = null,
         CancellationToken cancellationToken = default);

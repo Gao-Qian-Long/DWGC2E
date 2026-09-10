@@ -6,12 +6,12 @@ namespace DwgTranslator.Core.Services;
 /// </summary>
 public static class FontMapper
 {
-    public static string MapInlineFonts(string content, bool cnToEn)
+    public static string MapInlineFonts(string content, bool targetIsCjk)
     {
         return System.Text.RegularExpressions.Regex.Replace(content, @"\\[fF]([^;]+);", match =>
         {
             var fields=match.Groups[1].Value.Split('|');
-            var mapped=MapFontName(fields[0],cnToEn);
+            var mapped=MapFontName(fields[0],targetIsCjk);
             if(mapped==null)return match.Value;
             // Keep bold/italic, but do not carry a CJK charset or font-family
             // classification into the replacement Latin font.
@@ -41,11 +41,11 @@ public static class FontMapper
     /// Maps a font/style name from source language to target language.
     /// Returns null if no mapping is needed.
     /// </summary>
-    public static string? MapFontName(string currentStyleName, bool cnToEn)
+    public static string? MapFontName(string currentStyleName, bool targetIsCjk)
     {
         if (string.IsNullOrEmpty(currentStyleName)) return null;
 
-        if (cnToEn)
+        if (targetIsCjk)
         {
             foreach (var kv in CnToEnFonts)
             {

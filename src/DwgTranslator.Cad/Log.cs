@@ -65,8 +65,13 @@ public static class Log
         try
         {
             int idx = 0;
+            // Keep an optional format specifier ({OldW:F3}) so string.Format still applies
+            // it. The previous pattern only matched bare {Name}, so any template using a
+            // specifier failed to convert, threw inside string.Format, and fell through to
+            // the catch below -- emitting the raw template plus an argument dump instead of
+            // a readable line. That silently destroyed envelope-fit diagnostics.
             var converted = System.Text.RegularExpressions.Regex.Replace(
-                message, @"\{[A-Za-z_]\w*\}", _ => $"{{{idx++}}}");
+                message, @"\{[A-Za-z_]\w*(:[^}]*)?\}", m => $"{{{idx++}{m.Groups[1].Value}}}");
             return idx > 0
                 ? string.Format(converted, args)
                 : $"{message} [{string.Join(", ", args.Select(a => a?.ToString() ?? "null"))}]";
@@ -77,7 +82,12 @@ public static class Log
     public static void Information(string message, params object?[] args) =>
         WriteLine(LogLevel.Information, string.Empty, FormatMessage(message, args));
 
-    public static void Information(string category, string message, params object?[] args) =>
+    // Deliberately a distinct name. A second overload taking (category, message, args) is
+    // ambiguous for a call like Information(template, someString, 1.0, 2.0): the compiler
+    // binds it to (category, message, args), so the first argument became the category and
+    // the message became the string argument -- every such line was logged as
+    // "handle [numbers]" instead of the formatted message.
+    public static void InformationCategorized(string category, string message, params object?[] args) =>
         WriteLine(LogLevel.Information, category, FormatMessage(message, args));
 
     public static void Warning(string message, params object?[] args) =>
@@ -103,7 +113,8 @@ public static class Log
     public static void Debug(string message, params object?[] args) =>
         WriteLine(LogLevel.Debug, string.Empty, FormatMessage(message, args));
 
-    public static void Debug(string category, string message, params object?[] args) =>
+    /// <inheritdoc cref="InformationCategorized"/>
+    public static void DebugCategorized(string category, string message, params object?[] args) =>
         WriteLine(LogLevel.Debug, category, FormatMessage(message, args));
 
     public static void Verbose(string message, params object?[] args) =>

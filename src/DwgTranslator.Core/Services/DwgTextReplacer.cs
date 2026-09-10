@@ -32,7 +32,7 @@ internal static class DwgTextReplacer
         IEnumerable<CadEntity> entities,
         Dictionary<string, CoreTextEntity> translationMap,
         CadWriteResult result,
-        bool cnToEn,
+        bool targetIsCjk,
         CadDocument doc,
         List<(double minX, double minY, double maxX, double maxY)> frames)
     {
@@ -51,7 +51,7 @@ internal static class DwgTextReplacer
 
             if (translationMap.TryGetValue(handleStr, out var translatedEntity))
             {
-                var success = ReplaceEntityText(cadEntity, translatedEntity, cnToEn, doc, frames, entityList);
+                var success = ReplaceEntityText(cadEntity, translatedEntity, targetIsCjk, doc, frames, entityList);
                 if (success)
                 {
                     result.SuccessCount++;
@@ -189,7 +189,7 @@ internal static class DwgTextReplacer
     /// <summary>
     /// Replace text content of a CAD entity with translated text, applying font mapping and scaling.
     /// </summary>
-    public static bool ReplaceEntityText(CadEntity entity, CoreTextEntity ourEntity, bool cnToEn, CadDocument doc,
+    public static bool ReplaceEntityText(CadEntity entity, CoreTextEntity ourEntity, bool targetIsCjk, CadDocument doc,
         List<(double minX, double minY, double maxX, double maxY)> frames,
         List<CadEntity> allEntities)
     {
@@ -207,7 +207,7 @@ internal static class DwgTextReplacer
                     // Restore original text height before font mapping.
                     if (originalHeight > 0)
                         textEntity.Height = originalHeight;
-                    DwgFontManager.ApplyFontMapping(textEntity, ourEntity.TextStyleName, cnToEn, doc);
+                    DwgFontManager.ApplyFontMapping(textEntity, ourEntity.TextStyleName, targetIsCjk, doc);
                     if (originalHeight > 0)
                         textEntity.Height = originalHeight;
 
@@ -224,12 +224,12 @@ internal static class DwgTextReplacer
                     return true;
 
                 case CadMText mtext:
-                    mtext.Value = FontMapper.MapInlineFonts(translatedText,cnToEn).Replace("\r\n", "\\P").Replace("\n", "\\P").Replace("\r", "\\P");
+                    mtext.Value = FontMapper.MapInlineFonts(translatedText,targetIsCjk).Replace("\r\n", "\\P").Replace("\n", "\\P").Replace("\r", "\\P");
                     if (mtext.HasColumns && mtext.ColumnData != null)
                         mtext.ColumnData.ColumnType = ACadSharp.Entities.ColumnType.NoColumns;
                     if (originalHeight > 0)
                         mtext.Height = originalHeight;
-                    DwgFontManager.ApplyFontMapping(mtext, ourEntity.TextStyleName, cnToEn, doc);
+                    DwgFontManager.ApplyFontMapping(mtext, ourEntity.TextStyleName, targetIsCjk, doc);
                     if (originalHeight > 0)
                         mtext.Height = originalHeight;
 

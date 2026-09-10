@@ -7,6 +7,7 @@ using DwgTranslator.Core.Translation;
 using Microsoft.Extensions.DependencyInjection;
 using System.Collections.ObjectModel;
 using System.Net.Http;
+using System.Reflection;
 using Serilog;
 
 namespace DwgTranslator.App.ViewModels;
@@ -54,7 +55,6 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty] private bool _isCancellationRequested;
     [ObservableProperty] private bool _isTranslating;
     [ObservableProperty] private bool _isExporting;
-    [ObservableProperty] private bool _isCnToEn = true;
     [ObservableProperty] private string _languageDirection = Strings.Get("LangCnToEn");
     [ObservableProperty] private string _currentSourceLang = "ZH";
     [ObservableProperty] private string _currentTargetLang = "EN";
@@ -77,6 +77,33 @@ public partial class MainViewModel : ObservableObject, IDisposable
         Strings.Get("FilterReviewed"), Strings.Get("FilterFailed"), Strings.Get("FilterGlossaryHit"),
         Strings.Get("FilterSkipped")
     ];
+
+    /// <summary>Languages offered by the source/target pickers.</summary>
+    public IReadOnlyList<TranslationLanguage> LanguageOptions => TranslationLanguages.All;
+
+    /// <summary>
+    /// Version shown in the status bar. Read from the assembly so a release cannot ship with a
+    /// stale hard-coded number, with the SDK's source-revision suffix ("1.2.3+abcdef") trimmed off.
+    /// </summary>
+    public string AppVersionText { get; } = BuildVersionText();
+
+    private static string BuildVersionText()
+    {
+        var assembly = typeof(MainViewModel).Assembly;
+        var version = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+                      ?? assembly.GetName().Version?.ToString(3)
+                      ?? "1.0.0";
+        var plus = version.IndexOf('+');
+        if (plus > 0) version = version[..plus];
+        return $"v{version}";
+    }
+
+    /// <summary>
+    /// True when the translation is being written into a CJK language. The CAD writeback uses this
+    /// to choose a CJK-capable text style (instead of always assuming English output), so a
+    /// Chinese drawing translated into Japanese keeps a face that can render the result.
+    /// </summary>
+    public bool TargetIsCjk => TranslationLanguages.IsCjk(CurrentTargetLang);
 
     public MainViewModel()
         : this(
@@ -118,7 +145,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         try
         {
             await RefreshGlossaryDataAsync();
-            StatusMessage = Strings.Get("StatusReadyWithGlossary", GlossaryEntries.Count);
+            StatusMessage = Strings.Get("StatusReady");
         }
         catch (Exception ex)
         {

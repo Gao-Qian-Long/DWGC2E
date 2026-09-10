@@ -1139,4 +1139,23 @@ AutoCAD 可能会弹出「是否加载来自非信任路径的程序集」安全
   <data name="ProgressAutoCadCompleted" xml:space="preserve">
     <value>AutoCAD 回写完成</value>
   </data>
+  <data name="DropHintTitle" xml:space="preserve">
+    <value>松开鼠标即可导入</value>
+  </data>
+  <data name="DropHintDesc" xml:space="preserve">
+    <value>支持把多个 DWG / DXF 图纸一起拖进窗口，也可拖入校对后的 XLSX 译文表。</value>
+  </data>
+  <data name="DropHintFiles" xml:space="preserve">
+    <value>即将导入 {0} 个文件：
+{1}</value>
+  </data>
+  <data name="DropHintFilesPartial" xml:space="preserve">
+    <value>共 {1} 个文件，其中 {0} 个可以导入</value>
+  </data>
+  <data name="StatusDropUnsupported" xml:space="preserve">
+    <value>不支持的文件类型：{0}（仅支持 DWG / DXF / XLSX）</value>
+  </data>
+  <data name="StatusDropNothing" xml:space="preserve">
+    <value>拖入的内容里没有可导入的文件</value>
+  </data>
 </root>

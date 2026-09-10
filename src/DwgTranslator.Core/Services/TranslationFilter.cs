@@ -1,4 +1,4 @@
-﻿using System.Text.RegularExpressions;
+using System.Text.RegularExpressions;
 
 namespace DwgTranslator.Core.Services;
 
@@ -44,17 +44,41 @@ internal static class TranslationFilter
         if (!HasCjk(trimmed) && trimmed.Length <= 15 && IsMostlyCode(trimmed))
             return true;
 
-        // Already target language detection
-        if (sourceLang == "ZH" && targetLang == "EN")
+        // Already-target-language detection. The source language's script has to actually appear,
+        // otherwise the text is already written in the target language. Pairs that share a script
+        // (Chinese to Japanese) cannot be told apart this way, so they use the target language's
+        // distinguishing script instead (kana, hangul).
+        if (!string.Equals(sourceLang, targetLang, StringComparison.OrdinalIgnoreCase))
         {
-            if (!HasCjk(trimmed)) return true; // No CJK = already English
-        }
-        else if (sourceLang == "EN" && targetLang == "ZH")
-        {
-            if (!HasAsciiLetters(trimmed)) return true; // No ASCII letters = already Chinese
+            bool sourceIsCjk = DwgTranslator.Core.Models.TranslationLanguages.IsCjk(sourceLang);
+            bool targetIsCjk = DwgTranslator.Core.Models.TranslationLanguages.IsCjk(targetLang);
+            if (sourceIsCjk && !targetIsCjk)
+            {
+                if (!HasCjk(trimmed)) return true;          // e.g. Chinese/Japanese into English
+            }
+            else if (!sourceIsCjk && targetIsCjk)
+            {
+                if (!HasAsciiLetters(trimmed)) return true; // e.g. English into Chinese/Japanese
+            }
+            else if (sourceIsCjk && targetIsCjk && IsDistinctiveScript(trimmed, targetLang))
+            {
+                return true;                                // e.g. kana already present when going to Japanese
+            }
         }
 
         return false;
+    }
+
+    /// <summary>True when the text already carries the target language's distinguishing script.</summary>
+    private static bool IsDistinctiveScript(string text, string targetLang)
+    {
+        var language = DwgTranslator.Core.Models.TranslationLanguages.Normalize(targetLang);
+        return language switch
+        {
+            "JA" => text.Any(c => (c >= '\u3040' && c <= '\u309F') || (c >= '\u30A0' && c <= '\u30FF')),
+            "KO" => text.Any(c => (c >= '\uAC00' && c <= '\uD7AF') || (c >= '\u1100' && c <= '\u11FF')),
+            _ => false
+        };
     }
 
     public static bool IsNumericOnly(string text)

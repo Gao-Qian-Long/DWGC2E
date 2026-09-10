@@ -7,7 +7,9 @@
     <UseWPF>true</UseWPF>
     <RootNamespace>DwgTranslator.App</RootNamespace>
     <AssemblyName>DwgTranslator</AssemblyName>
-    <Version>1.0.0</Version>
+    <Version>2.1.0</Version>
+    <FileVersion>2.1.0.0</FileVersion>
+    <InformationalVersion>2.1.0</InformationalVersion>
     <Product>DWG Translator</Product>
     <Company>DWG Translator</Company>
     <ApplicationIcon>icon.ico</ApplicationIcon>

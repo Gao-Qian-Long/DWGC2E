@@ -78,7 +78,7 @@ public class AutoCadInteropService : IAutoCadInteropService, IDisposable
         string sourceFilePath,
         string outputFilePath,
         List<TextEntity> entities,
-        bool cnToEn,
+        bool targetIsCjk,
         AppConfig config,
         IProgress<string>? progress = null,
         CancellationToken cancellationToken = default)
@@ -95,7 +95,7 @@ public class AutoCadInteropService : IAutoCadInteropService, IDisposable
             Directory.CreateDirectory(sessionWorkDir);
             var doneSignalPath = Path.Combine(sessionWorkDir, "writeback_done.txt");
             var configJson = SerializeConfig(
-                sourceFilePath, outputFilePath, entities, cnToEn, sessionId, doneSignalPath);
+                sourceFilePath, outputFilePath, entities, targetIsCjk, sessionId, doneSignalPath);
 
             progress?.Report(Strings.Get("ProgressAutoCadPreparing"));
 
@@ -179,7 +179,7 @@ public class AutoCadInteropService : IAutoCadInteropService, IDisposable
 
     // ========== Step methods ==========
 
-    private static string SerializeConfig(string source, string output, List<TextEntity> entities, bool cnToEn,
+    private static string SerializeConfig(string source, string output, List<TextEntity> entities, bool targetIsCjk,
         string sessionId, string doneSignalPath)
     {
         var configObj = new
@@ -187,7 +187,10 @@ public class AutoCadInteropService : IAutoCadInteropService, IDisposable
             SourceDwgPath = source,
             OutputDwgPath = output,
             Entities = entities,
-            CnToEn = cnToEn,
+            targetIsCjk = targetIsCjk,
+            // Legacy field name: an installed plugin older than the language-pair support reads
+            // "cnToEn" and would otherwise default to CJK output for every direction.
+            cnToEn = targetIsCjk,
             SessionId = sessionId,
             DoneSignalPath = doneSignalPath
         };

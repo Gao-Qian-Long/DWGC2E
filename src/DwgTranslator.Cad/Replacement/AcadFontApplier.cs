@@ -21,9 +21,9 @@ internal static class AcadFontApplier
     /// <summary>
     /// Maps the font for a DBText entity based on its current text style.
     /// </summary>
-    public static void MapFont(DBText text, string originalStyleName, bool cnToEn, Transaction tr)
+    public static void MapFont(DBText text, string originalStyleName, bool targetIsCjk, Transaction tr)
     {
-        ObjectId? styleId = ResolveStyleId(text.Database, originalStyleName, cnToEn, tr);
+        ObjectId? styleId = ResolveStyleId(text.Database, originalStyleName, targetIsCjk, tr);
         if (styleId.HasValue)
             text.TextStyleId = styleId.Value;
     }
@@ -31,9 +31,9 @@ internal static class AcadFontApplier
     /// <summary>
     /// Maps the font for an MText entity based on its current text style.
     /// </summary>
-    public static void MapFont(MText mtext, string originalStyleName, bool cnToEn, Transaction tr)
+    public static void MapFont(MText mtext, string originalStyleName, bool targetIsCjk, Transaction tr)
     {
-        ObjectId? styleId = ResolveStyleId(mtext.Database, originalStyleName, cnToEn, tr);
+        ObjectId? styleId = ResolveStyleId(mtext.Database, originalStyleName, targetIsCjk, tr);
         if (styleId.HasValue)
             mtext.TextStyleId = styleId.Value;
     }
@@ -41,18 +41,18 @@ internal static class AcadFontApplier
     /// <summary>
     /// Maps the font for a Dimension entity based on its current text style.
     /// </summary>
-    public static void MapFont(Dimension dim, string originalStyleName, bool cnToEn, Transaction tr)
+    public static void MapFont(Dimension dim, string originalStyleName, bool targetIsCjk, Transaction tr)
     {
-        ObjectId? styleId = ResolveStyleId(dim.Database, originalStyleName, cnToEn, tr);
+        ObjectId? styleId = ResolveStyleId(dim.Database, originalStyleName, targetIsCjk, tr);
         if (styleId.HasValue)
             dim.TextStyleId = styleId.Value;
     }
 
-    private static ObjectId? ResolveStyleId(Database? db, string originalStyleName, bool cnToEn, Transaction tr)
+    private static ObjectId? ResolveStyleId(Database? db, string originalStyleName, bool targetIsCjk, Transaction tr)
     {
         try
         {
-            string? targetFont = FontMapper.MapFontName(originalStyleName, cnToEn);
+            string? targetFont = FontMapper.MapFontName(originalStyleName, targetIsCjk);
             if (string.IsNullOrEmpty(targetFont)) return null;
 
             if (db == null) return null;

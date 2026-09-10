@@ -17,6 +17,12 @@ public static class CadLabelCompactor
             case "处数": return "Qty.";
             case "制图": return "Drawn";
             case "旧底图总号": return "Prev. Base No.";
+            // The title-block cell holding this field is narrow enough that the literal
+            // 33-character translation fits at only 52% of the cell's own text height, while
+            // "Prev. Base No." in the cell beside it keeps 76%: the row reads as a mis-sized
+            // field rather than a translated one. The conventional short form restores the row.
+            case "借(通)用件登记": return "Borrowed Part Reg.";
+            case "借（通）用件登记": return "Borrowed Part Reg.";
         }
         if(Regex.IsMatch(key,@"^日光灯\*\d+$"))
             return "Fluor. lamp" + key.Substring(3);

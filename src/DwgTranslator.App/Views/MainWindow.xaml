@@ -11,10 +11,26 @@
         Topmost="False"
         WindowStyle="None"
         ResizeMode="CanResize"
+        AllowDrop="True"
+        PreviewDragOver="OnPreviewDragOver"
+        PreviewDragLeave="OnPreviewDragLeave"
+        PreviewDrop="OnPreviewDrop"
         Background="{DynamicResource Brush.Background}">
     <WindowChrome.WindowChrome>
         <WindowChrome CaptionHeight="36" ResizeBorderThickness="6" GlassFrameThickness="0" CornerRadius="0"/>
     </WindowChrome.WindowChrome>
+
+    <!-- Keyboard shortcuts. A delivered desktop tool is expected to have them, and they are the
+         fastest way to reach the dialogs that otherwise hide behind the toolbar's overflow menu. -->
+    <Window.InputBindings>
+        <KeyBinding Key="O" Modifiers="Control" Command="{Binding ImportDwgCommand}"/>
+        <KeyBinding Key="S" Modifiers="Control" Command="{Binding ExportDwgCommand}"/>
+        <KeyBinding Key="F5" Command="{Binding TranslateCommand}"/>
+        <KeyBinding Key="F1" Command="{Binding ShowHelpCommand}"/>
+        <KeyBinding Key="E" Modifiers="Control" Command="{Binding ShowEnvironmentCheckCommand}"/>
+        <KeyBinding Key="L" Modifiers="Control" Command="{Binding ToggleLogViewerCommand}"/>
+        <KeyBinding Key="OemComma" Modifiers="Control" Command="{Binding SettingsCommand}"/>
+    </Window.InputBindings>
 
     <Grid>
         <Grid.RowDefinitions>
@@ -30,11 +46,18 @@
         <!-- ═══ Row 0: Custom Title Bar ═══ -->
         <controls:TitleBarControl Grid.Row="0"/>
 
-        <!-- ═══ Row 1: Toolbar — card-grouped action buttons ═══ -->
-        <controls:MainToolBar Grid.Row="1" Margin="10,6,10,0"/>
-
-        <!-- ═══ Row 2: Filter + Stats card ═══ -->
-        <controls:FilterStatsBar Grid.Row="2" Margin="10,6,10,0"/>
+        <!-- ═══ Rows 1-2: actions and translation stats share ONE card, so the header reads as a
+             single control strip instead of two stacked bordered bars. ═══ -->
+        <Border Grid.Row="1" Grid.RowSpan="2" Margin="10,8,10,0"
+                Background="{DynamicResource Brush.Surface}"
+                BorderBrush="{DynamicResource Brush.Border}"
+                BorderThickness="1"
+                CornerRadius="{DynamicResource CornerRadius.Medium}">
+            <StackPanel>
+                <controls:MainToolBar/>
+                <controls:FilterStatsBar/>
+            </StackPanel>
+        </Border>
 
         <!-- ═══ Row 3: Progress Bar card ═══ -->
         <Border Grid.Row="3" Margin="10,6,10,0"
@@ -138,8 +161,9 @@
                     <TextBlock Text="{Binding GlossaryStatsText}"
                                Foreground="{DynamicResource Brush.TextMuted}" FontSize="12"
                                Margin="0,0,15,0" VerticalAlignment="Center"/>
-                    <TextBlock Text="DWG Translator v2.1"
+                    <TextBlock Text="{Binding AppVersionText}"
                                Foreground="{DynamicResource Brush.TextMuted}" FontSize="12"
+                               ToolTip="DWG Translator 版本"
                                VerticalAlignment="Center"/>
                     <TextBlock Text="&#xB7;" Foreground="{DynamicResource Brush.TextMuted}" FontSize="12"
                                Margin="6,0" VerticalAlignment="Center"/>
@@ -149,6 +173,45 @@
                                VerticalAlignment="Center"/>
                 </StackPanel>
             </Grid>
+        </Border>
+
+        <!-- ═══ Drag & drop import hint (covers the whole window while dragging) ═══ -->
+        <!-- IsHitTestVisible=False keeps the drag events flowing to the window itself,
+             so the drop never gets swallowed by this overlay. The size is bound to the
+             window rather than to the grid: the toolbar can be wider than the window, which
+             would make the grid wider than the visible area and shift the centred card. -->
+        <Border x:Name="DropOverlay"
+                Grid.Row="0" Grid.RowSpan="7"
+                HorizontalAlignment="Left" VerticalAlignment="Top"
+                Width="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=Window}}"
+                Height="{Binding ActualHeight, RelativeSource={RelativeSource AncestorType=Window}}"
+                Visibility="Collapsed" IsHitTestVisible="False">
+            <Border.Background>
+                <SolidColorBrush Color="{DynamicResource Color.DropScrim}" Opacity="0.55"/>
+            </Border.Background>
+            <Border Width="540" Padding="30,26" CornerRadius="10"
+                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                    Background="{DynamicResource Brush.Surface}"
+                    BorderBrush="{DynamicResource Brush.Primary}" BorderThickness="2">
+                <StackPanel>
+                    <!-- Vector icon: the folder emoji renders as a box on fonts that lack it. -->
+                    <Path x:Name="DropOverlayIcon" Data="{StaticResource Icon.EmptySheet}"
+                          Width="46" Height="46" Stretch="Uniform"
+                          HorizontalAlignment="Center" Margin="0,0,0,12"
+                          Stroke="{DynamicResource Brush.Primary}" StrokeThickness="1.4"
+                          StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                    <TextBlock Text="{conv:Localize DropHintTitle}" FontSize="18" FontWeight="SemiBold"
+                               Foreground="{DynamicResource Brush.TextPrimary}"
+                               HorizontalAlignment="Center" Margin="0,0,0,8"/>
+                    <TextBlock Text="{conv:Localize DropHintDesc}" FontSize="13"
+                               Foreground="{DynamicResource Brush.TextMuted}"
+                               TextWrapping="Wrap" TextAlignment="Center" MaxWidth="420"/>
+                    <TextBlock x:Name="DropOverlayFiles" FontSize="12" Margin="0,12,0,0"
+                               Foreground="{DynamicResource Brush.TextSecondary}"
+                               TextWrapping="Wrap" TextAlignment="Center" MaxWidth="460"
+                               Visibility="Collapsed"/>
+                </StackPanel>
+            </Border>
         </Border>
     </Grid>
 </Window>

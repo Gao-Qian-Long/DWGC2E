@@ -35,25 +35,18 @@ public partial class TranslationDataGrid : UserControl
 
     private void UpdateEmptyState(MainViewModel vm)
     {
+        // Only cover the grid when there is genuinely nothing to show. Previously the overlay
+        // also covered the imported rows until the first translation finished, so after an
+        // import (dialog, drag & drop or command line) the user could not see or check what
+        // had just been loaded.
         if (vm.TotalCount == 0)
         {
             EmptyStatePanel.Visibility = System.Windows.Visibility.Visible;
-            EmptyStateIcon.Text = "\U0001F4C2";
+            // The icon is a vector Path in XAML now; only the texts are set here.
             EmptyStateTitle.Text = "导入 DWG 开始翻译";
-            EmptyStateDescription.Text = "支持 .dwg / .dxf，自动识别中英文文字";
+            EmptyStateDescription.Text = "支持 .dwg / .dxf，自动识别中英文文字；也可以把多个文件直接拖进窗口";
             EmptyStatePrimaryButton.Content = "选择文件";
             EmptyStatePrimaryButton.Command = vm.ImportDwgCommand;
-            EmptyStatePrimaryButton.Visibility = System.Windows.Visibility.Visible;
-            EmptyStateSecondaryButton.Visibility = System.Windows.Visibility.Collapsed;
-        }
-        else if (vm.TranslatedCount == 0 && !vm.IsProcessing)
-        {
-            EmptyStatePanel.Visibility = System.Windows.Visibility.Visible;
-            EmptyStateIcon.Text = "\U0001F4DD";
-            EmptyStateTitle.Text = $"共 {vm.TotalCount} 条文字待翻译";
-            EmptyStateDescription.Text = "点击翻译按钮开始自动翻译";
-            EmptyStatePrimaryButton.Content = "\u25B6 开始翻译";
-            EmptyStatePrimaryButton.Command = vm.TranslateCommand;
             EmptyStatePrimaryButton.Visibility = System.Windows.Visibility.Visible;
             EmptyStateSecondaryButton.Visibility = System.Windows.Visibility.Collapsed;
         }

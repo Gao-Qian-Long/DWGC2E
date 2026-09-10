@@ -35,7 +35,7 @@ public class AcadWriterEngine
     // its original frame, so large jobs use the bounded fast path below.
     private const int ExhaustiveCollisionEntityLimit = 400;
 
-    public CadWriteResult WriteTranslations(string sourceFilePath, string outputFilePath, List<TextEntity> entities, bool cnToEn = true)
+    public CadWriteResult WriteTranslations(string sourceFilePath, string outputFilePath, List<TextEntity> entities, bool targetIsCjk = true)
     {
         var result = new CadWriteResult();
         string? tempOutputPath = null;
@@ -52,7 +52,7 @@ public class AcadWriterEngine
             using (var db = new Database(false, true))
             {
                 db.ReadDwgFile(sourceFilePath, FileOpenMode.OpenForReadAndAllShare, false, null);
-                WriteTranslationsToDatabase(db, entities, cnToEn, result);
+                WriteTranslationsToDatabase(db, entities, targetIsCjk, result);
 
                 var outputDir = Path.GetDirectoryName(outputFilePath);
                 if (!string.IsNullOrEmpty(outputDir) && !Directory.Exists(outputDir))
@@ -84,19 +84,19 @@ public class AcadWriterEngine
             if (!string.IsNullOrEmpty(tempOutputPath))
             {
                 try { if (File.Exists(tempOutputPath)) File.Delete(tempOutputPath); }
-                catch (Exception cleanupEx) { Log.Debug("AcadWriterEngine", "Failed to remove temporary DWG {0}: {1}", tempOutputPath, cleanupEx.Message); }
+                catch (Exception cleanupEx) { Log.DebugCategorized("AcadWriterEngine", "Failed to remove temporary DWG {Path}: {Detail}", tempOutputPath, cleanupEx.Message); }
             }
         }
 
         return result;
     }
 
-    public CadWriteResult WriteTranslations(Database db, List<TextEntity> entities, bool cnToEn = true)
+    public CadWriteResult WriteTranslations(Database db, List<TextEntity> entities, bool targetIsCjk = true)
     {
         var result = new CadWriteResult();
         try
         {
-            WriteTranslationsToDatabase(db, entities, cnToEn, result);
+            WriteTranslationsToDatabase(db, entities, targetIsCjk, result);
         }
         catch (Exception ex)
         {
@@ -108,7 +108,7 @@ public class AcadWriterEngine
         return result;
     }
 
-    private void WriteTranslationsToDatabase(Database db, List<TextEntity> entities, bool cnToEn, CadWriteResult result)
+    private void WriteTranslationsToDatabase(Database db, List<TextEntity> entities, bool targetIsCjk, CadWriteResult result)
     {
         using (var tr = db.TransactionManager.StartTransaction())
         {
@@ -126,7 +126,7 @@ public class AcadWriterEngine
             var modelSpaceId = SymbolUtilityServices.GetBlockModelSpaceId(db);
             var modelSpace = (BlockTableRecord)tr.GetObject(modelSpaceId, OpenMode.ForWrite);
             var errors = new List<string>();
-            successCount += ProcessBlockTableRecord(modelSpace, tr, entityMap, unprocessed, cnToEn, errors, layoutRejected, replacedEntities);
+            successCount += ProcessBlockTableRecord(modelSpace, tr, entityMap, unprocessed, targetIsCjk, errors, layoutRejected, replacedEntities);
             result.Errors.AddRange(errors);
 
             // Paper space layouts and user blocks
@@ -143,7 +143,7 @@ public class AcadWriterEngine
                 {
                     if (isPaperSpace || (!btr.IsAnonymous && !name.StartsWith("*")))
                     {
-                        successCount += ProcessBlockTableRecord(btr, tr, entityMap, unprocessed, cnToEn, errors, layoutRejected, replacedEntities);
+                        successCount += ProcessBlockTableRecord(btr, tr, entityMap, unprocessed, targetIsCjk, errors, layoutRejected, replacedEntities);
                     }
                 }
             }
@@ -158,14 +158,16 @@ public class AcadWriterEngine
                 .Select(item => new
                 {
                     Item = item,
+                    Baseline = BaselineOf(item),
                     Issues = AvailableTextSpace.FindIntersections(
-                            (Entity)tr.GetObject(item.EntityId, OpenMode.ForRead), tr)
+                            (Entity)tr.GetObject(item.EntityId, OpenMode.ForRead), tr, BaselineOf(item))
                         .Where(issue => issue.StartsWith("CONFLICT=", StringComparison.Ordinal))
                         .ToList()
                 })
                 .Where(x => x.Issues.Count > 0)
                 .ToList();
             var unrecoverableConflicts = new List<string>();
+            int shrinkResolved = 0;
             foreach (var conflict in conflicted)
             {
                 var handle = conflict.Item.EntityId.Handle.ToString();
@@ -176,6 +178,24 @@ public class AcadWriterEngine
                 }
 
                 var current = (Entity)tr.GetObject(conflict.Item.EntityId, OpenMode.ForWrite);
+
+                // A translation that only collides because it is slightly too large can still
+                // be written by shrinking it further. Reverting to the source text is the last
+                // resort, not the first response: leaving a Chinese label on an exported
+                // English drawing is worse than a slightly smaller English one. The envelope
+                // fit only guarantees a label fits its OWN original box, so neighbouring
+                // rotated labels whose axis-aligned ink boxes overlap land here.
+                if (TryShrinkUntilClear(current, conflict.Item.OriginalHeight, tr, conflict.Baseline, out var shrinkSteps))
+                {
+                    shrinkResolved++;
+                    if (shrinkSteps > 0)
+                        Log.Warning("Rendered interference resolved by shrinking {Handle} in {Steps} step(s); translation kept",
+                            handle, shrinkSteps);
+                    else
+                        Log.Information("Rendered interference cleared by a neighbouring shrink {Handle}; translation kept", handle);
+                    continue;
+                }
+
                 current.CopyFrom(conflict.Item.OriginalSnapshot);
                 current.RecordGraphicsModified(true);
                 layoutRejected.Add(handle);
@@ -199,13 +219,17 @@ public class AcadWriterEngine
 
             if (layoutRejected.Count > 0)
             {
-                var detail = "Original text preserved after layout rejection for handles: " +
-                    string.Join(", ", layoutRejected.Take(20));
+                // Log the source text next to each handle: a bare handle list is not
+                // actionable for the user, who needs to know which labels stayed Chinese.
+                var rejectedDetail = string.Join("; ", layoutRejected.Take(30).Select(h =>
+                    entityMap.TryGetValue(h, out var rejectedEntity) ? $"{h}={rejectedEntity.PlainText}" : h));
+                var detail = $"Original text preserved after layout rejection ({layoutRejected.Count}): {rejectedDetail}";
                 result.Errors.Add(detail);
                 Log.Warning("{Detail}", detail);
             }
 
-            Log.Information("Measured envelope verification passed for {Count} replacements", replacedEntities.Count);
+            Log.Information("Measured envelope verification passed for {Count} replacements ({Shrunk} separated by shrinking, {Preserved} kept original)",
+                replacedEntities.Count, shrinkResolved, layoutRejected.Count);
 
             tr.Commit();
         }
@@ -214,7 +238,7 @@ public class AcadWriterEngine
     private int ProcessBlockTableRecord(
         BlockTableRecord btr, Transaction tr,
         Dictionary<string, TextEntity> entityMap, HashSet<string> unprocessed,
-        bool cnToEn, List<string> errors, HashSet<string> layoutRejected,
+        bool targetIsCjk, List<string> errors, HashSet<string> layoutRejected,
         List<ReplacedEntityInfo> replacedEntities)
     {
         int count = 0;
@@ -246,7 +270,7 @@ public class AcadWriterEngine
                 };
                 Entity? originalSnapshot = wasAlreadyApplied ? null : entity.Clone() as Entity;
                 entity.UpgradeOpen();
-                if (ReplaceEntity(entity, textEntity, cnToEn, tr, out var envelopeFitSucceeded))
+                if (ReplaceEntity(entity, textEntity, targetIsCjk, tr, out var envelopeFitSucceeded))
                 {
                     if (!envelopeFitSucceeded)
                     {
@@ -409,7 +433,7 @@ public class AcadWriterEngine
     }
 
     private static bool ReplaceEntity(
-        Entity entity, TextEntity ourEntity, bool cnToEn, Transaction tr,
+        Entity entity, TextEntity ourEntity, bool targetIsCjk, Transaction tr,
         out bool envelopeFitSucceeded)
     {
         envelopeFitSucceeded = true;
@@ -422,12 +446,13 @@ public class AcadWriterEngine
                 Log.Information("Preserved non-rendered attribute template {Handle}", ourEntity.Handle);
                 return true;
             }
-            bool characterColumn = cnToEn && entity is MText sourceMText &&
+            bool characterColumn = targetIsCjk && entity is MText sourceMText &&
                 DwgTranslator.Core.Services.VerticalTextLayout.IsCharacterColumn(
                     ourEntity.PlainText, sourceMText.Rotation, sourceMText.Width, sourceMText.TextHeight);
             Extents3d? originalBounds = TryGetEntityBounds(entity);
+            double readingLength = 0;
             if (originalBounds.HasValue)
-                originalBounds = AvailableTextSpace.Measure(entity, originalBounds.Value, tr, characterColumn);
+                originalBounds = AvailableTextSpace.Measure(entity, originalBounds.Value, tr, characterColumn, out readingLength);
 
             switch (entity)
             {
@@ -445,7 +470,7 @@ public class AcadWriterEngine
                     // has a fixed height, it would override the entity height.
                     if (ourEntity.Height > 0)
                         dbText.Height = ourEntity.Height;
-                    AcadFontApplier.MapFont(dbText, ourEntity.TextStyleName, cnToEn, tr);
+                    AcadFontApplier.MapFont(dbText, ourEntity.TextStyleName, targetIsCjk, tr);
                     // Re-apply height after font mapping in case the new style
                     // has a fixed height that overrode our setting.
                     if (ourEntity.Height > 0)
@@ -482,7 +507,7 @@ public class AcadWriterEngine
                     if (ourEntity.MTextLineSpacingStyle > 0)
                         mtext.LineSpacingStyle = (LineSpacingStyle)ourEntity.MTextLineSpacingStyle;
 
-                    mtext.Contents = DwgTranslator.Core.Services.FontMapper.MapInlineFonts(translatedText, cnToEn)
+                    mtext.Contents = DwgTranslator.Core.Services.FontMapper.MapInlineFonts(translatedText, targetIsCjk)
                         .Replace("\r\n", "\\P")
                         .Replace("\n", "\\P")
                         .Replace("\r", "\\P");
@@ -505,7 +530,7 @@ public class AcadWriterEngine
                     // Restore original text height
                     if (ourEntity.Height > 0)
                         mtext.TextHeight = ourEntity.Height;
-                    AcadFontApplier.MapFont(mtext, ourEntity.TextStyleName, cnToEn, tr);
+                    AcadFontApplier.MapFont(mtext, ourEntity.TextStyleName, targetIsCjk, tr);
                     if (ourEntity.Height > 0)
                         mtext.TextHeight = ourEntity.Height;
                     // Fit against measured free space before reducing height.
@@ -513,7 +538,7 @@ public class AcadWriterEngine
                     envelopeFitSucceeded = FitMTextToOriginalEnvelope(
                         mtext, originalBounds,
                         ourEntity.OriginalHeight > 0 ? ourEntity.OriginalHeight : ourEntity.Height,
-                        ourEntity.Handle, characterColumn);
+                        ourEntity.Handle, characterColumn, readingLength);
                     if (!envelopeFitSucceeded)
                     {
                         mtext.TextStyleId = originalMTextStyle;
@@ -530,7 +555,7 @@ public class AcadWriterEngine
                     return true;
 
                 case Dimension dim:
-                    AcadFontApplier.MapFont(dim, ourEntity.TextStyleName, cnToEn, tr);
+                    AcadFontApplier.MapFont(dim, ourEntity.TextStyleName, targetIsCjk, tr);
                     dim.DimensionText = translatedText;
                     return true;
 
@@ -546,7 +571,7 @@ public class AcadWriterEngine
                             .Replace("\r\n", "\\P")
                             .Replace("\n", "\\P")
                             .Replace("\r", "\\P");
-                        AcadFontApplier.MapFont(leaderText, ourEntity.TextStyleName, cnToEn, tr);
+                        AcadFontApplier.MapFont(leaderText, ourEntity.TextStyleName, targetIsCjk, tr);
                         LayoutOptimizer.OptimizeMText(leaderText, translatedText, ourEntity, originalMTextBounds, tr);
                         envelopeFitSucceeded = FitMTextToOriginalEnvelope(
                             leaderText, originalMTextBounds,
@@ -586,97 +611,167 @@ public class AcadWriterEngine
         }
     }
 
+    /// <summary>
+    /// Fits a translated DBText into the space measured for the original text.
+    ///
+    /// A DBText cannot wrap, so a longer translation inside a fixed-width cell cannot keep its
+    /// original size. Instead of exhausting one knob -- which yields either flattened glyphs or
+    /// much smaller text -- the fit searches the size space and keeps the candidate closest to the
+    /// source size:
+    ///   1. the source size, when it already fits: nothing is changed;
+    ///   2. otherwise a UNIFORM scale, bisected to the largest value that still fits. Uniform
+    ///      scaling is the only distortion-free option, so this is "as large as the cell allows";
+    ///   3. only when even the smallest uniform scale fails, condense the glyphs horizontally.
+    ///      That is the last resort before giving up, because a label left in the source language
+    ///      reads worse than a condensed one.
+    /// </summary>
     private static bool FitDbTextToOriginalEnvelope(
         DBText text, Extents3d? originalBounds, double originalHeight, string handle)
     {
         if (!originalBounds.HasValue) return false;
-        double startWidthFactor = text.WidthFactor;
-        double startHeight = text.Height;
+        var bounds = originalBounds.Value;
 
-        for (int attempt = 0; attempt < 16; attempt++)
+        double originalWidthFactor = text.WidthFactor;
+        double originalTextHeight = text.Height;
+        var startPosition = text.Position;
+        var startAlignment = text.AlignmentPoint;
+        double referenceHeight = originalHeight > 0 ? originalHeight : originalTextHeight;
+        double floorScale = WritebackConstants.AbsoluteMinFitHeightRatio;
+        int tries = 0;
+
+        // scale = uniform size factor; widthRetention = fraction of the source width factor kept.
+        // Every candidate starts from the original position, otherwise AlignInsideEnvelope's
+        // translation would accumulate across attempts.
+        void Apply(double scale, double widthRetention)
         {
+            text.Height = referenceHeight * scale;
+            text.WidthFactor = originalWidthFactor * widthRetention;
+            text.Position = startPosition;
+            text.AlignmentPoint = startAlignment;
             text.RecordGraphicsModified(true);
-            Extents3d current;
-            try { current = CollisionDetector.GetCorrectedBounds(text); }
-            catch { return false; }
+        }
 
-            current = AlignInsideEnvelope(text, current, originalBounds.Value);
-
-            if (IsInsideOriginalEnvelope(current, originalBounds.Value, originalHeight))
+        bool Fits()
+        {
+            tries++;
+            try
             {
-                if (text.Height < startHeight*.70-1e-8 || text.WidthFactor < Math.Min(startWidthFactor,.40)-1e-8)
-                    return false;
-                if (attempt > 0)
-                    Log.Information(
-                        "Envelope fit DBText {Handle}: widthFactor {OldW:F3}->{NewW:F3}, height {OldH:F3}->{NewH:F3}",
-                        handle, startWidthFactor, text.WidthFactor, startHeight, text.Height);
+                var current = CollisionDetector.GetCorrectedBounds(text);
+                current = AlignInsideEnvelope(text, current, bounds);
+                return IsInsideOriginalEnvelope(current, bounds, referenceHeight);
+            }
+            catch { return false; }
+        }
+
+        // 1) Already fits at the source size.
+        Apply(1.0, 1.0);
+        if (Fits()) return true;
+
+        // 2) Largest uniform scale that fits (the fit predicate is monotone in the scale).
+        Apply(floorScale, 1.0);
+        if (Fits())
+        {
+            double low = floorScale, high = 1.0;   // invariant: low fits, high does not
+            for (int step = 0; step < 16; step++)
+            {
+                double mid = (low + high) / 2;
+                Apply(mid, 1.0);
+                if (Fits()) low = mid; else high = mid;
+            }
+            Apply(low, 1.0);
+            if (Fits())
+            {
+                Log.Warning(
+                    "Envelope fit DBText {Handle}: uniform scale to {Ratio:P0} of the original size after {Tries} tries (aspect preserved)",
+                    handle, low, tries);
                 return true;
             }
-
-            double rotation = NormalizeHalfTurn(text.Rotation);
-            bool vertical = Math.Abs(Math.Sin(rotation)) > Math.Abs(Math.Cos(rotation));
-            double originalLength = vertical
-                ? originalBounds.Value.MaxPoint.Y - originalBounds.Value.MinPoint.Y
-                : originalBounds.Value.MaxPoint.X - originalBounds.Value.MinPoint.X;
-            double currentLength = vertical
-                ? current.MaxPoint.Y - current.MinPoint.Y
-                : current.MaxPoint.X - current.MinPoint.X;
-
-            if (currentLength > originalLength && currentLength > 0)
-            {
-                double ratio = DwgTranslator.Cad.Compat.Clamp(
-                    originalLength / currentLength * 0.97, 0.08, 0.98);
-                double minimumWidth = Math.Min(startWidthFactor, .40);
-                double desiredWidth = text.WidthFactor * ratio;
-                if (desiredWidth < minimumWidth)
-                {
-                    text.Height *= desiredWidth / minimumWidth;
-                    text.WidthFactor = minimumWidth;
-                }
-                else text.WidthFactor = Math.Min(desiredWidth, 100.0);
-            }
-            else
-            {
-                double originalW = Math.Max(originalBounds.Value.MaxPoint.X - originalBounds.Value.MinPoint.X, 0.001);
-                double originalH = Math.Max(originalBounds.Value.MaxPoint.Y - originalBounds.Value.MinPoint.Y, 0.001);
-                double currentW = Math.Max(current.MaxPoint.X - current.MinPoint.X, 0.001);
-                double currentH = Math.Max(current.MaxPoint.Y - current.MinPoint.Y, 0.001);
-                double ratio = Math.Min(originalW / currentW, originalH / currentH) * 0.95;
-                text.Height *= DwgTranslator.Cad.Compat.Clamp(ratio, 0.20, 0.98);
-            }
         }
 
-        try
+        // 3) Last resort: keep the smallest uniform size and condense the glyphs as little as
+        //    possible. At this point widthRetention = 1.0 is known not to fit, so the bisection
+        //    starts from a valid invariant.
+        double retentionLow = WritebackConstants.FallbackWidthFactorRetention, retentionHigh = 1.0;
+        Apply(floorScale, retentionLow);
+        if (Fits())
         {
-            var finalBounds = AlignInsideEnvelope(text,CollisionDetector.GetCorrectedBounds(text),originalBounds.Value);
-            bool fitted = IsInsideOriginalEnvelope(finalBounds, originalBounds.Value, originalHeight);
-            if (!fitted) Log.Warning("DBText final bounds {Handle}: allowed={Allowed}; ink={Ink}",handle,originalBounds.Value,finalBounds);
-            if (!fitted)
-                Log.Warning("Envelope fit DBText {Handle}: precise fallback required", handle);
-            return fitted && text.Height >= startHeight*.70-1e-8 && text.WidthFactor >= Math.Min(startWidthFactor,.40)-1e-8;
+            for (int step = 0; step < 16; step++)
+            {
+                double mid = (retentionLow + retentionHigh) / 2;
+                Apply(floorScale, mid);
+                if (Fits()) retentionLow = mid; else retentionHigh = mid;
+            }
+            Apply(floorScale, retentionLow);
+            if (Fits())
+            {
+                Log.Warning(
+                    "Envelope fit DBText {Handle}: condensed widthFactor {OldW:F3}->{NewW:F3} at {Scale:P0} of the original height after {Tries} tries",
+                    handle, originalWidthFactor, originalWidthFactor * retentionLow, floorScale, tries);
+                return true;
+            }
         }
-        catch { return false; }
+
+        Log.Warning(
+            "Envelope fit DBText {Handle}: no fitting size found after {Tries} tries (uniform scale floor {Floor:P0}, condensation floor {Condense:P0}); original text kept",
+            handle, tries, floorScale, WritebackConstants.FallbackWidthFactorRetention);
+        Apply(1.0, 1.0);
+        return false;
     }
 
     private static bool FitMTextToOriginalEnvelope(
-        MText text, Extents3d? originalBounds, double originalHeight, string handle, bool singleLine = false)
+        MText text, Extents3d? originalBounds, double originalHeight, string handle, bool singleLine = false,
+        double readingLength = 0)
     {
         var contents=text.Contents;
         var location=text.Location;
         var height=text.TextHeight;
         var width=text.Width;
-        foreach(double factor in new[]{1.0,.9,.8,.75})
+        var factors=new[]{1.0,.9,.8,.75};
+
+        void Reset(double factor)
         {
             text.Location=location; text.TextHeight=height; text.Width=width;
             text.Contents=factor==1 ? contents : "{\\W"+factor.ToString(System.Globalization.CultureInfo.InvariantCulture)+";"+contents+"}";
-            if(FitMTextCandidate(text,originalBounds,originalHeight,handle,singleLine))return true;
+            text.RecordGraphicsModified(true);
         }
-        text.Location=location; text.TextHeight=height; text.Width=width; text.Contents=contents;
+
+        // Evaluate every factor instead of stopping at the first one that fits: the first fit can
+        // be substantially smaller than a slightly more condensed one, which reads as "why is this
+        // label so much smaller than its neighbours". Keep the tallest result, and prefer the
+        // least condensed candidate when the heights are within 1%.
+        double bestFactor=0, bestHeight=0;
+        foreach(double factor in factors)
+        {
+            Reset(factor);
+            if(!FitMTextCandidate(text,originalBounds,originalHeight,handle,singleLine,readingLength))continue;
+
+            double achieved=text.TextHeight;
+            if(achieved>bestHeight*1.01 || (achieved>=bestHeight*0.99 && factor>bestFactor))
+            {
+                bestHeight=achieved; bestFactor=factor;
+            }
+        }
+
+        if(bestFactor>0)
+        {
+            // Re-run the winner so the entity ends up in exactly the state that fitted.
+            Reset(bestFactor);
+            if(FitMTextCandidate(text,originalBounds,originalHeight,handle,singleLine,readingLength))
+            {
+                if(bestFactor<1.0)
+                    Log.Warning("Envelope fit MText {Handle}: best of {Tries} layout tries = widthFactor {W:F2}, height {H:F3}",
+                        handle,factors.Length,bestFactor,bestHeight);
+                return true;
+            }
+        }
+
+        Reset(1.0);
         return false;
     }
 
     private static bool FitMTextCandidate(
-        MText text, Extents3d? originalBounds, double originalHeight, string handle, bool singleLine)
+        MText text, Extents3d? originalBounds, double originalHeight, string handle, bool singleLine,
+        double readingLength = 0)
     {
         if (!originalBounds.HasValue) return false;
         double startHeight = text.TextHeight;
@@ -691,10 +786,15 @@ public class AcadWriterEngine
             double length = Math.Abs(Math.Cos(angle)) < .001
                 ? box.MaxPoint.Y-box.MinPoint.Y : box.MaxPoint.X-box.MinPoint.X;
             text.Width = singleLine ? 0 : Math.Max(.01,length*.98);
-            double high = originalHeight > 0 ? originalHeight : startHeight;
-            double low = high*.70;
+            double referenceHeight = originalHeight > 0 ? originalHeight : startHeight;
+            // Search down to the absolute floor, not just the preferred one: the largest
+            // fitting height is what we want, and refusing anything below the preferred
+            // ratio used to throw away an otherwise valid translation.
+            double searchFloor = referenceHeight * WritebackConstants.AbsoluteMinFitHeightRatio;
+            double low = searchFloor;
+            double high = referenceHeight;
             double best = 0;
-            for (int step=0; step<14; step++)
+            for (int step=0; step<16; step++)
             {
                 double candidate = step == 0 ? high : (low+high)/2;
                 text.TextHeight = candidate;
@@ -713,56 +813,193 @@ public class AcadWriterEngine
                 text.TextHeight = best;
                 text.RecordGraphicsModified(true);
                 var bounds = AlignInsideEnvelope(text,CollisionDetector.GetCorrectedBounds(text),box);
-                return IsInsideOriginalEnvelope(bounds,box,originalHeight);
+                if (IsInsideOriginalEnvelope(bounds,box,originalHeight))
+                {
+                    if (best < referenceHeight * WritebackConstants.PreferredFitHeightRatio - 1e-8)
+                        Log.Warning("Envelope fit MText {Handle}: accepted shrunk height {OldH:F3}->{NewH:F3} ({Ratio:P0})",
+                            handle, startHeight, best, referenceHeight > 0 ? best / referenceHeight : 0);
+                    return true;
+                }
             }
+            Log.Warning(
+                "Envelope fit MText {Handle}: giving up (no height in [{Floor:F3},{Ceil:F3}] fits the envelope); original text kept",
+                handle, searchFloor, referenceHeight);
             text.TextHeight=startHeight;
             text.Width=startWidth;
             return false;
         }
 
-        for (int attempt = 0; attempt < 10; attempt++)
+        // Rotated text (any rotation that is not a multiple of 90 degrees).
+        //
+        // AvailableTextSpace.Measure now returns the corridor measured in the text's own frame, so
+        // originalBounds is the space actually available along the reading direction. Search for the
+        // largest fitting height, exactly like the axis-aligned branch above.
         {
-            text.RecordGraphicsModified(true);
-            Extents3d current;
-            try { current = CollisionDetector.GetCorrectedBounds(text); }
-            catch { return false; }
-
-            current = AlignInsideEnvelope(text, current, originalBounds.Value);
-
-            if (IsInsideOriginalEnvelope(current, originalBounds.Value, originalHeight))
-            {
-                if (text.TextHeight < originalHeight*.70) return false;
-                if (attempt > 0)
-                    Log.Information(
-                        "Envelope fit MText {Handle}: width {OldW:F3}->{NewW:F3}, height {OldH:F3}->{NewH:F3}",
-                        handle, startWidth, text.Width, startHeight, text.TextHeight);
-                return true;
-            }
-
-            double originalW = Math.Max(originalBounds.Value.MaxPoint.X - originalBounds.Value.MinPoint.X, 0.001);
-            double originalH = Math.Max(originalBounds.Value.MaxPoint.Y - originalBounds.Value.MinPoint.Y, 0.001);
-            double currentW = Math.Max(current.MaxPoint.X - current.MinPoint.X, 0.001);
-            double currentH = Math.Max(current.MaxPoint.Y - current.MinPoint.Y, 0.001);
+            double boxW = Math.Max(originalBounds.Value.MaxPoint.X - originalBounds.Value.MinPoint.X, 0.001);
+            double boxH = Math.Max(originalBounds.Value.MaxPoint.Y - originalBounds.Value.MinPoint.Y, 0.001);
             double rotation = NormalizeHalfTurn(text.Rotation);
             bool vertical = Math.Abs(Math.Sin(rotation)) > Math.Abs(Math.Cos(rotation));
-            double originalLength = vertical ? originalH : originalW;
+            double originalLength = vertical ? boxH : boxW;
+            // Wrap within the measured corridor, not within the axis-aligned bounding box. The box of
+            // a rotated label is a diagonal square whose dimensions have nothing to do with the
+            // reading direction, so using it produced a column far narrower than the free run beside
+            // the label -- 停止指示 was broken over two lines at 44% height when a single full-height
+            // line fitted in the corridor.
+            double availableLength = readingLength > 0 ? readingLength : originalLength;
+            if (text.Width <= 0 || text.Width > availableLength * 0.96)
+                text.Width = Math.Max(availableLength * 0.96, 0.1);
 
-            if (text.Width <= 0 || text.Width > originalLength * 0.96)
-                text.Width = Math.Max(originalLength * 0.96, 0.1);
+            double ceiling = originalHeight > 0 ? originalHeight : startHeight;
+            double floor = ceiling * WritebackConstants.AbsoluteMinFitHeightRatio;
+            double searchFloor = floor;
+            double searchCeiling = ceiling;
+            double best = 0;
+            for (int attempt = 0; attempt < 16; attempt++)
+            {
+                double candidate = attempt == 0 ? ceiling : (floor + ceiling) / 2;
+                text.TextHeight = candidate;
+                text.RecordGraphicsModified(true);
 
-            double ratio = Math.Min(originalW / currentW, originalH / currentH) * 0.95;
-            text.TextHeight *= DwgTranslator.Cad.Compat.Clamp(ratio, 0.20, 0.98);
+                Extents3d current;
+                try { current = CollisionDetector.GetCorrectedBounds(text); }
+                catch { break; }
+
+                current = AlignInsideEnvelope(text, current, originalBounds.Value);
+                if (IsInsideOriginalEnvelope(current, originalBounds.Value, originalHeight))
+                {
+                    best = candidate;
+                    floor = candidate;
+                    if (attempt == 0)
+                    {
+                        Log.Information(
+                            "Envelope fit MText {Handle}: fits at full height {Height:F3} (width {OldW:F3}->{NewW:F3})",
+                            handle, candidate, startWidth, text.Width);
+                        return true;
+                    }
+                }
+                else ceiling = candidate;
+            }
+
+            if (best > 0)
+            {
+                text.TextHeight = best;
+                text.RecordGraphicsModified(true);
+                Extents3d finalBounds;
+                try { finalBounds = AlignInsideEnvelope(text, CollisionDetector.GetCorrectedBounds(text), originalBounds.Value); }
+                catch (Exception ex)
+                {
+                    Log.Warning(ex, "Envelope fit MText {Handle}: final bounds unavailable after fit", handle);
+                    text.TextHeight = startHeight;
+                    text.Width = startWidth;
+                    return false;
+                }
+                if (IsInsideOriginalEnvelope(finalBounds, originalBounds.Value, originalHeight))
+                {
+                    if (best < originalHeight * WritebackConstants.PreferredFitHeightRatio - 1e-8)
+                        Log.Warning(
+                            "Envelope fit MText {Handle}: accepted shrunk height {OldH:F3}->{NewH:F3} ({Ratio:P0}); width {OldW:F3}->{NewW:F3}",
+                            handle, startHeight, best, originalHeight > 0 ? best / originalHeight : 0,
+                            startWidth, text.Width);
+                    else if (best < startHeight - 1e-8)
+                        Log.Information(
+                            "Envelope fit MText {Handle}: width {OldW:F3}->{NewW:F3}, height {OldH:F3}->{NewH:F3}",
+                            handle, startWidth, text.Width, startHeight, best);
+                    return true;
+                }
+            }
+
+            Log.Warning(
+                "Envelope fit MText {Handle}: giving up (no height in [{Floor:F3},{Ceil:F3}] fits the original envelope); original text kept",
+                handle, searchFloor, searchCeiling);
+            text.TextHeight = startHeight;
+            text.Width = startWidth;
+            return false;
         }
+    }
 
-        try
+    /// <summary>
+    /// The box the SOURCE text occupied, used as the interference baseline so an overlap the
+    /// drawing already had is not blamed on the translation.
+    /// </summary>
+    private static Extents3d? BaselineOf(ReplacedEntityInfo item)
+    {
+        if (item.OriginalSnapshot == null) return null;
+        try { return CollisionDetector.GetCorrectedBounds(item.OriginalSnapshot, false); }
+        catch { return null; }
+    }
+
+    /// <summary>
+    /// Resolves a post-pass collision by scaling the translated text down until it no longer
+    /// intersects its neighbours, searching for the LARGEST scale that is clear rather than
+    /// stepping down until it happens to be clear. Height and wrap width are scaled together so
+    /// the MText block scales uniformly: the glyphs-per-line count, and therefore the line count,
+    /// stay stable and only the rendered size changes.
+    /// </summary>
+    /// <returns>True when the entity was separated (possibly needing no shrink at all).</returns>
+    private static bool TryShrinkUntilClear(Entity entity, double originalHeight, Transaction tr, Extents3d? baseline, out int steps)
+    {
+        // A local counter: an out parameter cannot be captured by the local functions below.
+        int tries = 0;
+        steps = 0;
+
+        double startHeight = entity switch
         {
-            bool fitted = IsInsideOriginalEnvelope(
-                CollisionDetector.GetCorrectedBounds(text), originalBounds.Value, originalHeight);
-            if (!fitted)
-                Log.Warning("Envelope fit MText {Handle}: precise fallback required", handle);
-            return fitted && text.TextHeight >= originalHeight*.70;
+            DBText dbText => dbText.Height,
+            MText mtext => mtext.TextHeight,
+            _ => 0
+        };
+        if (startHeight <= 0) return false;
+        double startWidth = entity is MText startMText ? startMText.Width : 0;
+
+        // Relative floor: never smaller than the absolute height floor the envelope fit respects.
+        double floorScale = originalHeight > 0
+            ? Math.Max(originalHeight * WritebackConstants.AbsoluteMinFitHeightRatio / startHeight, 0.05)
+            : 0.05;
+
+        void Apply(double scale)
+        {
+            switch (entity)
+            {
+                case DBText dbText:
+                    dbText.Height = startHeight * scale;
+                    break;
+                case MText mtext:
+                    mtext.TextHeight = startHeight * scale;
+                    if (startWidth > 0) mtext.Width = startWidth * scale;
+                    break;
+            }
+            entity.RecordGraphicsModified(true);
         }
-        catch { return false; }
+
+        bool IsClear()
+        {
+            AvailableTextSpace.Refresh(tr);
+            tries++;
+            return !AvailableTextSpace.FindIntersections(entity, tr, baseline)
+                .Any(issue => issue.StartsWith("CONFLICT=", StringComparison.Ordinal));
+        }
+
+        // Obstacle boxes are cached per BlockTableRecord and were built before this pass, so the
+        // first test has to rebuild them. Another entity's shrink may already have cleared this
+        // one, and the row-neighbour chains on a rotated drawing resolve from one end.
+        if (IsClear()) { steps = 0; return true; }
+
+        // IsClear is monotone in the scale (a smaller text overlaps no more than a larger one), so
+        // bisect between the known-conflicting original size and the floor.
+        Apply(floorScale);
+        if (!IsClear()) { steps = tries; return false; }   // even the floor is not clear
+
+        double clear = floorScale, conflicting = 1.0;
+        for (int step = 0; step < 8; step++)
+        {
+            double mid = (clear + conflicting) / 2;
+            Apply(mid);
+            if (IsClear()) clear = mid; else conflicting = mid;
+        }
+        Apply(clear);
+        bool separated = IsClear();
+        steps = tries;
+        return separated;
     }
 
     private static Extents3d AlignInsideEnvelope(Entity text, Extents3d current, Extents3d original)
