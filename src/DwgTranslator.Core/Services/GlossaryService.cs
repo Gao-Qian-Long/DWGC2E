@@ -17,6 +17,10 @@ public class GlossaryService : IGlossaryService
     /// <inheritdoc/>
     public async Task LoadGlossaryAsync(string filePath)
     {
+        _lock.EnterWriteLock();
+        try { _entries.Clear(); }
+        finally { _lock.ExitWriteLock(); }
+
         if (!File.Exists(filePath))
         {
             Log.Warning("Glossary file not found: {Path}", filePath);
@@ -34,7 +38,6 @@ public class GlossaryService : IGlossaryService
             _lock.EnterWriteLock();
             try
             {
-                _entries.Clear();
                 _entries.AddRange(entries.OrderByDescending(e => e.Source.Length)); // Longest match first
             }
             finally

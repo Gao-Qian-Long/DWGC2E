@@ -1,13 +1,14 @@
 # DWG Translator（DWGC2E）
 
-面向机械工程 CAD 图纸的 Windows 桌面翻译工具，可提取并翻译 DWG/DXF 中的文字标注，再将译文回写到图纸。支持离线文件处理，也支持通过 AutoCAD 插件在线回写。
+面向机械工程 CAD 图纸的 Windows 桌面翻译工具，可提取并翻译 DWG/DXF 中的文字标注，再将译文回写到图纸。支持离线文件处理，也支持通过宿主专用插件在线回写。
 
 ## 直接运行
 
 1. 打开 [`release`](./release/) 目录。
 2. 双击 `DwgTranslator.exe`。
 3. 首次运行后，在软件设置中填写 DeepSeek API Key。
-4. 导入 DWG/DXF，提取文字、翻译并导出。
+4. 可一次拖入多张 DWG/DXF：左侧按文件显示，双击图纸进入译文列表并直接编辑。
+5. 勾选需要输出的图纸后点击“导出”，只选择一次输出文件夹即可批量生成 `*_translated.dwg/.dxf`，无需再次选择源文件。
 
 > Windows 可能对从网络下载的程序显示安全提示；请确认文件来源为本仓库后再运行。
 
@@ -18,7 +19,7 @@
 - 保留常用 MText 格式代码
 - 自适应文字缩放与碰撞检测
 - 支持离线 DWG/DXF 写回
-- 支持 AutoCAD `NETLOAD` 插件在线写回
+- 支持浩辰 GstarCAD 2024 或 AutoCAD 2025+ 的宿主专用 `NETLOAD` 插件在线写回
 - 翻译缓存、日志查看与失败重试
 
 ## 运行目录
@@ -29,20 +30,21 @@ release/
 ├─ settings.json              # 默认配置模板（不包含私人 API Key）
 ├─ glossaries/                # 默认术语表
 ├─ prompts/                   # 翻译提示词
-└─ CadPlugin/                 # AutoCAD NETLOAD 插件
+└─ CadPlugin/                 # 当前发布包对应宿主的 NETLOAD 插件及平台清单
 ```
 
 运行时的个人配置、日志、术语表和导出文件保存在 `%APPDATA%\DwgTranslator\`。私人 API Key 和运行日志不会提交到仓库。
 
-## AutoCAD 插件
+## CAD 插件
 
-1. 启动 AutoCAD，输入 `NETLOAD`。
-2. 选择 `release\CadPlugin\DwgTranslator.Cad.dll`。
-3. 在桌面程序中使用在线写回，或在 AutoCAD 中调用插件命令。
+1. 确认压缩包名称中的平台与 CAD 宿主一致（不同宿主的插件 DLL 不通用）。
+2. 启动对应 CAD，输入 `NETLOAD`。
+3. 选择 `release\CadPlugin\DwgTranslator.Cad.dll`。
+4. 在桌面程序中使用在线写回，或在 CAD 中调用插件命令。
 
 ## 从源码构建
 
-环境要求：Windows、.NET 8 SDK；构建 CAD 插件还需要 AutoCAD .NET SDK。
+环境要求：Windows、.NET 8 SDK；构建 CAD 插件还需要对应宿主的托管 SDK。当前支持 GstarCAD 2024（.NET Framework 4.8）和 AutoCAD 2025+（.NET 8）。
 
 ```powershell
 dotnet build DwgTranslator.sln

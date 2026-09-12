@@ -99,12 +99,15 @@ public static class CollisionDetector
             double x0 = -(attachment % 3) * w / 2, y0 = (attachment / 3) * h / 2;
             var u = mtext.Direction.GetNormal();
             var v = mtext.Normal.CrossProduct(u).GetNormal();
-            var corners = new Point3d[4];
-            int i = 0;
-            foreach (var x in new[] { x0, x0 + w })
-            foreach (var y in new[] { y0, y0 - h })
-                corners[i++] = mtext.Location + u * x + v * y;
-            return corners;
+            // Perimeter order is mandatory for the separating-axis test below. The old nested
+            // loops returned TL, BL, TR, BR and therefore treated a diagonal as an edge.
+            return
+            [
+                mtext.Location + u * x0       + v * y0,
+                mtext.Location + u * (x0 + w) + v * y0,
+                mtext.Location + u * (x0 + w) + v * (y0 - h),
+                mtext.Location + u * x0       + v * (y0 - h)
+            ];
         }
         catch { return null; }
     }

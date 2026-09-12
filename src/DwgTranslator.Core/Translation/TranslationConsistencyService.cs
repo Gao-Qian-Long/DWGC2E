@@ -10,10 +10,12 @@ namespace DwgTranslator.Core.Translation;
 /// </summary>
 public class TranslationConsistencyService : ITranslationConsistencyService
 {
+    /// <summary>Direction assumed for cache files written before the key carried one.</summary>
+    private const string LegacyDirection = "ZH>EN";
+
     private readonly Dictionary<string, string> _cache;
     private readonly string _cacheFilePath;
     private readonly object _lock = new();
-
     /// <summary>
     /// Number of cached entries.
     /// </summary>
@@ -43,7 +45,7 @@ public class TranslationConsistencyService : ITranslationConsistencyService
     /// <param name="sourceText">The source text to look up.</param>
     /// <param name="translatedText">The cached translation if found.</param>
     /// <returns>True if a cached translation exists.</returns>
-    public bool TryGetMatch(string sourceText, out string? translatedText)
+    public bool TryGetMatch(string sourceText, string direction, out string? translatedText)
     {
         if (string.IsNullOrEmpty(sourceText))
         {
@@ -51,7 +53,7 @@ public class TranslationConsistencyService : ITranslationConsistencyService
             return false;
         }
 
-        var normalized = NormalizeForCache(sourceText);
+        var normalized = CacheKey(sourceText, direction);
 
         lock (_lock)
         {
@@ -71,12 +73,12 @@ public class TranslationConsistencyService : ITranslationConsistencyService
     /// </summary>
     /// <param name="sourceText">The original text.</param>
     /// <param name="translatedText">The translated text.</param>
-    public void AddToCache(string sourceText, string translatedText)
+    public void AddToCache(string sourceText, string translatedText, string direction)
     {
         if (string.IsNullOrEmpty(sourceText) || string.IsNullOrEmpty(translatedText))
             return;
 
-        var normalized = NormalizeForCache(sourceText);
+        var normalized = CacheKey(sourceText, direction);
 
         lock (_lock)
         {
@@ -101,10 +103,10 @@ public class TranslationConsistencyService : ITranslationConsistencyService
         }
     }
 
-    public void RemoveFromCache(string sourceText)
+    public void RemoveFromCache(string sourceText, string direction)
     {
         if (string.IsNullOrEmpty(sourceText)) return;
-        var normalized = NormalizeForCache(sourceText);
+        var normalized = CacheKey(sourceText, direction);
         lock (_lock)
         {
             if (_cache.Remove(normalized))
@@ -116,13 +118,13 @@ public class TranslationConsistencyService : ITranslationConsistencyService
     /// <summary>
     /// Batch-add multiple entries to the cache.
     /// </summary>
-    public void AddBatchToCache(Dictionary<string, string> entries)
+    public void AddBatchToCache(Dictionary<string, string> entries, string direction)
     {
         lock (_lock)
         {
             foreach (var kvp in entries)
             {
-                var normalized = NormalizeForCache(kvp.Key);
+                var normalized = CacheKey(kvp.Key, direction);
                 _cache[normalized] = kvp.Value;
             }
         }
@@ -173,14 +175,23 @@ public class TranslationConsistencyService : ITranslationConsistencyService
 
             if (entries != null)
             {
+                var migrated = 0;
                 lock (_lock)
                 {
                     foreach (var kvp in entries)
                     {
-                        _cache[kvp.Key] = kvp.Value;
+                        // Cache files written before the direction was part of the key hold bare
+                        // source text; they were produced by the only direction that existed then.
+                        // Migrating keeps the API credits already spent on those translations.
+                        var key = kvp.Key.Contains(CacheSeparator, StringComparison.Ordinal)
+                            ? kvp.Key
+                            : LegacyDirection + CacheSeparator + kvp.Key;
+                        if (!kvp.Key.Contains(CacheSeparator, StringComparison.Ordinal)) migrated++;
+                        _cache[key] = kvp.Value;
                     }
                 }
-                Log.Information("Loaded {Count} translation cache entries from {Path}", entries.Count, _cacheFilePath);
+                Log.Information("Loaded {Count} translation cache entries from {Path} ({Migrated} migrated to the {Direction} namespace)",
+                    entries.Count, _cacheFilePath, migrated, LegacyDirection);
             }
         }
         catch (Exception ex)
@@ -219,5 +230,18 @@ public class TranslationConsistencyService : ITranslationConsistencyService
     private static string NormalizeForCache(string text)
     {
         return text.Trim().Replace("\r\n", "\n").Replace("\r", "\n");
+    }
+
+    /// <summary>Separates the direction prefix from the source text inside a cache key.</summary>
+    private const string CacheSeparator = "|";
+
+    /// <summary>
+    /// Full cache key: direction + source text. The same source text has a different translation per
+    /// target language, so the direction has to be part of the key.
+    /// </summary>
+    private static string CacheKey(string sourceText, string direction)
+    {
+        var normalizedDirection = string.IsNullOrWhiteSpace(direction) ? LegacyDirection : direction.Trim().ToUpperInvariant();
+        return normalizedDirection + CacheSeparator + NormalizeForCache(sourceText);
     }
 }

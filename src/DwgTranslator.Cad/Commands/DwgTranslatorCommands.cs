@@ -120,7 +120,11 @@ public class DwgTranslatorCommands
 
             // Initialize services
             var glossaryService = new GlossaryService();
-            glossaryService.LoadGlossaryAsync(config.GlossaryPath).GetAwaiter().GetResult();
+            var expectedGlossary = TranslationLanguages.GlossaryFileName(
+                config.SourceLanguage, config.TargetLanguage);
+            var glossaryPath = string.Equals(Path.GetFileName(config.GlossaryPath), expectedGlossary,
+                StringComparison.OrdinalIgnoreCase) ? config.GlossaryPath : string.Empty;
+            glossaryService.LoadGlossaryAsync(glossaryPath).GetAwaiter().GetResult();
 
             var formatCodeParser = new FormatCodeParser();
             var systemPrompt = LoadSystemPrompt();
@@ -207,7 +211,7 @@ public class DwgTranslatorCommands
             var entities = excelService.ImportFromExcelAsync(filePath).GetAwaiter().GetResult();
 
             // Write back
-            var replacer = new TextReplacer(targetIsCjk: true);
+            var replacer = new TextReplacer(targetIsCjk: TranslationLanguages.IsCjk(config.TargetLanguage));
             var result = replacer.ReplaceAll(doc.Database, entities);
 
             editor.WriteMessage($"\n[DwgTranslator] Writeback complete:");
@@ -246,7 +250,7 @@ public class DwgTranslatorCommands
         if (File.Exists(configPath))
         {
             var json = File.ReadAllText(configPath);
-            _config = JsonSerializer.Deserialize<AppConfig>(json) ?? new AppConfig();
+            _config = JsonSerializer.Deserialize<AppConfig>(json, DwgTranslator.Core.Models.AppConfigJson.ReadOptions) ?? new AppConfig();
             Log.Information("CAD plugin loaded settings from {Path}", configPath);
         }
         else

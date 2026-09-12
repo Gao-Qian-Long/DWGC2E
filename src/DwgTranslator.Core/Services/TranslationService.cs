@@ -55,6 +55,10 @@ public class TranslationService : ITranslationService
     {
         var allResults = new List<TranslationPair>();
 
+        // Keep the direction local to this batch. A mutable direction on the shared cache races
+        // when callers translate different language pairs concurrently.
+        var cacheDirection = $"{TranslationLanguages.Normalize(sourceLanguage)}>{TranslationLanguages.Normalize(targetLanguage)}";
+
         var groups = entities
             .Where(e => !string.IsNullOrWhiteSpace(e.PlainText))
             .GroupBy(e => e.PlainText.Trim(), StringComparer.Ordinal)
@@ -85,7 +89,7 @@ public class TranslationService : ITranslationService
                 await semaphore.WaitAsync(cancellationToken);
                 try
                 {
-                    var pair = await TranslateSingleAsync(representative, sourceLanguage, targetLanguage, cancellationToken);
+                    var pair = await TranslateSingleAsync(representative, sourceLanguage, targetLanguage, cacheDirection, cancellationToken);
 
                     lock (mapLock) { translationMap[plainText] = pair; }
 
@@ -146,7 +150,7 @@ public class TranslationService : ITranslationService
     }
 
     private async Task<TranslationPair> TranslateSingleAsync(
-        TextEntity entity, string sourceLanguage, string targetLanguage, CancellationToken ct)
+        TextEntity entity, string sourceLanguage, string targetLanguage, string cacheDirection, CancellationToken ct)
     {
         try
         {
@@ -171,7 +175,7 @@ public class TranslationService : ITranslationService
                 };
             }
 
-            if (_consistencyService.TryGetMatch(entity.PlainText, out var cached))
+            if (_consistencyService.TryGetMatch(entity.PlainText, cacheDirection, out var cached))
             {
                 if (TranslationQualityValidator.IsAcceptable(
                     entity.PlainText, cached!, sourceLanguage, targetLanguage))
@@ -186,7 +190,7 @@ public class TranslationService : ITranslationService
 
                 // Older versions cached echoed source text as a successful translation.
                 // Remove it and request a fresh translation instead of propagating it.
-                _consistencyService.RemoveFromCache(entity.PlainText);
+                _consistencyService.RemoveFromCache(entity.PlainText, cacheDirection);
             }
 
             var (translated, glossaryHit) = await TranslateWithMetadataAsync(
@@ -197,7 +201,7 @@ public class TranslationService : ITranslationService
                 throw new InvalidDataException("Translation response still contains source-language text");
 
             if (!glossaryHit && !string.IsNullOrEmpty(translated))
-                _consistencyService.AddToCache(entity.PlainText, translated);
+                _consistencyService.AddToCache(entity.PlainText, translated, cacheDirection);
 
             return new TranslationPair
             {

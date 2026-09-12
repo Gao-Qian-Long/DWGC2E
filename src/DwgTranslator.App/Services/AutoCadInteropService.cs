@@ -108,6 +108,12 @@ public class AutoCadInteropService : IAutoCadInteropService, IDisposable
                 result.Errors.Add(Strings.Get("AutoCadPluginNotFound"));
                 return result;
             }
+            var pluginDirectory = Path.GetDirectoryName(cadDllPath) ?? string.Empty;
+            if (!CadPluginInstaller.IsPackageCompatible(config.AutoCadInstallPath, pluginDirectory))
+            {
+                result.Errors.Add($"CAD 插件平台不匹配：{CadPluginInstaller.DescribeProduct(config.AutoCadInstallPath)}");
+                return result;
+            }
             Log.Information("Using Cad plugin: {Path}", cadDllPath);
 
             progress?.Report(Strings.Get("ProgressAutoCadPreparingFiles"));
@@ -189,8 +195,8 @@ public class AutoCadInteropService : IAutoCadInteropService, IDisposable
             Entities = entities,
             targetIsCjk = targetIsCjk,
             // Legacy field name: an installed plugin older than the language-pair support reads
-            // "cnToEn" and would otherwise default to CJK output for every direction.
-            cnToEn = targetIsCjk,
+            // Legacy plugins understand cnToEn (true means a Latin/English target).
+            cnToEn = !targetIsCjk,
             SessionId = sessionId,
             DoneSignalPath = doneSignalPath
         };
@@ -505,7 +511,8 @@ DwgTranslator: done."")
 
     /// <summary>
     /// Parses writeback_done.txt. Expected formats:
-    ///   success|sessionId|successCount|failCount|timestamp
+    ///   success|sessionId|successCount|failCount|timestamp|detail
+    ///   partial|sessionId|successCount|failCount|timestamp|detail
     ///   success|sessionId|timestamp              (legacy)
     ///   failed|sessionId|message|timestamp
     /// </summary>
@@ -516,8 +523,9 @@ DwgTranslator: done."")
         {
             var doneContent = File.ReadAllText(doneSignalPath).Trim();
             var parts = doneContent.Split('|');
-            bool isSuccess = parts.Length > 0 &&
-                parts[0].Equals("success", StringComparison.OrdinalIgnoreCase);
+            var status = parts.Length > 0 ? parts[0] : string.Empty;
+            bool isSuccess = status.Equals("success", StringComparison.OrdinalIgnoreCase) ||
+                status.Equals("partial", StringComparison.OrdinalIgnoreCase);
 
             // Validate SessionId to prevent cross-session confusion
             if (!string.IsNullOrEmpty(sessionId))
@@ -549,8 +557,13 @@ DwgTranslator: done."")
                 {
                     result.SuccessCount = successCount;
                     result.FailCount = failCount;
-                    if (successCount == 0)
-                        result.Errors.Add(Strings.Get("AutoCadWritebackFailed", doneContent));
+                    if (failCount > 0)
+                    {
+                        var detail = parts.Length >= 6 && !string.IsNullOrWhiteSpace(parts[5])
+                            ? parts[5]
+                            : $"{failCount} entities kept their original text";
+                        result.Errors.Add(detail);
+                    }
                 }
                 else
                 {

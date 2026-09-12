@@ -173,7 +173,8 @@ public partial class App : Application
             try
             {
                 var json = File.ReadAllText(settingsPath);
-                var config = System.Text.Json.JsonSerializer.Deserialize<DwgTranslator.Core.Models.AppConfig>(json);
+                var config = System.Text.Json.JsonSerializer.Deserialize<DwgTranslator.Core.Models.AppConfig>(
+                    json, DwgTranslator.Core.Models.AppConfigJson.ReadOptions);
                 if (config != null && string.IsNullOrEmpty(config.DeepSeekApiKey))
                 {
                     MessageBox.Show(
@@ -211,7 +212,8 @@ public partial class App : Application
             if (File.Exists(settingsPath))
             {
                 var json = File.ReadAllText(settingsPath);
-                var config = System.Text.Json.JsonSerializer.Deserialize<DwgTranslator.Core.Models.AppConfig>(json);
+                var config = System.Text.Json.JsonSerializer.Deserialize<DwgTranslator.Core.Models.AppConfig>(
+                    json, DwgTranslator.Core.Models.AppConfigJson.ReadOptions);
                 if (config != null && !string.IsNullOrEmpty(config.MinimumLogLevel))
                 {
                     return config.MinimumLogLevel.ToLowerInvariant() switch
@@ -240,7 +242,8 @@ public partial class App : Application
         {
             if (!File.Exists(settingsPath)) return false;
             var json = File.ReadAllText(settingsPath);
-            var config = System.Text.Json.JsonSerializer.Deserialize<DwgTranslator.Core.Models.AppConfig>(json);
+            var config = System.Text.Json.JsonSerializer.Deserialize<DwgTranslator.Core.Models.AppConfig>(
+                json, DwgTranslator.Core.Models.AppConfigJson.ReadOptions);
             return config?.LicensingEnabled == true;
         }
         catch (Exception ex)
@@ -265,7 +268,8 @@ public partial class App : Application
                 if (File.Exists(settingsPath))
                 {
                     var json = File.ReadAllText(settingsPath);
-                    var config = System.Text.Json.JsonSerializer.Deserialize<DwgTranslator.Core.Models.AppConfig>(json);
+                    var config = System.Text.Json.JsonSerializer.Deserialize<DwgTranslator.Core.Models.AppConfig>(
+                        json, DwgTranslator.Core.Models.AppConfigJson.ReadOptions);
                     if (config != null && !string.IsNullOrEmpty(config.Language))
                         persistedLanguage = config.Language;
                 }

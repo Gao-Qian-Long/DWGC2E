@@ -18,8 +18,6 @@ public partial class SettingsViewModel : ObservableObject
 {
     private readonly string _settingsPath;
     private readonly ILocalizationService _localizationService;
-    private static readonly JsonSerializerOptions s_writeIndentedOptions = new() { WriteIndented = true };
-
     [ObservableProperty] private string _apiKey = string.Empty;
     [ObservableProperty] private string _baseUrl = "https://api.deepseek.com";
     [ObservableProperty] private string _model = "deepseek-chat";
@@ -57,7 +55,7 @@ public partial class SettingsViewModel : ObservableObject
             if (!File.Exists(_settingsPath)) return;
 
             var json = File.ReadAllText(_settingsPath);
-            var config = JsonSerializer.Deserialize<AppConfig>(json) ?? new AppConfig();
+            var config = JsonSerializer.Deserialize<AppConfig>(json, AppConfigJson.ReadOptions) ?? new AppConfig();
 
             ApiKey = AppConfig.DecryptApiKey(config.DeepSeekApiKey);
             BaseUrl = config.DeepSeekBaseUrl ?? BaseUrl;
@@ -85,7 +83,7 @@ public partial class SettingsViewModel : ObservableObject
         try
         {
             var config = File.Exists(_settingsPath)
-                ? JsonSerializer.Deserialize<AppConfig>(File.ReadAllText(_settingsPath)) ?? new AppConfig()
+                ? JsonSerializer.Deserialize<AppConfig>(File.ReadAllText(_settingsPath), AppConfigJson.ReadOptions) ?? new AppConfig()
                 : new AppConfig();
 
             config.DeepSeekApiKey = AppConfig.EncryptApiKey(ApiKey.Trim());
@@ -97,7 +95,7 @@ public partial class SettingsViewModel : ObservableObject
             config.MaxTranslationConcurrency = Math.Clamp(MaxTranslationConcurrency, 1, 20);
 
             Directory.CreateDirectory(Path.GetDirectoryName(_settingsPath)!);
-            File.WriteAllText(_settingsPath, JsonSerializer.Serialize(config, s_writeIndentedOptions));
+            File.WriteAllText(_settingsPath, JsonSerializer.Serialize(config, AppConfigJson.WriteOptions));
             return true;
         }
         catch (Exception ex)

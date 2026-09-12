@@ -48,7 +48,7 @@ public class WritebackCommand
         public bool? CnToEn { get; set; }
 
         /// <summary>Resolved direction flag, defaulting to CJK output for a config with neither field.</summary>
-        public bool WritesCjkText => TargetIsCjk ?? CnToEn ?? true;
+        public bool WritesCjkText => TargetIsCjk ?? (CnToEn.HasValue ? !CnToEn.Value : true);
 
         public string? SessionId { get; set; }
         public string? DoneSignalPath { get; set; }
@@ -150,7 +150,8 @@ public class WritebackCommand
 
             SignalDone(
                 donePath,
-                result.SuccessCount > 0 ? "success" : "failed",
+                result.SuccessCount > 0 && result.FailCount > 0 ? "partial" :
+                    result.SuccessCount > 0 ? "success" : "failed",
                 sessionId,
                 result.SuccessCount,
                 result.FailCount,

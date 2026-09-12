@@ -61,6 +61,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty] private string _glossaryStatsText = Strings.Get("StatsGlossaryCount", 0);
     [ObservableProperty] private string _licenseStatusText = Strings.Get("LicenseNotActivated");
     [ObservableProperty] private bool _isLicensingEnabled;
+    [ObservableProperty] private DrawingFileItem? _selectedDrawingFile;
+    [ObservableProperty] private bool _hasMultipleDrawingFiles;
 
     #endregion
 
@@ -69,6 +71,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     public ObservableCollection<TextEntity> Entities { get; } = [];
     public ObservableCollection<TextEntity> FilteredEntities { get; } = [];
+    public ObservableCollection<DrawingFileItem> DrawingFiles { get; } = [];
     public ObservableCollection<GlossaryEntry> GlossaryEntries { get; } = [];
 
     public string[] FilterOptions { get; } =

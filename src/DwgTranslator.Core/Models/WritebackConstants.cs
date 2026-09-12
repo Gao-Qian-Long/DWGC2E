@@ -43,6 +43,17 @@ public static class WritebackConstants
     public const double CollisionMarginRatio = 0.15;
 
     /// <summary>
+    /// Visible clearance between translated glyph ink and non-text geometry such as
+    /// title-block cell borders. The absolute floor also covers very small text.
+    /// </summary>
+    public const double GeometryClearanceRatio = 0.04;
+
+    public const double MinGeometryClearance = 0.02;
+
+    public static double GeometryClearance(double textHeight) =>
+        Math.Max(Math.Abs(textHeight) * GeometryClearanceRatio, MinGeometryClearance);
+
+    /// <summary>
     /// Binary-search iterations for height reduction.
     /// </summary>
     public const int MaxBinarySearchIterations = 16;

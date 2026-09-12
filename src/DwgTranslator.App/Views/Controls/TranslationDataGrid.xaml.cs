@@ -1,5 +1,6 @@
 using System.Windows.Controls;
 using DwgTranslator.App.ViewModels;
+using DwgTranslator.Core.Models;
 
 namespace DwgTranslator.App.Views.Controls;
 
@@ -54,5 +55,23 @@ public partial class TranslationDataGrid : UserControl
         {
             EmptyStatePanel.Visibility = System.Windows.Visibility.Collapsed;
         }
+    }
+
+    private void DrawingFileList_MouseDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (DataContext is MainViewModel vm && DrawingFileList.SelectedItem is DrawingFileItem item)
+        {
+            vm.OpenDrawingFile(item);
+            e.Handled = true;
+        }
+    }
+
+    private void TranslationTextBox_LostFocus(object sender, System.Windows.RoutedEventArgs e)
+    {
+        if (sender is not TextBox textBox || textBox.DataContext is not TextEntity entity ||
+            DataContext is not MainViewModel vm) return;
+
+        textBox.GetBindingExpression(TextBox.TextProperty)?.UpdateSource();
+        vm.MarkTranslationEdited(entity);
     }
 }

@@ -4,8 +4,8 @@
         xmlns:conv="clr-namespace:DwgTranslator.App.Converters"
         xmlns:controls="clr-namespace:DwgTranslator.App.Views.Controls"
         xmlns:views="clr-namespace:DwgTranslator.App.Views"
-        Title="{conv:Localize AppTitle}" Height="780" Width="1280"
-        MinHeight="680" MinWidth="1050"
+        Title="{conv:Localize AppTitle}" Height="820" Width="1380"
+        MinHeight="700" MinWidth="1180"
         Icon="pack://application:,,,/icon.ico"
         WindowStartupLocation="CenterScreen"
         Topmost="False"
@@ -34,7 +34,7 @@
 
     <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="40"/>
+            <RowDefinition Height="48"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -48,11 +48,12 @@
 
         <!-- ═══ Rows 1-2: actions and translation stats share ONE card, so the header reads as a
              single control strip instead of two stacked bordered bars. ═══ -->
-        <Border Grid.Row="1" Grid.RowSpan="2" Margin="10,8,10,0"
+        <Border Grid.Row="1" Grid.RowSpan="2" Margin="16,12,16,0"
                 Background="{DynamicResource Brush.Surface}"
                 BorderBrush="{DynamicResource Brush.Border}"
                 BorderThickness="1"
-                CornerRadius="{DynamicResource CornerRadius.Medium}">
+                CornerRadius="{DynamicResource CornerRadius.Large}"
+                Effect="{StaticResource CardShadow}">
             <StackPanel>
                 <controls:MainToolBar/>
                 <controls:FilterStatsBar/>
@@ -60,7 +61,7 @@
         </Border>
 
         <!-- ═══ Row 3: Progress Bar card ═══ -->
-        <Border Grid.Row="3" Margin="10,6,10,0"
+        <Border Grid.Row="3" Margin="16,8,16,0"
                 Visibility="{Binding IsProcessing, Converter={StaticResource BoolToVis}}"
                 Style="{StaticResource StripCard}" Padding="6,3">
             <Grid>
@@ -112,19 +113,19 @@
         </Border>
 
         <!-- ═══ Row 4: DataGrid card ═══ -->
-        <controls:TranslationDataGrid Grid.Row="4" Margin="10,6,10,10"/>
+        <controls:TranslationDataGrid Grid.Row="4" Margin="16,10,16,14"/>
 
         <!-- ═══ Row 5: Log Viewer Panel (collapsible) ═══ -->
         <views:LogViewerPanel Grid.Row="5" x:Name="LogPanel"
                               DataContext="{Binding LogViewModel}"
-                              MaxHeight="280" Margin="10,0,10,0"
+                              MaxHeight="280" Margin="16,0,16,10"
                               Visibility="{Binding IsVisible, Converter={StaticResource BoolToVis}}"/>
 
         <!-- ═══ Row 6: Status Bar card ═══ -->
         <Border Grid.Row="6" Style="{StaticResource StripCard}"
                 BorderThickness="0,1,0,0"
                 CornerRadius="0"
-                Padding="10,4"
+                Padding="16,7"
                 Background="{DynamicResource Brush.StatusBar}">
             <Grid>
                 <Grid.ColumnDefinitions>

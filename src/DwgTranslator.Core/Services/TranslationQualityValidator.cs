@@ -12,7 +12,9 @@ public static class TranslationQualityValidator
     {
         if (string.IsNullOrWhiteSpace(translated)) return false;
         if (!allowPlaceholders && (translated.Contains("__FMT_",StringComparison.Ordinal) || translated.Contains("__GLOSSARY_",StringComparison.Ordinal))) return false;
-        if (string.Equals(source.Trim(), translated.Trim(), StringComparison.Ordinal))
+        if (string.Equals(source.Trim(), translated.Trim(), StringComparison.Ordinal) ||
+            string.Equals(NormalizeMeaningfulText(source), NormalizeMeaningfulText(translated),
+                StringComparison.OrdinalIgnoreCase))
             return TranslationFilter.IsNumericOnly(source) ||
                 TranslationFilter.ShouldSkipTranslation(source, sourceLanguage, targetLanguage);
 
@@ -33,6 +35,13 @@ public static class TranslationQualityValidator
         return true;
     }
 
+    /// <summary>
+    /// Removes punctuation and spacing before echo comparison. Models sometimes append a full stop
+    /// or quote to unchanged source text; that is still an untranslated response and must not enter
+    /// the cache or drawing.
+    /// </summary>
+    private static string NormalizeMeaningfulText(string text) =>
+        new(text.Where(char.IsLetterOrDigit).Select(char.ToLowerInvariant).ToArray());
+
     public static bool ContainsCjk(string text) => TranslationLanguages.ContainsHan(text);
 }
-

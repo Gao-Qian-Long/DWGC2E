@@ -56,6 +56,9 @@
     <Error Condition="'$(CadPlatform)' == 'GstarCAD' And !Exists('$(GstarCadDir)\GcDbMgd.dll')"
            Text="GstarCAD managed API not found under $(GstarCadDir)." />
   </Target>
+  <Target Name="WriteCadPlatformManifest" AfterTargets="Build">
+    <WriteLinesToFile File="$(OutDir)cad-platform.txt" Lines="$(CadPlatform)" Overwrite="true" Encoding="UTF-8" />
+  </Target>
   <ItemGroup>
     <ProjectReference Include="..\DwgTranslator.Core\DwgTranslator.Core.csproj" />
   </ItemGroup>

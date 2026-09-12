@@ -19,7 +19,7 @@ public static class FontMapper
             return "\\f"+mapped+emphasis+";";
         });
     }
-    private static readonly Dictionary<string, string> CnToEnFonts = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly Dictionary<string, string> CjkToLatinFonts = new(StringComparer.OrdinalIgnoreCase)
     {
         { "SimHei", "Arial" },
         { "SimSun", "Arial" },
@@ -29,7 +29,7 @@ public static class FontMapper
         { "Times", "Arial" },
     };
 
-    private static readonly Dictionary<string, string> EnToCnFonts = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly Dictionary<string, string> LatinToCjkFonts = new(StringComparer.OrdinalIgnoreCase)
     {
         { "Arial", "SimHei" },
         { "Helvetica", "SimHei" },
@@ -47,7 +47,7 @@ public static class FontMapper
 
         if (targetIsCjk)
         {
-            foreach (var kv in CnToEnFonts)
+            foreach (var kv in LatinToCjkFonts)
             {
                 if (currentStyleName.IndexOf(kv.Key, StringComparison.OrdinalIgnoreCase) >= 0)
                     return kv.Value;
@@ -55,7 +55,7 @@ public static class FontMapper
         }
         else
         {
-            foreach (var kv in EnToCnFonts)
+            foreach (var kv in CjkToLatinFonts)
             {
                 if (currentStyleName.IndexOf(kv.Key, StringComparison.OrdinalIgnoreCase) >= 0)
                     return kv.Value;

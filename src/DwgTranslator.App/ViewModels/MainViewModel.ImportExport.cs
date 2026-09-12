@@ -34,7 +34,9 @@ public partial class MainViewModel
     /// File types accepted by drag-and-drop and by the command line.
     /// </summary>
     public static readonly string[] SupportedCadExtensions = [".dwg", ".dxf"];
-    public static readonly string[] SupportedExcelExtensions = [".xlsx", ".xls"];
+    // ClosedXML reads OpenXML workbooks only; advertising legacy binary .xls caused a guaranteed
+    // import failure after drag-and-drop accepted the file.
+    public static readonly string[] SupportedExcelExtensions = [".xlsx"];
 
     /// <summary>
     /// True when a dropped path has an extension the application can import.
@@ -82,8 +84,11 @@ public partial class MainViewModel
 
         // Excel translations are matched against the entities that were just imported, so
         // they always run after the CAD pass.
-        if (excelFiles.Count > 0 && !IsProcessing)
-            await ImportExcelFilesAsync(excelFiles[0]).ConfigureAwait(true);
+        foreach (var excelFile in excelFiles)
+        {
+            if (IsProcessing) break;
+            await ImportExcelFilesAsync(excelFile).ConfigureAwait(true);
+        }
 
         if (unsupported.Count > 0)
             Log.Warning("Dropped files ignored ({Count}): {Files}", unsupported.Count, string.Join("; ", unsupported));
@@ -102,7 +107,7 @@ public partial class MainViewModel
 
         await RunWithProgress(async () =>
         {
-            var importErrors = new List<string>();
+            var importErrors = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             var allEntities = await Task.Run(() =>
             {
                 var result = new List<TextEntity>();
@@ -127,7 +132,7 @@ public partial class MainViewModel
                     }
                     catch (Exception ex)
                     {
-                        importErrors.Add($"{Path.GetFileName(path)}: {ex.Message}");
+                        importErrors[path] = ex.Message;
                     }
                 }
                 return result;
@@ -138,13 +143,15 @@ public partial class MainViewModel
             foreach (var entity in allEntities)
                 Entities.Add(entity);
 
+            RebuildDrawingFileList(filePaths, importErrors);
             ApplyFilter();
             UpdateStatistics();
 
             if (importErrors.Count > 0 && allEntities.Count > 0)
             {
                 StatusMessage = Strings.Get("StatusImportPartialFail", allEntities.Count, importErrors.Count);
-                Log.Warning("Import errors ({Count}): {Errors}", importErrors.Count, string.Join("; ", importErrors));
+                Log.Warning("Import errors ({Count}): {Errors}", importErrors.Count,
+                    string.Join("; ", importErrors.Select(pair => $"{Path.GetFileName(pair.Key)}: {pair.Value}")));
             }
             else if (importErrors.Count > 0)
             {
@@ -181,7 +188,23 @@ public partial class MainViewModel
             return;
         }
 
+        var requestedSources = DrawingFiles.Count > 0
+            ? DrawingFiles.Where(f => f.IsIncludedForExport && string.IsNullOrWhiteSpace(f.ImportError))
+                .Select(f => f.FullPath).ToList()
+            : BatchExportPlanner.GetKnownSources(Entities).ToList();
+        if (requestedSources.Count == 0)
+        {
+            StatusMessage = DrawingFiles.Count > 0
+                ? "请至少勾选一张要导出的图纸。"
+                : "缺少源图纸信息，请重新拖入 DWG/DXF 后再导出。";
+            MessageBox.Show(StatusMessage, Strings.Get("MsgTitleNoData"),
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
         var translatedEntities = Entities
+            .Where(e => requestedSources.Contains(
+                NormalizeSourcePath(e.SourceFilePath), StringComparer.OrdinalIgnoreCase))
             .Where(e => e.Status is TranslationStatus.Translated or TranslationStatus.Reviewed
                 or TranslationStatus.WritebackSuccess or TranslationStatus.WritebackFailed)
             .ToList();
@@ -211,85 +234,9 @@ public partial class MainViewModel
             return;
         }
 
-        // Several drawings loaded at once: the export flow forces ONE source drawing and ONE
-        // destination name, so a folder of drawings could only be written one dialog-pair at a
-        // time and looked un-exportable. Write every imported drawing into one chosen folder
-        // instead, one "<name>_translated" file each.
-        var distinctSources = translatedEntities
-            .Select(e => NormalizeSourcePath(e.SourceFilePath))
-            .Where(p => !string.IsNullOrWhiteSpace(p))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-        if (distinctSources.Count > 1)
-        {
-            await ExportAllSourcesAsync(distinctSources!, translatedEntities);
-            return;
-        }
-
-        // Multi-file safety: only write entities that belong to the chosen source file.
-        var (sourceFilePath, destFilePath, isDxfSource) = PromptForExportFiles(translatedEntities);
-        if (sourceFilePath == null) return;
-
-        var sourceFull = Path.GetFullPath(sourceFilePath);
-        var unfinished = Entities.Where(e =>
-            string.Equals(NormalizeSourcePath(e.SourceFilePath), sourceFull, StringComparison.OrdinalIgnoreCase) &&
-            e.Status is TranslationStatus.Pending or TranslationStatus.TranslationFailed or TranslationStatus.GlossaryMatched)
-            .ToList();
-        if (unfinished.Count > 0)
-        {
-            StatusMessage = $"当前图纸仍有 {unfinished.Count} 条未完成翻译，已停止导出。";
-            MessageBox.Show(StatusMessage + "\n请完成待翻译项或重试失败项，再导出完整图纸。",
-                "翻译完整性检查", MessageBoxButton.OK, MessageBoxImage.Warning);
-            return;
-        }
-        var knownSourceCount = translatedEntities
-            .Select(e => NormalizeSourcePath(e.SourceFilePath))
-            .Where(p => !string.IsNullOrEmpty(p))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Count();
-        var entitiesToWrite = translatedEntities
-            .Where(e =>
-                (string.IsNullOrWhiteSpace(e.SourceFilePath) && knownSourceCount <= 1) ||
-                string.Equals(NormalizeSourcePath(e.SourceFilePath), sourceFull, StringComparison.OrdinalIgnoreCase))
-            .ToList();
-
-        if (entitiesToWrite.Count == 0)
-        {
-            StatusMessage = Strings.Get("StatusNoTranslatedText");
-            MessageBox.Show(
-                $"No translated entities belong to the selected source file:\n{sourceFilePath}",
-                Strings.Get("MsgTitleNoData"), MessageBoxButton.OK, MessageBoxImage.Warning);
-            return;
-        }
-
-        if (entitiesToWrite.Count < translatedEntities.Count)
-        {
-            Log.Information(
-                "Multi-file export scoped to {Source}: writing {Write}/{Total} translated entities",
-                Path.GetFileName(sourceFilePath), entitiesToWrite.Count, translatedEntities.Count);
-        }
-
-        IsExporting = true;
-        try
-        {
-            await RunWithProgress(async () =>
-            {
-                IsCancellationRequested = false;
-                _exportCts = new CancellationTokenSource();
-                ProgressValue = 0;
-
-                var (result, usedAcadInterop, cancelled) = await ExecuteWriteback(
-                    sourceFilePath, destFilePath!, entitiesToWrite, isDxfSource);
-
-                if (cancelled) return;
-                ProgressValue = 100;
-                HandleExportResult(result, usedAcadInterop, isDxfSource, destFilePath!, entitiesToWrite);
-            }, Strings.Get("OperationExporting"), "StatusCadExportFailed", "MsgCadExportError");
-        }
-        finally
-        {
-            IsExporting = false;
-        }
+        // The imported file list is the source of truth. The user selects an output folder once;
+        // the application never asks them to find each source drawing again.
+        await ExportAllSourcesAsync(requestedSources, translatedEntities);
     }
 
     /// <summary>
@@ -318,6 +265,7 @@ public partial class MainViewModel
         };
         if (folderDialog.ShowDialog() != true) return;
         var targetFolder = folderDialog.FolderName;
+        var destinations = BatchExportPlanner.CreateDestinationMap(targets, targetFolder);
 
         var modeDialog = new Views.ExportModeDialog(_autoCadInteropService.IsAutoCADAvailable(_config))
         {
@@ -375,10 +323,7 @@ public partial class MainViewModel
                         continue;
                     }
 
-                    var extension = Path.GetExtension(source);
-                    var dest = Path.Combine(
-                        targetFolder,
-                        Path.GetFileNameWithoutExtension(source) + "_translated" + extension);
+                    var dest = destinations[source];
                     if (string.Equals(Path.GetFullPath(source), Path.GetFullPath(dest),
                             StringComparison.OrdinalIgnoreCase))
                     {
@@ -448,80 +393,6 @@ public partial class MainViewModel
         {
             IsExporting = false;
         }
-    }
-
-    /// <summary>
-    /// Prompts user for source and destination files for DWG export.
-    /// When multiple source drawings are loaded, forces an explicit source choice.
-    /// Returns nulls if cancelled.
-    /// </summary>
-    private (string? sourcePath, string? destPath, bool isDxf) PromptForExportFiles(List<TextEntity>? candidates = null)
-    {
-        string? sourceFilePath = null;
-
-        var knownSources = (candidates ?? Entities.ToList())
-            .Select(e => e.SourceFilePath)
-            .Where(p => !string.IsNullOrWhiteSpace(p) && File.Exists(p))
-            .Select(p => Path.GetFullPath(p!))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-
-        if (knownSources.Count == 1)
-        {
-            sourceFilePath = knownSources[0];
-        }
-        else if (knownSources.Count > 1)
-        {
-            var dialog = new OpenFileDialog
-            {
-                Filter = Strings.Get("FilterCadFiles"),
-                Title = Strings.Get("DialogTitleSelectCadFile")
-            };
-            if (dialog.ShowDialog() == true) sourceFilePath = dialog.FileName;
-            else return (null, null, false);
-        }
-        else if (!string.IsNullOrEmpty(_lastSourceFilePath) && File.Exists(_lastSourceFilePath))
-        {
-            sourceFilePath = _lastSourceFilePath;
-        }
-        else
-        {
-            var dialog = new OpenFileDialog
-            {
-                Filter = Strings.Get("FilterCadFiles"),
-                Title = Strings.Get("DialogTitleSelectCadFile")
-            };
-            if (dialog.ShowDialog() == true) sourceFilePath = dialog.FileName;
-        }
-
-        if (string.IsNullOrEmpty(sourceFilePath) || !File.Exists(sourceFilePath))
-        {
-            StatusMessage = Strings.Get("StatusSelectCadFile");
-            return (null, null, false);
-        }
-
-        var isDxfSource = Path.GetExtension(sourceFilePath).ToLowerInvariant() == ".dxf";
-        var saveDialog = new SaveFileDialog
-        {
-            Filter = isDxfSource ? Strings.Get("FilterDxfFiles") : Strings.Get("FilterDwgFiles"),
-            Title = Strings.Get("DialogTitleSaveDwg", isDxfSource ? "DXF" : "DWG"),
-            FileName = Path.GetFileNameWithoutExtension(sourceFilePath) + "_translated" +
-                       Path.GetExtension(sourceFilePath)
-        };
-
-        if (saveDialog.ShowDialog() != true)
-            return (null, null, false);
-
-        if (string.Equals(Path.GetFullPath(sourceFilePath), Path.GetFullPath(saveDialog.FileName),
-                StringComparison.OrdinalIgnoreCase))
-        {
-            StatusMessage = "输出文件不能覆盖原始图纸，请选择新的文件名。";
-            MessageBox.Show(StatusMessage, Strings.Get("MsgTitleConfigError"),
-                MessageBoxButton.OK, MessageBoxImage.Warning);
-            return (null, null, false);
-        }
-
-        return (sourceFilePath, saveDialog.FileName, isDxfSource);
     }
 
     /// <summary>

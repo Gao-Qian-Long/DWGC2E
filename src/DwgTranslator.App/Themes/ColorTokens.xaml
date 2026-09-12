@@ -1,76 +1,48 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- Calm industrial palette: graphite navigation, teal actions, warm-neutral work surfaces. -->
+    <SolidColorBrush x:Key="Brush.Primary" Color="#0F766E"/>
+    <SolidColorBrush x:Key="Brush.PrimaryHover" Color="#0B5F59"/>
+    <SolidColorBrush x:Key="Brush.PrimaryPressed" Color="#084C48"/>
+    <SolidColorBrush x:Key="Brush.PrimaryLight" Color="#E7F5F2"/>
+    <SolidColorBrush x:Key="Brush.PrimarySoft" Color="#D4ECE8"/>
 
-    <!-- ============================================================
-         DWG Translator — Color Tokens (Light Theme)
-         Inspired by VS Code / JetBrains aesthetics
-         ============================================================ -->
+    <SolidColorBrush x:Key="Brush.Surface" Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="Brush.SurfaceAlt" Color="#F7F9F9"/>
+    <SolidColorBrush x:Key="Brush.Background" Color="#F2F5F4"/>
+    <SolidColorBrush x:Key="Brush.BackgroundAlt" Color="#E8EEEC"/>
+    <SolidColorBrush x:Key="Brush.Sidebar" Color="#F5F8F7"/>
 
-    <!-- ── Primary ── -->
-    <SolidColorBrush x:Key="Brush.Primary"        Color="#2563EB" />
-    <SolidColorBrush x:Key="Brush.PrimaryHover"   Color="#1D4ED8" />
-    <SolidColorBrush x:Key="Brush.PrimaryLight"   Color="#EFF6FF" />
+    <SolidColorBrush x:Key="Brush.TextPrimary" Color="#172522"/>
+    <SolidColorBrush x:Key="Brush.TextSecondary" Color="#3D4D49"/>
+    <SolidColorBrush x:Key="Brush.TextMuted" Color="#71807C"/>
+    <SolidColorBrush x:Key="Brush.TextDisabled" Color="#A5B0AD"/>
 
-    <!-- ── Surface ── -->
-    <SolidColorBrush x:Key="Brush.Surface"        Color="#FFFFFF" />
-    <SolidColorBrush x:Key="Brush.SurfaceAlt"     Color="#F1F5F9" />
+    <SolidColorBrush x:Key="Brush.Border" Color="#D5DFDC"/>
+    <SolidColorBrush x:Key="Brush.BorderLight" Color="#E7ECEA"/>
+    <SolidColorBrush x:Key="Brush.BorderStrong" Color="#B9C8C4"/>
 
-    <!-- ── Background ── -->
-    <SolidColorBrush x:Key="Brush.Background"     Color="#F8FAFC" />
-    <SolidColorBrush x:Key="Brush.BackgroundAlt"  Color="#E2E8F0" />
+    <SolidColorBrush x:Key="Brush.Success" Color="#16805D"/>
+    <SolidColorBrush x:Key="Brush.SuccessLight" Color="#EBF7F1"/>
+    <Color x:Key="Color.Warning">#C27617</Color>
+    <SolidColorBrush x:Key="Brush.Warning" Color="{DynamicResource Color.Warning}"/>
+    <SolidColorBrush x:Key="Brush.WarningLight" Color="#FFF7E8"/>
+    <SolidColorBrush x:Key="Brush.Danger" Color="#C94B4B"/>
+    <SolidColorBrush x:Key="Brush.DangerLight" Color="#FFF0F0"/>
+    <SolidColorBrush x:Key="Brush.Info" Color="#3B6F87"/>
+    <SolidColorBrush x:Key="Brush.InfoLight" Color="#EDF5F8"/>
 
-    <!-- ── Text ── -->
-    <SolidColorBrush x:Key="Brush.TextPrimary"    Color="#0F172A" />
-    <SolidColorBrush x:Key="Brush.TextSecondary"  Color="#334155" />
-    <SolidColorBrush x:Key="Brush.TextMuted"      Color="#64748B" />
-    <SolidColorBrush x:Key="Brush.TextDisabled"   Color="#94A3B8" />
-
-    <!-- ── Border ── -->
-    <SolidColorBrush x:Key="Brush.Border"         Color="#CBD5E1" />
-    <SolidColorBrush x:Key="Brush.BorderLight"    Color="#E2E8F0" />
-
-    <!-- ── Status: Success ── -->
-    <SolidColorBrush x:Key="Brush.Success"        Color="#059669" />
-    <SolidColorBrush x:Key="Brush.SuccessLight"   Color="#ECFDF5" />
-
-    <!-- ── Status: Warning ── -->
-    <Color x:Key="Color.Warning">#D97706</Color>
-    <SolidColorBrush x:Key="Brush.Warning"        Color="{DynamicResource Color.Warning}" />
-    <SolidColorBrush x:Key="Brush.WarningLight"   Color="#FFFBEB" />
-
-    <!-- ── Status: Danger ── -->
-    <SolidColorBrush x:Key="Brush.Danger"         Color="#DC2626" />
-    <SolidColorBrush x:Key="Brush.DangerLight"    Color="#FEF2F2" />
-
-    <!-- ── Status: Info ── -->
-    <SolidColorBrush x:Key="Brush.Info"           Color="#2563EB" />
-    <SolidColorBrush x:Key="Brush.InfoLight"      Color="#EFF6FF" />
-
-    <!-- ── Semantic: Title Bar ── -->
-    <LinearGradientBrush x:Key="Brush.TitleBarBackground"
-                         StartPoint="0,0" EndPoint="1,1">
-        <GradientStop Color="#2563EB" Offset="0" />
-        <GradientStop Color="#3B82F6" Offset="1" />
+    <LinearGradientBrush x:Key="Brush.TitleBarBackground" StartPoint="0,0" EndPoint="1,0">
+        <GradientStop Color="#182724" Offset="0"/>
+        <GradientStop Color="#213834" Offset="1"/>
     </LinearGradientBrush>
+    <SolidColorBrush x:Key="Brush.DataGridHeader" Color="#EDF2F0"/>
+    <SolidColorBrush x:Key="Brush.StatusBar" Color="#FCFDFC"/>
+    <SolidColorBrush x:Key="Brush.ToolBar" Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="Brush.Card" Color="#FFFFFF"/>
+    <Color x:Key="Color.DropScrim">#10201C</Color>
 
-    <!-- ── Semantic: DataGrid Header ── -->
-    <SolidColorBrush x:Key="Brush.DataGridHeader" Color="#1E293B" />
-
-    <!-- ── Semantic: Status Bar ── -->
-    <SolidColorBrush x:Key="Brush.StatusBar"      Color="#F1F5F9" />
-
-    <!-- ── Semantic: Tool Bar ── -->
-    <SolidColorBrush x:Key="Brush.ToolBar"        Color="#FFFFFF" />
-
-    <!-- ── Semantic: Card ── -->
-    <SolidColorBrush x:Key="Brush.Card"           Color="#FFFFFF" />
-
-    <!-- ── Semantic: Drag & drop scrim ── -->
-    <Color x:Key="Color.DropScrim">#0F172A</Color>
-
-    <!-- ── CornerRadius Constants ── -->
-    <CornerRadius x:Key="CornerRadius.Small"  TopLeft="4" TopRight="4" BottomLeft="4" BottomRight="4" />
-    <CornerRadius x:Key="CornerRadius.Medium" TopLeft="6" TopRight="6" BottomLeft="6" BottomRight="6" />
-    <CornerRadius x:Key="CornerRadius.Large"  TopLeft="8" TopRight="8" BottomLeft="8" BottomRight="8" />
-
+    <CornerRadius x:Key="CornerRadius.Small" TopLeft="5" TopRight="5" BottomLeft="5" BottomRight="5"/>
+    <CornerRadius x:Key="CornerRadius.Medium" TopLeft="8" TopRight="8" BottomLeft="8" BottomRight="8"/>
+    <CornerRadius x:Key="CornerRadius.Large" TopLeft="12" TopRight="12" BottomLeft="12" BottomRight="12"/>
 </ResourceDictionary>

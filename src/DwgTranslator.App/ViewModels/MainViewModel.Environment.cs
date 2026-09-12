@@ -19,7 +19,7 @@ namespace DwgTranslator.App.ViewModels;
 /// </summary>
 public partial class MainViewModel
 {
-    private static readonly JsonSerializerOptions EnvironmentWriteOptions = new() { WriteIndented = true };
+    private static readonly JsonSerializerOptions EnvironmentWriteOptions = AppConfigJson.WriteOptions;
 
     /// <summary>Folder holding the plugin that ships next to the application.</summary>
     public string CadPluginDirectory
@@ -140,7 +140,7 @@ public partial class MainViewModel
         {
             var path = _settingsPath ?? Path.Combine(App.AppDataDir, "settings.json");
             var config = File.Exists(path)
-                ? JsonSerializer.Deserialize<AppConfig>(File.ReadAllText(path)) ?? new AppConfig()
+                ? JsonSerializer.Deserialize<AppConfig>(File.ReadAllText(path), AppConfigJson.ReadOptions) ?? new AppConfig()
                 : new AppConfig();
             config.AutoCadInstallPath = _config.AutoCadInstallPath;
             config.CadPluginPath = _config.CadPluginPath;

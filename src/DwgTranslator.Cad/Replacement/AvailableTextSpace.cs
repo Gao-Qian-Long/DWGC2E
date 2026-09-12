@@ -6,6 +6,7 @@ using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.Geometry;
 #endif
 using System.Runtime.CompilerServices;
+using WBC = DwgTranslator.Core.Models.WritebackConstants;
 namespace DwgTranslator.Cad.Replacement;
 internal static class AvailableTextSpace
 {
@@ -39,14 +40,25 @@ internal static class AvailableTextSpace
     {
         var owner=tr.GetObject(text.OwnerId,OpenMode.ForRead) as BlockTableRecord;
         if(owner==null || !owner.IsLayout || text is AttributeReference)yield break;
-        var ink=CollisionDetector.GetCorrectedBounds(text,false);
-        var ownCorners=CollisionDetector.TryGetOrientedCorners(text);
+
+        // Measuring the entity's ink can fail (host reports a rectangle as extents, exploded MText
+        // has no glyphs, style height is zero). That used to escape into the caller and abort the
+        // whole writeback; fall back to the geometric extents so the entity is still checked.
+        var measured = MeasureForInterference(text);
+        if (measured == null) yield break;
+        var (ink, ownCorners) = measured.Value;
+
         foreach(var obstacle in GetObstacles(owner,tr))
         {
             if(obstacle.Id==text.ObjectId)continue;
             var box=obstacle.Ink;
+            bool hardBoundary = !obstacle.Text &&
+                (box.MaxPoint.X-box.MinPoint.X < .001 || box.MaxPoint.Y-box.MinPoint.Y < .001);
 
-            if(baseline.HasValue &&
+            // Existing overlap with labels or symbols may be intentional, but a straight cell or
+            // frame line is a hard boundary. Let those thin boundaries reach the shrink resolver
+            // even when the source label already crossed them.
+            if(!hardBoundary && baseline.HasValue &&
                box.MaxPoint.X > baseline.Value.MinPoint.X+.01 && box.MinPoint.X < baseline.Value.MaxPoint.X-.01 &&
                box.MaxPoint.Y > baseline.Value.MinPoint.Y+.01 && box.MinPoint.Y < baseline.Value.MaxPoint.Y-.01)
                 continue;   // the source text already overlapped this obstacle
@@ -65,8 +77,14 @@ internal static class AvailableTextSpace
             // obstacle the test never compared ink against. Ink against ink is the visible truth,
             // so the axis-aligned ink boxes are a necessary condition and the oriented test may
             // only REMOVE a conflict, never add one.
-            bool inkOverlaps = !(box.MaxPoint.X < ink.MinPoint.X+.01 || box.MinPoint.X > ink.MaxPoint.X-.01 ||
-                                 box.MaxPoint.Y < ink.MinPoint.Y+.01 || box.MinPoint.Y > ink.MaxPoint.Y-.01);
+            double textHeight = text is DBText heightDb ? heightDb.Height
+                : text is MText heightMText ? heightMText.TextHeight : 0;
+            double clearance = hardBoundary ? WBC.GeometryClearance(textHeight) : 0;
+            bool inkOverlaps = !hardBoundary
+                ? !(box.MaxPoint.X < ink.MinPoint.X+.01 || box.MinPoint.X > ink.MaxPoint.X-.01 ||
+                    box.MaxPoint.Y < ink.MinPoint.Y+.01 || box.MinPoint.Y > ink.MaxPoint.Y-.01)
+                : !(box.MaxPoint.X < ink.MinPoint.X-clearance || box.MinPoint.X > ink.MaxPoint.X+clearance ||
+                    box.MaxPoint.Y < ink.MinPoint.Y-clearance || box.MinPoint.Y > ink.MaxPoint.Y+clearance);
             bool overlaps = inkOverlaps && (ownCorners == null || obstacle.Corners == null
                 || CollisionDetector.QuadsOverlap(ownCorners, obstacle.Corners));
             if(!overlaps)continue;
@@ -75,6 +93,25 @@ internal static class AvailableTextSpace
             bool duplicate=obstacle.Text && content==obstacle.Content &&
                 ink.MinPoint.DistanceTo(box.MinPoint)<.01 && ink.MaxPoint.DistanceTo(box.MaxPoint)<.01;
             yield return (duplicate?"DUPLICATE":"CONFLICT")+"="+text.Handle+","+obstacle.Id.Handle+"|KIND="+(obstacle.Text?"TEXT":"GEOMETRY")+"|OBSTACLE="+box;
+        }
+    }
+
+    /// <summary>
+    /// Ink box plus oriented rectangle of the entity being checked, or null when the host cannot
+    /// measure it at all. Kept out of <see cref="FindIntersections"/> because a yield cannot appear
+    /// inside a try/catch block.
+    /// </summary>
+    private static (Extents3d Ink, Point3d[]? Corners)? MeasureForInterference(Entity text)
+    {
+        try
+        {
+            return (CollisionDetector.GetCorrectedBounds(text, false), CollisionDetector.TryGetOrientedCorners(text));
+        }
+        catch (Exception ex)
+        {
+            Log.DebugCategorized("Layout", "Ink measurement failed for {Handle}: {Detail}", text.Handle, ex.Message);
+            try { return (text.GeometricExtents, null); }
+            catch { return null; }
         }
     }
 
@@ -338,8 +375,25 @@ internal static class AvailableTextSpace
             }
             else {left=Math.Max(left,lo);right=Math.Min(right,hi);}
         }
-        // Never silently undo a clearance constraint to make an export pass.
-        if(right<=left || top<=bottom)throw new InvalidOperationException("No clear text corridor: "+text.Handle);
+        // A collapsed corridor must not abort the writeback. Throwing here used to leave the entity
+        // in the caller's "unprocessed" set, which aborted the whole transaction and lost every
+        // finished translation because of one label squeezed between two drawing lines. Clamp to a
+        // minimal usable interval instead: the envelope fit and the interference pass still revert
+        // this one label to its source text if it really does not fit.
+        if (right <= left)
+        {
+            var centre = (lo + hi) / 2;
+            var half = Math.Max((hi - lo) / 2, 0.05);
+            left = centre - half;
+            right = centre + half;
+        }
+        if (top <= bottom)
+        {
+            var centre = (cLo + cHi) / 2;
+            var half = Math.Max((cHi - cLo) / 2, 0.05);
+            bottom = centre - half;
+            top = centre + half;
+        }
         return (left,right,bottom,top);
     }
 }

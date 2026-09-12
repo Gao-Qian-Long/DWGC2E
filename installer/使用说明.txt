@@ -15,7 +15,8 @@ Indonesia、العربية。任意两种语言之间都可以互译，在标题
 1. Windows 10 / 11（64 位）。
 2. 不需要安装 .NET 运行时：程序是自包含发布，双击即用。
 3. 需要本机已安装 CAD 才能把译文写回图纸：
-   - 浩辰CAD（GstarCAD）或 AutoCAD（2018 及以上均可）。
+   - 与安装包平台标记匹配的浩辰CAD 2024，或 AutoCAD 2025 及以上版本。
+   - GstarCAD 与 AutoCAD 插件 DLL 不通用；程序会检查 CadPlugin\cad-platform.txt 并拒绝错误宿主。
    - 未安装 CAD 时程序仍可用来查看、翻译、导出 Excel。
 
 

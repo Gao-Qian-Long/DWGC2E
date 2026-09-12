@@ -22,12 +22,12 @@ internal static class DwgFontManager
         {
             if (targetIsCjk)
             {
-                EnsureStyle(doc, "Arial");
-                EnsureStyle(doc, "Helvetica");
+                EnsureStyle(doc, "SimHei");
             }
             else
             {
-                EnsureStyle(doc, "SimHei");
+                EnsureStyle(doc, "Arial");
+                EnsureStyle(doc, "Helvetica");
             }
         }
         catch (Exception ex)

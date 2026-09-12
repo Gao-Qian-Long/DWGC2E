@@ -13,7 +13,7 @@
     <conv:InverseBoolConverter x:Key="InverseBoolConverter"/>
 
     <!-- Drop Shadow Effect -->
-    <DropShadowEffect x:Key="CardShadow" ShadowDepth="1" BlurRadius="8" Opacity="0.10" Direction="270"/>
+    <DropShadowEffect x:Key="CardShadow" ShadowDepth="1" BlurRadius="12" Opacity="0.07" Direction="270"/>
 
     <!-- ── ToolButton (Ghost/Transparent) ── -->
     <Style x:Key="ToolButton" TargetType="Button">
@@ -162,18 +162,19 @@
     <!-- ── DataGrid Header ── -->
     <Style x:Key="DataGridHeaderStyle" TargetType="DataGridColumnHeader">
         <Setter Property="Background" Value="{DynamicResource Brush.DataGridHeader}"/>
-        <Setter Property="Foreground" Value="White"/>
+        <Setter Property="Foreground" Value="{DynamicResource Brush.TextSecondary}"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
-        <Setter Property="FontSize" Value="13"/>
-        <Setter Property="Padding" Value="10,8"/>
-        <Setter Property="BorderThickness" Value="0,0,1,0"/>
-        <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border}"/>
+        <Setter Property="FontSize" Value="11"/>
+        <Setter Property="Height" Value="38"/>
+        <Setter Property="Padding" Value="12,8"/>
+        <Setter Property="BorderThickness" Value="0,0,1,1"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource Brush.BorderLight}"/>
     </Style>
 
     <!-- ── DataGrid Cell ── -->
     <Style x:Key="DataGridCellStyle" TargetType="DataGridCell">
-        <Setter Property="Padding" Value="8,4"/>
-        <Setter Property="FontSize" Value="13"/>
+        <Setter Property="Padding" Value="10,4"/>
+        <Setter Property="FontSize" Value="12"/>
         <Setter Property="BorderThickness" Value="0"/>
         <Style.Triggers>
             <Trigger Property="IsSelected" Value="True">
@@ -185,29 +186,29 @@
 
     <!-- ── DataGrid Row (Translation) ── -->
     <Style x:Key="TranslationRowStyle" TargetType="DataGridRow">
-        <Setter Property="Height" Value="38"/>
-        <Setter Property="FontSize" Value="13"/>
+        <Setter Property="Height" Value="46"/>
+        <Setter Property="FontSize" Value="12"/>
         <Style.Triggers>
             <Trigger Property="AlternationIndex" Value="0">
                 <Setter Property="Background" Value="{DynamicResource Brush.Surface}"/>
             </Trigger>
             <Trigger Property="AlternationIndex" Value="1">
-                <Setter Property="Background" Value="{DynamicResource Brush.SurfaceAlt}"/>
+                <Setter Property="Background" Value="#FAFBFB"/>
             </Trigger>
             <DataTrigger Binding="{Binding Status}" Value="Translated">
-                <Setter Property="Background" Value="{DynamicResource Brush.SuccessLight}"/>
+                <Setter Property="Background" Value="#F5FBF8"/>
             </DataTrigger>
             <DataTrigger Binding="{Binding Status}" Value="Reviewed">
-                <Setter Property="Background" Value="#D1FAE5"/>
+                <Setter Property="Background" Value="#F0F9F5"/>
             </DataTrigger>
             <DataTrigger Binding="{Binding Status}" Value="TranslationFailed">
-                <Setter Property="Background" Value="{DynamicResource Brush.DangerLight}"/>
+                <Setter Property="Background" Value="#FFF7F7"/>
             </DataTrigger>
             <DataTrigger Binding="{Binding Status}" Value="Skipped">
                 <Setter Property="Background" Value="{DynamicResource Brush.BackgroundAlt}"/>
             </DataTrigger>
             <DataTrigger Binding="{Binding GlossaryHit}" Value="True">
-                <Setter Property="Background" Value="{DynamicResource Brush.WarningLight}"/>
+                <Setter Property="Background" Value="#FFFDF6"/>
             </DataTrigger>
         </Style.Triggers>
     </Style>
@@ -267,7 +268,7 @@
     <!-- Card with no padding — for wrapping DataGrid edge-to-edge -->
     <Style x:Key="ContentCardNoPad" TargetType="Border">
         <Setter Property="Background" Value="{DynamicResource Brush.Surface}"/>
-        <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource Brush.BorderLight}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="CornerRadius" Value="{DynamicResource CornerRadius.Large}"/>
         <Setter Property="Padding" Value="0"/>

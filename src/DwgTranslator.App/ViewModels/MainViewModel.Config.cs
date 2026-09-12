@@ -10,7 +10,7 @@ namespace DwgTranslator.App.ViewModels;
 
 public partial class MainViewModel
 {
-    private static readonly JsonSerializerOptions ConfigWriteOptions = new() { WriteIndented = true };
+    private static readonly JsonSerializerOptions ConfigWriteOptions = AppConfigJson.WriteOptions;
 
     #region Config
 
@@ -29,7 +29,12 @@ public partial class MainViewModel
                 // settings.json used to fail deserialization here and the whole configuration
                 // load fell through to the catch block, leaving the program without defaults.
                 if (!string.IsNullOrWhiteSpace(json))
-                    _config = JsonSerializer.Deserialize<AppConfig>(json) ?? new AppConfig();
+                    _config = JsonSerializer.Deserialize<AppConfig>(json, AppConfigJson.ReadOptions) ?? new AppConfig();
+                else
+                    // An empty settings.json must not fall through to a previously loaded config: by
+                    // the time the file is written back further down, that config's API key has
+                    // already been DECRYPTED, so carrying it over stores the key in clear text.
+                    _config = new AppConfig();
             }
 
             // Resolve the installed CAD host and bundled plugin automatically. Persist
@@ -195,7 +200,7 @@ public partial class MainViewModel
         {
             var path = _settingsPath ?? Path.Combine(App.AppDataDir, "settings.json");
             var config = File.Exists(path)
-                ? JsonSerializer.Deserialize<AppConfig>(File.ReadAllText(path)) ?? new AppConfig()
+                ? JsonSerializer.Deserialize<AppConfig>(File.ReadAllText(path), AppConfigJson.ReadOptions) ?? new AppConfig()
                 : new AppConfig();
             config.SourceLanguage = CurrentSourceLang;
             config.TargetLanguage = CurrentTargetLang;
@@ -237,13 +242,20 @@ public partial class MainViewModel
 
     private string ResolveGlossaryPath()
     {
-        var appDataGlossary = Path.Combine(App.AppDataDir, "glossaries", "mechanical_zh_en.json");
+        var fileName = TranslationLanguages.GlossaryFileName(CurrentSourceLang, CurrentTargetLang);
+        var appDataGlossary = Path.Combine(App.AppDataDir, "glossaries", fileName);
         if (File.Exists(appDataGlossary)) return appDataGlossary;
 
-        var bundledGlossary = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "glossaries", "mechanical_zh_en.json");
+        var bundledGlossary = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "glossaries", fileName);
         if (File.Exists(bundledGlossary)) return bundledGlossary;
 
-        return _config.GlossaryPath;
+        // A custom glossary is direction-specific too. Never apply the legacy zh_en file to a
+        // different pair, because a fully-covered German/Japanese request would return English.
+        if (!string.IsNullOrWhiteSpace(_config.GlossaryPath) &&
+            string.Equals(Path.GetFileName(_config.GlossaryPath), fileName, StringComparison.OrdinalIgnoreCase))
+            return _config.GlossaryPath;
+
+        return string.Empty;
     }
 
     #endregion

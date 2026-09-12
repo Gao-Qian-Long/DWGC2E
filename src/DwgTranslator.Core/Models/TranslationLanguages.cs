@@ -73,6 +73,10 @@ public static class TranslationLanguages
     /// <summary>Name handed to the model and shown in prompts/logs, e.g. "Chinese (Simplified)".</summary>
     public static string Name(string? code) => Find(code)?.EnglishName ?? (code ?? string.Empty);
 
+    /// <summary>Conventional bundled glossary file for one exact language direction.</summary>
+    public static string GlossaryFileName(string? sourceCode, string? targetCode) =>
+        $"mechanical_{Normalize(sourceCode).ToLowerInvariant().Replace('-', '_')}_{Normalize(targetCode).ToLowerInvariant().Replace('-', '_')}.json";
+
     /// <summary>True when the language is written with Han/Kana/Hangul characters.</summary>
     public static bool IsCjk(string? code) => Find(code)?.IsCjk ?? false;
 

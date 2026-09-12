@@ -12,12 +12,13 @@ public sealed record CadPluginStatus(
     string PluginDirectory,
     bool PluginFilesPresent,
     bool PluginUpToDate,
+    bool PlatformCompatible,
     bool AutoLoadConfigured,
     string InstalledPluginVersion,
     string Detail)
 {
     /// <summary>True when the CAD host can already run the writeback plugin without a repair.</summary>
-    public bool Ready => PluginFilesPresent && PluginUpToDate && AutoLoadConfigured;
+    public bool Ready => PluginFilesPresent && PluginUpToDate && PlatformCompatible && AutoLoadConfigured;
 }
 
 /// <summary>Outcome of an install, repair or uninstall request.</summary>
@@ -45,12 +46,13 @@ public static class CadPluginInstaller
 {
     public const string PluginFileName = "DwgTranslator.Cad.dll";
     public const string CoreFileName = "DwgTranslator.Core.dll";
+    public const string PlatformFileName = "cad-platform.txt";
     public const string PluginFolderName = "DwgTranslator";
     public const string AutoLoadFileName = "acaddoc.lsp";
     public const string BeginMarker = ";;; ==== DWG Translator plugin : begin (managed block, do not edit) ====";
     public const string EndMarker = ";;; ==== DWG Translator plugin : end ====";
 
-    private static readonly string[] ManagedFileNames = [PluginFileName, CoreFileName];
+    private static readonly string[] ManagedFileNames = [PluginFileName, CoreFileName, PlatformFileName];
 
     /// <summary>Support folder the CAD host searches, preferring the spelling it actually ships.</summary>
     public static string ResolveSupportPath(string cadInstallPath)
@@ -76,6 +78,11 @@ public static class CadPluginInstaller
         return "CAD";
     }
 
+    /// <summary>True when a packaged plugin was compiled for the selected CAD host.</summary>
+    public static bool IsPackageCompatible(string cadInstallPath, string pluginDirectory) =>
+        string.Equals(ReadPlatform(pluginDirectory), DescribePlatform(cadInstallPath),
+            StringComparison.OrdinalIgnoreCase);
+
     private static string ResolveExecutable(string cadInstallPath)
     {
         var gcad = Path.Combine(cadInstallPath, "gcad.exe");
@@ -98,14 +105,22 @@ public static class CadPluginInstaller
         var autoLoadPath = ResolveAutoLoadPath(cadInstallPath);
 
         var installedPlugin = Path.Combine(pluginDir, PluginFileName);
-        var filesPresent = File.Exists(installedPlugin);
+        var filesPresent = ManagedFileNames.All(name => File.Exists(Path.Combine(pluginDir, name)));
         var upToDate = false;
+        var expectedPlatform = DescribePlatform(cadInstallPath);
+        var installedPlatform = ReadPlatform(pluginDir);
+        var sourcePlatform = ReadPlatform(pluginSourceDirectory);
+        var platformCompatible = string.Equals(installedPlatform, expectedPlatform, StringComparison.OrdinalIgnoreCase) &&
+                                 string.Equals(sourcePlatform, expectedPlatform, StringComparison.OrdinalIgnoreCase);
         var version = filesPresent ? DescribeFileVersion(installedPlugin) : "-";
 
-        var sourcePlugin = Path.Combine(pluginSourceDirectory, PluginFileName);
-        if (filesPresent && File.Exists(sourcePlugin))
+        if (filesPresent && ManagedFileNames.All(name => File.Exists(Path.Combine(pluginSourceDirectory, name))))
         {
-            try { upToDate = HashFile(installedPlugin) == HashFile(sourcePlugin); }
+            try
+            {
+                upToDate = platformCompatible && ManagedFileNames.All(name =>
+                    HashFile(Path.Combine(pluginDir, name)) == HashFile(Path.Combine(pluginSourceDirectory, name)));
+            }
             catch { upToDate = false; }
         }
 
@@ -120,16 +135,17 @@ public static class CadPluginInstaller
         }
         catch { autoLoadConfigured = false; }
 
-        var detail = (filesPresent, upToDate, autoLoadConfigured) switch
+        var detail = (filesPresent, platformCompatible, upToDate, autoLoadConfigured) switch
         {
-            (false, _, _) => "尚未安装到 CAD（桌面程序仍可正常翻译图纸）",
-            (true, false, _) => "已安装，但版本与当前程序不一致，建议修复",
-            (true, true, false) => "文件已就位，但缺少自动加载配置，建议修复",
+            (false, _, _, _) => "插件文件不完整（必须同时包含 Cad、Core 和平台清单）",
+            (true, false, _, _) => $"插件平台不匹配：当前 CAD={expectedPlatform}，安装包={sourcePlatform}",
+            (true, true, false, _) => "已安装，但版本与当前程序不一致，建议修复",
+            (true, true, true, false) => "文件已就位，但缺少自动加载配置，建议修复",
             _ => "已安装且与当前程序一致"
         };
 
         return new CadPluginStatus(cadInstallPath, productName, ResolveExecutable(cadInstallPath),
-            support, pluginDir, filesPresent, upToDate, autoLoadConfigured, version, detail);
+            support, pluginDir, filesPresent, upToDate, platformCompatible, autoLoadConfigured, version, detail);
     }
 
     /// <summary>
@@ -144,13 +160,21 @@ public static class CadPluginInstaller
             if (string.IsNullOrWhiteSpace(cadInstallPath) || !AutoCadDetector.IsValidAutoCadPath(cadInstallPath))
                 return CadPluginActionResult.Fail("未找到有效的 CAD 安装目录，请先在设置中选择 CAD 安装路径。");
 
-            var sourcePlugin = Path.Combine(pluginSourceDirectory, PluginFileName);
-            if (!File.Exists(sourcePlugin))
-                return CadPluginActionResult.Fail($"安装包内缺少插件文件：{sourcePlugin}");
+            var missing = ManagedFileNames
+                .Where(name => !File.Exists(Path.Combine(pluginSourceDirectory, name))).ToArray();
+            if (missing.Length > 0)
+                return CadPluginActionResult.Fail($"安装包内缺少插件文件：{string.Join(", ", missing)}");
+
+            var expectedPlatform = DescribePlatform(cadInstallPath);
+            var sourcePlatform = ReadPlatform(pluginSourceDirectory);
+            if (!string.Equals(sourcePlatform, expectedPlatform, StringComparison.OrdinalIgnoreCase))
+                return CadPluginActionResult.Fail($"插件平台不匹配：当前 CAD={expectedPlatform}，安装包={sourcePlatform}");
 
             var support = ResolveSupportPath(cadInstallPath);
             if (!Directory.Exists(support))
                 return CadPluginActionResult.Fail($"CAD 支持目录不存在：{support}");
+            if (!CanWriteDirectory(support))
+                return CadPluginActionResult.Fail($"当前账户不能写入 CAD 支持目录，请以管理员身份运行一次环境自检：{support}");
 
             var pluginDir = ResolvePluginDirectory(cadInstallPath);
             Directory.CreateDirectory(pluginDir);
@@ -159,7 +183,6 @@ public static class CadPluginInstaller
             foreach (var name in ManagedFileNames)
             {
                 var source = Path.Combine(pluginSourceDirectory, name);
-                if (!File.Exists(source)) continue;
                 File.Copy(source, Path.Combine(pluginDir, name), overwrite: true);
                 steps.Add($"复制 {name}（{new FileInfo(source).Length / 1024} KB）");
             }
@@ -198,7 +221,7 @@ public static class CadPluginInstaller
         }
         catch (Exception ex)
         {
-            return new CadPluginActionResult(false, "安装插件失败：" + ex.Message, steps, ex.ToString());
+            return new CadPluginActionResult(false, "安装插件失败：" + ex.Message, steps, ex.Message);
         }
     }
 
@@ -255,7 +278,7 @@ public static class CadPluginInstaller
         }
         catch (Exception ex)
         {
-            return new CadPluginActionResult(false, "卸载插件失败：" + ex.Message, steps, ex.ToString());
+            return new CadPluginActionResult(false, "卸载插件失败：" + ex.Message, steps, ex.Message);
         }
     }
 
@@ -302,6 +325,46 @@ public static class CadPluginInstaller
             return version ?? new FileInfo(path).LastWriteTime.ToString("yyyy-MM-dd HH:mm");
         }
         catch { return "-"; }
+    }
+
+    private static string DescribePlatform(string cadInstallPath)
+    {
+        if (File.Exists(Path.Combine(cadInstallPath, "gcad.exe"))) return "GstarCAD";
+        var acad = Path.Combine(cadInstallPath, "acad.exe");
+        try
+        {
+            // AutoCAD 2025 (R25) is the first release hosted on modern .NET 8. The current
+            // AutoCAD build cannot be loaded by the CLR 4.x hosts in AutoCAD 2024 and earlier.
+            return System.Diagnostics.FileVersionInfo.GetVersionInfo(acad).FileMajorPart >= 25
+                ? "AutoCAD"
+                : "AutoCAD-legacy-unsupported";
+        }
+        catch { return "AutoCAD-legacy-unsupported"; }
+    }
+
+    private static string ReadPlatform(string directory)
+    {
+        try
+        {
+            var path = Path.Combine(directory, PlatformFileName);
+            return File.Exists(path) ? File.ReadAllText(path).Trim() : "missing";
+        }
+        catch { return "unreadable"; }
+    }
+
+    private static bool CanWriteDirectory(string directory)
+    {
+        var probe = Path.Combine(directory, $".dwgtranslator-write-{Guid.NewGuid():N}.tmp");
+        try
+        {
+            using (File.Create(probe, 1, FileOptions.DeleteOnClose)) { }
+            return true;
+        }
+        catch { return false; }
+        finally
+        {
+            try { if (File.Exists(probe)) File.Delete(probe); } catch { }
+        }
     }
 
     private static string HashFile(string path)

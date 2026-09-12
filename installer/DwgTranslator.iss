@@ -63,7 +63,7 @@ Name: "{userappdata}\DwgTranslator\glossaries"; Flags: uninsneveruninstall
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
-Name: "{group}\环境自检与安装 CAD 插件"; Filename: "{app}\{#MyAppExeName}"
+Name: "{group}\环境自检与安装 CAD 插件"; Filename: "{app}\{#MyAppExeName}"; Parameters: "--env-check"
 Name: "{group}\使用说明"; Filename: "{app}\使用说明.txt"
 Name: "{group}\卸载 {#MyAppName}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon

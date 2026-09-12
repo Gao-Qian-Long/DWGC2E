@@ -37,6 +37,10 @@ public partial class MainViewModel
 
         Entities.Clear();
         FilteredEntities.Clear();
+        DrawingFiles.Clear();
+        SelectedDrawingFile = null;
+        HasMultipleDrawingFiles = false;
+        SelectedFilePath = string.Empty;
         TotalCount = 0; TranslatedCount = 0; FailedCount = 0;
         GlossaryHitCount = 0; CacheHitCount = 0; VisibleCount = 0;
         ProgressValue = 0; _lastSourceFilePath = null;
@@ -60,6 +64,12 @@ public partial class MainViewModel
     private void ApplyFilter()
     {
         IEnumerable<TextEntity> filtered = Entities;
+        if (SelectedDrawingFile != null)
+        {
+            var selectedPath = SelectedDrawingFile.FullPath;
+            filtered = filtered.Where(e => string.Equals(
+                NormalizeSourcePath(e.SourceFilePath), selectedPath, StringComparison.OrdinalIgnoreCase));
+        }
         var filterAll = Strings.Get("FilterAll");
         if (FilterStatusText != filterAll)
         {
@@ -106,6 +116,77 @@ public partial class MainViewModel
         GlossaryHitCount = Entities.Count(e => e.GlossaryHit);
         CacheHitCount = _consistencyService.CacheSize;
         VisibleCount = FilteredEntities.Count;
+        RefreshDrawingFileSummaries();
+    }
+
+    partial void OnSelectedDrawingFileChanged(DrawingFileItem? value)
+    {
+        SelectedFilePath = value == null
+            ? (DrawingFiles.Count > 1 ? "全部文件" : DrawingFiles.FirstOrDefault()?.FileName ?? string.Empty)
+            : value.FileName;
+        ApplyFilter();
+    }
+
+    [RelayCommand]
+    private void ShowAllDrawingFiles()
+    {
+        SelectedDrawingFile = null;
+        // Refresh the one-way ListBox binding even if "all" was already the active filter and
+        // the user only single-clicked a visual list item.
+        OnPropertyChanged(nameof(SelectedDrawingFile));
+        SelectedFilePath = DrawingFiles.Count > 1 ? "全部文件" : DrawingFiles.FirstOrDefault()?.FileName ?? string.Empty;
+        ApplyFilter();
+    }
+
+    public void OpenDrawingFile(DrawingFileItem item)
+    {
+        if (DrawingFiles.Contains(item))
+            SelectedDrawingFile = item;
+    }
+
+    public void MarkTranslationEdited(TextEntity entity)
+    {
+        if (!Entities.Contains(entity)) return;
+        entity.Status = string.IsNullOrWhiteSpace(entity.TranslatedText)
+            ? TranslationStatus.Pending
+            : TranslationStatus.Reviewed;
+        UpdateStatistics();
+        ApplyFilter();
+        StatusMessage = $"已保存 {entity.Handle} 的人工译文";
+    }
+
+    private void RebuildDrawingFileList(IEnumerable<string> sourceFiles,
+        IReadOnlyDictionary<string, string>? importErrors = null)
+    {
+        DrawingFiles.Clear();
+        foreach (var source in sourceFiles
+                     .Select(NormalizeSourcePath)
+                     .Where(p => !string.IsNullOrWhiteSpace(p))
+                     .Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            string? error = null;
+            if (importErrors != null)
+            {
+                var match = importErrors.FirstOrDefault(pair => string.Equals(
+                    NormalizeSourcePath(pair.Key), source, StringComparison.OrdinalIgnoreCase));
+                if (!string.IsNullOrWhiteSpace(match.Key)) error = match.Value;
+            }
+            var item = new DrawingFileItem(source, error);
+            item.Refresh(Entities);
+            DrawingFiles.Add(item);
+        }
+
+        HasMultipleDrawingFiles = DrawingFiles.Count > 1;
+        SelectedDrawingFile = DrawingFiles.Count == 1 ? DrawingFiles[0] : null;
+        SelectedFilePath = DrawingFiles.Count > 1
+            ? "全部文件"
+            : DrawingFiles.FirstOrDefault()?.FileName ?? string.Empty;
+    }
+
+    private void RefreshDrawingFileSummaries()
+    {
+        foreach (var file in DrawingFiles)
+            file.Refresh(Entities);
     }
 
     #endregion

@@ -298,7 +298,19 @@ public class AcadWriterEngine
                 }
                 else
                 {
-                    originalSnapshot?.Dispose();
+                    // The replacement failed part-way through (unsupported type, or an exception
+                    // caught inside it). Put the source text back and record it as "kept original":
+                    // leaving the handle in the unprocessed set aborted the entire transaction, so a
+                    // single stubborn label used to discard every finished translation.
+                    if (originalSnapshot != null)
+                    {
+                        entity.CopyFrom(originalSnapshot);
+                        entity.RecordGraphicsModified(true);
+                        originalSnapshot.Dispose();
+                    }
+                    Log.Warning("Replacement failed for {Handle}: {Text}; original text kept", handleStr, textEntity.PlainText);
+                    layoutRejected.Add(handleStr);
+                    unprocessed.Remove(handleStr);
                 }
             }
 
@@ -446,7 +458,10 @@ public class AcadWriterEngine
                 Log.Information("Preserved non-rendered attribute template {Handle}", ourEntity.Handle);
                 return true;
             }
-            bool characterColumn = targetIsCjk && entity is MText sourceMText &&
+            // Column intent belongs to the SOURCE geometry, not to the target language. The old
+            // targetIsCjk gate disabled this for the common ZH -> EN path, leaving vertical Chinese
+            // labels horizontal (or reverting them after the resulting layout conflict).
+            bool characterColumn = entity is MText sourceMText &&
                 DwgTranslator.Core.Services.VerticalTextLayout.IsCharacterColumn(
                     ourEntity.PlainText, sourceMText.Rotation, sourceMText.Width, sourceMText.TextHeight);
             Extents3d? originalBounds = TryGetEntityBounds(entity);
@@ -507,7 +522,10 @@ public class AcadWriterEngine
                     if (ourEntity.MTextLineSpacingStyle > 0)
                         mtext.LineSpacingStyle = (LineSpacingStyle)ourEntity.MTextLineSpacingStyle;
 
-                    mtext.Contents = DwgTranslator.Core.Services.FontMapper.MapInlineFonts(translatedText, targetIsCjk)
+                    var layoutText = characterColumn
+                        ? DwgTranslator.Core.Services.VerticalTextLayout.FormatTranslatedColumn(translatedText, targetIsCjk)
+                        : translatedText;
+                    mtext.Contents = DwgTranslator.Core.Services.FontMapper.MapInlineFonts(layoutText, targetIsCjk)
                         .Replace("\r\n", "\\P")
                         .Replace("\n", "\\P")
                         .Replace("\r", "\\P");
@@ -515,11 +533,10 @@ public class AcadWriterEngine
                     mtext.ColumnType = ColumnType.NoColumns;
                     if (characterColumn)
                     {
-                        // Preserve the column's world-space corridor, but read English
-                        // bottom-to-top as a coherent phrase (the user's 90-degree example).
-                        mtext.Rotation = Math.PI / 2;
-                        mtext.Contents = System.Text.RegularExpressions.Regex.Replace(
-                            mtext.Contents.Replace("\\P", " "), @"\s+", " ").Trim();
+                        // Latin text uses a rotated coherent phrase; CJK stays upright and is
+                        // stacked with explicit paragraph breaks by FormatTranslatedColumn.
+                        mtext.Rotation = DwgTranslator.Core.Services.VerticalTextLayout.TargetRotation(
+                            originalMTextRotation, targetIsCjk);
                     }
 
                     // Keep a non-zero wrap width when the source had a fixed rectangle.
