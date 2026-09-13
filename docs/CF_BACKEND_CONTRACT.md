@@ -296,3 +296,12 @@ updateManifestUrl: https://cad.pocketter.dpdns.org/update/latest.json
 - Worker Secrets：`JWT_SECRET`、`PASSWORD_PEPPER`、`DEEPSEEK_API_KEY`、`BREVO_API_KEY`；
 - Pages：部署 `main` 分支并放置 `update/latest.json`；
 - 不需要在 Pages 配置 D1，APP 和官网都只通过 Worker HTTPS API 访问。
+
+## 术语云端备份（可选）
+
+APP 的术语默认只保存在本地。需要跨电脑备份时使用认证接口：
+
+- `GET /v1/glossary`：读取当前账号的云端术语；
+- `PUT /v1/glossary`：保存 `{ entries: [...] }`，最多 1000 条；
+- 数据按 `user_id` 隔离，服务端不会公开术语内容；
+- 当前 APP UI 尚未默认开启自动云同步，避免未经用户同意上传本地术语。后续增加“上传/下载”明确操作后再接入客户端。

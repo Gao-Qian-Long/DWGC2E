@@ -254,7 +254,22 @@ async function verifyCode(
     .run();
   return true;
 }
-async function resetPassword(r: Request, e: Env) {
+async function glossary(r: Request, e: Env, user: J) {
+  if (r.method === "GET") {
+    const row = await e.DB.prepare("SELECT entries_json,updated_at FROM user_glossaries WHERE user_id=?").bind(user.user_id).first<J>();
+    let entries: any[] = [];
+    try { entries = row?.entries_json ? JSON.parse(String(row.entries_json)) : []; } catch { entries = []; }
+    return json({ success: true, entries: Array.isArray(entries) ? entries : [], updated_at: row?.updated_at || null, max_entries: 1000 }, 200, cors(e));
+  }
+  if (r.method !== "PUT") return json({ success: false, error_code: "method_not_allowed", message: "请求方法不支持" }, 405, cors(e));
+  const body = await text(r);
+  const entries = Array.isArray(body?.entries) ? body.entries : null;
+  if (!entries || entries.length > 1000) return json({ success: false, error_code: "glossary_limit", message: "云端术语库最多保存 1000 条" }, 400, cors(e));
+  const clean = entries.map((x: any) => ({ source: String(x?.source || "").trim().slice(0, 500), target: String(x?.target || "").trim().slice(0, 500), category: String(x?.category || "").trim().slice(0, 128), folder: String(x?.folder || "").trim().slice(0, 128), enabled: x?.enabled !== false })).filter((x: any) => x.source && x.target);
+  const ts = now();
+  await e.DB.prepare("INSERT INTO user_glossaries(user_id,entries_json,updated_at) VALUES(?,?,?) ON CONFLICT(user_id) DO UPDATE SET entries_json=excluded.entries_json,updated_at=excluded.updated_at").bind(user.user_id, JSON.stringify(clean), ts).run();
+  return json({ success: true, entries: clean, updated_at: ts, max_entries: 1000 }, 200, cors(e));
+}async function resetPassword(r: Request, e: Env) {
   const b = await text(r),
     email = normalizeEmail(b?.email),
     code = String(b?.code || b?.verification_code || ""),
@@ -577,6 +592,10 @@ export default {
         origin,
       );
     const user = await auth(r, e);
+    if (p === "/v1/glossary") {
+      if (!user) return json({ error_code: "unauthenticated", message: "请先登录" }, 401, origin);
+      return glossary(r, e, user);
+    }
     if (!user)
       return json(
         { error_code: "unauthenticated", message: "请先登录" },

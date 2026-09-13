@@ -10,5 +10,5 @@ function Check([string]$Path, [int[]]$Expected) {
 }
 Check '/' @(200)
 Check '/v1/version' @(200)
-foreach ($path in @('/v1/profile','/v1/subscription','/v1/usage','/v1/devices','/v1/translate')) { Check $path @(401,405) }
+foreach ($path in @('/v1/profile','/v1/subscription','/v1/usage','/v1/devices','/v1/glossary','/v1/translate')) { Check $path @(401,405) }
 Write-Host 'Worker 公共契约检查完成。'
