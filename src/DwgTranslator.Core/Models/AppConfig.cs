@@ -103,7 +103,7 @@ public class AppConfig
 
     // ── 后端对接（客户端只认 IApiClient）──
     public string ApiMode { get; set; } = "worker";
-    public string ApiBaseUrl { get; set; } = "https://api.cad.pocketter.dpdns.org";
+    public string ApiBaseUrl { get; set; } = "https://dwgc2e-api.maplehousezz.workers.dev";
     public string AuthTokenEncrypted { get; set; } = string.Empty;
     public string UpdateManifestUrl { get; set; } = "https://cad.pocketter.dpdns.org/update/latest.json";
     public bool AutoCheckUpdate { get; set; } = true;
@@ -124,3 +124,4 @@ public class AppConfig
     public bool StartWithWindows { get; set; } = false;
     public bool OpenOutputFolderAfterExport { get; set; } = true;
 }
+
