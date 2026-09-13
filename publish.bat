@@ -5,8 +5,11 @@ echo.
 
 :: Windows locks a running single-file EXE. Fail early with a clear message instead of
 :: reporting a misleading successful publish when release\DwgTranslator.exe cannot be replaced.
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$p = Get-Process -Name DwgTranslator -ErrorAction SilentlyContinue; if ($p) { Write-Error 'Please close DwgTranslator.exe before publishing.'; exit 3 }"
-if %ERRORLEVEL% NEQ 0 exit /b %ERRORLEVEL%
+tasklist /FI "IMAGENAME eq DwgTranslator.exe" 2>nul | find /I "DwgTranslator.exe" >nul
+if %ERRORLEVEL% EQU 0 (
+    echo ERROR: Please close DwgTranslator.exe before publishing.
+    exit /b 3
+)
 set PUBDIR=artifacts\publish
 set RELEASEDIR=release
 
