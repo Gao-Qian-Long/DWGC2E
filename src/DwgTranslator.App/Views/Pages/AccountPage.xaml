@@ -58,7 +58,7 @@
     <Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
      <TextBlock Text="授权与服务" Style="{StaticResource CardTitleStyle}" FontSize="13"/>
      <TextBlock Grid.Row="1" Text="{Binding AccountSessionText}" Style="{StaticResource CaptionStyle}" FontSize="11" Margin="0,4,0,0" TextTrimming="CharacterEllipsis"/>
-     <Button Grid.Row="2" Content="打开设置" Command="{Binding NavigateToCommand}" CommandParameter="settings" Style="{StaticResource Button.Secondary}" HorizontalAlignment="Left" Padding="10,4" Margin="0,7,0,0"/>
+     <TextBlock Grid.Row="2" Text="翻译服务由云端账户统一管理" Style="{StaticResource CaptionStyle}" Margin="0,7,0,0"/>
     </Grid>
    </Border>
    <Border Grid.Row="1" Grid.Column="1" Style="{StaticResource Card}" Padding="12" Margin="4,4,0,0">
@@ -71,3 +71,4 @@
   </Grid>
  </Grid>
 </UserControl>
+

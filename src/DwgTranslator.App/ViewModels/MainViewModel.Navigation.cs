@@ -12,7 +12,7 @@ namespace DwgTranslator.App.ViewModels;
 /// Shell navigation and the dashboard numbers shown next to the work area.
 ///
 /// The interface follows the product design: a sidebar with 图纸翻译 / 批量任务 / 术语库 / 会员中心 /
-/// 设置, an account strip, and per-page statistics. Everything here binds to data the application
+/// an account strip, and per-page statistics. Everything here binds to data the application
 /// already owns — nothing is a placeholder that would mislead the user.
 /// </summary>
 public partial class MainViewModel
@@ -21,7 +21,6 @@ public partial class MainViewModel
     public const string PageBatch = "batch";
     public const string PageGlossary = "glossary";
     public const string PageAccount = "account";
-    public const string PageSettings = "settings";
 
     [ObservableProperty] private string _currentPage = PageTranslate;
 
@@ -29,7 +28,6 @@ public partial class MainViewModel
     public bool IsBatchPage => CurrentPage == PageBatch;
     public bool IsGlossaryPage => CurrentPage == PageGlossary;
     public bool IsAccountPage => CurrentPage == PageAccount;
-    public bool IsSettingsPage => CurrentPage == PageSettings;
 
     partial void OnCurrentPageChanged(string value)
     {
@@ -37,7 +35,6 @@ public partial class MainViewModel
         OnPropertyChanged(nameof(IsBatchPage));
         OnPropertyChanged(nameof(IsGlossaryPage));
         OnPropertyChanged(nameof(IsAccountPage));
-        OnPropertyChanged(nameof(IsSettingsPage));
         RefreshPageStatistics();
         if (CurrentPage == PageAccount) _ = RefreshAccountAsync();
     }
@@ -46,6 +43,8 @@ public partial class MainViewModel
     private void NavigateTo(string? page)
     {
         if (string.IsNullOrWhiteSpace(page)) return;
+        // 本地高级设置已从用户界面下线，避免旧入口或旧命令再次打开。
+        if (page.Equals("settings", StringComparison.OrdinalIgnoreCase)) return;
         CurrentPage = page;
     }
 
@@ -193,3 +192,5 @@ public partial class MainViewModel
 
     public string StatusReadyText => Strings.Get("StatusReady");
 }
+
+

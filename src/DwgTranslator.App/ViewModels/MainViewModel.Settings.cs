@@ -202,33 +202,11 @@ public partial class MainViewModel
         LogViewModel.ToggleVisibilityCommand.Execute(null);
     }
 
+    // 保留命令符号以兼容旧绑定，但不再打开本地高级设置窗口。
     [RelayCommand]
     private void Settings()
     {
-        if (IsProcessing) return;
-
-        var dialog = new Views.SettingsDialog
-        {
-            Owner = Application.Current.MainWindow
-        };
-        var result = dialog.ShowDialog();
-
-        if (result == true)
-        {
-            var oldApiKey = _config.DeepSeekApiKey;
-            var oldBaseUrl = _config.DeepSeekBaseUrl;
-            var oldModel = _config.DeepSeekModel;
-
-            LoadConfig();
-
-            // AI 客户端现在每次调用前重读配置（SettingsBackedDeepSeekClient）：改 Key / 地址 / 模型
-            // 不再需要在这里重建 HttpClient，也不需要重启程序才生效。
-            StatusMessage = _config.DeepSeekApiKey != oldApiKey
-                || _config.DeepSeekBaseUrl != oldBaseUrl
-                || _config.DeepSeekModel != oldModel
-                    ? Strings.Get("StatusApiReset")
-                    : Strings.Get("StatusSettingsSaved");
-        }
+        StatusMessage = "本地高级设置已停用，请使用云端账户管理翻译服务。";
     }
 
     [RelayCommand]
@@ -291,3 +269,5 @@ public partial class MainViewModel
 
     #endregion
 }
+
+
