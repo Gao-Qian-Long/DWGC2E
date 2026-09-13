@@ -15,7 +15,7 @@
    </StackPanel>
   </Grid>
 
-  <Border Grid.Row="1" Style="{StaticResource Card.Inset}" Padding="10,7" Margin="0,0,0,8">
+  <Border Grid.Row="1" Style="{StaticResource Card.Inset}" Padding="12,6" Margin="0,0,0,8">
    <Grid>
     <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
     <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,22,0">
@@ -30,7 +30,7 @@
   </Border>
 
   <Border Grid.Row="2" Style="{StaticResource CardNoPad}" Clip="{x:Null}">
-   <DataGrid ItemsSource="{Binding GlossaryEntries}" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" CanUserResizeRows="False" CanUserSortColumns="True" SelectionMode="Single" HeadersVisibility="Column" BorderThickness="0" RowHeight="38" GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="{DynamicResource Brush.BorderLight}" AlternationCount="2" Background="Transparent" ColumnHeaderStyle="{StaticResource DataGridHeaderStyle}" CellStyle="{StaticResource DataGridCellStyle}">
+   <DataGrid ItemsSource="{Binding GlossaryEntries}" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" CanUserResizeRows="False" CanUserSortColumns="True" SelectionMode="Single" HeadersVisibility="Column" BorderThickness="0" RowHeight="34" GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="{DynamicResource Brush.BorderLight}" AlternationCount="2" Background="Transparent" ColumnHeaderStyle="{StaticResource DataGridHeaderStyle}" CellStyle="{StaticResource DataGridCellStyle}">
     <DataGrid.RowStyle>
      <Style TargetType="DataGridRow">
       <Setter Property="Background" Value="Transparent"/>
@@ -44,9 +44,9 @@
      </Style>
     </DataGrid.RowStyle>
     <DataGrid.Columns>
-     <DataGridTextColumn Header="原文" Binding="{Binding Source}" Width="2.1*" ElementStyle="{StaticResource WrapCellStyle}"/>
-     <DataGridTextColumn Header="译文" Binding="{Binding Target}" Width="2.1*" ElementStyle="{StaticResource WrapCellStyle}"/>
-     <DataGridTextColumn Header="分类" Binding="{Binding Category}" Width="1.15*" ElementStyle="{StaticResource WrapCellStyle}"/>
+     <DataGridTextColumn Header="原文" Binding="{Binding Source}" Width="2.4*" ElementStyle="{StaticResource WrapCellStyle}"/>
+     <DataGridTextColumn Header="译文" Binding="{Binding Target}" Width="2.4*" ElementStyle="{StaticResource WrapCellStyle}"/>
+     <DataGridTextColumn Header="分类" Binding="{Binding Category}" Width="1.25*" ElementStyle="{StaticResource WrapCellStyle}"/>
      <DataGridTextColumn Header="来源" Binding="{Binding SourceText}" Width="1.05*" ElementStyle="{StaticResource WrapCellStyle}"/>
      <DataGridTextColumn Header="状态" Binding="{Binding StatusText}" Width="82" ElementStyle="{StaticResource CenteredCellStyle}"/>
     </DataGrid.Columns>
@@ -56,3 +56,4 @@
   <TextBlock Grid.Row="3" Text="术语只在 Windows 客户端中参与翻译，不会把术语内容上传到官网。" Style="{StaticResource CaptionStyle}" Margin="2,8,0,0"/>
  </Grid>
 </UserControl>
+

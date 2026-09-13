@@ -18,19 +18,19 @@
             <Button HorizontalAlignment="Right" Content="✕" Width="32" Height="30" Background="Transparent" BorderThickness="0" Foreground="{DynamicResource Brush.TextSecondary}" Cursor="Hand" ToolTip="关闭" Command="{x:Static SystemCommands.CloseWindowCommand}" CommandTarget="{Binding RelativeSource={RelativeSource AncestorType=Window}}"/>
         </Grid>
         <Grid Grid.Row="1">
-            <Grid.ColumnDefinitions><ColumnDefinition Width="190"/><ColumnDefinition Width="12"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-            <Border Grid.Column="0" Background="{DynamicResource Brush.SurfaceSubtle}" CornerRadius="8" Padding="10">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="220"/><ColumnDefinition Width="14"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+            <Border Grid.Column="0" Background="{DynamicResource Brush.Surface}" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1" CornerRadius="10" Padding="14">
                 <DockPanel>
                     <Button DockPanel.Dock="Bottom" Content="＋ 新建文件夹" Height="32" Margin="0,10,0,0" Click="NewFolder_Click" Cursor="Hand"/>
-                    <TextBlock DockPanel.Dock="Top" Text="本地术语库" FontWeight="SemiBold" Margin="2,0,0,8"/>
-                    <ListBox x:Name="FolderList" BorderThickness="0" Background="Transparent" SelectionChanged="FolderList_SelectionChanged" FontSize="13"/>
+                    <StackPanel DockPanel.Dock="Top" Margin="2,0,0,10"><TextBlock Text="本地术语库" FontWeight="SemiBold" FontSize="14"/><TextBlock Text="按文件夹管理，术语只保存在本机" Foreground="{DynamicResource Brush.TextMuted}" FontSize="11" Margin="0,3,0,0"/></StackPanel>
+                    <ListBox x:Name="FolderList" BorderThickness="0" Background="Transparent" SelectionChanged="FolderList_SelectionChanged" FontSize="13" Padding="0,2"><ListBox.ItemContainerStyle><Style TargetType="ListBoxItem"><Setter Property="Padding" Value="10,8"/><Setter Property="Margin" Value="0,2"/><Setter Property="HorizontalContentAlignment" Value="Stretch"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ListBoxItem"><Border Background="{TemplateBinding Background}" CornerRadius="7" Padding="{TemplateBinding Padding}"><ContentPresenter/></Border></ControlTemplate></Setter.Value></Setter><Style.Triggers><Trigger Property="IsSelected" Value="True"><Setter Property="Background" Value="{DynamicResource Brush.PrimarySoft}"/><Setter Property="Foreground" Value="{DynamicResource Brush.Primary}"/><Setter Property="FontWeight" Value="SemiBold"/></Trigger><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{DynamicResource Brush.BackgroundAlt}"/></Trigger></Style.Triggers></Style></ListBox.ItemContainerStyle></ListBox>
                 </DockPanel>
             </Border>
             <Border Grid.Column="2" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1" CornerRadius="8" Padding="0">
                 <DockPanel>
                     <Grid DockPanel.Dock="Top" Margin="10,10,10,8">
                         <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                        <TextBlock Text="当前文件夹中的术语" VerticalAlignment="Center" FontWeight="SemiBold"/>
+                        <TextBlock Text="当前文件夹中的术语" VerticalAlignment="Center" FontWeight="SemiBold" FontSize="14"/>
                         <Button Grid.Column="1" Content="＋ 新增条目" Padding="10,5" Margin="8,0,6,0" Click="AddRow_Click" Cursor="Hand"/>
                         <Button Grid.Column="2" x:Name="UploadCloudButton" Content="↑ 上传云端" Padding="10,5" Margin="0,0,6,0" Click="UploadCloud_Click" Cursor="Hand" ToolTip="覆盖云端术语库"/>
                         <Button Grid.Column="3" x:Name="DownloadCloudButton" Content="↓ 下载云端" Padding="10,5" Margin="0,0,6,0" Click="DownloadCloud_Click" Cursor="Hand" ToolTip="用云端术语替换当前编辑内容"/>
@@ -59,3 +59,4 @@
         </StackPanel>
     </Grid>
 </Window>
+

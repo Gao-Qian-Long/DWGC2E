@@ -198,8 +198,7 @@
                                                           RelativeSource={RelativeSource Self}}">
                                     <MenuItem Header="会员中心" Command="{Binding NavigateToCommand}"
                                               CommandParameter="account"/>
-                                    <MenuItem Header="窗口置顶" Command="{Binding ToggleTopmostCommand}"/>
-                                    <Separator/>
+                                    <Separator/>\n                                    <MenuItem Header="窗口置顶" Command="{Binding ToggleTopmostCommand}"/>\n                                    <Separator/>
                                     <MenuItem Header="环境自检" Command="{Binding ShowEnvironmentCheckCommand}"/>
                                     <MenuItem Header="帮助" Command="{Binding ShowHelpCommand}"/>
                                 </ContextMenu>
@@ -337,4 +336,5 @@
         </Border>
     </Grid>
 </Window>
+
 
