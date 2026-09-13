@@ -15,17 +15,22 @@ npx wrangler deploy
 ## 必须配置的 Secrets（不能写入代码、Pages 或 Git）
 
 ```powershell
-npx wrangler secret put PASSWORD_PEPPER`r`nnpx wrangler secret put JWT_SECRET`r`nnpx wrangler secret put DEEPSEEK_API_KEY
+npx wrangler secret put PASSWORD_PEPPER
+npx wrangler secret put JWT_SECRET
+npx wrangler secret put DEEPSEEK_API_KEY
 npx wrangler secret put BREVO_API_KEY
 ```
 
 - `PASSWORD_PEPPER`：固定的随机长字符串；以后不要更换，否则历史密码哈希无法验证。
+- JWT_SECRET：用于会话签名，只放 Worker Secret。
 - `DEEPSEEK_API_KEY`：只放 Worker，用于服务端翻译，不下发到 APP。
 - `BREVO_API_KEY`：只放 Worker，用于注册/找回密码验证码邮件。
 
 ## wrangler.toml 中的公开变量
 
-当前仓库已经提供默认值，重点确认：`r`n`r`n- 当前 Worker 地址：`https://dwgc2e-api.maplehousezz.workers.dev`（绑定自定义域名后再替换）
+当前仓库已经提供默认值，重点确认：
+
+- 当前 Worker 地址：`https://dwgc2e-api.maplehousezz.workers.dev`（绑定自定义域名后再替换）
 
 - `CORS_ORIGINS = "https://cad.pocketter.dpdns.org"`
 - `DEFAULT_PLAN = "free"`
@@ -44,4 +49,5 @@ cd D:\DWGC2E
 ```
 
 重点验证：注册/登录、验证码邮件、找回密码、额度、设备、`/v1/glossary`。未登录访问 `/v1/glossary` 应返回 `401`；登录后 GET/PUT 术语库最多 1000 条。
+
 
