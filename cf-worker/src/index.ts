@@ -1,7 +1,7 @@
 interface Env { DB: D1Database; DEEPSEEK_API_KEY: string; JWT_SECRET: string; PASSWORD_PEPPER: string; ADMIN_API_KEY: string; CORS_ORIGINS?: string; DEFAULT_PLAN?: string; MAX_TRANSLATE_ITEMS?: string; MAX_TEXT_LENGTH?: string; SESSION_TTL_DAYS?: string; RESEND_API_KEY?: string; BREVO_API_KEY?: string; MAIL_FROM?: string; }
 type J = Record<string, any>;
 const now=()=>new Date().toISOString();
-const json=(x:any,status=200,origin='*')=>new Response(JSON.stringify(x),{status,headers:{'content-type':'application/json; charset=utf-8','access-control-allow-origin':origin,'access-control-allow-headers':'Content-Type, Authorization','access-control-allow-methods':'GET,POST,OPTIONS'}});
+const json=(x:any,status=200,origin='*')=>new Response(status===204?null:JSON.stringify(x),{status,headers:{'content-type':'application/json; charset=utf-8','access-control-allow-origin':origin,'access-control-allow-headers':'Content-Type, Authorization','access-control-allow-methods':'GET,POST,OPTIONS'}});
 const cors=(env:Env)=>env.CORS_ORIGINS||'https://cad.pocketter.dpdns.org';
 const text=async(r:Request)=>{try{return await r.json() as J}catch{return null}};
 const random=()=>crypto.randomUUID().replaceAll('-','')+crypto.randomUUID().replaceAll('-','');
