@@ -188,7 +188,7 @@
                             </StackPanel>
                         </Border>
 
-                        <!-- 用户入口：账号 / 置顶 / 设置 / 环境自检 / 帮助 全部收进下拉菜单 -->
+                        <!-- 用户入口：账号 / 置顶 / 环境自检 / 帮助 -->
                         <Button x:Name="AccountMenuButton" Style="{StaticResource Button.Tertiary}" Height="40"
                                 Padding="10,0" Click="AccountMenu_Click"
                                 WindowChrome.IsHitTestVisibleInChrome="True"
@@ -198,7 +198,7 @@
                                                           RelativeSource={RelativeSource Self}}">
                                     <MenuItem Header="会员中心" Command="{Binding NavigateToCommand}"
                                               CommandParameter="account"/>
-                                    <Separator/>\n                                    <MenuItem Header="窗口置顶" Command="{Binding ToggleTopmostCommand}"/>\n                                    <Separator/>
+                                    <Separator/>`r`n                                    <MenuItem Header="窗口置顶" Command="{Binding ToggleTopmostCommand}"/>`r`n                                    <Separator/>
                                     <MenuItem Header="环境自检" Command="{Binding ShowEnvironmentCheckCommand}"/>
                                     <MenuItem Header="帮助" Command="{Binding ShowHelpCommand}"/>
                                 </ContextMenu>
@@ -336,5 +336,6 @@
         </Border>
     </Grid>
 </Window>
+
 
 
