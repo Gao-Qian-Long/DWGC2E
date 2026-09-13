@@ -170,3 +170,14 @@ Worker dry-run：通过
 
 
 
+
+## 十二、Worker 公共契约冒烟检查
+
+无需测试账号、不会发送验证码，也不会修改 D1：
+
+```powershell
+cd D:\DWGC2E
+tools\Test-WorkerContract.ps1
+```
+
+它会检查健康接口、版本接口，以及登录保护接口是否拒绝未认证请求。该脚本不能代替真实账号、Brevo 邮件、设备和额度联调。
