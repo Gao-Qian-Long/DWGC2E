@@ -18,7 +18,9 @@ public enum TranslationTaskStatus
     Completed,
     Failed,
     Cancelled,
-    Paused
+    Paused,
+    PartiallyCompleted,
+    Skipped
 }
 
 public enum TaskPriority
@@ -70,6 +72,9 @@ public sealed class TranslationTask
     /// <summary>输出文件绝对路径（成功写回后填入）。</summary>
     public string? OutputPath { get; set; }
 
+    public string CheckpointSignature { get; set; } = string.Empty;
+    public List<DwgTranslator.Core.Models.TranslationPair> SuccessfulTranslations { get; set; } = new();
+
     public TaskPriority Priority { get; set; }
 
     public string? Error { get; set; }
@@ -88,7 +93,8 @@ public sealed class TranslationTask
         : (Elapsed.TotalHours >= 1 ? Elapsed.ToString(@"hh\:mm\:ss") : Elapsed.ToString(@"mm\:ss"));
 
     public bool IsFinished => Status is TranslationTaskStatus.Completed
-        or TranslationTaskStatus.Failed or TranslationTaskStatus.Cancelled;
+        or TranslationTaskStatus.Failed or TranslationTaskStatus.Cancelled
+        or TranslationTaskStatus.PartiallyCompleted or TranslationTaskStatus.Skipped;
 
     public bool IsActive => Status is TranslationTaskStatus.Parsing
         or TranslationTaskStatus.Extracting or TranslationTaskStatus.Translating
@@ -107,6 +113,8 @@ public sealed class TranslationTask
         TranslationTaskStatus.Failed => "失败",
         TranslationTaskStatus.Cancelled => "已取消",
         TranslationTaskStatus.Paused => "已暂停",
+        TranslationTaskStatus.PartiallyCompleted => "部分完成",
+        TranslationTaskStatus.Skipped => "已跳过",
         _ => "等待中"
     };
 
@@ -120,7 +128,7 @@ public sealed class TranslationTask
     /// <summary>恢复上次运行遗留的任务（任务恢复）：清掉运行态，回到可重跑的状态。</summary>
     public void ResetForResume()
     {
-        if (Status is TranslationTaskStatus.Completed) return;
+        if (Status is TranslationTaskStatus.Completed or TranslationTaskStatus.PartiallyCompleted or TranslationTaskStatus.Skipped) return;
         Status = TranslationTaskStatus.Pending;
         Progress = 0;
         StartedAt = null;

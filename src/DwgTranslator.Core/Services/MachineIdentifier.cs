@@ -1,4 +1,5 @@
 ﻿using System.Text;
+using System.Security.Cryptography;
 
 namespace DwgTranslator.Core.Services;
 
@@ -12,6 +13,12 @@ internal static class MachineIdentifier
     /// Generates a machine fingerprint based on stable hardware/OS identifiers.
     /// Uses multiple fallback strategies for resilience across reboots and minor hardware changes.
     /// </summary>
+    private static string ComputeHash(string value)
+    {
+        using var sha = SHA256.Create();
+        return Convert.ToHexString(sha.ComputeHash(Encoding.UTF8.GetBytes(value)));
+    }
+
     public static string GetMachineId()
     {
         try
@@ -52,12 +59,12 @@ internal static class MachineIdentifier
             }
             catch { }
 
-            var hash = LicenseCrypto.ComputeHash(sb.ToString());
+            var hash = ComputeHash(sb.ToString());
             return hash[..16];
         }
         catch
         {
-            return LicenseCrypto.ComputeHash(Environment.MachineName + Environment.UserName)[..16];
+            return ComputeHash(Environment.MachineName + Environment.UserName)[..16];
         }
     }
 
@@ -84,7 +91,7 @@ internal static class MachineIdentifier
         sb.Append("|");
         sb.Append(Environment.ProcessorCount);
 
-        return LicenseCrypto.ComputeHash(sb.ToString())[..16];
+        return ComputeHash(sb.ToString())[..16];
     }
 
     /// <summary>

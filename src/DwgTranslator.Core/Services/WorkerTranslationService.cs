@@ -26,6 +26,8 @@ public sealed class WorkerTranslationService : ITranslationService
         _glossary = glossary ?? (() => Array.Empty<GlossaryEntry>());
     }
 
+    public string CheckpointContext => System.Text.Json.JsonSerializer.Serialize(_glossary().ToList());
+
     public Task<List<TranslationPair>> TranslateBatchAsync(List<TextEntity> entities,
         string sourceLanguage, string targetLanguage, CancellationToken cancellationToken = default) =>
         TranslateBatchWithProgressAsync(entities, sourceLanguage, targetLanguage, null, cancellationToken);
@@ -80,7 +82,7 @@ public sealed class WorkerTranslationService : ITranslationService
             else pending.Add(entity);
         }
 
-        // Bounded batches; no automatic retries because a remote request may already be billed.
+        // Bounded batches. Transport retries reuse the request ID to avoid duplicate billing.
         var size = Math.Clamp(_config.BatchSize, 1, 100);
         for (int offset = 0; offset < pending.Count; offset += size)
         {
@@ -110,6 +112,12 @@ public sealed class WorkerTranslationService : ITranslationService
                 }).ToList()
             };
             var response = await _client.TranslateAsync(request, cancellationToken).ConfigureAwait(false);
+            for (int retry = 0; retry < 3 && !response.Success &&
+                response.ErrorCode is "network_error" or "upstream_unavailable" or "request_in_progress"; retry++)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(2 << retry), cancellationToken).ConfigureAwait(false);
+                response = await _client.TranslateAsync(request, cancellationToken).ConfigureAwait(false);
+            }
             cancellationToken.ThrowIfCancellationRequested();
             if (!response.Success)
                 throw new InvalidOperationException(response.ErrorCode ?? response.Message ?? "worker_batch_failed");

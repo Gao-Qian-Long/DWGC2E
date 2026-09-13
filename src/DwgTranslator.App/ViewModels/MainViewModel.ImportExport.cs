@@ -463,7 +463,8 @@ public partial class MainViewModel
         {
             var result = await Task.Run(() =>
                 _dwgWriterService.WriteTranslations(
-                    sourceFilePath, destFilePath, entitiesToWrite, TargetIsCjk, _exportCts!.Token),
+                    sourceFilePath, destFilePath, entitiesToWrite, TargetIsCjk, _exportCts!.Token,
+                    new WritebackOptions { OverwriteExisting = _config.DuplicatePolicy == "overwrite", BackupSource = _config.BackupSourceBeforeWrite }),
                 _exportCts!.Token);
             return (result, false, false);
         }

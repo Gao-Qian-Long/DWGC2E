@@ -25,7 +25,7 @@ function setup(t) {
     async batch(statements){
       writes.push('batch');sqlite.exec('BEGIN');
       try {
-        const result=statements.map(x=>sqlite.prepare(x.sql).run(...x.values));sqlite.exec('COMMIT');return result;
+        const result=statements.map(x=>({meta:{changes:Number(sqlite.prepare(x.sql).run(...x.values).changes)}}));sqlite.exec('COMMIT');return result;
       } catch(error) {sqlite.exec('ROLLBACK');throw error;}
     }
   };
@@ -116,5 +116,8 @@ for(const collision of ['email','account']) test('concurrent '+collision+' regis
 test('unrelated batch failure is not mislabeled as an existing account',async t=>{
   const x=setup(t);await code(x.sqlite,'new@example.com');
   x.DB.batch=async()=>{throw Error('test database failure');};
-  await assert.rejects(x.post('/v1/auth/register',registration('new@example.com')),/test database failure/);
+  const response=await x.post('/v1/auth/register',registration('new@example.com'));
+  assert.equal(response.status,500);
+  assert.equal((await response.json()).error_code,'internal_error');
+  assert.equal(x.sqlite.prepare('SELECT used_at FROM email_verification_codes').get().used_at,null);
 });

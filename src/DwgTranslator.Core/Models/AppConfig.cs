@@ -13,7 +13,7 @@ public class AppConfig
     /// Commercial licensing switch. Disabled for the current pre-commercial build;
     /// the existing licensing implementation remains available for a later release.
     /// </summary>
-    public bool LicensingEnabled { get; set; } = false;
+    public bool LicensingEnabled { get => false; set { /* Legacy setting: cloud accounts are authoritative. */ } }
 
     public string DeepSeekApiKey { get; set; } = string.Empty;
     public string DeepSeekBaseUrl { get; set; } = "https://api.deepseek.com";

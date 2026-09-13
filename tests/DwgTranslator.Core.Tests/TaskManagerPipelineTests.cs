@@ -159,7 +159,7 @@ public class TaskManagerPipelineTests : IDisposable
 
         public CadWriteResult WriteTranslations(
             string sourceFilePath, string outputFilePath, List<TextEntity> entities,
-            bool targetIsCjk = true, CancellationToken cancellationToken = default)
+            bool targetIsCjk = true, CancellationToken cancellationToken = default, WritebackOptions? options = null)
         {
             Written.Add(outputFilePath);
             File.WriteAllText(outputFilePath, "written");
@@ -240,11 +240,13 @@ public class TaskManagerPipelineTests : IDisposable
         var existing = Path.Combine(_exportDir, "flange_en.dwg");
         File.WriteAllText(existing, "previous result");
 
-        using var manager = CreateManager(new FakeReader(), new FakeTranslator(), new FakeWriter(), new InMemoryTaskStore(), Config(), out _);
+        var translator = new FakeTranslator();
+        using var manager = CreateManager(new FakeReader(), translator, new FakeWriter(), new InMemoryTaskStore(), Config(), out _);
         var task = manager.Enqueue(source);
         await manager.RunAsync();
 
-        Assert.Equal(TranslationTaskStatus.Failed, task.Status);
+        Assert.Equal(TranslationTaskStatus.Skipped, task.Status);
+        Assert.Equal(0, translator.Calls);
         Assert.Contains("已存在", task.Error);
         Assert.Equal("previous result", File.ReadAllText(existing));
     }
@@ -335,6 +337,40 @@ public class TaskManagerPipelineTests : IDisposable
         }
     }
 
+    [Fact]
+    public async Task PartialRetryReusesCheckpointAndPreservesPriorOutput()
+    {
+        using var handler = new PartialHandler();
+        using var http = new System.Net.Http.HttpClient(handler);
+        var api = new DwgTranslator.Core.Api.WorkerApiClient(http, "https://worker.invalid", () => "session", "device", "host");
+        var config = Config();
+        using var manager = CreateManager(new FakeReader(), new WorkerTranslationService(api, config, (t,r) => t), new FakeWriter(), new InMemoryTaskStore(), config, out _);
+        manager.ConfigureRun("ZH", "EN");
+        var task = manager.Enqueue(CreateDrawing("partial.dwg"));
+        await manager.RunAsync();
+        Assert.Equal(TranslationTaskStatus.PartiallyCompleted, task.Status);
+        var first = task.OutputPath!;
+        await manager.RetryFailedAsync();
+        Assert.Equal(TranslationTaskStatus.Completed, task.Status);
+        Assert.Equal(new[] { 2, 1 }, handler.Counts);
+        Assert.NotEqual(first, task.OutputPath);
+        Assert.True(File.Exists(first));
+        Assert.True(File.Exists(task.OutputPath));
+    }
+
+    private sealed class PartialHandler : System.Net.Http.HttpMessageHandler
+    {
+        public List<int> Counts { get; } = new();
+        protected override async Task<System.Net.Http.HttpResponseMessage> SendAsync(System.Net.Http.HttpRequestMessage request, CancellationToken ct)
+        {
+            using var body = System.Text.Json.JsonDocument.Parse(await request.Content!.ReadAsStringAsync(ct));
+            Counts.Add(body.RootElement.GetProperty("items").GetArrayLength());
+            return new(System.Net.HttpStatusCode.OK) { Content = new System.Net.Http.StringContent(Counts.Count == 1
+                ? "{\"success\":true,\"items\":[{\"id\":0,\"translated_text\":\"Surface Roughness\"},{\"id\":1,\"error_code\":\"missing_result\"}]}"
+                : "{\"success\":true,\"items\":[{\"id\":0,\"translated_text\":\"Chamfer\"}]}") };
+        }
+    }
+
     private sealed class WorkerHandler(bool unauthorized) : System.Net.Http.HttpMessageHandler
     {
         protected override async Task<System.Net.Http.HttpResponseMessage> SendAsync(
@@ -342,6 +378,7 @@ public class TaskManagerPipelineTests : IDisposable
         {
             Assert.Equal("/v1/translate", request.RequestUri!.AbsolutePath);
             Assert.Equal("test-session", request.Headers.Authorization!.Parameter);
+            Assert.True(request.Headers.Contains("Idempotency-Key"));
             using var body = System.Text.Json.JsonDocument.Parse(await request.Content!.ReadAsStringAsync(ct));
             Assert.Equal("ZH", body.RootElement.GetProperty("source_lang").GetString());
             var json = unauthorized ? """{"error_code":"token_expired"}""" :

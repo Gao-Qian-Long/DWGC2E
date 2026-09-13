@@ -72,6 +72,7 @@ public sealed class TaskManager : ITaskManager, IRuntimeTaskConfiguration
 
     private readonly object _gate = new();
     private readonly List<TranslationTask> _tasks = new();
+    private IReadOnlyDictionary<string, OutputPathResult> _outputPlan = new Dictionary<string, OutputPathResult>();
     private readonly List<TranslationTask> _pendingFromLastRun = new();
 
     /// <summary>
@@ -563,7 +564,7 @@ public sealed class TaskManager : ITaskManager, IRuntimeTaskConfiguration
         List<TranslationTask> retried;
         lock (_gate)
         {
-            retried = _tasks.Where(t => t.Status == TranslationTaskStatus.Failed).ToList();
+            retried = _tasks.Where(t => t.Status is TranslationTaskStatus.Failed or TranslationTaskStatus.PartiallyCompleted).ToList();
             foreach (var task in retried)
             {
                 task.Status = TranslationTaskStatus.Pending;
@@ -576,7 +577,7 @@ public sealed class TaskManager : ITaskManager, IRuntimeTaskConfiguration
                 task.Error = null;
                 task.StartedAt = null;
                 task.CompletedAt = null;
-                task.OutputPath = null;
+                // Keep previous partial output as a protected retry artifact.
             }
         }
 
@@ -654,11 +655,36 @@ public sealed class TaskManager : ITaskManager, IRuntimeTaskConfiguration
             await WaitWhilePausedAsync(ct).ConfigureAwait(false);
 
             MarkStarted(task);
+            if (_outputPlan.TryGetValue(NormalizePath(task.FilePath), out var planned) && planned.ShouldSkip)
+            {
+                if (planned.Resolution == DuplicateResolution.Error)
+                    throw new IOException(planned.Reason);
+                lock (_gate) { task.Status = TranslationTaskStatus.Skipped; task.Error = planned.Reason; task.CompletedAt = DateTime.UtcNow; task.Progress = 100; }
+                RaiseTaskUpdated(task); SaveNow(); return;
+            }
 
             // ── [1/6] Parsing：读 DWG/DXF ──
             SetStatus(task, TranslationTaskStatus.Parsing);
             RaiseProgressMessage(Stage(task, 1, "正在解析图纸"));
             var entities = await Task.Run(() => ReadTextEntities(task), ct).ConfigureAwait(false);
+            string signature;
+            using (var stream = File.OpenRead(task.FilePath))
+            using (var sha = System.Security.Cryptography.SHA256.Create())
+                signature = Convert.ToHexString(sha.ComputeHash(stream)) + "|" + _sourceLanguage + "|" + _targetLanguage + "|" + System.Text.Json.JsonSerializer.Serialize(_config) + "|" + (_translationService is WorkerTranslationService worker ? worker.CheckpointContext : Guid.NewGuid().ToString());
+            signature = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(signature)));
+            lock (_gate)
+            {
+                if (task.CheckpointSignature != signature) task.SuccessfulTranslations = new();
+                task.CheckpointSignature = signature;
+                foreach (var entity in entities)
+                {
+                    var saved = task.SuccessfulTranslations.FirstOrDefault(p => p.Handle == entity.Handle && p.SourceText == entity.PlainText);
+                    if (saved == null) continue;
+                    entity.TranslatedText = saved.TranslatedText;
+                    entity.Status = saved.Status;
+                    task.TranslatedCount++;
+                }
+            }
 
             await WaitWhilePausedAsync(ct).ConfigureAwait(false);
 
@@ -817,7 +843,11 @@ public sealed class TaskManager : ITaskManager, IRuntimeTaskConfiguration
                     // TranslatedCount 只算真正拿到译文的（含术语命中/跳过），失败单独计，
                     // 否则"已翻译 N 条"会把失败条数也算进去。
                     if (pair.Status == TranslationStatus.TranslationFailed) task.FailedCount++;
-                    else task.TranslatedCount++;
+                    else
+                    {
+                        task.TranslatedCount++;
+                        task.SuccessfulTranslations = task.SuccessfulTranslations.Where(p => p.Handle != pair.Handle).Append(pair).ToList();
+                    }
 
                     percent = total <= 0 ? 100 : Math.Min(100, (double)done / total * 100.0);
                     task.Progress = percent;
@@ -836,6 +866,7 @@ public sealed class TaskManager : ITaskManager, IRuntimeTaskConfiguration
                 }
 
                 RaiseOverallProgress();
+                SaveThrottled();
 
                 // 实体级回调：UI 的「文字条目表」（人工校对 / Excel 复核）必须与任务层看到同一份译文，
                 // 否则界面会显示"翻译完成"但条目表全是待翻译。订阅方自己吞异常，这里也再兜一层。
@@ -935,10 +966,11 @@ public sealed class TaskManager : ITaskManager, IRuntimeTaskConfiguration
 
         var isDxf = string.Equals(Path.GetExtension(sourcePath), ".dxf", StringComparison.OrdinalIgnoreCase);
         var dxfWriter = _dxfWriter;
+        var options = new WritebackOptions { OverwriteExisting = _config.DuplicatePolicy == "overwrite", BackupSource = _config.BackupSourceBeforeWrite };
 
         return await Task.Run(() => isDxf && dxfWriter != null
-            ? dxfWriter.WriteTranslations(sourcePath, outputPath, entities, targetIsCjk, ct)
-            : _dwgWriter.WriteTranslations(sourcePath, outputPath, entities, targetIsCjk, ct), ct)
+            ? dxfWriter.WriteTranslations(sourcePath, outputPath, entities, targetIsCjk, ct, options)
+            : _dwgWriter.WriteTranslations(sourcePath, outputPath, entities, targetIsCjk, ct, options), ct)
             .ConfigureAwait(false);
     }
 
@@ -951,20 +983,27 @@ public sealed class TaskManager : ITaskManager, IRuntimeTaskConfiguration
     /// </summary>
     private void PrepareDestinations()
     {
-        var folder = ResolveOutputFolder();
-        var sources = Snapshot().Select(t => t.FilePath);
-
-        // 走配置驱动的规划：命名规则（motor.dwg → motor_zh.dwg）、重名策略（默认跳过）
-        // 与源文件保护都由 OutputPathResolver 执行；被跳过的文件记日志，不静默丢弃。
-        var plan = BatchExportPlanner.CreateExportPlan(sources, _targetLanguage, _config);
-        if (plan.Skipped.Count > 0)
+        var snapshot = System.Text.Json.JsonSerializer.Deserialize<AppConfig>(
+            System.Text.Json.JsonSerializer.Serialize(_config))!;
+        snapshot.ExportDirectory = ResolveOutputFolder();
+        var tasks = Snapshot();
+        var sources = tasks.Select(t => t.FilePath);
+        var plan = new OutputPathResolver(snapshot).ResolveBatch(sources, _targetLanguage).ToDictionary(p => p.Key, p => p.Value, StringComparer.OrdinalIgnoreCase);
+        foreach (var task in tasks.Where(t => t.Status == TranslationTaskStatus.Pending && !string.IsNullOrEmpty(t.OutputPath)))
         {
-            Log.Warning("任务层按重名策略（{Policy}）跳过 {Count} 个已存在的输出文件：{Reasons}",
-                _config.DuplicatePolicy, plan.Skipped.Count,
-                string.Join("; ", plan.Skipped.Select(s => s.Reason)));
+            var item = plan[NormalizePath(task.FilePath)];
+            if (item.Resolution != DuplicateResolution.Skip) continue;
+            // Retry produces a new artifact; it never silently overwrites the successful portion.
+            item.OutputPath = Path.Combine(Path.GetDirectoryName(item.OutputPath)!, Path.GetFileNameWithoutExtension(item.OutputPath) + "_retry_" + Guid.NewGuid().ToString("N")[..8] + Path.GetExtension(item.OutputPath));
+            item.ShouldSkip = false; item.Resolution = DuplicateResolution.Renamed;
+            item.Reason = "重试使用新文件名，保留上次部分完成的输出";
         }
-
-        lock (_gate) _destinations = plan.Destinations;
+        lock (_gate)
+        {
+            _outputPlan = plan;
+            _destinations = plan.Where(p => !p.Value.ShouldSkip)
+                .ToDictionary(p => p.Key, p => p.Value.OutputPath, StringComparer.OrdinalIgnoreCase);
+        }
     }
 
     /// <summary>输出目录：调用方显式指定 &gt; AppConfig.ExportDirectory &gt; 进程当前目录。</summary>
@@ -1120,7 +1159,7 @@ public sealed class TaskManager : ITaskManager, IRuntimeTaskConfiguration
         lock (_gate)
         {
             task.Status = task.FailedCount > 0
-                ? TranslationTaskStatus.Failed
+                ? TranslationTaskStatus.PartiallyCompleted
                 : TranslationTaskStatus.Completed;
             task.Progress = 100;
             task.CompletedAt = DateTime.UtcNow;

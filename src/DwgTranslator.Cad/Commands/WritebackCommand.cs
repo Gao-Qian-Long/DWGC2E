@@ -36,6 +36,7 @@ public class WritebackCommand
     {
         public string SourceDwgPath { get; set; } = "";
         public string OutputDwgPath { get; set; } = "";
+        public bool OverwriteExisting { get; set; }
         public List<TextEntity> Entities { get; set; } = new();
 
         /// <summary>
@@ -133,7 +134,7 @@ public class WritebackCommand
             var engine = new AcadWriterEngine();
             var result = engine.WriteTranslations(
                 config.SourceDwgPath, config.OutputDwgPath,
-                config.Entities, config.WritesCjkText);
+                config.Entities, config.WritesCjkText, new WritebackOptions { OverwriteExisting = config.OverwriteExisting });
 
             if (result.SuccessCount > 0)
             {
@@ -182,7 +183,9 @@ public class WritebackCommand
             if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
             var sid = sessionId ?? "none";
             var content = $"{status}|{sid}|{successCount}|{failCount}|{DateTime.UtcNow:O}|{detail.Replace('|', ';').Replace('\r', ' ').Replace('\n', ' ')}";
-            File.WriteAllText(donePath, content);
+            var temporary = donePath + "." + Guid.NewGuid().ToString("N") + ".tmp";
+            File.WriteAllText(temporary, content);
+            DwgTranslator.Core.Services.SafeFileCommit.Commit(temporary, donePath, true);
         }
         catch { }
     }

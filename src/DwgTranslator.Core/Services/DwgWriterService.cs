@@ -15,7 +15,7 @@ namespace DwgTranslator.Core.Services;
 public class DwgWriterService : IDwgWriterService, IDxfWriterService
 {
     /// <inheritdoc/>
-    public CadWriteResult WriteTranslations(string sourceFilePath, string outputFilePath, List<CoreTextEntity> entities, bool targetIsCjk = true, CancellationToken cancellationToken = default)
+    public CadWriteResult WriteTranslations(string sourceFilePath, string outputFilePath, List<CoreTextEntity> entities, bool targetIsCjk = true, CancellationToken cancellationToken = default, WritebackOptions? options = null)
     {
         var result = new CadWriteResult();
 
@@ -34,7 +34,10 @@ public class DwgWriterService : IDwgWriterService, IDxfWriterService
         }
 
         // 1. Auto-backup original file
-        CreateBackup(sourceFilePath);
+        options ??= new WritebackOptions();
+        if (string.Equals(Path.GetFullPath(sourceFilePath), Path.GetFullPath(outputFilePath), StringComparison.OrdinalIgnoreCase))
+            throw new IOException("Output must not overwrite the source drawing.");
+        if (options.BackupSource) CreateBackup(sourceFilePath);
 
         // Detect file format
         var sourceExtension = Path.GetExtension(sourceFilePath).ToLowerInvariant();
@@ -101,9 +104,9 @@ public class DwgWriterService : IDwgWriterService, IDxfWriterService
 
             // 7. Log any unmatched entities
             LogUnmatchedHandles(translationMap);
-            if (translationMap.Count > 0 || result.FailCount > 0 || result.Errors.Count > 0)
-                throw new InvalidOperationException("Writeback incomplete; output was not saved. Unmatched handles: " +
-                    string.Join(", ", translationMap.Keys.Take(20)));
+            result.FailedHandles.AddRange(translationMap.Keys);
+            result.FailCount += translationMap.Count;
+            if (result.SuccessCount == 0) throw new InvalidOperationException("No translation could be written.");
 
             // 8. Save the modified document
             EnsureOutputDirectory(outputFilePath);
@@ -122,7 +125,7 @@ public class DwgWriterService : IDwgWriterService, IDxfWriterService
                 throw new IOException("CAD writer produced an empty output file");
 
             cancellationToken.ThrowIfCancellationRequested();
-            File.Move(tempOutputPath, outputFilePath, overwrite: true);
+            SafeFileCommit.Commit(tempOutputPath, outputFilePath, options.OverwriteExisting);
             tempOutputPath = null;
 
             Log.Information("{Format} writeback complete: {Success} replaced, {Failed} failed",
@@ -152,9 +155,9 @@ public class DwgWriterService : IDwgWriterService, IDxfWriterService
     }
 
     /// <inheritdoc/>
-    CadWriteResult IDxfWriterService.WriteTranslations(string sourceFilePath, string outputFilePath, List<CoreTextEntity> entities, bool targetIsCjk, CancellationToken cancellationToken)
+    CadWriteResult IDxfWriterService.WriteTranslations(string sourceFilePath, string outputFilePath, List<CoreTextEntity> entities, bool targetIsCjk, CancellationToken cancellationToken, WritebackOptions? options)
     {
-        return WriteTranslations(sourceFilePath, outputFilePath, entities, targetIsCjk, cancellationToken);
+        return WriteTranslations(sourceFilePath, outputFilePath, entities, targetIsCjk, cancellationToken, options);
     }
 
     // ───────────────────── Private orchestration helpers ─────────────────────
@@ -176,7 +179,7 @@ public class DwgWriterService : IDwgWriterService, IDxfWriterService
         }
         catch (Exception ex)
         {
-            Log.Warning(ex, "Failed to create backup for {Path}", sourceFilePath);
+            throw new IOException("Required source backup could not be created.", ex);
         }
     }
 

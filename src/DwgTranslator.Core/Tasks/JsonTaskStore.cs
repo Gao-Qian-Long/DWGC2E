@@ -94,7 +94,7 @@ public sealed class JsonTaskStore : ITaskStore
 
                     // 已完成/已取消是历史记录，保留原状（TranslationTask.ResetForResume 只保住
                     // Completed，所以 Cancelled 要在这里自己跳过，否则会被恢复成待跑）。
-                    if (task.Status is TranslationTaskStatus.Completed or TranslationTaskStatus.Cancelled)
+                    if (task.Status is TranslationTaskStatus.Completed or TranslationTaskStatus.Cancelled or TranslationTaskStatus.PartiallyCompleted or TranslationTaskStatus.Skipped)
                     {
                         restored.Add(task);
                         continue;

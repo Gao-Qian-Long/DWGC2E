@@ -16,5 +16,5 @@ public interface IDxfWriterService
     /// <param name="entities">List of entities with translated text to apply.</param>
     /// <param name="targetIsCjk">True when the target language needs a CJK-capable font.</param>
     /// <returns>Result with success/failure counts.</returns>
-    CadWriteResult WriteTranslations(string sourceFilePath, string outputFilePath, List<TextEntity> entities, bool targetIsCjk = true, CancellationToken cancellationToken = default);
+    CadWriteResult WriteTranslations(string sourceFilePath, string outputFilePath, List<TextEntity> entities, bool targetIsCjk = true, CancellationToken cancellationToken = default, WritebackOptions? options = null);
 }

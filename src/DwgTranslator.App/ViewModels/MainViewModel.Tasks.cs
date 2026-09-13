@@ -182,7 +182,7 @@ public partial class MainViewModel
         }
 
         var runnable = retryFailedFirst
-            ? tasks.Where(t => t.Status == TranslationTaskStatus.Failed).ToList()
+            ? tasks.Where(t => t.Status is TranslationTaskStatus.Failed or TranslationTaskStatus.PartiallyCompleted).ToList()
             : tasks.Where(t => t.Status == TranslationTaskStatus.Pending
                 || t.Status == TranslationTaskStatus.Paused).ToList();
 
@@ -267,10 +267,14 @@ public partial class MainViewModel
         var tasks = _taskManager.Tasks;
         int completed = tasks.Count(t => t.Status == TranslationTaskStatus.Completed);
         int failed = tasks.Count(t => t.Status == TranslationTaskStatus.Failed);
+        int partial = tasks.Count(t => t.Status == TranslationTaskStatus.PartiallyCompleted);
+        int skipped = tasks.Count(t => t.Status == TranslationTaskStatus.Skipped);
         int cancelled = tasks.Count(t => t.Status == TranslationTaskStatus.Cancelled);
         int pending = tasks.Count(t => t.Status is TranslationTaskStatus.Pending or TranslationTaskStatus.Paused);
 
         var summary = $"队列结束：成功 {completed} 张，失败 {failed} 张";
+        if (partial > 0) summary += $"，部分完成 {partial} 张";
+        if (skipped > 0) summary += $"，跳过 {skipped} 张";
         if (cancelled > 0) summary += $"，取消 {cancelled} 张";
         if (pending > 0) summary += $"，待处理 {pending} 张";
 

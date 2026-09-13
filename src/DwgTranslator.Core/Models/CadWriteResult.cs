@@ -9,5 +9,7 @@ public class CadWriteResult
     public int SuccessCount { get; set; }
     public int FailCount { get; set; }
     public List<string> Errors { get; set; } = new();
+    public List<string> SucceededHandles { get; set; } = new();
+    public List<string> FailedHandles { get; set; } = new();
     public bool IsSuccess => SuccessCount > 0;
 }

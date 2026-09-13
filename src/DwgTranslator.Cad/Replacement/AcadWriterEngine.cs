@@ -35,7 +35,7 @@ public class AcadWriterEngine
     // its original frame, so large jobs use the bounded fast path below.
     private const int ExhaustiveCollisionEntityLimit = 400;
 
-    public CadWriteResult WriteTranslations(string sourceFilePath, string outputFilePath, List<TextEntity> entities, bool targetIsCjk = true)
+    public CadWriteResult WriteTranslations(string sourceFilePath, string outputFilePath, List<TextEntity> entities, bool targetIsCjk = true, WritebackOptions? options = null)
     {
         var result = new CadWriteResult();
         string? tempOutputPath = null;
@@ -51,6 +51,8 @@ public class AcadWriterEngine
         {
             using (var db = new Database(false, true))
             {
+                if (string.Equals(Path.GetFullPath(sourceFilePath), Path.GetFullPath(outputFilePath), StringComparison.OrdinalIgnoreCase))
+                    throw new IOException("Output must not overwrite the source drawing.");
                 db.ReadDwgFile(sourceFilePath, FileOpenMode.OpenForReadAndAllShare, false, null);
                 WriteTranslationsToDatabase(db, entities, targetIsCjk, result);
 
@@ -66,8 +68,7 @@ public class AcadWriterEngine
                 if (!File.Exists(tempOutputPath) || new FileInfo(tempOutputPath).Length == 0)
                     throw new IOException("AutoCAD produced an empty output file");
 
-                if (File.Exists(outputFilePath)) File.Delete(outputFilePath);
-                File.Move(tempOutputPath, outputFilePath);
+                DwgTranslator.Core.Services.SafeFileCommit.Commit(tempOutputPath, outputFilePath, options?.OverwriteExisting == true);
                 tempOutputPath = null;
                 Log.Information("AcadWriter: saved DWG to {Path}", outputFilePath);
             }
@@ -211,11 +212,10 @@ public class AcadWriterEngine
 
             result.SuccessCount = successCount;
             result.FailCount = unprocessed.Count + layoutRejected.Count;
-            // Unmatched or failed replacements must roll back the transaction:
-            // otherwise a partially mutated entity could be saved as a success.
-            if (unprocessed.Count > 0 || errors.Count > 0)
-                throw new InvalidOperationException("Writeback incomplete for handles: " +
-                    string.Join(", ", unprocessed.Take(20)) + "; " + string.Join("; ", errors.Take(5)));
+            result.FailedHandles.AddRange(unprocessed.Concat(layoutRejected).Distinct(StringComparer.OrdinalIgnoreCase));
+            result.SucceededHandles.AddRange(entityMap.Keys.Except(result.FailedHandles, StringComparer.OrdinalIgnoreCase));
+            if (unprocessed.Count > 0) result.Errors.Add("Unmatched handles: " + string.Join(", ", unprocessed.Take(20)));
+            if (result.SuccessCount == 0) throw new InvalidOperationException("No translation could be written.");
 
             if (layoutRejected.Count > 0)
             {
@@ -279,6 +279,7 @@ public class AcadWriterEngine
                             entity is DBText d2 ? d2.WidthFactor : entity is MText m2 ? m2.Width : 0);
                         layoutRejected.Add(handleStr);
                         unprocessed.Remove(handleStr);
+                        if (originalSnapshot != null) { entity.CopyFrom(originalSnapshot); entity.RecordGraphicsModified(true); }
                         originalSnapshot?.Dispose();
                         continue;
                     }
@@ -381,7 +382,9 @@ public class AcadWriterEngine
                         }
                         catch (Exception ex)
                         {
-                            Log.Warning(ex, "Failed to update attribute {Tag}", att.Tag);
+                            // This branch can have changed style/geometry before failing.
+                            // Abort the transaction rather than committing an unverified partial mutation.
+                            throw new InvalidOperationException("Attribute replacement could not be safely completed: " + compoundHandle, ex);
                         }
                     }
                 }
@@ -436,8 +439,7 @@ public class AcadWriterEngine
             }
             catch (Exception ex)
             {
-                Log.Warning(ex, "Failed to update table cell {Key}", key);
-                errors.Add($"Table cell {key}: {ex.Message}");
+                throw new InvalidOperationException("Table replacement could not be safely completed: " + key, ex);
             }
         }
 

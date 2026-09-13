@@ -38,8 +38,8 @@ test('concurrent callers using separate connections share a persisted cursor', a
       db.close(); parentPort.postMessage(rows);`;
     const run = () => new Promise((resolve,reject) => {
       const worker = new Worker(workerCode,{eval:true,workerData:{path,sql:MAIL_ROTATION_SQL}});
-      worker.once('message',resolve); worker.once('error',reject);
-      worker.once('exit',code=>{if(code) reject(Error('worker exit '+code));});
+      let result; worker.once('message',value=>{result=value;}); worker.once('error',reject);
+      worker.once('exit',code=>{if(code) reject(Error('worker exit '+code));else resolve(result);});
     });
     const slots=(await Promise.all([run(),run()])).flat();
     assert.equal(slots.filter(x=>x===0).length,50);

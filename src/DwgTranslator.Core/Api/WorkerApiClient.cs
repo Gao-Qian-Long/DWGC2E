@@ -292,7 +292,7 @@ public sealed class WorkerApiClient : IApiClient
         // 只记录条数与语言方向：图纸文字内容属于客户资料，不进日志。
         Log.Debug("Worker 翻译请求：{Count} 条 {Src}->{Tgt}", payload.Items.Count, payload.SourceLang, payload.TargetLang);
 
-        var outcome = await SendAsync(HttpMethod.Post, Url("/v1/translate"), JsonContent(payload), TranslateTimeout, cancellationToken)
+        var outcome = await SendAsync(HttpMethod.Post, Url("/v1/translate"), JsonContent(payload), TranslateTimeout, cancellationToken, idempotencyKey: request.RequestId)
             .ConfigureAwait(false);
 
         if (outcome.TransportFailed)
@@ -508,7 +508,8 @@ public sealed class WorkerApiClient : IApiClient
         HttpContent? content,
         TimeSpan timeout,
         CancellationToken cancellationToken,
-        bool includeAuth = true)
+        bool includeAuth = true,
+        string? idempotencyKey = null)
     {
         var outcome = new HttpOutcome();
 
@@ -520,6 +521,7 @@ public sealed class WorkerApiClient : IApiClient
         {
             using var request = new HttpRequestMessage(method, requestUri);
             if (content != null) request.Content = content;
+            if (idempotencyKey != null) request.Headers.TryAddWithoutValidation("Idempotency-Key", idempotencyKey);
 
             if (includeAuth)
             {

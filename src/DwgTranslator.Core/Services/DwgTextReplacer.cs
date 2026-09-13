@@ -51,10 +51,24 @@ internal static class DwgTextReplacer
 
             if (translationMap.TryGetValue(handleStr, out var translatedEntity))
             {
+                // Capture fields this writer/layout pipeline mutates. A restoration failure
+                // propagates, so a partially mutated object can never be committed.
+                var snapshot = cadEntity.GetType().GetProperties()
+                    .Where(p => p.CanRead && p.SetMethod?.IsPublic == true && p.GetIndexParameters().Length == 0
+                        && (p.PropertyType.IsValueType || p.PropertyType == typeof(string) || p.Name == "Style"))
+                    .Select(p => (Property:p, Value:p.GetValue(cadEntity))).ToList();
+                var columns = (cadEntity as CadMText)?.ColumnData;
+                var columnType = columns?.ColumnType;
                 var success = ReplaceEntityText(cadEntity, translatedEntity, targetIsCjk, doc, frames, entityList);
+                if (!success)
+                {
+                    foreach (var field in snapshot) field.Property.SetValue(cadEntity, field.Value);
+                    if (columns != null && columnType.HasValue) columns.ColumnType = columnType.Value;
+                }
                 if (success)
                 {
                     result.SuccessCount++;
+                    result.SucceededHandles.Add(handleStr);
                     translationMap.Remove(handleStr);
                     replacedCount++;
                     if (translationMap.Count == 0) break;
@@ -62,6 +76,8 @@ internal static class DwgTextReplacer
                 else
                 {
                     result.FailCount++;
+                    result.FailedHandles.Add(handleStr);
+                    translationMap.Remove(handleStr);
                     result.Errors.Add($"Failed to replace text for entity handle {handleStr}");
                 }
             }
@@ -107,6 +123,7 @@ internal static class DwgTextReplacer
                 if (!AttributeTranslationPolicy.IsMetadataTag(attEntity.Tag))
                     attEntity.Value = translatedEntity.TranslatedText;
                 result.SuccessCount++;
+                result.SucceededHandles.Add(compoundHandle);
                 translationMap.Remove(compoundHandle);
                 replacedCount++;
             }
@@ -146,20 +163,18 @@ internal static class DwgTextReplacer
                 var cell = rowObj.Cells[col];
                 if (!TrySetTableCellText(cell, translatedEntity.TranslatedText))
                 {
-                    result.FailCount++;
                     result.Errors.Add($"Failed to replace table cell {key}");
                     continue;
                 }
 
                 result.SuccessCount++;
+                result.SucceededHandles.Add(key);
                 translationMap.Remove(key);
                 replacedCount++;
             }
             catch (Exception ex)
             {
-                Log.Warning(ex, "Failed to replace table cell {Key}", key);
-                result.FailCount++;
-                result.Errors.Add($"Failed to replace table cell {key}: {ex.Message}");
+                throw new InvalidOperationException("Table replacement could not be safely completed: " + key, ex);
             }
         }
     }
@@ -182,7 +197,7 @@ internal static class DwgTextReplacer
         }
         catch (Exception ex)
         {
-            Log.Warning(ex, "TrySetTableCellText failed");
+            throw new InvalidOperationException("Table cell mutation failed", ex);
         }
         return false;
     }

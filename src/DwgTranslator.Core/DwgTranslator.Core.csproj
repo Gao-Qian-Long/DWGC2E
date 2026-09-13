@@ -37,6 +37,8 @@
     <Compile Include="Compatibility\IsExternalInit.cs" />
     <Compile Include="Compatibility\TextEntity.NetFramework.cs" />
     <Compile Include="Models\CadWriteResult.cs" />
+    <Compile Include="Models\WritebackOptions.cs" />
+    <Compile Include="Services\SafeFileCommit.cs" />
     <Compile Include="Models\AttributeTranslationPolicy.cs" />
     <Compile Include="Models\WritebackConstants.cs" />
     <Compile Include="Services\FontMapper.cs" />

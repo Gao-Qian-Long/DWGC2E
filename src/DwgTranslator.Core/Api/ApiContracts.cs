@@ -31,6 +31,8 @@ public sealed class TranslationItem
 
 public sealed class TranslationBatchRequest
 {
+    /// <summary>Reuse for transport retries of the same immutable batch.</summary>
+    public string RequestId { get; set; } = Guid.NewGuid().ToString("N");
     public string SourceLang { get; set; } = string.Empty;
     public string TargetLang { get; set; } = string.Empty;
     /// <summary>术语表条目（服务端可覆盖，客户端只作提示）。</summary>

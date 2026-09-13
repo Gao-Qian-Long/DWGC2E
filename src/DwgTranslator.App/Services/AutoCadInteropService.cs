@@ -86,16 +86,38 @@ public class AutoCadInteropService : IAutoCadInteropService, IDisposable
         var result = new CadWriteResult();
         string? sessionWorkDir = null;
         var localComObjects = new List<object?>();
+        bool dispatched = false, completionConfirmed = false;
+        string? leasePath = null;
+        var sessionId = Guid.NewGuid().ToString("N")[..12];
 
         try
         {
             // Step 1: Serialize config with session ID for race-condition safety
-            var sessionId = Guid.NewGuid().ToString("N")[..12];
             sessionWorkDir = Path.Combine(Path.GetTempPath(), "DwgTranslator", sessionId);
             Directory.CreateDirectory(sessionWorkDir);
             var doneSignalPath = Path.Combine(sessionWorkDir, "writeback_done.txt");
+            var candidateLease = Path.GetFullPath(outputFilePath) + ".dwgc2e.pending";
+            Directory.CreateDirectory(Path.GetDirectoryName(candidateLease)!);
+            if (File.Exists(candidateLease))
+            {
+                // A late completion can release an old lease; absence of a signal is not success.
+                var previous = System.Text.Json.JsonSerializer.Deserialize<PendingCadSession>(File.ReadAllText(candidateLease));
+                var sessionRoot = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "DwgTranslator")) + Path.DirectorySeparatorChar;
+                if (previous == null || !Path.GetFullPath(previous.DonePath).StartsWith(sessionRoot, StringComparison.OrdinalIgnoreCase)
+                    || !File.Exists(previous.DonePath))
+                    throw new IOException("该输出仍有未确认的 CAD 写回会话；请先在 CAD 中确认旧命令已结束。记录：" + candidateLease);
+                var oldResult = new CadWriteResult();
+                if (ProcessDoneSignal(previous.DonePath, previous.SessionId, entities.Count, oldResult) == DoneSignalOutcome.Stale)
+                    throw new IOException("CAD 完成信号与未决会话不匹配。");
+                File.Delete(candidateLease);
+            }
+            using (var lease = new FileStream(candidateLease, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                System.Text.Json.JsonSerializer.Serialize(lease, new PendingCadSession { SessionId = sessionId, DonePath = doneSignalPath });
+            leasePath = candidateLease;
+            if (config.BackupSourceBeforeWrite && !File.Exists(sourceFilePath + ".bak"))
+                File.Copy(sourceFilePath, sourceFilePath + ".bak", false);
             var configJson = SerializeConfig(
-                sourceFilePath, outputFilePath, entities, targetIsCjk, sessionId, doneSignalPath);
+                sourceFilePath, outputFilePath, entities, targetIsCjk, sessionId, doneSignalPath, config.DuplicatePolicy == "overwrite");
 
             progress?.Report(Strings.Get("ProgressAutoCadPreparing"));
 
@@ -126,6 +148,7 @@ public class AutoCadInteropService : IAutoCadInteropService, IDisposable
             if (acad is null)
             {
                 Log.Information("CAD COM server is unavailable; using batch NETLOAD fallback");
+                dispatched = true;
                 await RunCadBatchWritebackAsync(
                     config.AutoCadInstallPath, cadDllPath, configPath, sessionWorkDir,
                     doneSignalPath, sessionId, entities.Count, result, outputFilePath,
@@ -149,6 +172,7 @@ public class AutoCadInteropService : IAutoCadInteropService, IDisposable
             progress?.Report(Strings.Get("ProgressAutoCadSendingCommand"));
             var lispLspPath = lspPath.Replace("\\", "\\\\");
             var outputBaseline = TryGetLastWriteTimeUtc(outputFilePath);
+            dispatched = true;
             doc.SendCommand($"(load \"{lispLspPath}\") ");
 
             // Step 7: Poll for completion signal
@@ -160,8 +184,7 @@ public class AutoCadInteropService : IAutoCadInteropService, IDisposable
             if (result.SuccessCount > 0)
                 progress?.Report(Strings.Get("ProgressAutoCadCompleted"));
 
-            // Cleanup signal file
-            try { if (File.Exists(doneSignalPath)) File.Delete(doneSignalPath); } catch { }
+            completionConfirmed = IsConfirmedSignal(doneSignalPath, sessionId);
         }
         catch (OperationCanceledException)
         {
@@ -176,20 +199,33 @@ public class AutoCadInteropService : IAutoCadInteropService, IDisposable
         finally
         {
             ReleaseComObjects(localComObjects);
-            if (!string.IsNullOrEmpty(sessionWorkDir))
-                await TryDeleteSessionDirectoryAsync(sessionWorkDir);
+            if (!completionConfirmed && sessionWorkDir != null)
+                completionConfirmed = IsConfirmedSignal(Path.Combine(sessionWorkDir, "writeback_done.txt"), sessionId);
+            if (!dispatched || completionConfirmed)
+            {
+                if (leasePath != null) { try { File.Delete(leasePath); } catch (Exception ex) { Log.Warning(ex,"Could not remove completed CAD lease"); } }
+                if (!string.IsNullOrEmpty(sessionWorkDir)) await TryDeleteSessionDirectoryAsync(sessionWorkDir);
+            }
+            else Log.Warning("CAD session is still unconfirmed; retained {Session} and output lease {Lease}",sessionWorkDir,leasePath);
         }
 
         return result;
     }
 
+    private sealed class PendingCadSession
+    {
+        public string SessionId { get; set; } = "";
+        public string DonePath { get; set; } = "";
+    }
+
     // ========== Step methods ==========
 
     private static string SerializeConfig(string source, string output, List<TextEntity> entities, bool targetIsCjk,
-        string sessionId, string doneSignalPath)
+        string sessionId, string doneSignalPath, bool overwriteExisting)
     {
         var configObj = new
         {
+            OverwriteExisting = overwriteExisting,
             SourceDwgPath = source,
             OutputDwgPath = output,
             Entities = entities,
@@ -503,6 +539,18 @@ DwgTranslator: done."")
         }
     }
 
+    private static bool IsConfirmedSignal(string path, string sessionId)
+    {
+        try
+        {
+            var parts = File.ReadAllText(path).Trim().Split('|');
+            return parts.Length >= 3 && parts[1] == sessionId &&
+                (parts[0] == "failed" || ((parts[0] == "success" || parts[0] == "partial") && parts.Length >= 5)) &&
+                DateTime.TryParse(parts.Length >= 5 ? parts[4] : parts[parts.Length - 1], out _);
+        }
+        catch { return false; }
+    }
+
     private enum DoneSignalOutcome
     {
         Processed,
@@ -521,6 +569,7 @@ DwgTranslator: done."")
         Log.Information("WritebackCommand completed (done signal detected)");
         try
         {
+            if (!IsConfirmedSignal(doneSignalPath, sessionId)) return DoneSignalOutcome.Stale;
             var doneContent = File.ReadAllText(doneSignalPath).Trim();
             var parts = doneContent.Split('|');
             var status = parts.Length > 0 ? parts[0] : string.Empty;
