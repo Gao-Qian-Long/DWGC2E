@@ -47,7 +47,9 @@ MAIL_FROM=DWGC2E <noreply@mail.cad.pocketter.dpdns.org>
 
 ```text
 PASSWORD_PEPPER=<随机长字符串>
-DEEPSEEK_API_KEY=<DeepSeek 密钥>\r?\nBREVO_API_KEY=<Brevo API 密钥>\r?\nJWT_SECRET=<随机长字符串>
+DEEPSEEK_API_KEY=<DeepSeek 密钥>
+BREVO_API_KEY=<Brevo API 密钥>
+JWT_SECRET=<随机长字符串>
 ```
 
 这些值只能存在 Worker Secrets：
@@ -194,4 +196,5 @@ tools\Test-WorkerContract.ps1
 ### 尚未能由静态检查证明的项目
 
 真实邮箱送达、真实账号完整流程、额度扣减、设备上限、DeepSeek 实际返回、APP 术语同步和 Pages 最新 commit 部署，必须在云端用真实账号继续验证，不能仅凭匿名接口测试宣称完成。
+
 
