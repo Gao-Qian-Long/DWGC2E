@@ -176,6 +176,7 @@ public sealed class WorkerApiClient : IApiClient
         var outcome = await SendAsync(HttpMethod.Get, Url("/v1/profile"), null, DefaultTimeout, cancellationToken).ConfigureAwait(false);
         if (!outcome.IsSuccess)
         {
+            ThrowIfAuthenticationFailure(outcome);
             LogNonSuccess("GET /v1/profile", outcome);
             return null;
         }
@@ -199,6 +200,7 @@ public sealed class WorkerApiClient : IApiClient
         var outcome = await SendAsync(HttpMethod.Get, Url("/v1/subscription"), null, DefaultTimeout, cancellationToken).ConfigureAwait(false);
         if (!outcome.IsSuccess)
         {
+            ThrowIfAuthenticationFailure(outcome);
             LogNonSuccess("GET /v1/subscription", outcome);
             return null;
         }
@@ -224,6 +226,7 @@ public sealed class WorkerApiClient : IApiClient
         var outcome = await SendAsync(HttpMethod.Get, Url("/v1/usage"), null, DefaultTimeout, cancellationToken).ConfigureAwait(false);
         if (!outcome.IsSuccess)
         {
+            ThrowIfAuthenticationFailure(outcome);
             LogNonSuccess("GET /v1/usage", outcome);
             return null;
         }
@@ -365,6 +368,27 @@ public sealed class WorkerApiClient : IApiClient
     }
 
     /// <inheritdoc />
+    public async Task<IReadOnlyList<DeviceInfo>?> GetDevicesAsync(CancellationToken cancellationToken = default)
+    {
+        if (!IsConfigured) return null;
+        var outcome = await SendAsync(HttpMethod.Get, Url("/v1/devices"), null, DefaultTimeout, cancellationToken).ConfigureAwait(false);
+        if (outcome.TransportFailed || !outcome.IsSuccess)
+        {
+            LogNonSuccess("GET /v1/devices", outcome);
+            return null;
+        }
+        var wire = Deserialize<WireDevicesResponse>(outcome.Body);
+        if (wire?.Devices == null) return null;
+        return wire.Devices.Select(d => new DeviceInfo
+        {
+            DeviceId = d.DeviceId ?? string.Empty,
+            DeviceName = d.DeviceName ?? string.Empty,
+            Platform = d.Platform ?? "Windows",
+            LastSeenAt = ParseTimestamp(d.LastSeen ?? d.LastSeenAt),
+            IsCurrent = string.Equals(d.DeviceId, _deviceId, StringComparison.Ordinal)
+        }).ToList();
+    }
+
     public async Task<DeviceBindResult> BindDeviceAsync(string deviceId, string deviceName, CancellationToken cancellationToken = default)
     {
         if (!IsConfigured)
@@ -411,6 +435,18 @@ public sealed class WorkerApiClient : IApiClient
     /// 只有没配清单、或清单不可用时，才退回 Worker 的 <c>GET /v1/version?current=x</c>。
     /// 这样即使清单没部署，版本检查也不会静默失效。
     /// </remarks>
+    public async Task<bool> RevokeDeviceAsync(string deviceId, CancellationToken cancellationToken = default)
+    {
+        if (!IsConfigured || string.IsNullOrWhiteSpace(deviceId)) return false;
+        var outcome = await SendAsync(HttpMethod.Post, Url("/v1/devices/revoke"), JsonContent(new { device_id = deviceId.Trim() }), DefaultTimeout, cancellationToken).ConfigureAwait(false);
+        if (outcome.TransportFailed || !outcome.IsSuccess)
+        {
+            Log.Warning("设备撤销失败：HTTP {Status}", outcome.StatusCode);
+            return false;
+        }
+        return true;
+    }
+
     public async Task<VersionInfo?> CheckVersionAsync(string currentVersion, CancellationToken cancellationToken = default)
     {
         var manifestUri = ResolveManifestUri();
@@ -560,6 +596,13 @@ public sealed class WorkerApiClient : IApiClient
 
         if (statusCode >= 500) return "upstream_unavailable";
         return statusCode > 0 ? "request_failed" : "network_error";
+    }
+
+    private static void ThrowIfAuthenticationFailure(HttpOutcome outcome)
+    {
+        if (outcome.TransportFailed || outcome.StatusCode != 401) return;
+        var (code, message) = ReadError(outcome);
+        throw new ApiAuthenticationException(code == "request_failed" ? "token_expired" : code, message);
     }
 
     private static void LogNonSuccess(string endpoint, HttpOutcome outcome)
@@ -788,6 +831,20 @@ public sealed class WorkerApiClient : IApiClient
         [JsonPropertyName("reset_at")] public string? ResetAt { get; set; }
     }
 
+    private sealed class WireDevicesResponse
+    {
+        [JsonPropertyName("devices")] public List<WireDevice>? Devices { get; set; }
+    }
+
+    private sealed class WireDevice
+    {
+        [JsonPropertyName("device_id")] public string? DeviceId { get; set; }
+        [JsonPropertyName("device_name")] public string? DeviceName { get; set; }
+        [JsonPropertyName("platform")] public string? Platform { get; set; }
+        [JsonPropertyName("last_seen")] public string? LastSeen { get; set; }
+        [JsonPropertyName("last_seen_at")] public string? LastSeenAt { get; set; }
+    }
+
     private sealed class WireDeviceBindRequest
     {
         [JsonPropertyName("device_id")] public string DeviceId { get; set; } = string.Empty;
@@ -819,6 +876,7 @@ public sealed class WorkerApiClient : IApiClient
         [JsonPropertyName("message")] public string? Message { get; set; }
     }
 }
+
 
 
 

@@ -1,0 +1,104 @@
+<UserControl x:Class="DwgTranslator.App.Views.Pages.SettingsPage"
+ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+ <Grid Margin="18,14,18,12">
+  <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+  <DockPanel Margin="0,0,0,8">
+   <Button DockPanel.Dock="Right" Content="高级设置" Command="{Binding SettingsCommand}" Style="{StaticResource Button.Secondary}" VerticalAlignment="Top"/>
+   <StackPanel><TextBlock Text="设置" Style="{StaticResource PageTitleStyle}"/><TextBlock Text="配置翻译偏好、文件输出与服务连接。" Style="{StaticResource PageSubtitleStyle}"/></StackPanel>
+  </DockPanel>
+  <Grid Grid.Row="1">
+   <Grid.ColumnDefinitions><ColumnDefinition Width="176"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+   <ListBox x:Name="SettingsNav" SelectedIndex="0" ItemContainerStyle="{StaticResource SettingsNavItemStyle}" Background="Transparent" BorderThickness="0" Margin="0,0,20,0">
+    <ListBoxItem Content="常规"/><ListBoxItem Content="翻译"/><ListBoxItem Content="文件"/>
+    <ListBoxItem Content="性能"/><ListBoxItem Content="账号"/><ListBoxItem Content="关于"/>
+   </ListBox>
+   <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto" Padding="0,0,8,0"><Grid><Border Style="{StaticResource Card}" Padding="18,8,18,16" VerticalAlignment="Top" Visibility="{Binding SelectedIndex, ElementName=SettingsNav, Converter={StaticResource IndexToVis}, ConverterParameter=0}"><StackPanel><TextBlock Text="常规" Style="{StaticResource CardTitleStyle}" Margin="0,12,0,4"/><Border BorderBrush="{DynamicResource Brush.BorderLight}" BorderThickness="0,0,0,1" Padding="0,10">
+ <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+ <StackPanel Margin="0,0,24,0"><TextBlock Text="开机启动" FontSize="14"/><TextBlock Text="登录 Windows 后启动应用。" Style="{StaticResource CaptionStyle}" Margin="0,6,0,0"/></StackPanel>
+ <ContentControl Grid.Column="1" VerticalAlignment="Center"><CheckBox Style="{StaticResource Toggle.Switch}" IsChecked="{Binding StartWithWindows, Mode=TwoWay}"/></ContentControl>
+ </Grid>
+</Border><Border BorderBrush="{DynamicResource Brush.BorderLight}" BorderThickness="0,0,0,1" Padding="0,10">
+ <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+ <StackPanel Margin="0,0,24,0"><TextBlock Text="自动检查更新" FontSize="14"/><TextBlock Text="有可用版本时提醒。" Style="{StaticResource CaptionStyle}" Margin="0,6,0,0"/></StackPanel>
+ <ContentControl Grid.Column="1" VerticalAlignment="Center"><CheckBox Style="{StaticResource Toggle.Switch}" IsChecked="{Binding AutoCheckUpdate, Mode=TwoWay}"/></ContentControl>
+ </Grid>
+</Border><Border BorderBrush="{DynamicResource Brush.BorderLight}" BorderThickness="0,0,0,1" Padding="0,10">
+ <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+ <StackPanel Margin="0,0,24,0"><TextBlock Text="完成后打开目录" FontSize="14"/><TextBlock Text="导出结束后查看生成的图纸。" Style="{StaticResource CaptionStyle}" Margin="0,6,0,0"/></StackPanel>
+ <ContentControl Grid.Column="1" VerticalAlignment="Center"><CheckBox Style="{StaticResource Toggle.Switch}" IsChecked="{Binding OpenOutputFolderAfterExport, Mode=TwoWay}"/></ContentControl>
+ </Grid>
+</Border></StackPanel></Border><Border Style="{StaticResource Card}" Padding="18,8,18,16" VerticalAlignment="Top" Visibility="{Binding SelectedIndex, ElementName=SettingsNav, Converter={StaticResource IndexToVis}, ConverterParameter=1}"><StackPanel><TextBlock Text="翻译" Style="{StaticResource CardTitleStyle}" Margin="0,12,0,4"/><Border BorderBrush="{DynamicResource Brush.BorderLight}" BorderThickness="0,0,0,1" Padding="0,10">
+ <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+ <StackPanel Margin="0,0,24,0"><TextBlock Text="源语言" FontSize="14"/><TextBlock Text="图纸原文的语言。" Style="{StaticResource CaptionStyle}" Margin="0,6,0,0"/></StackPanel>
+ <ContentControl Grid.Column="1" VerticalAlignment="Center"><ComboBox Width="156" ItemsSource="{Binding LanguageOptions}" DisplayMemberPath="NativeName" SelectedValuePath="Code" SelectedValue="{Binding CurrentSourceLang, Mode=TwoWay}"/></ContentControl>
+ </Grid>
+</Border><Border BorderBrush="{DynamicResource Brush.BorderLight}" BorderThickness="0,0,0,1" Padding="0,10">
+ <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+ <StackPanel Margin="0,0,24,0"><TextBlock Text="目标语言" FontSize="14"/><TextBlock Text="生成译文的语言。" Style="{StaticResource CaptionStyle}" Margin="0,6,0,0"/></StackPanel>
+ <ContentControl Grid.Column="1" VerticalAlignment="Center"><ComboBox Width="156" ItemsSource="{Binding LanguageOptions}" DisplayMemberPath="NativeName" SelectedValuePath="Code" SelectedValue="{Binding CurrentTargetLang, Mode=TwoWay}"/></ContentControl>
+ </Grid>
+</Border><Border BorderBrush="{DynamicResource Brush.BorderLight}" BorderThickness="0,0,0,1" Padding="0,10">
+ <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+ <StackPanel Margin="0,0,24,0"><TextBlock Text="保护尺寸" FontSize="14"/><TextBlock Text="保留尺寸标注。" Style="{StaticResource CaptionStyle}" Margin="0,6,0,0"/></StackPanel>
+ <ContentControl Grid.Column="1" VerticalAlignment="Center"><CheckBox Style="{StaticResource Toggle.Switch}" IsChecked="{Binding ProtectDimensions, Mode=TwoWay}"/></ContentControl>
+ </Grid>
+</Border><Border BorderBrush="{DynamicResource Brush.BorderLight}" BorderThickness="0,0,0,1" Padding="0,10">
+ <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+ <StackPanel Margin="0,0,24,0"><TextBlock Text="保护公差" FontSize="14"/><TextBlock Text="保留公差表达式。" Style="{StaticResource CaptionStyle}" Margin="0,6,0,0"/></StackPanel>
+ <ContentControl Grid.Column="1" VerticalAlignment="Center"><CheckBox Style="{StaticResource Toggle.Switch}" IsChecked="{Binding ProtectTolerances, Mode=TwoWay}"/></ContentControl>
+ </Grid>
+</Border><Border BorderBrush="{DynamicResource Brush.BorderLight}" BorderThickness="0,0,0,1" Padding="0,10">
+ <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+ <StackPanel Margin="0,0,24,0"><TextBlock Text="保护型号" FontSize="14"/><TextBlock Text="保留零件型号与编号。" Style="{StaticResource CaptionStyle}" Margin="0,6,0,0"/></StackPanel>
+ <ContentControl Grid.Column="1" VerticalAlignment="Center"><CheckBox Style="{StaticResource Toggle.Switch}" IsChecked="{Binding ProtectModels, Mode=TwoWay}"/></ContentControl>
+ </Grid>
+</Border></StackPanel></Border><Border Style="{StaticResource Card}" Padding="18,8,18,16" VerticalAlignment="Top" Visibility="{Binding SelectedIndex, ElementName=SettingsNav, Converter={StaticResource IndexToVis}, ConverterParameter=2}"><StackPanel><TextBlock Text="文件" Style="{StaticResource CardTitleStyle}" Margin="0,12,0,4"/><Border BorderBrush="{DynamicResource Brush.BorderLight}" BorderThickness="0,0,0,1" Padding="0,10">
+ <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+ <StackPanel Margin="0,0,24,0"><TextBlock Text="输出目录" FontSize="14"/><TextBlock Text="在高级设置中修改保存路径。" Style="{StaticResource CaptionStyle}" Margin="0,6,0,0"/></StackPanel>
+ <ContentControl Grid.Column="1" VerticalAlignment="Center"><Button Content="打开目录" Command="{Binding OpenOutputFolderCommand}" Style="{StaticResource Button.Secondary}"/></ContentControl>
+ </Grid>
+</Border><TextBlock Text="{Binding OutputDirectoryText}" Style="{StaticResource CaptionStyle}" Margin="0,12,0,0"/><Border BorderBrush="{DynamicResource Brush.BorderLight}" BorderThickness="0,0,0,1" Padding="0,10">
+ <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+ <StackPanel Margin="0,0,24,0"><TextBlock Text="写回前备份" FontSize="14"/><TextBlock Text="保存一份原始图纸副本。" Style="{StaticResource CaptionStyle}" Margin="0,6,0,0"/></StackPanel>
+ <ContentControl Grid.Column="1" VerticalAlignment="Center"><CheckBox Style="{StaticResource Toggle.Switch}" IsChecked="{Binding BackupSourceBeforeWrite, Mode=TwoWay}"/></ContentControl>
+ </Grid>
+</Border></StackPanel></Border><Border Style="{StaticResource Card}" Padding="18,8,18,16" VerticalAlignment="Top" Visibility="{Binding SelectedIndex, ElementName=SettingsNav, Converter={StaticResource IndexToVis}, ConverterParameter=3}"><StackPanel><TextBlock Text="性能" Style="{StaticResource CardTitleStyle}" Margin="0,12,0,4"/><Border BorderBrush="{DynamicResource Brush.BorderLight}" BorderThickness="0,0,0,1" Padding="0,10">
+ <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+ <StackPanel Margin="0,0,24,0"><TextBlock Text="本地图纸并发" FontSize="14"/><TextBlock Text="同时解析和处理的图纸数量。" Style="{StaticResource CaptionStyle}" Margin="0,6,0,0"/></StackPanel>
+ <ContentControl Grid.Column="1" VerticalAlignment="Center"><ComboBox Width="156" ItemsSource="{Binding LocalWorkerOptions}" SelectedItem="{Binding LocalWorkerCount, Mode=TwoWay}"/></ContentControl>
+ </Grid>
+</Border><Border BorderBrush="{DynamicResource Brush.BorderLight}" BorderThickness="0,0,0,1" Padding="0,10">
+ <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+ <StackPanel Margin="0,0,24,0"><TextBlock Text="AI 请求并发" FontSize="14"/><TextBlock Text="单张图纸内并行翻译的请求数。" Style="{StaticResource CaptionStyle}" Margin="0,6,0,0"/></StackPanel>
+ <ContentControl Grid.Column="1" VerticalAlignment="Center"><ComboBox Width="156" ItemsSource="{Binding AiConcurrencyOptions}" SelectedItem="{Binding AiConcurrency, Mode=TwoWay}"/></ContentControl>
+ </Grid>
+</Border><Border BorderBrush="{DynamicResource Brush.BorderLight}" BorderThickness="0,0,0,1" Padding="0,10">
+ <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+ <StackPanel Margin="0,0,24,0"><TextBlock Text="失败重试" FontSize="14"/><TextBlock Text="请求失败后的重试次数。" Style="{StaticResource CaptionStyle}" Margin="0,6,0,0"/></StackPanel>
+ <ContentControl Grid.Column="1" VerticalAlignment="Center"><ComboBox Width="156" ItemsSource="{Binding MaxRetryOptions}" SelectedItem="{Binding MaxRetryCount, Mode=TwoWay}"/></ContentControl>
+ </Grid>
+</Border><Border BorderBrush="{DynamicResource Brush.BorderLight}" BorderThickness="0,0,0,1" Padding="0,10">
+ <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+ <StackPanel Margin="0,0,24,0"><TextBlock Text="内存优化" FontSize="14"/><TextBlock Text="任务结束后释放不再使用的资源。" Style="{StaticResource CaptionStyle}" Margin="0,6,0,0"/></StackPanel>
+ <ContentControl Grid.Column="1" VerticalAlignment="Center"><CheckBox Style="{StaticResource Toggle.Switch}" IsChecked="{Binding MemoryOptimization, Mode=TwoWay}"/></ContentControl>
+ </Grid>
+</Border></StackPanel></Border><Border Style="{StaticResource Card}" Padding="18,8,18,16" VerticalAlignment="Top" Visibility="{Binding SelectedIndex, ElementName=SettingsNav, Converter={StaticResource IndexToVis}, ConverterParameter=4}"><StackPanel><TextBlock Text="账号" Style="{StaticResource CardTitleStyle}" Margin="0,12,0,4"/><Border BorderBrush="{DynamicResource Brush.BorderLight}" BorderThickness="0,0,0,1" Padding="0,10">
+ <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+ <StackPanel Margin="0,0,24,0"><TextBlock Text="授权与服务" FontSize="14"/><TextBlock Text="管理本地授权及服务连接。" Style="{StaticResource CaptionStyle}" Margin="0,6,0,0"/></StackPanel>
+ <ContentControl Grid.Column="1" VerticalAlignment="Center"><Button Content="高级设置" Command="{Binding SettingsCommand}" Style="{StaticResource Button.Secondary}"/></ContentControl>
+ </Grid>
+</Border><TextBlock Text="{Binding ApiKeyStatusText}" Style="{StaticResource CaptionStyle}" Margin="0,10,0,0"/></StackPanel></Border><Border Style="{StaticResource Card}" Padding="18,8,18,16" VerticalAlignment="Top" Visibility="{Binding SelectedIndex, ElementName=SettingsNav, Converter={StaticResource IndexToVis}, ConverterParameter=5}"><StackPanel><TextBlock Text="关于" Style="{StaticResource CardTitleStyle}" Margin="0,12,0,4"/><TextBlock Text="DWGC2E" FontSize="20" FontWeight="SemiBold" Margin="0,14,0,6"/><TextBlock Text="{Binding AppVersionText}" Style="{StaticResource CaptionStyle}"/><Border BorderBrush="{DynamicResource Brush.BorderLight}" BorderThickness="0,0,0,1" Padding="0,10">
+ <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+ <StackPanel Margin="0,0,24,0"><TextBlock Text="运行环境" FontSize="14"/><TextBlock Text="检查 CAD 安装、插件与应用配置。" Style="{StaticResource CaptionStyle}" Margin="0,6,0,0"/></StackPanel>
+ <ContentControl Grid.Column="1" VerticalAlignment="Center"><Button Content="环境检查" Command="{Binding ShowEnvironmentCheckCommand}" Style="{StaticResource Button.Secondary}"/></ContentControl>
+ </Grid>
+</Border><Border BorderBrush="{DynamicResource Brush.BorderLight}" BorderThickness="0,0,0,1" Padding="0,10">
+ <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+ <StackPanel Margin="0,0,24,0"><TextBlock Text="使用帮助" FontSize="14"/><TextBlock Text="查看操作说明与常见问题。" Style="{StaticResource CaptionStyle}" Margin="0,6,0,0"/></StackPanel>
+ <ContentControl Grid.Column="1" VerticalAlignment="Center"><Button Content="打开帮助" Command="{Binding ShowHelpCommand}" Style="{StaticResource Button.Secondary}"/></ContentControl>
+ </Grid>
+</Border><TextBlock Text="{Binding AppDataDirectory}" Style="{StaticResource CaptionStyle}" Margin="0,10,0,0"/></StackPanel></Border></Grid></ScrollViewer>
+  </Grid>
+ </Grid>
+</UserControl>
+

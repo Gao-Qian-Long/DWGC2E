@@ -17,7 +17,7 @@ public partial class LogViewModel : ObservableObject, IDisposable
     private readonly ILogStore _logStore;
     private readonly int _maxDisplayEntries = 500;
 
-    [ObservableProperty] private bool _isVisible;
+    [ObservableProperty] private bool _isVisible = true;
     [ObservableProperty] private bool _autoScroll = true;
     [ObservableProperty] private bool _isPaused;
     [ObservableProperty] private string _selectedLevelFilter = "ALL";

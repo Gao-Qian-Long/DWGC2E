@@ -96,10 +96,13 @@ public partial class MainViewModel
 
             RefreshGlossaryData();
 
-            _consistencyService?.FlushCache();
-            var cachePath = Path.Combine(App.AppDataDir, "translation_cache.json");
-            _consistencyService = new TranslationConsistencyService(cachePath);
+            // 一致性缓存是 DI 单例（与任务层共用同一份）：这里只做一次落盘，
+            // 不再 new 第二个实例——两套缓存会让界面的命中统计与任务层实际用到的数据对不上。
+            _consistencyService.FlushCache();
 
+            // 开机启动以注册表实际状态为准：用户可能在任务管理器里禁用过，或者换过绿色版目录。
+            // 配置里那个布尔值不能"说谎"（否则开关显示已勾选、重启却不启动）。
+            _config.StartWithWindows = DwgTranslator.App.Services.StartupRegistration.IsEnabled();
             ApplyLanguagePair();
             RefreshLicenseStatus();
             // The glossary count has its own place in the status bar; repeating it here made the

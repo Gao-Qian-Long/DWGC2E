@@ -1,0 +1,29 @@
+﻿<UserControl x:Class="DwgTranslator.App.Views.Controls.ToastHost"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             IsHitTestVisible="False">
+    <!-- 操作结果浮层（§29）：右下角堆叠，4 秒自动消失；不占用页面空间、不阻塞操作。
+         危险操作走 ConfirmDialog，成功/提示类结果走这里。 -->
+    <ItemsControl x:Name="ToastItems" VerticalAlignment="Bottom" HorizontalAlignment="Right"
+                  Margin="0,0,24,60">
+        <ItemsControl.ItemTemplate>
+            <DataTemplate>
+                <Border Background="{DynamicResource Brush.Surface}"
+                        BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1"
+                        CornerRadius="{DynamicResource CornerRadius.Medium}"
+                        Padding="14,10" Margin="0,0,0,8" MinWidth="240" MaxWidth="420">
+                    <Border.Effect>
+                        <DropShadowEffect BlurRadius="14" ShadowDepth="3" Opacity="0.14" Color="#0F1F3A"/>
+                    </Border.Effect>
+                    <StackPanel Orientation="Horizontal">
+                        <Ellipse Width="8" Height="8" Margin="0,0,10,0" VerticalAlignment="Center"
+                                 Fill="{Binding Accent}"/>
+                        <TextBlock Text="{Binding Message}" FontSize="13" TextWrapping="Wrap"
+                                   MaxWidth="360" VerticalAlignment="Center"
+                                   Foreground="{DynamicResource Brush.TextPrimary}"/>
+                    </StackPanel>
+                </Border>
+            </DataTemplate>
+        </ItemsControl.ItemTemplate>
+    </ItemsControl>
+</UserControl>

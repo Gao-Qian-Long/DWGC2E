@@ -3,9 +3,10 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:conv="clr-namespace:DwgTranslator.App.Converters"
         xmlns:controls="clr-namespace:DwgTranslator.App.Views.Controls"
+        xmlns:pages="clr-namespace:DwgTranslator.App.Views.Pages"
         xmlns:views="clr-namespace:DwgTranslator.App.Views"
-        Title="{conv:Localize AppTitle}" Height="820" Width="1380"
-        MinHeight="700" MinWidth="1180"
+        Title="{conv:Localize AppTitle}" Height="820" Width="1500"
+        MinHeight="640" MinWidth="1100" FontFamily="Microsoft YaHei UI, Segoe UI" FontSize="13" UseLayoutRounding="True"
         Icon="pack://application:,,,/icon.ico"
         WindowStartupLocation="CenterScreen"
         Topmost="False"
@@ -20,8 +21,7 @@
         <WindowChrome CaptionHeight="36" ResizeBorderThickness="6" GlassFrameThickness="0" CornerRadius="0"/>
     </WindowChrome.WindowChrome>
 
-    <!-- Keyboard shortcuts. A delivered desktop tool is expected to have them, and they are the
-         fastest way to reach the dialogs that otherwise hide behind the toolbar's overflow menu. -->
+    <!-- Keyboard shortcuts: F1 帮助 / Ctrl+E 环境自检 / Ctrl+L 日志 / Ctrl+, 设置 … -->
     <Window.InputBindings>
         <KeyBinding Key="O" Modifiers="Control" Command="{Binding ImportDwgCommand}"/>
         <KeyBinding Key="S" Modifiers="Control" Command="{Binding ExportDwgCommand}"/>
@@ -32,157 +32,290 @@
         <KeyBinding Key="OemComma" Modifiers="Control" Command="{Binding SettingsCommand}"/>
     </Window.InputBindings>
 
+    <Window.Resources>
+        <!-- Sidebar entry: icon + label; the selected page gets a light blue plate and a blue
+             accent bar on the left, as in the design. -->
+        <Style x:Key="NavItemStyle" TargetType="ListBoxItem">
+            <Setter Property="Height" Value="{DynamicResource Size.NavItem}"/>
+            <Setter Property="Padding" Value="14,0"/>
+            <Setter Property="Margin" Value="8,2"/>
+            <Setter Property="FontSize" Value="{DynamicResource FontSize.Body}"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Foreground" Value="{DynamicResource Brush.TextSecondary}"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <!-- 侧栏项不需要键盘焦点虚线框（截图里会显得没做完） -->
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Grid>
+                            <Border x:Name="Accent" Width="3" HorizontalAlignment="Left" Margin="-8,2,0,2"
+                                    CornerRadius="2" Background="Transparent"/>
+                            <Border x:Name="Bd" Background="Transparent"
+                                    CornerRadius="{DynamicResource CornerRadius.Medium}"
+                                    Padding="{TemplateBinding Padding}">
+                                <ContentPresenter VerticalAlignment="Center"/>
+                            </Border>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Brush.BackgroundAlt}"/>
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Brush.PrimaryLight}"/>
+                                <Setter TargetName="Accent" Property="Background" Value="{DynamicResource Brush.Primary}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource Brush.Primary}"/>
+                                <Setter Property="FontWeight" Value="SemiBold"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
     <Grid>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="48"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto" MinHeight="0"/>
-            <RowDefinition Height="Auto"/>
-        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="176"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
 
-        <!-- ═══ Row 0: Custom Title Bar ═══ -->
-        <controls:TitleBarControl Grid.Row="0"/>
+        <!-- ═══════════ 左侧导航 ═══════════ -->
+        <Border Grid.Column="0" Grid.RowSpan="3" Background="{DynamicResource Brush.Sidebar}"
+                BorderBrush="{DynamicResource Brush.Border}" BorderThickness="0,0,1,0">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
 
-        <!-- ═══ Rows 1-2: actions and translation stats share ONE card, so the header reads as a
-             single control strip instead of two stacked bordered bars. ═══ -->
-        <Border Grid.Row="1" Grid.RowSpan="2" Margin="16,12,16,0"
-                Background="{DynamicResource Brush.Surface}"
-                BorderBrush="{DynamicResource Brush.Border}"
-                BorderThickness="1"
-                CornerRadius="{DynamicResource CornerRadius.Large}"
-                Effect="{StaticResource CardShadow}">
-            <StackPanel>
-                <controls:MainToolBar/>
-                <controls:FilterStatsBar/>
-            </StackPanel>
+                <!-- 品牌 -->
+                <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="20,18,20,16">
+                    <Border Width="32" Height="32" CornerRadius="{DynamicResource CornerRadius.Medium}"
+                            Margin="0,0,10,0" Background="{DynamicResource Brush.Primary}">
+                        <TextBlock Text="D" Foreground="White" FontSize="17" FontWeight="Bold"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="DWGC2E" FontSize="14" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource Brush.TextPrimary}"/>
+                        <TextBlock Text="CAD 图纸智能翻译工具" FontSize="11" Margin="0,2,0,0"
+                                   Foreground="{DynamicResource Brush.TextMuted}"/>
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- 页面导航 -->
+                <ListBox Grid.Row="1" x:Name="NavList"
+                         Background="Transparent" BorderThickness="0"
+                         SelectedValuePath="Tag"
+                         SelectedValue="{Binding CurrentPage, Mode=TwoWay}"
+                         ItemContainerStyle="{StaticResource NavItemStyle}"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                    <ListBoxItem Tag="translate" AutomationProperties.Name="图纸翻译">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Data="{StaticResource Icon.NavTranslate}" Width="16" Height="16" Stretch="Uniform"
+                                  Fill="Transparent" Margin="0,0,11,0" VerticalAlignment="Center"
+                                  Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ListBoxItem}}"
+                                  StrokeThickness="1.3"/>
+                            <TextBlock Text="图纸翻译" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </ListBoxItem>
+                    <ListBoxItem Tag="batch" AutomationProperties.Name="批量任务">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Data="{StaticResource Icon.NavBatch}" Width="16" Height="16" Stretch="Uniform"
+                                  Fill="Transparent" Margin="0,0,11,0" VerticalAlignment="Center"
+                                  Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ListBoxItem}}"
+                                  StrokeThickness="1.3"/>
+                            <TextBlock Text="批量任务" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </ListBoxItem>
+                    <ListBoxItem Tag="glossary" AutomationProperties.Name="术语库">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Data="{StaticResource Icon.NavGlossary}" Width="16" Height="16" Stretch="Uniform"
+                                  Fill="Transparent" Margin="0,0,11,0" VerticalAlignment="Center"
+                                  Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ListBoxItem}}"
+                                  StrokeThickness="1.3"/>
+                            <TextBlock Text="术语库" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </ListBoxItem>
+                    <ListBoxItem Tag="account" AutomationProperties.Name="会员中心">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Data="{StaticResource Icon.NavAccount}" Width="16" Height="16" Stretch="Uniform"
+                                  Fill="Transparent" Margin="0,0,11,0" VerticalAlignment="Center"
+                                  Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ListBoxItem}}"
+                                  StrokeThickness="1.3"/>
+                            <TextBlock Text="会员中心" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </ListBoxItem>
+                    <ListBoxItem Tag="settings" AutomationProperties.Name="设置">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Data="{StaticResource Icon.NavSettings}" Width="16" Height="16" Stretch="Uniform"
+                                  Fill="Transparent" Margin="0,0,11,0" VerticalAlignment="Center"
+                                  Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ListBoxItem}}"
+                                  StrokeThickness="1.3"/>
+                            <TextBlock Text="设置" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </ListBoxItem>
+                </ListBox>
+
+                <!-- 页脚 -->
+                <StackPanel Grid.Row="2" Margin="20,12,20,16">
+                    <TextBlock Text="{Binding AppVersionText}" FontSize="11"
+                               Foreground="{DynamicResource Brush.TextMuted}"/>
+                </StackPanel>
+            </Grid>
         </Border>
 
-        <!-- ═══ Row 3: Progress Bar card ═══ -->
-        <Border Grid.Row="3" Margin="16,8,16,0"
-                Visibility="{Binding IsProcessing, Converter={StaticResource BoolToVis}}"
-                Style="{StaticResource StripCard}" Padding="6,3">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
+        <!-- ═══════════ 内容列 ═══════════ -->
+        <Grid Grid.Column="1">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="44"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
 
-                <!-- Operation label + cancelling indicator -->
-                <Border Grid.Column="0" Background="{DynamicResource Brush.PrimaryLight}"
-                        CornerRadius="{DynamicResource CornerRadius.Small}" Padding="8,2">
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="{Binding OperationLabel}" FontSize="11"
-                                   Foreground="{DynamicResource Brush.Primary}" FontWeight="SemiBold"
-                                   VerticalAlignment="Center"/>
-                        <TextBlock Text="..." FontSize="11" Foreground="{DynamicResource Brush.Primary}"
-                                   VerticalAlignment="Center">
+            <!-- 顶部 Header（52px）：会员状态 · 用户入口 · 窗口控制（§9） -->
+            <Border Grid.Row="0" Background="{DynamicResource Brush.Surface}"
+                    BorderBrush="{DynamicResource Brush.Border}" BorderThickness="0,0,0,1">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" HorizontalAlignment="Right"
+                                VerticalAlignment="Center" Margin="0,0,12,0">
+                        <!-- 会员状态：只显示真实授权状态（后端未接通时不伪造套餐/额度） -->
+                        <Border Style="{StaticResource Badge.Accent}" Padding="9,3" Margin="0,0,12,0">
+                            <StackPanel Orientation="Horizontal">
+                                <Path Data="{StaticResource Icon.StatPin}" Width="12" Height="12" Stretch="Uniform"
+                                      Fill="Transparent" Margin="0,0,5,0" VerticalAlignment="Center"
+                                      Stroke="{DynamicResource Brush.Accent}" StrokeThickness="1.5"/>
+                                <TextBlock Text="{Binding LicenseStatusText}"
+                                           Style="{StaticResource Badge.AccentText}"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- 用户入口：账号 / 置顶 / 设置 / 环境自检 / 帮助 全部收进下拉菜单 -->
+                        <Button x:Name="AccountMenuButton" Style="{StaticResource Button.Tertiary}" Height="40"
+                                Padding="10,0" Click="AccountMenu_Click"
+                                WindowChrome.IsHitTestVisibleInChrome="True"
+                                AutomationProperties.Name="账号菜单" ToolTip="账号与设置">
+                            <Button.ContextMenu>
+                                <ContextMenu DataContext="{Binding PlacementTarget.DataContext,
+                                                          RelativeSource={RelativeSource Self}}">
+                                    <MenuItem Header="会员中心" Command="{Binding NavigateToCommand}"
+                                              CommandParameter="account"/>
+                                    <MenuItem Header="窗口置顶" Command="{Binding ToggleTopmostCommand}"/>
+                                    <Separator/>
+                                    <MenuItem Header="设置" Command="{Binding SettingsCommand}"/>
+                                    <MenuItem Header="环境自检" Command="{Binding ShowEnvironmentCheckCommand}"/>
+                                    <MenuItem Header="帮助" Command="{Binding ShowHelpCommand}"/>
+                                </ContextMenu>
+                            </Button.ContextMenu>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <Path Data="{StaticResource Icon.NavAccount}" Width="15" Height="15" Stretch="Uniform"
+                                      Fill="Transparent" Margin="0,0,8,0" VerticalAlignment="Center"
+                                      Stroke="{DynamicResource Brush.TextSecondary}" StrokeThickness="1.5"/>
+                                <TextBlock Text="{Binding MachineName}" FontSize="13" VerticalAlignment="Center"
+                                           Foreground="{DynamicResource Brush.TextPrimary}"/>
+                                <Path Data="{StaticResource Icon.Caret}" Width="8" Height="5" Margin="8,1,0,0"
+                                      VerticalAlignment="Center" Fill="{DynamicResource Brush.TextMuted}"/>
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+
+                    <Border Grid.Column="1" Style="{StaticResource Divider.Vertical}"/>
+                    <controls:TitleBarControl Grid.Column="2" VerticalAlignment="Center"/>
+                </Grid>
+            </Border>
+
+            <!-- 页面宿主：五页常驻，切换只改可见性，编辑状态不丢 -->
+            <Grid Grid.Row="1">
+                <pages:TranslatePage Visibility="{Binding IsTranslatePage, Converter={StaticResource BoolToVis}}"/>
+                <pages:BatchTasksPage Visibility="{Binding IsBatchPage, Converter={StaticResource BoolToVis}}"/>
+                <pages:GlossaryPage Visibility="{Binding IsGlossaryPage, Converter={StaticResource BoolToVis}}"/>
+                <pages:AccountPage Visibility="{Binding IsAccountPage, Converter={StaticResource BoolToVis}}"/>
+                <pages:SettingsPage Visibility="{Binding IsSettingsPage, Converter={StaticResource BoolToVis}}"/>
+            </Grid>
+
+            <!-- 底栏：当前任务 + 总进度 + 预计剩余时间 -->
+            <Border Grid.Row="2" Background="{DynamicResource Brush.StatusBar}"
+                    BorderBrush="{DynamicResource Brush.Border}" BorderThickness="0,1,0,0"
+                    Padding="14,6">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Ellipse Width="8" Height="8" Margin="0,0,8,0">
+                            <Ellipse.Style>
+                                <Style TargetType="Ellipse">
+                                    <Setter Property="Fill" Value="{DynamicResource Brush.Success}"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsProcessing}" Value="True">
+                                            <Setter Property="Fill" Value="{DynamicResource Brush.Warning}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Ellipse.Style>
+                        </Ellipse>
+                        <TextBlock Text="{Binding StatusMessage}" FontSize="12" TextTrimming="CharacterEllipsis"
+                                   MaxWidth="520" VerticalAlignment="Center"
+                                   Foreground="{DynamicResource Brush.TextSecondary}"/>
+                        <!-- 任务层当前阶段（例：[3/6] 总装配图.dwg 正在翻译文本 42%）：状态栏直接说清
+                             "在做什么"，而不是只给一个百分比。无任务阶段时自动隐藏。 -->
+                        <TextBlock Text="{Binding ProgressDetailText}" FontSize="12" Margin="12,0,0,0"
+                                   TextTrimming="CharacterEllipsis" MaxWidth="460" VerticalAlignment="Center"
+                                   Foreground="{DynamicResource Brush.TextMuted}">
                             <TextBlock.Style>
                                 <Style TargetType="TextBlock">
+                                    <Setter Property="Visibility" Value="Visible"/>
                                     <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsCancellationRequested}" Value="True">
-                                            <Setter Property="Text" Value="{conv:Localize ProgressCancelling}"/>
-                                            <Setter Property="Foreground" Value="{DynamicResource Brush.Danger}"/>
+                                        <DataTrigger Binding="{Binding ProgressDetailText}" Value="">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
                                         </DataTrigger>
                                     </Style.Triggers>
                                 </Style>
                             </TextBlock.Style>
-                        </TextBlock>
+                        </TextBlock></StackPanel>
+
+                    <ProgressBar Grid.Column="1" Margin="20,0" MaxWidth="420"
+                                 HorizontalAlignment="Stretch" VerticalAlignment="Center"
+                                 Value="{Binding ProgressValue}" Maximum="100"
+                                 Foreground="{DynamicResource Brush.Primary}"
+                                 Background="{DynamicResource Brush.BackgroundAlt}"
+                                 Visibility="{Binding IsProcessing, Converter={StaticResource BoolToVis}}"/>
+
+                    <TextBlock Grid.Column="2" Text="{Binding EtaText}" FontSize="12" Margin="0,0,16,0"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource Brush.TextMuted}"/>
+
+                    <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding GlossaryStatsText}" FontSize="12" Margin="0,0,14,0"
+                                   Foreground="{DynamicResource Brush.TextMuted}"/>
+                        <TextBlock Text="{Binding LicenseStatusText}" FontSize="12" Margin="0,0,14,0"
+                                   Foreground="{DynamicResource Brush.TextMuted}"
+                                   Visibility="{Binding IsLicensingEnabled, Converter={StaticResource BoolToVis}}"/>
+                        <TextBlock Text="{Binding AppVersionText}" FontSize="12"
+                                   Foreground="{DynamicResource Brush.TextMuted}"/>
                     </StackPanel>
-                </Border>
+                </Grid>
+            </Border>
+        </Grid>
 
-                <!-- Progress bar -->
-                <ProgressBar Grid.Column="1" Height="4" Margin="8,0"
-                             Value="{Binding ProgressValue}" Maximum="100"
-                             IsIndeterminate="{Binding IsIndeterminate}"
-                             Foreground="{DynamicResource Brush.Primary}"
-                             Background="{DynamicResource Brush.BackgroundAlt}"/>
-
-                <!-- Percentage -->
-                <TextBlock Grid.Column="2" Margin="4,0" FontSize="11"
-                           Foreground="{DynamicResource Brush.TextMuted}"
-                           VerticalAlignment="Center">
-                    <TextBlock.Text>
-                        <Binding Path="ProgressValue" StringFormat="{}{0:0}%"/>
-                    </TextBlock.Text>
-                </TextBlock>
-            </Grid>
-        </Border>
-
-        <!-- ═══ Row 4: DataGrid card ═══ -->
-        <controls:TranslationDataGrid Grid.Row="4" Margin="16,10,16,14"/>
-
-        <!-- ═══ Row 5: Log Viewer Panel (collapsible) ═══ -->
-        <views:LogViewerPanel Grid.Row="5" x:Name="LogPanel"
-                              DataContext="{Binding LogViewModel}"
-                              MaxHeight="280" Margin="16,0,16,10"
-                              Visibility="{Binding IsVisible, Converter={StaticResource BoolToVis}}"/>
-
-        <!-- ═══ Row 6: Status Bar card ═══ -->
-        <Border Grid.Row="6" Style="{StaticResource StripCard}"
-                BorderThickness="0,1,0,0"
-                CornerRadius="0"
-                Padding="16,7"
-                Background="{DynamicResource Brush.StatusBar}">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-
-                <!-- Left: Status message + processing indicator -->
-                <StackPanel Grid.Column="0" Orientation="Horizontal">
-                    <Border Width="8" Height="8" CornerRadius="4" Margin="0,0,6,0"
-                            Visibility="{Binding IsProcessing, Converter={StaticResource BoolToVis}}">
-                        <Border.Background>
-                            <SolidColorBrush Color="{DynamicResource Color.Warning}"/>
-                        </Border.Background>
-                        <Border.Triggers>
-                            <EventTrigger RoutedEvent="Border.Loaded">
-                                <BeginStoryboard>
-                                    <Storyboard RepeatBehavior="Forever">
-                                        <ColorAnimation Storyboard.TargetProperty="Background.Color"
-                                                        From="#D97706" To="#2563EB" Duration="0:0:0.8"
-                                                        AutoReverse="True"/>
-                                    </Storyboard>
-                                </BeginStoryboard>
-                            </EventTrigger>
-                        </Border.Triggers>
-                    </Border>
-                    <TextBlock Text="{Binding StatusMessage}" TextTrimming="CharacterEllipsis"
-                               FontSize="12" Foreground="{DynamicResource Brush.TextSecondary}"
-                               VerticalAlignment="Center"/>
-                </StackPanel>
-
-                <!-- Glossary stats + Version + License -->
-                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="{Binding GlossaryStatsText}"
-                               Foreground="{DynamicResource Brush.TextMuted}" FontSize="12"
-                               Margin="0,0,15,0" VerticalAlignment="Center"/>
-                    <TextBlock Text="{Binding AppVersionText}"
-                               Foreground="{DynamicResource Brush.TextMuted}" FontSize="12"
-                               ToolTip="DWG Translator 版本"
-                               VerticalAlignment="Center"/>
-                    <TextBlock Text="&#xB7;" Foreground="{DynamicResource Brush.TextMuted}" FontSize="12"
-                               Margin="6,0" VerticalAlignment="Center"/>
-                    <TextBlock Text="{Binding LicenseStatusText}"
-                               Foreground="{DynamicResource Brush.TextMuted}" FontSize="12"
-                               Visibility="{Binding IsLicensingEnabled, Converter={StaticResource BoolToVis}}"
-                               VerticalAlignment="Center"/>
-                </StackPanel>
-            </Grid>
-        </Border>
-
-        <!-- ═══ Drag & drop import hint (covers the whole window while dragging) ═══ -->
-        <!-- IsHitTestVisible=False keeps the drag events flowing to the window itself,
-             so the drop never gets swallowed by this overlay. The size is bound to the
-             window rather than to the grid: the toolbar can be wider than the window, which
-             would make the grid wider than the visible area and shift the centred card. -->
+        <!-- 操作结果 Toast 浮层（§29）：右下角堆叠，不阻塞操作 -->
+        <controls:ToastHost x:Name="Toasts" Grid.Column="0" Grid.ColumnSpan="2"
+                            Panel.ZIndex="19"/>
+        <!-- 拖入提示覆盖层（IsHitTestVisible=False 保证拖放事件回到窗口本身） -->
         <Border x:Name="DropOverlay"
-                Grid.Row="0" Grid.RowSpan="7"
+                Grid.Column="0" Grid.ColumnSpan="2"
                 HorizontalAlignment="Left" VerticalAlignment="Top"
                 Width="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=Window}}"
                 Height="{Binding ActualHeight, RelativeSource={RelativeSource AncestorType=Window}}"
@@ -190,12 +323,11 @@
             <Border.Background>
                 <SolidColorBrush Color="{DynamicResource Color.DropScrim}" Opacity="0.55"/>
             </Border.Background>
-            <Border Width="540" Padding="30,26" CornerRadius="10"
+            <Border Width="540" Padding="30,26" CornerRadius="12"
                     HorizontalAlignment="Center" VerticalAlignment="Center"
                     Background="{DynamicResource Brush.Surface}"
                     BorderBrush="{DynamicResource Brush.Primary}" BorderThickness="2">
                 <StackPanel>
-                    <!-- Vector icon: the folder emoji renders as a box on fonts that lack it. -->
                     <Path x:Name="DropOverlayIcon" Data="{StaticResource Icon.EmptySheet}"
                           Width="46" Height="46" Stretch="Uniform"
                           HorizontalAlignment="Center" Margin="0,0,0,12"

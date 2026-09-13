@@ -22,6 +22,8 @@ public partial class SettingsDialog : Window
             ?? new LocalizationService();
         _viewModel = new SettingsViewModel(localizationService);
         DataContext = _viewModel;
+        // Direct DeepSeek credentials are intentionally unavailable in Worker mode.
+        DirectApiSection.Visibility = _viewModel.IsWorkerMode ? Visibility.Collapsed : Visibility.Visible;
 
         // PasswordBox doesn't support binding, so bridge manually
         ApiKeyBox.Password = _viewModel.ApiKey;

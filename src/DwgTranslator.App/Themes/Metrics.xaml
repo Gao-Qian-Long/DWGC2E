@@ -1,0 +1,327 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=System.Runtime">
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         尺码令牌 + 文本层级 + 表单/徽标/状态/分区等轻量组件样式。
+
+         这一层存在的意义：页面里不再出现 15 种 FontSize、15 种 CornerRadius、
+         7~14px 这类不规则间距。所有数值都从这里取：
+           字号 → FontSize.*    间距 → Spacing.*    尺寸 → Size.*    圆角 → CornerRadius.*
+         ═══════════════════════════════════════════════════════════════════════ -->
+
+    <!-- ── 字号层级（页面标题最重 → 说明文字最浅）── -->
+    <sys:Double x:Key="FontSize.PageTitle">24</sys:Double>
+    <sys:Double x:Key="FontSize.PageSubtitle">13</sys:Double>
+    <sys:Double x:Key="FontSize.SectionTitle">15</sys:Double>
+    <sys:Double x:Key="FontSize.CardTitle">14</sys:Double>
+    <sys:Double x:Key="FontSize.Body">13</sys:Double>
+    <sys:Double x:Key="FontSize.Secondary">12</sys:Double>
+    <sys:Double x:Key="FontSize.Table">13</sys:Double>
+    <sys:Double x:Key="FontSize.TableHeader">12.5</sys:Double>
+    <sys:Double x:Key="FontSize.Kpi">26</sys:Double>
+    <sys:Double x:Key="FontSize.KpiLabel">12</sys:Double>
+
+    <!-- ── 8pt 间距系统 ── -->
+    <Thickness x:Key="Spacing.Page">16</Thickness>
+    <Thickness x:Key="Spacing.PageTop">0,12,0,10</Thickness>
+    <Thickness x:Key="Spacing.Card">14</Thickness>
+    <Thickness x:Key="Spacing.CardHeader">14,10</Thickness>
+    <Thickness x:Key="Spacing.CardGap">0,0,0,10</Thickness>
+    <Thickness x:Key="Spacing.SectionGap">0,0,0,14</Thickness>
+    <Thickness x:Key="Spacing.RowGap">0,0,0,8</Thickness>
+    <Thickness x:Key="Spacing.Inline">0,0,8,0</Thickness>
+
+    <!-- ── 控件尺寸（同一工具栏不再出现多种高度）── -->
+    <sys:Double x:Key="Size.Control">32</sys:Double>
+    <sys:Double x:Key="Size.Button">32</sys:Double>
+    <sys:Double x:Key="Size.ButtonCompact">30</sys:Double>
+    <sys:Double x:Key="Size.Toolbar">44</sys:Double>
+    <sys:Double x:Key="Size.Header">44</sys:Double>
+    <sys:Double x:Key="Size.TableRow">36</sys:Double>
+    <sys:Double x:Key="Size.TableHeader">32</sys:Double>
+    <sys:Double x:Key="Size.NavItem">36</sys:Double>
+    <sys:Double x:Key="Size.Icon">18</sys:Double>
+    <sys:Double x:Key="Size.IconInline">16</sys:Double>
+    <sys:Double x:Key="Size.Stroke">1.5</sys:Double>
+
+    <!-- ── 文本层级样式 ── -->
+    <Style x:Key="PageTitleStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="{DynamicResource FontSize.PageTitle}"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}"/>
+    </Style>
+
+    <Style x:Key="PageSubtitleStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="{DynamicResource FontSize.PageSubtitle}"/>
+        <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}"/>
+        <Setter Property="TextWrapping" Value="Wrap"/>
+        <Setter Property="Margin" Value="0,8,0,0"/>
+    </Style>
+
+    <Style x:Key="SectionTitleStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="{DynamicResource FontSize.SectionTitle}"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}"/>
+    </Style>
+
+    <Style x:Key="CardTitleStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="{DynamicResource FontSize.CardTitle}"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+
+    <Style x:Key="BodyStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="{DynamicResource FontSize.Body}"/>
+        <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}"/>
+        <Setter Property="TextWrapping" Value="Wrap"/>
+    </Style>
+
+    <Style x:Key="CaptionStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="{DynamicResource FontSize.Secondary}"/>
+        <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}"/>
+        <Setter Property="TextWrapping" Value="Wrap"/>
+    </Style>
+
+    <Style x:Key="KpiNumberStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="{DynamicResource FontSize.Kpi}"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}"/>
+    </Style>
+
+    <Style x:Key="KpiLabelStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="{DynamicResource FontSize.KpiLabel}"/>
+        <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}"/>
+        <Setter Property="Margin" Value="0,0,0,4"/>
+    </Style>
+
+    <!-- 兼容旧键名（页面历史引用） -->
+    <Style x:Key="SectionHeader" TargetType="TextBlock" BasedOn="{StaticResource SectionTitleStyle}">
+        <Setter Property="Margin" Value="0,0,0,8"/>
+    </Style>
+    <Style x:Key="CardHeader" TargetType="TextBlock" BasedOn="{StaticResource CaptionStyle}">
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Margin" Value="0,0,0,6"/>
+    </Style>
+    <Style x:Key="InputLabel" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="{DynamicResource FontSize.Body}"/>
+        <Setter Property="FontWeight" Value="Medium"/>
+        <Setter Property="Foreground" Value="{DynamicResource Brush.TextSecondary}"/>
+    </Style>
+    <Style x:Key="DescriptionText" TargetType="TextBlock" BasedOn="{StaticResource CaptionStyle}"/>
+
+    <!-- 设置目录项：与侧栏导航同一套视觉语言 -->
+    <Style x:Key="SettingsNavItemStyle" TargetType="ListBoxItem">
+        <Setter Property="Height" Value="36"/>
+        <Setter Property="Padding" Value="12,0"/>
+        <Setter Property="Margin" Value="0,1"/>
+        <Setter Property="FontSize" Value="{DynamicResource FontSize.Body}"/>
+        <Setter Property="Foreground" Value="{DynamicResource Brush.TextSecondary}"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ListBoxItem">
+                    <Border x:Name="Bd" Background="Transparent"
+                            CornerRadius="{DynamicResource CornerRadius.Small}"
+                            Padding="{TemplateBinding Padding}" SnapsToDevicePixels="True">
+                        <ContentPresenter VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="Background"
+                                    Value="{DynamicResource Brush.BackgroundAlt}"/>
+                        </Trigger>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter TargetName="Bd" Property="Background"
+                                    Value="{DynamicResource Brush.PrimaryLight}"/>
+                            <Setter Property="Foreground" Value="{DynamicResource Brush.Primary}"/>
+                            <Setter Property="FontWeight" Value="SemiBold"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    <!-- ── 表单：标题 / 说明 / 控件 三段式（§21）── -->
+    <Style x:Key="FormSectionTitle" TargetType="TextBlock" BasedOn="{StaticResource SectionTitleStyle}">
+        <Setter Property="Margin" Value="0,0,0,16"/>
+    </Style>
+
+    <Style x:Key="FormRowLabel" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="{DynamicResource FontSize.Body}"/>
+        <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}"/>
+        <Setter Property="TextWrapping" Value="Wrap"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+
+    <Style x:Key="FormRowDescription" TargetType="TextBlock" BasedOn="{StaticResource CaptionStyle}">
+        <Setter Property="Margin" Value="0,4,0,0"/>
+    </Style>
+
+    <Style x:Key="FormRow" TargetType="Grid">
+        <Setter Property="Margin" Value="0,0,0,16"/>
+    </Style>
+
+    <!-- ── 分区（用留白 + 标题分组，而不是到处加线 / 加卡片）── -->
+    <Style x:Key="Divider" TargetType="Border">
+        <Setter Property="Height" Value="1"/>
+        <Setter Property="Background" Value="{DynamicResource Brush.BorderLight}"/>
+        <Setter Property="SnapsToDevicePixels" Value="True"/>
+    </Style>
+
+    <Style x:Key="Divider.Vertical" TargetType="Border">
+        <Setter Property="Width" Value="1"/>
+        <Setter Property="Background" Value="{DynamicResource Brush.BorderLight}"/>
+        <Setter Property="Margin" Value="8,6"/>
+        <Setter Property="SnapsToDevicePixels" Value="True"/>
+    </Style>
+
+    <Style x:Key="ToolbarDivider" TargetType="Border" BasedOn="{StaticResource Divider.Vertical}"/>
+
+    <!-- ── 徽标（Badge）：来源 / 会员 / 待确认；一律浅底 + 同色文字，不做高饱和胶囊 ── -->
+    <Style x:Key="Badge" TargetType="Border">
+        <Setter Property="CornerRadius" Value="{DynamicResource CornerRadius.Pill}"/>
+        <Setter Property="Padding" Value="8,2"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+        <Setter Property="Background" Value="{DynamicResource Brush.BackgroundAlt}"/>
+    </Style>
+
+    <Style x:Key="Badge.Text" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="11.5"/>
+        <Setter Property="FontWeight" Value="Medium"/>
+        <Setter Property="Foreground" Value="{DynamicResource Brush.TextSecondary}"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+
+    <Style x:Key="Badge.User" TargetType="Border" BasedOn="{StaticResource Badge}">
+        <Setter Property="Background" Value="{DynamicResource Brush.PrimaryLight}"/>
+    </Style>
+    <Style x:Key="Badge.Enterprise" TargetType="Border" BasedOn="{StaticResource Badge}">
+        <Setter Property="Background" Value="{DynamicResource Brush.SuccessLight}"/>
+    </Style>
+    <Style x:Key="Badge.System" TargetType="Border" BasedOn="{StaticResource Badge}">
+        <Setter Property="Background" Value="{DynamicResource Brush.BackgroundAlt}"/>
+    </Style>
+    <Style x:Key="Badge.Warning" TargetType="Border" BasedOn="{StaticResource Badge}">
+        <Setter Property="Background" Value="{DynamicResource Brush.WarningLight}"/>
+    </Style>
+    <Style x:Key="Badge.Accent" TargetType="Border" BasedOn="{StaticResource Badge}">
+        <Setter Property="Background" Value="{DynamicResource Brush.AccentLight}"/>
+    </Style>
+    <Style x:Key="Badge.AccentText" TargetType="TextBlock" BasedOn="{StaticResource Badge.Text}">
+        <Setter Property="Foreground" Value="{DynamicResource Brush.Accent}"/>
+    </Style>
+    <Style x:Key="Badge.PrimaryText" TargetType="TextBlock" BasedOn="{StaticResource Badge.Text}">
+        <Setter Property="Foreground" Value="{DynamicResource Brush.Primary}"/>
+    </Style>
+    <Style x:Key="Badge.SuccessText" TargetType="TextBlock" BasedOn="{StaticResource Badge.Text}">
+        <Setter Property="Foreground" Value="{DynamicResource Brush.Success}"/>
+    </Style>
+    <Style x:Key="Badge.WarningText" TargetType="TextBlock" BasedOn="{StaticResource Badge.Text}">
+        <Setter Property="Foreground" Value="{DynamicResource Brush.Warning}"/>
+    </Style>
+
+    <!-- ── 状态：8px 圆点 + 同色文字（§25；不要每行一个彩色底）── -->
+    <Style x:Key="StatusDot" TargetType="Ellipse">
+        <Setter Property="Width" Value="8"/>
+        <Setter Property="Height" Value="8"/>
+        <Setter Property="Fill" Value="{DynamicResource Brush.TextDisabled}"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+
+    <Style x:Key="StatusText" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="{DynamicResource FontSize.Body}"/>
+        <Setter Property="Foreground" Value="{DynamicResource Brush.TextSecondary}"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+
+    <!-- ── 空状态（§28）── -->
+    <Style x:Key="EmptyState.Icon" TargetType="Path">
+        <Setter Property="Width" Value="44"/>
+        <Setter Property="Height" Value="44"/>
+        <Setter Property="Stretch" Value="Uniform"/>
+        <Setter Property="Fill" Value="Transparent"/>
+        <Setter Property="Stroke" Value="{DynamicResource Brush.TextDisabled}"/>
+        <Setter Property="StrokeThickness" Value="{DynamicResource Size.Stroke}"/>
+    </Style>
+
+    <Style x:Key="EmptyState.Title" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="{DynamicResource FontSize.SectionTitle}"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}"/>
+        <Setter Property="HorizontalAlignment" Value="Center"/>
+        <Setter Property="Margin" Value="0,0,0,6"/>
+    </Style>
+
+    <Style x:Key="EmptyState.Description" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="{DynamicResource FontSize.Body}"/>
+        <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}"/>
+        <Setter Property="HorizontalAlignment" Value="Center"/>
+        <Setter Property="TextAlignment" Value="Center"/>
+    </Style>
+
+    <!-- ── Toggle 开关：二元系统行为用它（§22）── -->
+    <Style x:Key="Toggle.Switch" TargetType="CheckBox">
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="CheckBox">
+                    <StackPanel Orientation="Horizontal" Background="Transparent">
+                        <Border x:Name="Track" Width="40" Height="22" CornerRadius="11"
+                                Background="{DynamicResource Brush.BorderStrong}"
+                                SnapsToDevicePixels="True">
+                            <Border x:Name="Thumb" Width="18" Height="18" CornerRadius="9" Margin="2,0,0,0"
+                                    HorizontalAlignment="Left" Background="White"
+                                    SnapsToDevicePixels="True"/>
+                        </Border>
+                        <ContentPresenter Margin="10,0,0,0" VerticalAlignment="Center"
+                                          RecognizesAccessKey="True"/>
+                    </StackPanel>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="Track" Property="Background"
+                                    Value="{DynamicResource Brush.Primary}"/>
+                            <Setter TargetName="Thumb" Property="HorizontalAlignment" Value="Right"/>
+                            <Setter TargetName="Thumb" Property="Margin" Value="0,0,2,0"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.5"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- 多选规则用它（保护尺寸/公差…）-->
+    <Style x:Key="CheckBox.Rule" TargetType="CheckBox">
+        <Setter Property="FontSize" Value="{DynamicResource FontSize.Body}"/>
+        <Setter Property="Foreground" Value="{DynamicResource Brush.TextSecondary}"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Margin" Value="0,0,16,8"/>
+    </Style>
+
+    <!-- ── 只读信息行：左标签右值（输出设置、账号信息等）── -->
+    <Style x:Key="InfoLabel" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="{DynamicResource FontSize.Body}"/>
+        <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}"/>
+        <Setter Property="Margin" Value="0,0,0,4"/>
+    </Style>
+
+    <Style x:Key="InfoValue" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="{DynamicResource FontSize.Body}"/>
+        <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}"/>
+        <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+    </Style>
+
+    <Style x:Key="InfoValueStrong" TargetType="TextBlock" BasedOn="{StaticResource InfoValue}">
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="FontSize" Value="{DynamicResource FontSize.SectionTitle}"/>
+    </Style>
+</ResourceDictionary>
+

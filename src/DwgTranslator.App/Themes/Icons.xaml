@@ -82,4 +82,39 @@
     <PathGeometry x:Key="Icon.Cad"
                   Figures="M 1,1.5 L 13,1.5 L 13,12.5 L 1,12.5 Z M 3.6,9.8 L 6.5,4.4 L 9.4,9.8 Z M 11.1,6.4 A 1.5,1.5 0 1 1 11.09,6.4 Z" />
 
+    <!-- ═══ Sidebar navigation (all drawn in a 14 x 14 box) ═══ -->
+    <!-- 图纸翻译: sheet with text lines -->
+    <PathGeometry x:Key="Icon.NavTranslate"
+                  Figures="M 2,1.2 L 12,1.2 L 12,12.8 L 2,12.8 Z M 4.4,4.6 L 9.6,4.6 M 4.4,7.2 L 9.6,7.2 M 4.4,9.8 L 7.4,9.8" />
+    <!-- 批量任务: stacked sheets -->
+    <PathGeometry x:Key="Icon.NavBatch"
+                  Figures="M 4.4,0.8 L 13.2,0.8 L 13.2,9.6 M 0.8,4.4 L 9.6,4.4 L 9.6,13.2 L 0.8,13.2 Z M 3.2,7.4 L 7.2,7.4 M 3.2,10.2 L 7.2,10.2" />
+    <!-- 术语库: open book -->
+    <PathGeometry x:Key="Icon.NavGlossary"
+                  Figures="M 1.2,1.6 L 6.2,1.6 L 7,3 L 7.8,1.6 L 12.8,1.6 L 12.8,12.4 L 7.8,12.4 L 7,11 L 6.2,12.4 L 1.2,12.4 Z M 7,3 L 7,11" />
+    <!-- 会员中心: crowned user -->
+    <PathGeometry x:Key="Icon.NavAccount"
+                  Figures="M 7,1.2 L 9,3.4 L 11.6,1.8 L 11,6.4 L 3,6.4 L 2.4,1.8 L 5,3.4 Z M 3.4,8.6 L 10.6,8.6 L 11.4,13.2 L 2.6,13.2 Z" />
+    <!-- 设置: gear -->
+    <PathGeometry x:Key="Icon.NavSettings"
+                  Figures="M 7,4.6 A 2.4,2.4 0 1 1 6.99,4.6 Z M 6.4,0.8 L 7.6,0.8 L 7.9,2.2 L 9.1,2.6 L 10.2,1.7 L 11.1,2.6 L 10.2,3.7 L 10.7,4.9 L 12.2,5.2 L 12.2,6.4 L 10.7,6.7 L 10.2,7.9 L 11.1,9 L 10.2,9.9 L 9.1,9 L 7.9,9.4 L 7.6,10.8 L 6.4,10.8 L 6.1,9.4 L 4.9,9 L 3.8,9.9 L 2.9,9 L 3.8,7.9 L 3.3,6.7 L 1.8,6.4 L 1.8,5.2 L 3.3,4.9 L 3.8,3.7 L 2.9,2.6 L 3.8,1.7 L 4.9,2.6 L 6.1,2.2 Z" />
+    <!-- 添加图纸: folder with a plus -->
+    <PathGeometry x:Key="Icon.FolderPlus"
+                  Figures="M 0.8,2.6 L 5.2,2.6 L 6.4,4 L 13.2,4 L 13.2,12.4 L 0.8,12.4 Z M 7,6.2 L 7,10.6 M 4.8,8.4 L 9.2,8.4" />
+    <!-- 打开输出目录: folder with a down arrow -->
+    <PathGeometry x:Key="Icon.FolderOpen"
+                  Figures="M 0.8,2.6 L 5.2,2.6 L 6.4,4 L 13.2,4 L 13.2,12.4 L 0.8,12.4 Z M 7,6 L 7,10.6 M 5,8.6 L 7,10.6 L 9,8.6" />
+    <!-- 停止任务 -->
+    <PathGeometry x:Key="Icon.StopSquare" Figures="M 0.4,0.4 L 9.6,0.4 L 9.6,9.6 L 0.4,9.6 Z" />
+    <!-- Statistics cards -->
+    <PathGeometry x:Key="Icon.StatText"
+                  Figures="M 2.2,1 L 11.8,1 L 11.8,13 L 2.2,13 Z M 4.6,4.2 L 9.4,4.2 M 4.6,7 L 9.4,7 M 4.6,9.8 L 7.4,9.8" />
+    <PathGeometry x:Key="Icon.StatPie" Figures="M 7,1 L 13,7 L 7,13 Z M 7,1 A 6,6 0 0 0 1,7 L 7,7 Z" />
+    <PathGeometry x:Key="Icon.StatPin"
+                  Figures="M 7,1.2 L 9.4,5.6 L 12.8,6.2 L 10.4,8.6 L 11,12.8 L 7,10.8 L 3,12.8 L 3.6,8.6 L 1.2,6.2 L 4.6,5.6 Z" />
+    <PathGeometry x:Key="Icon.Monitor"
+                  Figures="M 1,2 L 13,2 L 13,10.4 L 1,10.4 Z M 4.6,12.6 L 9.4,12.6 M 7,10.4 L 7,12.6" />
+    <PathGeometry x:Key="Icon.Clock"
+                  Figures="M 7,1 A 6,6 0 1 1 6.99,1 Z M 7,3.4 L 7,7.4 L 9.8,8.8" />
+
 </ResourceDictionary>

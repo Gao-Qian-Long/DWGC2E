@@ -86,7 +86,7 @@
 
         <!-- Bottom -->
         <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
-            <Button Content="{conv:Localize BtnCancel}" Width="80" Height="32" Margin="0,0,0,0" Click="Cancel_Click"
+            <Button Content="{conv:Localize BtnCancel}" Width="80" Margin="0,0,0,0" Click="Cancel_Click"
                     Background="{DynamicResource Brush.BackgroundAlt}" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1" Cursor="Hand"/>
         </StackPanel>
     </Grid>

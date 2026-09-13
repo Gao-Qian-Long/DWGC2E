@@ -33,7 +33,7 @@
                     <TextBlock Text="原文语言" Style="{StaticResource InputLabel}" />
                     <ComboBox x:Name="SourceCombo"
                               Margin="0,6,0,0"
-                              Height="34"
+
                               MaxWidth="212"
                               HorizontalAlignment="Left"
                               VerticalContentAlignment="Center"
@@ -45,7 +45,7 @@
                 <Button Grid.Column="1"
                         x:Name="SwapButton"
                         Margin="12,22,12,0"
-                        Width="40" Height="34"
+                        Width="40"
                         ToolTip="交换原文语言与目标语言"
                         AutomationProperties.Name="交换语言"
                         Style="{StaticResource ToolButton}"
@@ -66,7 +66,7 @@
                     <TextBlock Text="目标语言" Style="{StaticResource InputLabel}" />
                     <ComboBox x:Name="TargetCombo"
                               Margin="0,6,0,0"
-                              Height="34"
+
                               MaxWidth="212"
                               HorizontalAlignment="Left"
                               VerticalContentAlignment="Center"
@@ -112,11 +112,11 @@
             </Border>
 
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,20,0,0">
-                <Button Content="取消" MinWidth="92" Height="34"
+                <Button Content="取消" MinWidth="92"
                         IsCancel="True"
                         Style="{StaticResource DialogCancelButton}"
                         Click="Cancel_Click" />
-                <Button x:Name="ApplyButton" Content="应用" MinWidth="92" Height="34" Margin="10,0,0,0"
+                <Button x:Name="ApplyButton" Content="应用" MinWidth="92" Margin="10,0,0,0"
                         IsDefault="True"
                         Style="{StaticResource DialogSaveButton}"
                         Click="Apply_Click" />

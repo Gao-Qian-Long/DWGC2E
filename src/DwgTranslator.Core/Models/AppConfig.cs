@@ -95,4 +95,32 @@ public class AppConfig
     /// Returns the decrypted API key from this config instance.
     /// </summary>
     public string GetDecryptedApiKey() => DecryptApiKey(DeepSeekApiKey);
+
+    // ── 任务层与并发（本地并发与 AI 并发分开限流）──
+    public int LocalWorkerCount { get; set; } = 2;
+    public int AiConcurrency { get; set; } = 4;
+    public bool MemoryOptimization { get; set; } = true;
+
+    // ── 后端对接（客户端只认 IApiClient）──
+    public string ApiMode { get; set; } = "worker";
+    public string ApiBaseUrl { get; set; } = "https://api.cad.pocketter.dpdns.org";
+    public string AuthTokenEncrypted { get; set; } = string.Empty;
+    public string UpdateManifestUrl { get; set; } = "https://cad.pocketter.dpdns.org/update/latest.json";
+    public bool AutoCheckUpdate { get; set; } = true;
+
+    // ── 文件安全（默认不覆盖原文件）──
+    public string OutputNamingPattern { get; set; } = "{name}_{lang}";
+    public string DuplicatePolicy { get; set; } = "skip";
+    public bool BackupSourceBeforeWrite { get; set; } = false;
+    public bool AllowOverwriteSource { get; set; } = false;
+
+    // ── 工程保护规则开关（直接作用于过滤与校验）──
+    public bool ProtectDimensions { get; set; } = true;
+    public bool ProtectTolerances { get; set; } = true;
+    public bool ProtectModels { get; set; } = true;
+    public bool GlossaryFirst { get; set; } = true;
+
+    // ── 常规 ──
+    public bool StartWithWindows { get; set; } = false;
+    public bool OpenOutputFolderAfterExport { get; set; } = true;
 }

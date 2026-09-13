@@ -19,6 +19,9 @@ public partial class SettingsViewModel : ObservableObject
     private readonly string _settingsPath;
     private readonly ILocalizationService _localizationService;
     [ObservableProperty] private string _apiKey = string.Empty;
+    [ObservableProperty] private string _apiMode = "direct";
+    [ObservableProperty] private string _workerBaseUrl = string.Empty;
+    public bool IsWorkerMode => string.Equals(ApiMode, "worker", StringComparison.OrdinalIgnoreCase);
     [ObservableProperty] private string _baseUrl = "https://api.deepseek.com";
     [ObservableProperty] private string _model = "deepseek-chat";
     [ObservableProperty] private string _autoCadPath = string.Empty;
@@ -57,6 +60,8 @@ public partial class SettingsViewModel : ObservableObject
             var json = File.ReadAllText(_settingsPath);
             var config = JsonSerializer.Deserialize<AppConfig>(json, AppConfigJson.ReadOptions) ?? new AppConfig();
 
+            ApiMode = config.ApiMode ?? "direct";
+            WorkerBaseUrl = config.ApiBaseUrl ?? string.Empty;
             ApiKey = AppConfig.DecryptApiKey(config.DeepSeekApiKey);
             BaseUrl = config.DeepSeekBaseUrl ?? BaseUrl;
             Model = config.DeepSeekModel ?? Model;
@@ -86,7 +91,10 @@ public partial class SettingsViewModel : ObservableObject
                 ? JsonSerializer.Deserialize<AppConfig>(File.ReadAllText(_settingsPath), AppConfigJson.ReadOptions) ?? new AppConfig()
                 : new AppConfig();
 
-            config.DeepSeekApiKey = AppConfig.EncryptApiKey(ApiKey.Trim());
+            config.ApiMode = ApiMode;
+            config.ApiBaseUrl = WorkerBaseUrl.Trim();
+            // In Worker mode the DeepSeek credential belongs only to Cloudflare Worker.
+            config.DeepSeekApiKey = IsWorkerMode ? string.Empty : AppConfig.EncryptApiKey(ApiKey.Trim());
             config.DeepSeekBaseUrl = BaseUrl.Trim();
             config.DeepSeekModel = Model.Trim();
             config.AutoCadInstallPath = AutoCadPath.Trim();
@@ -126,11 +134,9 @@ public partial class SettingsViewModel : ObservableObject
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
         try
         {
-            using var httpClient = new HttpClient { BaseAddress = new Uri(BaseUrl.Trim()) };
-            httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {ApiKey.Trim()}");
-            httpClient.Timeout = TimeSpan.FromSeconds(15);
-
-            var client = new DeepSeekClient(httpClient, Model.Trim());
+            // 用表单里此刻填的值建客户端（这些值还没落盘，不能走读配置的客户端），
+            // 但 HttpClient / 鉴权头的拼装留在 Core：界面层不再自己写 HTTP 细节。
+            var client = DeepSeekClientFactory.Create(BaseUrl, ApiKey, Model, TimeSpan.FromSeconds(15));
             var response = await Task.Run(
                 () => client.ChatCompletionAsync("You are a test assistant.", "Say OK", cts.Token),
                 cts.Token);

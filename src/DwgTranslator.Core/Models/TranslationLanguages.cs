@@ -11,6 +11,13 @@ public sealed record TranslationLanguage(string Code, string EnglishName, string
 {
     /// <summary>Label used by the language pickers: "Japanese · 日本語".</summary>
     public string DisplayName => NativeName == EnglishName ? EnglishName : $"{NativeName} · {EnglishName}";
+
+    /// <summary>
+    /// Readable name for anything that falls back to ToString() — accessibility names, logs and
+    /// any control template that cannot apply DisplayMemberPath. Without this the record prints its
+    /// whole property dump (which is how a combo box once showed "TranslationLanguage { Code = ZH … }").
+    /// </summary>
+    public override string ToString() => DisplayName;
 }
 
 /// <summary>

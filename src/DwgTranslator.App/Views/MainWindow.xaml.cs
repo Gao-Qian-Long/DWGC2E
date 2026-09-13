@@ -18,14 +18,30 @@ public partial class MainWindow : Window
         InitializeComponent();
 
         // Resolve ViewModel from DI container (falls back to parameterless ctor if DI not ready)
-        _viewModel = App.Services?.GetService<MainViewModel>() ?? new MainViewModel();
+        // 依赖全部由 DI 装配（MainViewModel 只有这一个构造函数）：容器没起来就是致命错误，
+        // 不能悄悄退回"半装配"的另一套实例——那样界面会看不到任务层，翻译按钮会静默失效。
+        _viewModel = App.Services?.GetService<MainViewModel>()
+            ?? throw new InvalidOperationException("服务容器未初始化，无法创建主视图模型。");
         DataContext = _viewModel;
 
         // BUG FIX: 异步初始化术语库加载，避免 UI 线程同步阻塞
+        // 操作结果统一走 Toast（§29）
+        Services.ToastService.Attach(Toasts);
+
         Loaded += OnLoaded;
         Closing += (s, e) => _viewModel.Dispose();
     }
 
+    /// <summary>右上角用户入口：用主题化 ContextMenu 承载账号/置顶/设置等入口（§9）。</summary>
+    private void AccountMenu_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.Button button || button.ContextMenu is null) return;
+
+        button.ContextMenu.PlacementTarget = button;
+        button.ContextMenu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+        button.ContextMenu.HorizontalOffset = -8;
+        button.ContextMenu.IsOpen = true;
+    }
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
         await _viewModel.InitializeAsync();

@@ -16,5 +16,8 @@
   "minimumLogLevel": "Debug",
   "autoCadInstallPath": "",
   "cadPluginPath": "",
-  "language": "zh-CN"
+  "language": "zh-CN",
+  "apiMode": "worker",
+  "apiBaseUrl": "https://api.cad.pocketter.dpdns.org",
+  "updateManifestUrl": "https://cad.pocketter.dpdns.org/update/latest.json"
 }

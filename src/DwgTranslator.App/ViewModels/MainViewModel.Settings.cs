@@ -221,19 +221,13 @@ public partial class MainViewModel
 
             LoadConfig();
 
-            if (_config.DeepSeekApiKey != oldApiKey ||
-                _config.DeepSeekBaseUrl != oldBaseUrl ||
-                _config.DeepSeekModel != oldModel)
-            {
-                _httpClient?.Dispose();
-                _httpClient = null;
-                _deepSeekClient = null;
-                StatusMessage = Strings.Get("StatusApiReset");
-            }
-            else
-            {
-                StatusMessage = Strings.Get("StatusSettingsSaved");
-            }
+            // AI 客户端现在每次调用前重读配置（SettingsBackedDeepSeekClient）：改 Key / 地址 / 模型
+            // 不再需要在这里重建 HttpClient，也不需要重启程序才生效。
+            StatusMessage = _config.DeepSeekApiKey != oldApiKey
+                || _config.DeepSeekBaseUrl != oldBaseUrl
+                || _config.DeepSeekModel != oldModel
+                    ? Strings.Get("StatusApiReset")
+                    : Strings.Get("StatusSettingsSaved");
         }
     }
 

@@ -22,7 +22,7 @@
         </Grid.RowDefinitions>
 
         <!-- Section 1: DeepSeek API Settings -->
-        <Border Grid.Row="0" Background="White" CornerRadius="8" Padding="16" Margin="0,0,0,12"
+        <Border x:Name="DirectApiSection" Grid.Row="0" Background="White" CornerRadius="8" Padding="16" Margin="0,0,0,12"
                 Effect="{StaticResource CardShadow}">
             <StackPanel>
                 <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
@@ -40,7 +40,7 @@
                     <PasswordBox x:Name="ApiKeyBox" Grid.Column="1" Padding="6,4" VerticalContentAlignment="Center" BorderBrush="{DynamicResource Brush.Border}"/>
                     <TextBox x:Name="ApiKeyTextBox" Grid.Column="1" Padding="6,4" VerticalContentAlignment="Center" BorderBrush="{DynamicResource Brush.Border}"
                              Visibility="Collapsed" FontFamily="Consolas" FontSize="12"/>
-                    <Button x:Name="ToggleApiKeyVisibility" Grid.Column="2" Content="{conv:Localize BtnShow}" Width="50" Height="26" Margin="5,0,0,0"
+                    <Button x:Name="ToggleApiKeyVisibility" Grid.Column="2" Content="{conv:Localize BtnShow}" Width="50" Margin="5,0,0,0"
                             Click="ToggleApiKeyVisibility_Click" FontSize="10" Cursor="Hand"/>
                 </Grid>
 
@@ -61,7 +61,7 @@
                     </Grid.ColumnDefinitions>
                     <TextBlock Text="{conv:Localize SettingsModel}" VerticalAlignment="Center" Foreground="{DynamicResource Brush.TextSecondary}"/>
                     <TextBox x:Name="ModelBox" Grid.Column="1" Text="{Binding Model, UpdateSourceTrigger=PropertyChanged}" Padding="6,4" VerticalContentAlignment="Center" BorderBrush="{DynamicResource Brush.Border}"/>
-                    <Button Grid.Column="2" Content="{conv:Localize BtnTestConnection}" Width="75" Height="26" Margin="5,0,0,0" Click="TestConnection_Click"
+                    <Button Grid.Column="2" Content="{conv:Localize BtnTestConnection}" Width="75" Margin="5,0,0,0" Click="TestConnection_Click"
                             Background="{DynamicResource Brush.Primary}" Foreground="White" BorderThickness="0" Cursor="Hand" FontSize="11"/>
                 </Grid>
 
@@ -72,7 +72,7 @@
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
                     <TextBlock Text="并发请求" VerticalAlignment="Center" Foreground="{DynamicResource Brush.TextSecondary}"/>
-                    <ComboBox Grid.Column="1" Height="28"
+                    <ComboBox Grid.Column="1"
                               ItemsSource="{Binding TranslationConcurrencyChoices}"
                               SelectedItem="{Binding MaxTranslationConcurrency, Mode=TwoWay}"
                               VerticalContentAlignment="Center"/>
@@ -103,8 +103,8 @@
                     <TextBlock Text="{conv:Localize SettingsInstallPath}" VerticalAlignment="Center" Foreground="{DynamicResource Brush.TextSecondary}"/>
                     <TextBox x:Name="AutoCadPathBox" Grid.Column="1" Text="{Binding AutoCadPath, UpdateSourceTrigger=PropertyChanged}" Padding="6,4" VerticalContentAlignment="Center" Margin="0,0,5,0" BorderBrush="{DynamicResource Brush.Border}"/>
                     <StackPanel Grid.Column="2" Orientation="Horizontal">
-                        <Button Content="{conv:Localize BtnBrowse}" Width="50" Height="26" Margin="0,0,3,0" Click="BrowseAutoCad_Click" Cursor="Hand" FontSize="11"/>
-                        <Button Content="{conv:Localize BtnAutoDetect}" Width="70" Height="26" Click="DetectAutoCad_Click" Cursor="Hand" FontSize="11"/>
+                        <Button Content="{conv:Localize BtnBrowse}" Width="50" Margin="0,0,3,0" Click="BrowseAutoCad_Click" Cursor="Hand" FontSize="11"/>
+                        <Button Content="{conv:Localize BtnAutoDetect}" Width="70" Click="DetectAutoCad_Click" Cursor="Hand" FontSize="11"/>
                     </StackPanel>
                 </Grid>
 
@@ -116,13 +116,13 @@
                     </Grid.ColumnDefinitions>
                     <TextBlock Text="{conv:Localize SettingsPluginPath}" VerticalAlignment="Center" Foreground="{DynamicResource Brush.TextSecondary}"/>
                     <TextBox x:Name="CadPluginPathBox" Grid.Column="1" Text="{Binding CadPluginPath, UpdateSourceTrigger=PropertyChanged}" Padding="6,4" VerticalContentAlignment="Center" Margin="0,0,5,0" BorderBrush="{DynamicResource Brush.Border}"/>
-                    <Button Grid.Column="2" Content="{conv:Localize BtnBrowse}" Width="50" Height="26" Click="BrowseCadPlugin_Click" Cursor="Hand" FontSize="11"/>
+                    <Button Grid.Column="2" Content="{conv:Localize BtnBrowse}" Width="50" Click="BrowseCadPlugin_Click" Cursor="Hand" FontSize="11"/>
                 </Grid>
 
                 <TextBlock x:Name="AutoCadStatusText" Text="{Binding AutoCadStatusText}" FontSize="11" Margin="80,6,0,0"
                            Foreground="{Binding AutoCadStatusBrush}" TextWrapping="Wrap" VerticalAlignment="Top"/>
                 <StackPanel Orientation="Horizontal" Margin="80,8,0,0">
-                    <Button Content="验证在线回写" Width="110" Height="28" Click="TestCadIntegration_Click"
+                    <Button Content="验证在线回写" Width="110" Click="TestCadIntegration_Click"
                             IsEnabled="{Binding IsTestingCad, Converter={StaticResource InverseBoolConverter}}"
                             Background="{DynamicResource Brush.Primary}" Foreground="White" BorderThickness="0" Cursor="Hand"/>
                     <TextBlock Text="{Binding CadTestResultText}" Foreground="{Binding CadTestResultBrush}"
@@ -142,7 +142,7 @@
 
                 <StackPanel Orientation="Horizontal">
                     <TextBlock Text="{conv:Localize SettingsLogLevel}" Width="80" VerticalAlignment="Center" Foreground="{DynamicResource Brush.TextSecondary}"/>
-                    <ComboBox x:Name="LogLevelComboBox" Width="160" Height="28" FontSize="12"
+                    <ComboBox x:Name="LogLevelComboBox" Width="160" FontSize="12"
                               VerticalContentAlignment="Center"/>
                     <TextBlock Text="{conv:Localize SettingsLogLevelNote}" VerticalAlignment="Center" Foreground="{DynamicResource Brush.TextMuted}" FontSize="11" Margin="8,0,0,0"/>
                 </StackPanel>
@@ -157,9 +157,9 @@
 
         <!-- Footer -->
         <StackPanel Grid.Row="6" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,4,0,0">
-            <Button Content="{conv:Localize BtnSave}" Width="80" Height="32" Margin="0,0,10,0" Click="Save_Click"
+            <Button Content="{conv:Localize BtnSave}" Width="80" Margin="0,0,10,0" Click="Save_Click"
                     Background="{DynamicResource Brush.Primary}" Foreground="White" FontWeight="SemiBold" BorderThickness="0" Cursor="Hand"/>
-            <Button Content="{conv:Localize BtnCancel}" Width="80" Height="32" Click="Cancel_Click"
+            <Button Content="{conv:Localize BtnCancel}" Width="80" Click="Cancel_Click"
                     Background="{DynamicResource Brush.BackgroundAlt}" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1" Cursor="Hand"/>
         </StackPanel>
     </Grid>
