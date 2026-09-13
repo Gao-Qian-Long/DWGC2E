@@ -22,6 +22,8 @@ DOWNLOAD_URL = ""
 BACKUP_DOWNLOAD_URL = ""
 RELEASE_NOTES = ""
 
-# Select brevo or resend; keys must remain Worker Secrets.
-MAIL_PROVIDER = "brevo"
+# round_robin alternates preferred providers in D1; brevo/resend pin the primary.
+# Apply migrations/0001_mail_round_robin.sql before deploying this mode.
+# Keys must remain Worker Secrets.
+MAIL_PROVIDER = "round_robin"
 MAIL_FALLBACK_ENABLED = "true"

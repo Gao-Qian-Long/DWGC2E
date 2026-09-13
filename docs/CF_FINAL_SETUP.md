@@ -58,7 +58,7 @@ BREVO_API_KEY
 ```
 
 禁止写入 APP、Pages Variables、GitHub、`wrangler.toml`、前端 JS 或安装包。双平台方案额外保留 `RESEND_API_KEY`，不要删除已经可用的 `BREVO_API_KEY`。
-普通变量新增 `MAIL_PROVIDER=brevo`、`MAIL_FALLBACK_ENABLED=true`。详见 cf-worker/README.md 的双平台部署与分别验收步骤。
+普通变量使用 `MAIL_PROVIDER=round_robin`、`MAIL_FALLBACK_ENABLED=true`：Brevo 和 Resend 轮流作为首选，失败时允许备用。升级前先执行 `cf-worker/migrations/0001_mail_round_robin.sql` 增量建表（不清空用户数据），再部署。详见 cf-worker/README.md 的双平台升级与验收步骤。
 
 ## 5. Brevo
 

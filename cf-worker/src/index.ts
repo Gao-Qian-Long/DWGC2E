@@ -1,4 +1,4 @@
-import { deliverMail, mailProviders } from "./mail";
+import { deliverMail, mailProviders, selectMailProviders } from "./mail";
 interface Env {
   DB: D1Database;
   DEEPSEEK_API_KEY: string;
@@ -124,6 +124,13 @@ async function sendCode(email: string, purpose: string, e: Env) {
       429,
       cors(e),
     );
+  let providers: Awaited<ReturnType<typeof selectMailProviders>>;
+  try { providers = await selectMailProviders(e); } catch {
+    // Do not invalidate an existing code or send anything when routing is unavailable.
+    console.error(JSON.stringify({ event: "mail_routing_unavailable" }));
+    return json({ success: false, error_code: "mail_routing_unavailable",
+      message: "邮件调度暂不可用，请联系管理员检查数据库迁移" }, 503, cors(e));
+  }
   const code = String(Math.floor(100000 + Math.random() * 900000)),
     id = random(),
     ts = now(),
@@ -150,7 +157,7 @@ async function sendCode(email: string, purpose: string, e: Env) {
     subject: purpose === "register" ? "DWGC2E 注册验证码" : "DWGC2E 密码重置验证码",
     html: '<p>你的验证码是：</p><p style="font-size:28px;font-weight:700;letter-spacing:6px">' +
       code + '</p><p>验证码 10 分钟内有效。如非本人操作，请忽略此邮件。</p>',
-  });
+  }, fetch, 8000, providers);
   if (!result.ok) {
     // Preserve uncertain deliveries in case the message arrives late.
     if (!result.uncertain) await e.DB.prepare(

@@ -52,25 +52,47 @@ cd D:\DWGC2E
 
 
 
-## 双邮件平台（Brevo + Resend）
+## 双邮件平台轮流发送（Brevo + Resend）
 
-保留已经可用的 Brevo，在同一个 Worker 添加 Secret `RESEND_API_KEY`。无需新建 Worker、修改 D1 或重配已验证的 DNS。两个平台均须允许 MAIL_FROM 对应的发件人。
+两个平台都保留，注册和找回密码共用全局轮换队列：Brevo → Resend → Brevo → Resend。两个平台均须允许 MAIL_FROM 对应的发件人，Worker 中须保留 BREVO_API_KEY 和 RESEND_API_KEY 两个 Secret；无需重配已验证的 DNS。
 
 普通变量（已写入 wrangler.toml）：
 
-- MAIL_PROVIDER=brevo：首选 Brevo；设为 resend 可首选 Resend。
-- MAIL_FALLBACK_ENABLED=true：允许备用平台；false 则只使用所选平台。
+- MAIL_PROVIDER=round_robin：两个平台轮流作为首选；brevo 或 resend 可固定首选平台。
+- MAIL_FALLBACK_ENABLED=true：首选返回 401/402/403/429/5xx 时尝试另一平台一次；false 关闭备用，但不关闭轮流选首选。
+- 只有一个平台有密钥时，轮换模式只使用该平台。两个密钥都缺失或配置非法时不发送。
 
-若主平台未配置密钥且允许备用，会直接使用有密钥的备用平台；配置值非法会报邮箱未配置，不会盲目发送。
-主平台返回 401/402/403/429/5xx 时尝试备用平台一次；400/422 等请求错误不会切换。两次发送共用同一条验证码数据库记录和邮件内容，失效时间不重置。
-网络异常/超时意味着发送结果不确定，不自动跨平台重发，提示检查邮箱并保留验证码有效。5xx 下也无法严格保证不重复投递，可能收到内容相同的两封邮件。API 接受请求不等于收件箱送达。
+轮换使用 D1 的单条原子 UPSERT RETURNING，不依赖 Worker 内存。新增 mail_routing_state 表仅保存一行 0/1 状态；双平台模式每次分配增加一次 D1 写操作，受现有 D1 配额限制。备用重试不再推进轮换。限流/配置检查在分配之前执行。分配后若验证码写库或投递失败，该轮仍已消耗，因此均衡的是首选分配次数，不保证送达数量精确 50/50，也不根据平台剩余额度加权。
 
-### 部署与验收
+网络异常/超时的投递结果不确定，不自动跨平台重发；5xx 切换时仍可能收到同一验证码的两封邮件。API 成功只表示平台接受请求，不表示最终到达收件箱。全站用户共享轮换，其他用户请求或并发会影响你看到的顺序。
 
-1. CF → dwgc2e-api → Settings → Variables and Secrets：添加加密 RESEND_API_KEY，保留 BREVO_API_KEY 和 MAIL_FROM。勿把密钥写入 Git。
-2. 本地运行 npm ci、npm test、npm run typecheck，随后 npx wrangler deploy。Dashboard 手动更改的普通变量可能被本地 wrangler.toml 覆盖，部署前核对；不要重新执行生产 schema。
-3. 验证 Brevo：临时 MAIL_PROVIDER=brevo、MAIL_FALLBACK_ENABLED=false，保存并部署，申请一次验证码并检查 Brevo 发信记录和收件箱。
-4. 验证 Resend：临时 MAIL_PROVIDER=resend、MAIL_FALLBACK_ENABLED=false，保存并部署，申请验证码并检查 Resend 发信记录和收件箱。避免频繁点击触发限流。不要用删除密钥的方式测试。
-5. 验收后恢复 MAIL_PROVIDER=brevo、MAIL_FALLBACK_ENABLED=true 并部署。
+### 已有生产库升级（先加表，再部署）
 
-Worker 日志中的 verification_mail 包含 provider、HTTP status 和 request_id，不包含邮箱、验证码或密钥。成功接收响应只证明平台接受请求；实际送达仍需人工查收。单元测试使用模拟请求，不会发真实邮件。
+1. CF → dwgc2e-api → Settings → Variables and Secrets：确认两个 API Key 均为加密 Secret，不要删除 Brevo，不要把密钥写入 Git。
+2. 核对本地 wrangler.toml 的 MAIL_FROM、下载地址等普通变量，避免覆盖 Dashboard 中的不同值。
+3. 执行以下命令；这里用独立增量文件，不重建或清空已有用户数据库：
+
+```powershell
+cd D:\DWGC2E\cf-worker
+npm test
+npm run typecheck
+npx wrangler d1 execute dwg-translator-prod --remote --file=./migrations/0001_mail_round_robin.sql
+# 上一步成功后再执行部署
+npx wrangler deploy
+```
+
+增量建表可重复执行，不重置现有轮换位置。如果忘记建表，发送接口返回 503 / mail_routing_unavailable，不发送邮件且不作废上一次验证码。不要通过重建数据库来修复。
+
+### 用户验收
+
+```powershell
+cd D:\DWGC2E\cf-worker
+npx wrangler tail --format pretty
+```
+
+在官网申请验证码、等倒计时结束后再申请一次，并检查两个平台的发送记录和收件箱。不要频繁点击触发限流；新验证码会使旧验证码失效，以最新一封为准。
+日志 verification_mail 包含 primary、attempt、provider、HTTP status、request_id，不含邮箱、验证码或密钥。正常无其他请求时，两次 attempt=1 的 provider 应不同；attempt=2 表示备用尝试。
+
+需要分别排查平台时，临时将 MAIL_PROVIDER 设为 brevo 或 resend，MAIL_FALLBACK_ENABLED=false 并部署；验收后恢复 round_robin / true。回退到固定平台不需要删表。
+
+本地测试模拟邮件 HTTP 请求，并用 SQLite 验证轮换 SQL、持久化、独立连接分配；不发送真实邮件，不代表生产已经部署。

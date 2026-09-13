@@ -13,3 +13,9 @@ CREATE TABLE IF NOT EXISTS email_verification_codes (id TEXT PRIMARY KEY NOT NUL
 CREATE INDEX IF NOT EXISTS idx_email_codes_lookup ON email_verification_codes(email,purpose,created_at);
 
 CREATE TABLE IF NOT EXISTS user_glossaries (user_id TEXT PRIMARY KEY NOT NULL, entries_json TEXT NOT NULL DEFAULT '[]', updated_at TEXT NOT NULL, FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE);
+
+-- Additive upgrade only: never deletes users, codes or existing routing state.
+CREATE TABLE IF NOT EXISTS mail_routing_state (
+  id TEXT PRIMARY KEY NOT NULL CHECK (id = 'verification'),
+  slot INTEGER NOT NULL CHECK (slot IN (0, 1))
+);
