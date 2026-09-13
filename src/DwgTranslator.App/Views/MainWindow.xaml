@@ -29,7 +29,6 @@
         <KeyBinding Key="F1" Command="{Binding ShowHelpCommand}"/>
         <KeyBinding Key="E" Modifiers="Control" Command="{Binding ShowEnvironmentCheckCommand}"/>
         <KeyBinding Key="L" Modifiers="Control" Command="{Binding ToggleLogViewerCommand}"/>
-        <KeyBinding Key="OemComma" Modifiers="Control" Command="{Binding SettingsCommand}"/>
     </Window.InputBindings>
 
     <Window.Resources>
