@@ -132,3 +132,6 @@ public partial class GlossaryManagerDialog : Window
             _editableEntries.Remove(item);
     }
 }
+
+
+

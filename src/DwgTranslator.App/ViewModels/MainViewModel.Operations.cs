@@ -28,22 +28,29 @@ public partial class MainViewModel
         if (IsProcessing) return;
         if (Entities.Count == 0) return;
 
-        var result = MessageBox.Show(
-            Strings.Get("MsgClearConfirmBody", Entities.Count),
+        // 危险操作走主题化确认框（§29）
+        var confirmed = Views.ConfirmDialog.Ask(
+            Application.Current?.MainWindow,
             Strings.Get("MsgClearConfirmTitle"),
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Question);
-        if (result != MessageBoxResult.Yes) return;
+            Strings.Get("MsgClearConfirmBody", Entities.Count),
+            confirmText: "清空", danger: true);
+        if (!confirmed) return;
 
         Entities.Clear();
         FilteredEntities.Clear();
         DrawingFiles.Clear();
+        InvalidateEntityIndex();
+        // 清空工作区同时也清掉任务层记录（含未完成）：这是用户确认过的操作，
+        // 且 IsProcessing 已经挡掉了"跑到一半还清列表"的情况。
+        _taskManager.Clear(includeUnfinished: true);
+        HasDrawingFiles = false;
+        ProgressDetailText = string.Empty;
         SelectedDrawingFile = null;
         HasMultipleDrawingFiles = false;
         SelectedFilePath = string.Empty;
         TotalCount = 0; TranslatedCount = 0; FailedCount = 0;
         GlossaryHitCount = 0; CacheHitCount = 0; VisibleCount = 0;
-        ProgressValue = 0; _lastSourceFilePath = null;
+        ProgressValue = 0;
         StatusMessage = Strings.Get("StatusCleared");
     }
 
@@ -119,6 +126,44 @@ public partial class MainViewModel
         RefreshDrawingFileSummaries();
     }
 
+    private void DrawingFiles_CollectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+    {
+        if (e.OldItems != null)
+            foreach (DrawingFileItem item in e.OldItems) item.PropertyChanged -= DrawingFileItem_PropertyChanged;
+        if (e.NewItems != null)
+            foreach (DrawingFileItem item in e.NewItems) item.PropertyChanged += DrawingFileItem_PropertyChanged;
+        UpdateDrawingSelection();
+    }
+
+    private void DrawingFileItem_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(DrawingFileItem.IsIncludedForExport)) UpdateDrawingSelection();
+    }
+
+    partial void OnIsAllDrawingsSelectedChanged(bool value)
+    {
+        if (_updatingDrawingSelection) return;
+        try
+        {
+            _updatingDrawingSelection = true;
+            foreach (var item in DrawingFiles) item.IsIncludedForExport = value;
+        }
+        finally { _updatingDrawingSelection = false; }
+        OnPropertyChanged(nameof(IsAllDrawingsSelected));
+    }
+
+    public void UpdateDrawingSelection()
+    {
+        if (_updatingDrawingSelection) return;
+        var selected = DrawingFiles.Count > 0 && DrawingFiles.All(f => f.IsIncludedForExport);
+        if (IsAllDrawingsSelected != selected)
+        {
+            _updatingDrawingSelection = true;
+            IsAllDrawingsSelected = selected;
+            _updatingDrawingSelection = false;
+        }
+        OnPropertyChanged(nameof(IsAllDrawingsSelected));
+    }
     partial void OnSelectedDrawingFileChanged(DrawingFileItem? value)
     {
         SelectedFilePath = value == null
@@ -181,13 +226,26 @@ public partial class MainViewModel
         SelectedFilePath = DrawingFiles.Count > 1
             ? "全部文件"
             : DrawingFiles.FirstOrDefault()?.FileName ?? string.Empty;
+
+        // 导入即入队后，新行要立刻挂上任务对象，任务表才有真实的状态列。
+        HasDrawingFiles = DrawingFiles.Count > 0;
+        AttachTasksToRows();
     }
 
     private void RefreshDrawingFileSummaries()
     {
-        foreach (var file in DrawingFiles)
-            file.Refresh(Entities);
+        for (int i = 0; i < DrawingFiles.Count; i++)
+        {
+            DrawingFiles[i].Index = i + 1;
+            DrawingFiles[i].Refresh(Entities);
+        }
+        HasDrawingFiles = DrawingFiles.Count > 0;
     }
 
     #endregion
 }
+
+// Batch export selection helpers.
+
+
+

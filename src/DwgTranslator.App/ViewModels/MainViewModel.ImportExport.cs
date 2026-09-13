@@ -138,12 +138,19 @@ public partial class MainViewModel
                 return result;
             });
 
-            _lastSourceFilePath = filePaths[0];
+            // Replace workspace semantics: old queued drawings must not execute against hidden rows.
+            _taskManager.Clear(includeUnfinished: true);
             Entities.Clear();
+            InvalidateEntityIndex();
             foreach (var entity in allEntities)
                 Entities.Add(entity);
 
             RebuildDrawingFileList(filePaths, importErrors);
+            // 导入即入队：任务层是主链路的唯一入口。同一张图纸重复入队会被任务层合并，
+            // 不会重复跑；导入失败的文件不入队（否则队列里会出现一张必然失败的图纸）。
+            foreach (var path in filePaths.Where(p => !importErrors.ContainsKey(p)))
+                _taskManager.Enqueue(path);
+            AttachTasksToRows();
             ApplyFilter();
             UpdateStatistics();
 
@@ -192,6 +199,9 @@ public partial class MainViewModel
             ? DrawingFiles.Where(f => f.IsIncludedForExport && string.IsNullOrWhiteSpace(f.ImportError))
                 .Select(f => f.FullPath).ToList()
             : BatchExportPlanner.GetKnownSources(Entities).ToList();
+
+        // Explicit export includes reviewed results even after a task has written an earlier version.
+        // Destination planning below still applies duplicate policy and source-file protection.
         if (requestedSources.Count == 0)
         {
             StatusMessage = DrawingFiles.Count > 0
@@ -265,7 +275,17 @@ public partial class MainViewModel
         };
         if (folderDialog.ShowDialog() != true) return;
         var targetFolder = folderDialog.FolderName;
-        var destinations = BatchExportPlanner.CreateDestinationMap(targets, targetFolder);
+        // 用户在对话框里选定的目录优先；命名规则（motor_zh.dwg）、重名策略与源文件保护
+        // 由 OutputPathResolver 按配置执行，被跳过的文件不会静默覆盖既有输出。
+        _config.ExportDirectory = targetFolder;
+        var exportPlan = BatchExportPlanner.CreateExportPlan(targets, CurrentTargetLang, _config);
+        var destinations = exportPlan.Destinations;
+        if (exportPlan.Skipped.Count > 0)
+        {
+            StatusMessage = "已跳过 " + exportPlan.Skipped.Count + " 个已存在的输出文件（重名策略：" + _config.DuplicatePolicy + "）";
+            Log.Information("Export skipped {Count} existing outputs: {Reasons}",
+                exportPlan.Skipped.Count, string.Join("; ", exportPlan.Skipped.Select(s => s.Reason)));
+        }
 
         var modeDialog = new Views.ExportModeDialog(_autoCadInteropService.IsAutoCADAvailable(_config))
         {
@@ -380,10 +400,14 @@ public partial class MainViewModel
                 }
 
                 StatusMessage = $"批量导出完成：成功 {written.Count} 张，跳过 {skipped.Count} 张，失败 {failed.Count} 张";
-                MessageBox.Show(summary.ToString(),
-                    Strings.Get(written.Count > 0 ? "MsgTitleExportSuccess" : "MsgTitleExportError"),
-                    MessageBoxButton.OK,
-                    failed.Count > 0 || written.Count == 0 ? MessageBoxImage.Warning : MessageBoxImage.Information);
+                // 结果提示改走 Toast（§29）：详细清单进日志，界面只给一行结论，不再弹阻塞对话框
+                Log.Information("导出结果：{Summary}", summary.ToString().Replace(Environment.NewLine, " | "));
+                if (written.Count > 0 && failed.Count == 0)
+                    DwgTranslator.App.Services.ToastService.Success($"导出完成：成功 {written.Count} 张到 {targetFolder}");
+                else if (written.Count > 0)
+                    DwgTranslator.App.Services.ToastService.Warning($"导出完成：成功 {written.Count} 张，失败 {failed.Count} 张");
+                else
+                    DwgTranslator.App.Services.ToastService.Error($"导出失败：{failed.Count} 张未写出，详见日志");
 
                 ApplyFilter();
                 UpdateStatistics();
@@ -618,3 +642,12 @@ public partial class MainViewModel
 
     #endregion
 }
+
+
+
+
+
+
+
+
+

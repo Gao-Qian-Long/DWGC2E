@@ -1,12 +1,13 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using DwgTranslator.Core.Api;
 using DwgTranslator.Core.Logging;
 using DwgTranslator.Core.Models;
 using DwgTranslator.Core.Resources;
 using DwgTranslator.Core.Services;
+using DwgTranslator.Core.Tasks;
 using DwgTranslator.Core.Translation;
 using Microsoft.Extensions.DependencyInjection;
 using System.Collections.ObjectModel;
-using System.Net.Http;
 using System.Reflection;
 using Serilog;
 
@@ -14,7 +15,10 @@ namespace DwgTranslator.App.ViewModels;
 
 /// <summary>
 /// Main ViewModel for DWG Translator — core skeleton.
-/// Partial classes: Config, Translation, ImportExport, Operations, Settings.
+/// Partial classes: Config, Translation, ImportExport, Operations, Settings, Tasks, …
+///
+/// 依赖全部由 DI 注入（构造函数只有一个），不再走 "App.Services?.GetService(...) ?? new ..."
+/// 那套服务定位 + 静默兜底：容器没装配好就应该立刻报错，而不是悄悄退化成另一套实现。
 /// </summary>
 public partial class MainViewModel : ObservableObject, IDisposable
 {
@@ -24,12 +28,11 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private readonly IDwgWriterService _dwgWriterService;
     private readonly ILicenseService _licenseService;
     private readonly IAutoCadInteropService _autoCadInteropService;
-    private readonly IFormatCodeParser _formatCodeParser;
-    private TranslationConsistencyService _consistencyService;
-    private HttpClient? _httpClient;
-    private DeepSeekClient? _deepSeekClient;
+    private readonly ITranslationConsistencyService _consistencyService;
+    private readonly ITaskManager _taskManager;
+    private readonly TaskManagerOptions _taskOptions;
+    private readonly IApiClient _apiClient;
     private AppConfig _config;
-    private string? _lastSourceFilePath;
     private string? _settingsPath;
     private CancellationTokenSource? _cts;
     private CancellationTokenSource? _exportCts;
@@ -63,6 +66,11 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty] private bool _isLicensingEnabled;
     [ObservableProperty] private DrawingFileItem? _selectedDrawingFile;
     [ObservableProperty] private bool _hasMultipleDrawingFiles;
+    [ObservableProperty] private bool _isAllDrawingsSelected = true;
+    private bool _updatingDrawingSelection;
+
+    /// <summary>任务层最近一条阶段化日志（[3/6] 总装配图.dwg 正在翻译文本 42%）。</summary>
+    [ObservableProperty] private string _progressDetailText = string.Empty;
 
     #endregion
 
@@ -108,18 +116,6 @@ public partial class MainViewModel : ObservableObject, IDisposable
     /// </summary>
     public bool TargetIsCjk => TranslationLanguages.IsCjk(CurrentTargetLang);
 
-    public MainViewModel()
-        : this(
-            App.Services?.GetService<IGlossaryService>() ?? new GlossaryService(),
-            App.Services?.GetService<IExcelService>() ?? new ExcelService(),
-            App.Services?.GetService<IDwgReaderService>() ?? new DwgReaderService(),
-            App.Services?.GetService<IDwgWriterService>() ?? new DwgWriterService(),
-            App.Services?.GetService<ILicenseService>() ?? App.LicenseService,
-            App.Services?.GetService<IAutoCadInteropService>() ?? new DwgTranslator.App.Services.AutoCadInteropService(),
-            App.Services?.GetService<IFormatCodeParser>() ?? new FormatCodeParser())
-    {
-    }
-
     public MainViewModel(
         IGlossaryService glossaryService,
         IExcelService excelService,
@@ -127,7 +123,10 @@ public partial class MainViewModel : ObservableObject, IDisposable
         IDwgWriterService dwgWriterService,
         ILicenseService licenseService,
         IAutoCadInteropService autoCadInteropService,
-        IFormatCodeParser formatCodeParser)
+        ITranslationConsistencyService consistencyService,
+        ITaskManager taskManager,
+        TaskManagerOptions taskOptions,
+        IApiClient apiClient)
     {
         _config = new AppConfig();
         _glossaryService = glossaryService;
@@ -136,8 +135,13 @@ public partial class MainViewModel : ObservableObject, IDisposable
         _dwgWriterService = dwgWriterService;
         _licenseService = licenseService;
         _autoCadInteropService = autoCadInteropService;
-        _formatCodeParser = formatCodeParser;
-        _consistencyService = new TranslationConsistencyService();
+        _consistencyService = consistencyService;
+        _taskManager = taskManager;
+        _taskOptions = taskOptions;
+        _apiClient = apiClient;
+
+        // 任务层是主链路的执行者：界面只订阅它的事件，不再自己跑解析 / 翻译 / 写回。
+        SubscribeTaskEvents();
 
         LoadConfig();
         RefreshLicenseStatus();
@@ -149,6 +153,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
         {
             await RefreshGlossaryDataAsync();
             StatusMessage = Strings.Get("StatusReady");
+
+            // 上次运行没跑完的任务：问用户是否继续（选"否"则清掉记录）。
+            ResumePendingTasks();
         }
         catch (Exception ex)
         {
@@ -172,10 +179,20 @@ public partial class MainViewModel : ObservableObject, IDisposable
         _exportCts?.Dispose();
         _logViewModel?.Dispose();
         _consistencyService?.FlushCache();
-        _httpClient?.Dispose();
-        _httpClient = null;
+
+        // 关闭窗口时别把写回留在半途：取消当前队列，任务层的记录（已完成的部分）保持可续跑。
+        try { _taskManager.CancelCurrentRun(); }
+        catch (Exception ex) { Log.Debug(ex, "取消任务队列时忽略异常"); }
+
+        DrawingFiles.CollectionChanged -= DrawingFiles_CollectionChanged;
         _cts = null;
         _exportCts = null;
         GC.SuppressFinalize(this);
     }
 }
+
+
+
+
+
+
