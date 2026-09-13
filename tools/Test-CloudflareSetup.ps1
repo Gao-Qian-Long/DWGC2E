@@ -23,9 +23,18 @@ Assert-Status '/' 200
 Assert-Status '/v1/version' 200
 
 $required = @('PASSWORD_PEPPER', 'JWT_SECRET', 'DEEPSEEK_API_KEY', 'BREVO_API_KEY')
-$secretJson = npx wrangler secret list --name $WorkerName --json | Out-String
-try { $secrets = $secretJson | ConvertFrom-Json }
-catch { throw "无法读取 Wrangler Secret 名称列表，请先执行 npx wrangler login。" }
+$workerDir = Join-Path $PSScriptRoot '..\cf-worker'
+Push-Location $workerDir
+try {
+  $secretJson = npx wrangler secret list --name $WorkerName | Out-String
+} finally {
+  Pop-Location
+}
+try {
+  $secrets = $secretJson | ConvertFrom-Json
+} catch {
+  throw "无法读取 Wrangler Secret 名称列表，请先执行 npx wrangler login。输出：$secretJson"
+}
 $secretNames = @($secrets | ForEach-Object { $_.name })
 foreach ($name in $required) {
   if ($secretNames -notcontains $name) { throw "缺少 Worker Secret：$name（脚本不会读取 Secret 值）" }
