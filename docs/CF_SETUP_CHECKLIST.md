@@ -8,7 +8,7 @@
 |---|---|---|
 | Pages | `dwgc2e-website` | 官网静态页面，连接 GitHub `Gao-Qian-Long/DWGC2E_Website` 的 `main` |
 | Worker | `dwgc2e-api` | 认证、额度、设备、翻译代理 |
-| Worker 域名 | `api.cad.pocketter.dpdns.org` | APP 和官网统一使用此地址 |
+| Worker 域名 | `https://dwgc2e-api.maplehousezz.workers.dev` | 当前已部署并可用；自定义域名待绑定后再切换 |
 | D1 | `dwg-translator-prod` | 用户、会话、订阅、额度、设备 |
 
 ## 二、Worker 绑定
@@ -47,8 +47,7 @@ MAIL_FROM=DWGC2E <noreply@mail.cad.pocketter.dpdns.org>
 
 ```text
 PASSWORD_PEPPER=<随机长字符串>
-DEEPSEEK_API_KEY=<DeepSeek 密钥>
-BREVO_API_KEY=<Brevo API 密钥>
+DEEPSEEK_API_KEY=<DeepSeek 密钥>\r?\nBREVO_API_KEY=<Brevo API 密钥>\r?\nJWT_SECRET=<随机长字符串>
 ```
 
 这些值只能存在 Worker Secrets：
@@ -86,11 +85,7 @@ POST /v1/auth/password/request-code
 根目录：仓库根目录
 ```
 
-官网中的 API 地址必须统一为：
-
-```text
-https://api.cad.pocketter.dpdns.org
-```
+官网中的 API 地址必须统一为：`https://dwgc2e-api.maplehousezz.workers.dev`。自定义域名验证成功后才改为 `https://api.cad.pocketter.dpdns.org`
 
 如果 Pages 显示旧页面：
 
@@ -129,7 +124,7 @@ Worker dry-run：通过
 
 ## 八、联调顺序
 
-1. `GET https://api.cad.pocketter.dpdns.org/` 返回 `status=ok`；
+1. `GET https://dwgc2e-api.maplehousezz.workers.dev/` 返回 `status=ok`；
 2. 注册邮箱验证码；
 3. 注册新账号；
 4. 登录并刷新账户页面；
@@ -199,3 +194,4 @@ tools\Test-WorkerContract.ps1
 ### 尚未能由静态检查证明的项目
 
 真实邮箱送达、真实账号完整流程、额度扣减、设备上限、DeepSeek 实际返回、APP 术语同步和 Pages 最新 commit 部署，必须在云端用真实账号继续验证，不能仅凭匿名接口测试宣称完成。
+
