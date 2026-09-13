@@ -459,7 +459,7 @@ public partial class App : Application
         });
         // ── 后端客户端（IApiClient）────────────────────────────────────────────
         // UI 与 CAD 插件只依赖 IApiClient，不再直接接触 DeepSeek / 模型名 / System Prompt。
-        // 走 Worker 还是直连由 settings.json 的 apiMode 决定，切换不需要改代码。
+        // 生产环境始终走 Worker；旧 apiMode=direct 配置会被工厂强制纠正。
         services.AddSingleton<DwgTranslator.Core.Api.IApiClient>(sp =>
         {
             var config = ReadAppConfig();
@@ -485,3 +485,4 @@ public partial class App : Application
         base.OnExit(e);
     }
 }
+

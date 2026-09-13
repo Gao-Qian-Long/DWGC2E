@@ -35,14 +35,14 @@ public class ApiClientFactoryTests
     }
 
     [Fact]
-    public void ExplicitDirectModePreservesOptIn()
+    public void LegacyDirectModeIsForcedBackToWorker()
     {
         using var http = new HttpClient();
         var called = false;
-        Assert.Throws<NotSupportedException>(() => ApiClientFactory.Create(
-            new AppConfig { ApiMode = " DIRECT " }, http, () => null, "test-device", "test-host",
-            () => { called = true; throw new NotSupportedException(); }));
-        Assert.True(called);
+        var client = ApiClientFactory.Create(new AppConfig { ApiMode = " DIRECT " }, http, () => null, "test-device", "test-host",
+            () => { called = true; throw new NotSupportedException(); });
+        Assert.False(called);
+        Assert.IsType<WorkerApiClient>(client);
     }
 
     [Fact]
@@ -59,4 +59,5 @@ public class ApiClientFactoryTests
         Assert.Empty(config.DeepSeekApiKey);
     }
 }
+
 

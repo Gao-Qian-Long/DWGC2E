@@ -40,7 +40,7 @@ public sealed class WorkerApiClient : IApiClient
     /// <summary>未配置后端地址时返回的错误码：属于客户端前置校验，不在服务端契约里。</summary>
     private const string UnconfiguredErrorCode = "unconfigured";
 
-    private const string UnconfiguredMessage = "未配置后端地址（apiBaseUrl），请在设置中填写 Worker 地址";
+    private const string UnconfiguredMessage = "未配置后端地址（apiBaseUrl），请重新安装或联系管理员更新应用配置";
 
     /// <summary>服务端返回了 2xx 但报文不可解析时使用。</summary>
     private const string BadResponseMessage = "服务端返回了无法解析的响应";
@@ -904,6 +904,7 @@ public sealed class WorkerApiClient : IApiClient
         [JsonPropertyName("message")] public string? Message { get; set; }
     }
 }
+
 
 
 
