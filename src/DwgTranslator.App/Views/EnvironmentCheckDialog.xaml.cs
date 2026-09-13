@@ -88,8 +88,6 @@ public partial class EnvironmentCheckDialog : Window
         // Translation service
         ApiEndpointText.Text = _viewModel.TranslationServiceText;
         ApiLamp.Fill = _viewModel.TranslationServiceText.Contains("未配置", StringComparison.Ordinal) ? _warn : _ok;
-        ApiKeyText.Text = _viewModel.ApiKeyStatusText;
-        KeyLamp.Fill = _viewModel.ApiKeyStatusText.StartsWith("已设置", StringComparison.Ordinal) ? _ok : _warn;
     }
 
     private void AppendLog(string line) =>

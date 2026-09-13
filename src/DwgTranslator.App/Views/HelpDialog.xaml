@@ -44,7 +44,7 @@
                 <TextBlock Style="{StaticResource BodyText}" Text="3. 翻译完成后，可直接在列表中双击译文进行修改，或导出 Excel 批量校对"/>
                 <TextBlock Style="{StaticResource BodyText}" Text="4. 点击「导出 DWG」（Ctrl+S）：单张图纸选输出文件名；多张图纸只需选一个输出文件夹，程序会把每张图各自导出为「原名_translated.dwg」"/>
 
-                <TextBlock Style="{StaticResource BodyText}" Margin="0,8,0,0" Text="💡 首次使用前，请先点击「设置」按钮，在「DeepSeek API 设置」中填入您的 API Key。安装 CAD 插件请点「更多 ▾ → 环境自检与安装…」（Ctrl+E），那里还能看到 CAD 检测结果与运行环境自检。常用快捷键：Ctrl+O 导入、F5 翻译、Ctrl+S 导出、Ctrl+L 日志面板、Ctrl+, 设置、F1 帮助。" Foreground="{DynamicResource Brush.Success}"/>
+                <TextBlock Style="{StaticResource BodyText}" Margin="0,8,0,0" Text="💡 首次使用前，请先登录账户并确认套餐额度。安装 CAD 插件请点「更多 ▾ → 环境自检与安装…」（Ctrl+E），那里还能看到 CAD 检测结果与运行环境自检。常用快捷键：Ctrl+O 导入、F5 翻译、Ctrl+S 导出、Ctrl+L 日志面板、F1 帮助。" Foreground="{DynamicResource Brush.Success}"/>
 
                 <!-- ========== 主要功能 ========== -->
                 <TextBlock Style="{StaticResource SectionHeader}" Text="主要功能"/>

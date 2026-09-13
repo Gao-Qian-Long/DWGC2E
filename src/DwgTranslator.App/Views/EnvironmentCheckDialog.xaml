@@ -125,14 +125,9 @@
                         <TextBlock Text="接口地址" Style="{StaticResource RowLabel}"/>
                         <TextBlock x:Name="ApiEndpointText" Style="{StaticResource RowValue}"/>
                     </StackPanel>
-                    <StackPanel Orientation="Horizontal">
-                        <Ellipse x:Name="KeyLamp" Style="{StaticResource Lamp}"/>
-                        <TextBlock Text="API Key" Style="{StaticResource RowLabel}"/>
-                        <TextBlock x:Name="ApiKeyText" Style="{StaticResource RowValue}"/>
-                    </StackPanel>
                     <TextBlock Margin="0,10,0,0" TextWrapping="Wrap" FontSize="12"
                                Foreground="{DynamicResource Brush.TextMuted}"
-                               Text="接口地址与 API Key 在「设置」中修改；更换语言方向请点击标题栏的语言按钮。"/>
+                               Text="翻译请求由云端服务统一处理；更换语言方向请点击标题栏的语言按钮。"/>
                 </StackPanel>
             </Border>
 

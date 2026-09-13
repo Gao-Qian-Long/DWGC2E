@@ -21,7 +21,7 @@
         <WindowChrome CaptionHeight="36" ResizeBorderThickness="6" GlassFrameThickness="0" CornerRadius="0"/>
     </WindowChrome.WindowChrome>
 
-    <!-- Keyboard shortcuts: F1 帮助 / Ctrl+E 环境自检 / Ctrl+L 日志 / Ctrl+, 设置 … -->
+    <!-- Keyboard shortcuts: F1 帮助 / Ctrl+E 环境自检 / Ctrl+L 日志 … -->
     <Window.InputBindings>
         <KeyBinding Key="O" Modifiers="Control" Command="{Binding ImportDwgCommand}"/>
         <KeyBinding Key="S" Modifiers="Control" Command="{Binding ExportDwgCommand}"/>
@@ -210,7 +210,6 @@
                                               CommandParameter="account"/>
                                     <MenuItem Header="窗口置顶" Command="{Binding ToggleTopmostCommand}"/>
                                     <Separator/>
-                                    <MenuItem Header="设置" Command="{Binding SettingsCommand}"/>
                                     <MenuItem Header="环境自检" Command="{Binding ShowEnvironmentCheckCommand}"/>
                                     <MenuItem Header="帮助" Command="{Binding ShowHelpCommand}"/>
                                 </ContextMenu>
