@@ -97,7 +97,21 @@ function normalizeAccount(v: any) {
     .trim()
     .toLowerCase();
 }
+async function registrationConflict(email: string, e: Env, account?: string) {
+  // Include inactive accounts: disabling an account must not free its identity.
+  if (await e.DB.prepare("SELECT 1 FROM users WHERE lower(email)=?").bind(email).first())
+    return json({ success: false, error_code: "email_exists",
+      message: "该邮箱已注册，请直接登录或使用忘记密码" }, 409, cors(e));
+  if (account && await e.DB.prepare("SELECT 1 FROM users WHERE account=?").bind(account).first())
+    return json({ success: false, error_code: "account_exists",
+      message: "该账号已存在，请更换账号或直接登录" }, 409, cors(e));
+  return null;
+}
 async function sendCode(email: string, purpose: string, e: Env) {
+  if (purpose === "register") {
+    const conflict = await registrationConflict(email, e);
+    if (conflict) return conflict;
+  }
   try { mailProviders(e); } catch {
     return json(
       {
@@ -307,6 +321,8 @@ async function register(r: Request, e: Env) {
       400,
       cors(e),
     );
+  const conflict = await registrationConflict(email, e, account);
+  if (conflict) return conflict;
   if (!(await verifyCode(email, "register", code, e)))
     return json(
       {
@@ -317,33 +333,31 @@ async function register(r: Request, e: Env) {
       400,
       cors(e),
     );
-  if (
-    await e.DB.prepare("SELECT 1 FROM users WHERE account=? OR lower(email)=?")
-      .bind(account, email)
-      .first()
-  )
-    return json(
-      { success: false, error_code: "account_exists", message: "账号已存在" },
-      409,
-      cors(e),
-    );
   const id = random(),
     ts = now();
-  await e.DB.batch([
-    e.DB.prepare(
-      "INSERT INTO users(id,account,password_hash,display_name,email,created_at) VALUES(?,?,?,?,?,?)",
-    ).bind(
-      id,
-      account,
-      await pass(password, e.PASSWORD_PEPPER),
-      String(b?.display_name || account),
-      email,
-      ts,
-    ),
-    e.DB.prepare(
-      "INSERT INTO subscriptions(user_id,plan_name,starts_at,updated_at) VALUES(?,?,?,?)",
-    ).bind(id, e.DEFAULT_PLAN || "free", ts, ts),
-  ]);
+  try {
+    await e.DB.batch([
+      e.DB.prepare(
+        "INSERT INTO users(id,account,password_hash,display_name,email,created_at) VALUES(?,?,?,?,?,?)",
+      ).bind(
+        id,
+        account,
+        await pass(password, e.PASSWORD_PEPPER),
+        String(b?.display_name || account),
+        email,
+        ts,
+      ),
+      e.DB.prepare(
+        "INSERT INTO subscriptions(user_id,plan_name,starts_at,updated_at) VALUES(?,?,?,?)",
+      ).bind(id, e.DEFAULT_PLAN || "free", ts, ts),
+    ]);
+  } catch (error) {
+    // Another request may register the identity after our preflight check.
+    // The unique constraints and transactional batch prevent duplicate/partial users.
+    const concurrentConflict = await registrationConflict(email, e, account);
+    if (concurrentConflict) return concurrentConflict;
+    throw error; // Do not misreport unrelated database failures as duplicate accounts.
+  }
   return json({ success: true, message: "注册成功，请登录" }, 201, cors(e));
 }
 async function login(r: Request, e: Env) {
