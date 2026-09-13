@@ -23,6 +23,14 @@ if %ERRORLEVEL% NEQ 0 (
 :: The App project builds the CAD plugin and copies its complete private dependency
 :: closure to CadPlugin. CAD-host API DLLs (Ac*/Gc*) are intentionally supplied by
 :: the installed CAD product and are not redistributed.
+:: Ensure runtime configuration and bundled glossary/prompt assets are present even when
+:: dotnet publish reuses an incremental output directory.
+if not exist "%PUBDIR%\glossaries" mkdir "%PUBDIR%\glossaries"
+if not exist "%PUBDIR%\prompts" mkdir "%PUBDIR%\prompts"
+copy /y "settings.json.example" "%PUBDIR%\settings.json" >nul
+copy /y "glossaries\mechanical_zh_en.json" "%PUBDIR%\glossaries\mechanical_zh_en.json" >nul
+copy /y "prompts\deepl_context.txt" "%PUBDIR%\prompts\deepl_context.txt" >nul
+
 if not exist "%PUBDIR%\CadPlugin\DwgTranslator.Cad.dll" (
     echo ERROR: CAD plugin package was not produced.
     exit /b 2
@@ -64,3 +72,4 @@ echo %CADPLATFORM% online writeback plugin:
 echo   %PUBDIR%\CadPlugin\DwgTranslator.Cad.dll
 echo Package: %ZIPFILE%
 echo The package is platform-locked and will reject installation into an incompatible CAD host.
+
