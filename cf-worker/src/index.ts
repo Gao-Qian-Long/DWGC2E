@@ -411,7 +411,7 @@ async function login(r: Request, e: Env) {
       "INSERT INTO sessions(id,user_id,token_hash,device_id,expires_at,created_at) VALUES(?,?,?,?,?,?)",
     ).bind(random(), u.id, await digest(token), device, expires, ts),
     e.DB.prepare(
-      "INSERT INTO devices(device_id,user_id,device_name,platform,first_seen,last_seen) VALUES(?,?,?,?,?,?,0) ON CONFLICT(device_id) DO UPDATE SET user_id=excluded.user_id,last_seen=excluded.last_seen,device_name=excluded.device_name,platform=excluded.platform,revoked=0",
+      "INSERT INTO devices(device_id,user_id,device_name,platform,first_seen,last_seen,revoked) VALUES(?,?,?,?,?,?,0) ON CONFLICT(device_id) DO UPDATE SET last_seen=excluded.last_seen,device_name=excluded.device_name,platform=excluded.platform,revoked=0",
     ).bind(
       device,
       u.id,

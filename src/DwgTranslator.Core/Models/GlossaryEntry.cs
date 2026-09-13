@@ -26,6 +26,9 @@ public class GlossaryEntry
     public string Target { get; set; } = string.Empty;
     public string Category { get; set; } = string.Empty;
 
+    /// <summary>本地术语文件夹；为空表示未分类。</summary>
+    public string Folder { get; set; } = string.Empty;
+
     // ── 以下为新增字段（向后兼容：旧术语文件缺这些字段时取默认值）──
 
     /// <summary>来源：用户 / 企业 / 系统。默认按"系统"处理，避免旧文件被误判成用户术语。</summary>

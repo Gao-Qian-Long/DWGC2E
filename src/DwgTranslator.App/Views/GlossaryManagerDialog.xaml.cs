@@ -6,6 +6,8 @@ using System.IO;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
+using System.ComponentModel;
+using System.Windows.Data;
 
 namespace DwgTranslator.App.Views;
 
@@ -19,6 +21,10 @@ public partial class GlossaryManagerDialog : Window
     private readonly ObservableCollection<GlossaryEntry> _editableEntries;
     private readonly string _titleSuffix;
     private bool _isSaving;
+    private string _selectedFolder = "全部术语";
+    private ICollectionView? _view;
+    private readonly HashSet<string> _folders = new(StringComparer.OrdinalIgnoreCase);
+    private const int MaxEntries = 1000;
 
     /// <summary>
     /// The saved entries if the user clicked Save; null if cancelled.
@@ -48,7 +54,43 @@ public partial class GlossaryManagerDialog : Window
             });
         }
 
-        GlossaryGrid.ItemsSource = _editableEntries;
+        _view = CollectionViewSource.GetDefaultView(_editableEntries);
+        _view.Filter = FilterEntry;
+        GlossaryGrid.ItemsSource = _view;
+        RefreshFolders();
+    }
+
+    private bool FilterEntry(object obj) => _selectedFolder == "全部术语" || (obj is GlossaryEntry e && string.Equals(string.IsNullOrWhiteSpace(e.Folder) ? "未分类" : e.Folder, _selectedFolder, StringComparison.OrdinalIgnoreCase));
+
+    private void RefreshFolders()
+    {
+        FolderList.Items.Clear();
+        FolderList.Items.Add("全部术语");
+        foreach (var folder in _folders.Concat(_editableEntries.Select(x => x.Folder)).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x)) FolderList.Items.Add(folder);
+        FolderList.SelectedItem = _selectedFolder;
+    }
+
+    private void FolderList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (FolderList.SelectedItem is string folder) { _selectedFolder = folder; _view?.Refresh(); }
+    }
+
+    private void NewFolder_Click(object sender, RoutedEventArgs e)
+    {
+        var name = PromptForFolderName();
+        if (string.IsNullOrWhiteSpace(name)) return;
+        name = name.Trim();
+        if (_folders.Contains(name)) { MessageBox.Show("该文件夹已存在。", "提示", MessageBoxButton.OK, MessageBoxImage.Information); return; }
+        _folders.Add(name);
+        _selectedFolder = name; RefreshFolders(); _view?.Refresh(); AddRow_Click(sender, e);
+    }
+
+    private static string? PromptForFolderName()
+    {
+        var box = new Window { Title = "新建术语文件夹", Width = 360, Height = 150, WindowStartupLocation = WindowStartupLocation.CenterOwner, ResizeMode = ResizeMode.NoResize, Owner = Application.Current.MainWindow };
+        var panel = new StackPanel { Margin = new Thickness(16) }; panel.Children.Add(new TextBlock { Text = "文件夹名称", Margin = new Thickness(0,0,0,6) });
+        var input = new TextBox { Height = 28 }; panel.Children.Add(input); var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0,10,0,0) };
+        string? result = null; var ok = new Button { Content = "创建", Width = 72, IsDefault = true, Margin = new Thickness(0,0,8,0) }; ok.Click += (_,__) => { result = input.Text; box.DialogResult = true; }; var cancel = new Button { Content = "取消", Width = 72, IsCancel = true }; buttons.Children.Add(ok); buttons.Children.Add(cancel); panel.Children.Add(buttons); box.Content = panel; box.ShowDialog(); return result;
     }
 
     private async void Save_Click(object sender, RoutedEventArgs e)
@@ -59,9 +101,15 @@ public partial class GlossaryManagerDialog : Window
         _isSaving = true;
         try
         {
+            var validCount = _editableEntries.Count(x => !string.IsNullOrWhiteSpace(x.Source) && !string.IsNullOrWhiteSpace(x.Target));
+            if (validCount > MaxEntries)
+            {
+                MessageBox.Show($"术语条目最多 {MaxEntries} 条，请删除多余条目后再保存。", "数量限制", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
             var list = _editableEntries
                 .Where(x => !string.IsNullOrWhiteSpace(x.Source) && !string.IsNullOrWhiteSpace(x.Target))
-                .Select(x => new GlossaryEntry { Source = x.Source.Trim(), Target = x.Target.Trim(), Category = x.Category?.Trim() ?? string.Empty })
+                .Select(x => new GlossaryEntry { Source = x.Source.Trim(), Target = x.Target.Trim(), Category = x.Category?.Trim() ?? string.Empty, Folder = x.Folder?.Trim() ?? string.Empty })
                 .GroupBy(x => x.Source, StringComparer.OrdinalIgnoreCase)
                 .Select(g => g.First()).ToList();
             var targetPath = Path.Combine(App.AppDataDir, "glossaries", "mechanical_zh_en.json");
