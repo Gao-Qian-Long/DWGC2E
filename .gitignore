@@ -72,8 +72,7 @@ installer/Output/
 !DwgTranslator.iss
 
 # ===== Runnable Release =====
-!/release/
-!/release/**
+/release/
 
 # ===== Development Notes & Temp Files =====
 .codegraph/

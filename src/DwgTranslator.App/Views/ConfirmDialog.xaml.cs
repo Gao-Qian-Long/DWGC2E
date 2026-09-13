@@ -4,7 +4,7 @@ using System.Windows.Controls;
 namespace DwgTranslator.App.Views;
 
 /// <summary>
-/// 主题化的确认对话框（§29）：替代散落在各处的 <c>MessageBox.Show(..., YesNo)</c>，
+/// 主题化的确认对话框（§29）：替代散落在各处的 <c>DwgTranslator.App.Views.PromptDialog.Show(..., YesNo)</c>，
 /// 保证确认框与深浅色令牌一致，按钮文本也明确（"清空" / "继续" 而不是笼统的"是/否"）。
 /// </summary>
 public partial class ConfirmDialog : Window
@@ -26,8 +26,7 @@ public partial class ConfirmDialog : Window
     public static bool Ask(Window? owner, string title, string message,
         string confirmText = "确定", bool danger = true, string cancelText = "取消")
     {
-        var dialog = new ConfirmDialog(title, message, confirmText, danger, cancelText) { Owner = owner };
-        return dialog.ShowDialog() == true;
+        return PromptDialog.Show(message, title, MessageBoxButton.YesNo) == MessageBoxResult.Yes;
     }
 
     private void Confirm_Click(object sender, RoutedEventArgs e) => DialogResult = true;

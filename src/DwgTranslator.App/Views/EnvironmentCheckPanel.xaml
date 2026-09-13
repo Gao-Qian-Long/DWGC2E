@@ -1,0 +1,136 @@
+<UserControl x:Class="DwgTranslator.App.Views.EnvironmentCheckPanel"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Background="{DynamicResource Brush.Background}"
+        FontFamily="Microsoft YaHei UI, Segoe UI"
+        FontSize="13">
+
+    <UserControl.Resources>
+        <Style x:Key="RowLabel" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Width" Value="132"/>
+        </Style>
+        <Style x:Key="RowValue" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+        </Style>
+        <Style x:Key="Lamp" TargetType="Ellipse">
+            <Setter Property="Width" Value="9"/>
+            <Setter Property="Height" Value="9"/>
+            <Setter Property="Margin" Value="0,0,9,0"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Fill" Value="{DynamicResource Brush.TextDisabled}"/>
+        </Style>
+        <Style x:Key="SectionTitle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}"/>
+            <Setter Property="Margin" Value="0,0,0,10"/>
+        </Style>
+    </UserControl.Resources>
+
+    <Border Padding="22,20,22,18">
+        <StackPanel Width="636">
+            <TextBlock Text="环境自检与安装" FontSize="18" FontWeight="SemiBold"
+                       Foreground="{DynamicResource Brush.TextPrimary}"/>
+            <TextBlock Margin="0,5,0,0" TextWrapping="Wrap"
+                       Foreground="{DynamicResource Brush.TextMuted}"
+                       Text="把程序交给别人之前，用这一页确认这台电脑是否具备运行条件，并把 CAD 插件一键装好。"/>
+
+            <!-- ═══ 应用程序 ═══ -->
+            <Border Style="{StaticResource CardBorder}" Margin="0,16,0,0" Padding="16,14">
+                <StackPanel>
+                    <TextBlock Text="应用程序" Style="{StaticResource SectionTitle}"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                        <Ellipse x:Name="AppLamp" Style="{StaticResource Lamp}"/>
+                        <TextBlock Text="程序版本" Style="{StaticResource RowLabel}"/>
+                        <TextBlock x:Name="AppVersionText" Style="{StaticResource RowValue}"/>
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                        <Ellipse x:Name="RuntimeLamp" Style="{StaticResource Lamp}"/>
+                        <TextBlock Text="运行环境" Style="{StaticResource RowLabel}"/>
+                        <TextBlock x:Name="RuntimeText" Style="{StaticResource RowValue}"/>
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal">
+                        <Ellipse x:Name="PathsLamp" Style="{StaticResource Lamp}"/>
+                        <TextBlock Text="数据目录" Style="{StaticResource RowLabel}"/>
+                        <TextBlock x:Name="DataPathText" Style="{StaticResource RowValue}"
+                                   ToolTipService.ShowDuration="30000"/>
+                        <Button Content="打开" Click="OpenDataDir_Click" Margin="10,0,0,0"
+                                Padding="12,3" Style="{StaticResource ToolButton}"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- ═══ CAD 环境 ═══ -->
+            <Border Style="{StaticResource CardBorder}" Margin="0,12,0,0" Padding="16,14">
+                <StackPanel>
+                    <TextBlock Text="CAD 环境" Style="{StaticResource SectionTitle}"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                        <Ellipse x:Name="CadLamp" Style="{StaticResource Lamp}"/>
+                        <TextBlock Text="检测到的 CAD" Style="{StaticResource RowLabel}"/>
+                        <TextBlock x:Name="CadProductText" Style="{StaticResource RowValue}"/>
+                        <Button Content="重新检测" Click="Detect_Click" Margin="10,0,0,0"
+                                Padding="12,3" Style="{StaticResource ToolButton}"/>
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                        <Ellipse x:Name="PluginLamp" Style="{StaticResource Lamp}"/>
+                        <TextBlock Text="CAD 插件" Style="{StaticResource RowLabel}"/>
+                        <TextBlock x:Name="PluginStatusText" Style="{StaticResource RowValue}"/>
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal">
+                        <Ellipse x:Name="AutoLoadLamp" Style="{StaticResource Lamp}"/>
+                        <TextBlock Text="自动加载" Style="{StaticResource RowLabel}"/>
+                        <TextBlock x:Name="AutoLoadText" Style="{StaticResource RowValue}"/>
+                    </StackPanel>
+
+                    <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
+                        <Button x:Name="InstallButton" Content="安装 / 修复插件"
+                                Click="Install_Click" Padding="16,6"
+                                Style="{StaticResource PrimaryButton}"/>
+                        <Button x:Name="UninstallButton" Content="卸载插件"
+                                Click="Uninstall_Click" Margin="8,0,0,0" Padding="14,6"
+                                Style="{StaticResource ToolButton}"/>
+                    </StackPanel>
+
+                    <TextBlock Margin="0,12,0,0" TextWrapping="Wrap" FontSize="12"
+                               Foreground="{DynamicResource Brush.TextMuted}"
+                               Text="未安装插件时，桌面程序照常可以翻译图纸（它每次运行时自行加载插件）。安装后，可以在 CAD 里直接使用 DwgTranslateWrite 命令。"/>
+
+                    <Border Margin="0,12,0,0" Background="{DynamicResource Brush.BackgroundAlt}"
+                            CornerRadius="6" Padding="12,10">
+                        <ScrollViewer MaxHeight="120" VerticalScrollBarVisibility="Auto">
+                            <TextBox x:Name="LogText" IsReadOnly="True" TextWrapping="Wrap"
+                                     Background="Transparent" BorderThickness="0"
+                                     FontFamily="Consolas, Microsoft YaHei UI" FontSize="12"
+                                     Foreground="{DynamicResource Brush.TextSecondary}"/>
+                        </ScrollViewer>
+                    </Border>
+                </StackPanel>
+            </Border>
+
+            <!-- ═══ 翻译接口 ═══ -->
+            <Border Style="{StaticResource CardBorder}" Margin="0,12,0,0" Padding="16,14">
+                <StackPanel>
+                    <TextBlock Text="翻译接口" Style="{StaticResource SectionTitle}"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                        <Ellipse x:Name="ApiLamp" Style="{StaticResource Lamp}"/>
+                        <TextBlock Text="接口地址" Style="{StaticResource RowLabel}"/>
+                        <TextBlock x:Name="ApiEndpointText" Style="{StaticResource RowValue}"/>
+                    </StackPanel>
+                    <TextBlock Margin="0,10,0,0" TextWrapping="Wrap" FontSize="12"
+                               Foreground="{DynamicResource Brush.TextMuted}"
+                               Text="翻译请求由云端服务统一处理；更换语言方向请点击标题栏的语言按钮。"/>
+                </StackPanel>
+            </Border>
+
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
+                <Button Content="打开日志目录" Click="OpenLogs_Click" Padding="14,6"
+                        Style="{StaticResource ToolButton}"/>
+
+            </StackPanel>
+        </StackPanel>
+    </Border>
+</UserControl>

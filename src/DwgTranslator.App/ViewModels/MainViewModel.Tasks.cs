@@ -143,6 +143,9 @@ public partial class MainViewModel
     /// <param name="askWritebackMode">是否先问写回方式（离线 / AutoCAD）；恢复续跑时沿用上次选择。</param>
     private async Task RunTaskQueueAsync(bool retryFailedFirst, bool askWritebackMode = true)
     {
+        if (!RequireAccount()) return;
+        if (IsGlossaryLoading) { StatusMessage = "正在加载术语，请稍候再开始任务。"; return; }
+        if (!IsProcessing) ApplySavedSettings();
         if (IsProcessing) return;
 
         if (_config.LicensingEnabled && !_licenseService.CanExecuteOperation())
@@ -155,8 +158,8 @@ public partial class MainViewModel
         var workerMode = string.Equals(_apiClient.ModeName, "worker", StringComparison.OrdinalIgnoreCase);
         if (workerMode && !_apiClient.IsConfigured)
         {
-            StatusMessage = "请先配置 Worker 服务地址。";
-            MessageBox.Show(StatusMessage, Strings.Get("MsgTitleConfigError"),
+            StatusMessage = "服务配置异常，请联系管理员修复安装配置。";
+            DwgTranslator.App.Views.PromptDialog.Show(StatusMessage, Strings.Get("MsgTitleConfigError"),
                 MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
@@ -166,18 +169,11 @@ public partial class MainViewModel
         if (workerMode && string.IsNullOrWhiteSpace(AppConfig.DecryptApiKey(_config.AuthTokenEncrypted)))
         {
             StatusMessage = "请先登录后再开始翻译。";
-            MessageBox.Show(StatusMessage, Strings.Get("MsgTitleConfigError"),
+            DwgTranslator.App.Views.PromptDialog.Show(StatusMessage, Strings.Get("MsgTitleConfigError"),
                 MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
-        if (!workerMode && string.IsNullOrWhiteSpace(_config.DeepSeekApiKey))
-        {
-            StatusMessage = Strings.Get("StatusConfigureApiKey");
-            MessageBox.Show(Strings.Get("MsgNoApiKey"), Strings.Get("MsgTitleConfigError"),
-                MessageBoxButton.OK, MessageBoxImage.Warning);
-            return;
-        }
         var tasks = _taskManager.Tasks;
         if (tasks.Count == 0)
         {
@@ -244,7 +240,7 @@ public partial class MainViewModel
         {
             Log.Error(ex, "Task queue failed");
             StatusMessage = Strings.Get("StatusTranslateFailed");
-            MessageBox.Show(Strings.Get("MsgTranslateError"), Strings.Get("MsgTitleError"),
+            DwgTranslator.App.Views.PromptDialog.Show(Strings.Get("MsgTranslateError"), Strings.Get("MsgTitleError"),
                 MessageBoxButton.OK, MessageBoxImage.Error);
         }
         finally
@@ -252,6 +248,7 @@ public partial class MainViewModel
             _cts?.Dispose();
             _cts = null;
             IsProcessing = false;
+            ApplySavedSettings();
             IsTranslating = false;
             IsIndeterminate = false;
             OperationLabel = string.Empty;

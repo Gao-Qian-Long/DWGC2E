@@ -65,6 +65,7 @@ public class GlossaryEntry
         Source = Source,
         Target = Target,
         Category = Category,
+        Folder = Folder,
         SourceKind = SourceKind,
         Direction = Direction,
         HitCount = HitCount,

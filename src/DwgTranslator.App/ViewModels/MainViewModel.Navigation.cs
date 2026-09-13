@@ -21,6 +21,8 @@ public partial class MainViewModel
     public const string PageBatch = "batch";
     public const string PageGlossary = "glossary";
     public const string PageAccount = "account";
+    public const string PageSettings = "settings";
+    public bool IsSettingsPage => CurrentPage == PageSettings;
 
     [ObservableProperty] private string _currentPage = PageTranslate;
 
@@ -29,23 +31,31 @@ public partial class MainViewModel
     public bool IsGlossaryPage => CurrentPage == PageGlossary;
     public bool IsAccountPage => CurrentPage == PageAccount;
 
+    private bool _restoringPage;
+    private string _acceptedPage = PageTranslate;
     partial void OnCurrentPageChanged(string value)
     {
+        if (_restoringPage) return;
+        if (_acceptedPage != value && !ConfirmLeavePage())
+        {
+            _restoringPage = true; CurrentPage = _acceptedPage; _restoringPage = false;
+            return;
+        }
+        _acceptedPage = value;
+        OnPropertyChanged(nameof(IsSettingsPage));
         OnPropertyChanged(nameof(IsTranslatePage));
         OnPropertyChanged(nameof(IsBatchPage));
         OnPropertyChanged(nameof(IsGlossaryPage));
         OnPropertyChanged(nameof(IsAccountPage));
         RefreshPageStatistics();
         if (CurrentPage == PageAccount) _ = RefreshAccountAsync();
+        if (CurrentPage == PageGlossary) LoadTermEditor();
     }
 
     [RelayCommand]
     private void NavigateTo(string? page)
     {
         if (string.IsNullOrWhiteSpace(page)) return;
-        if (page.Equals("settings", StringComparison.OrdinalIgnoreCase)) { SettingsCommand.Execute(null); return; }
-        // 本地高级设置已从用户界面下线，避免旧入口或旧命令再次打开。
-        if (page.Equals("settings", StringComparison.OrdinalIgnoreCase)) return;
         CurrentPage = page;
     }
 
@@ -193,4 +203,3 @@ public partial class MainViewModel
 
     public string StatusReadyText => Strings.Get("StatusReady");
 }
-

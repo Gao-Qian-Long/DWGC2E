@@ -93,7 +93,7 @@ public partial class LogViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"导出日志失败：{ex.Message.Replace('\\', '/')}", "导出失败",
+            DwgTranslator.App.Views.PromptDialog.Show($"导出日志失败：{ex.Message.Replace('\\', '/')}", "导出失败",
                 MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }

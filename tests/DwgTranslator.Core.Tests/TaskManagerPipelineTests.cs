@@ -43,6 +43,20 @@ public class TaskManagerPipelineTests : IDisposable
         return path;
     }
 
+    [Fact]
+    public void SavedConfigurationReachesTaskSnapshotOnlyWhenApplied()
+    {
+        var snapshot = Config();
+        using var manager = CreateManager(new FakeReader(), new FakeTranslator(), new FakeWriter(), new InMemoryTaskStore(), snapshot, out _);
+        var draft = Config(); draft.ProtectModels = !snapshot.ProtectModels; draft.OutputNamingPattern = "{name}_changed";
+        Assert.NotEqual(draft.ProtectModels, snapshot.ProtectModels);
+        manager.ApplyConfiguration(draft);
+        Assert.Equal(draft.ProtectModels, snapshot.ProtectModels);
+        Assert.Equal("{name}_changed", snapshot.OutputNamingPattern);
+        draft.OutputNamingPattern = "later-edit";
+        Assert.Equal("{name}_changed", snapshot.OutputNamingPattern);
+    }
+
     private AppConfig Config() => new()
     {
         ExportDirectory = _exportDir,

@@ -104,8 +104,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         var version = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
                       ?? assembly.GetName().Version?.ToString(3)
                       ?? "1.0.0";
-        var plus = version.IndexOf('+');
-        if (plus > 0) version = version[..plus];
+        // Keep the build identity visible so release verification is unambiguous.
         return $"v{version}";
     }
 
@@ -156,6 +155,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
             // 上次运行没跑完的任务：问用户是否继续（选"否"则清掉记录）。
             ResumePendingTasks();
+            _ = RefreshAccountAsync();
         }
         catch (Exception ex)
         {

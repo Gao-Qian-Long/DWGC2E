@@ -16,6 +16,9 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        var area = SystemParameters.WorkArea;
+        Width = Math.Min(Width, area.Width);
+        Height = Math.Min(Height, area.Height);
 
         // Resolve ViewModel from DI container (falls back to parameterless ctor if DI not ready)
         // 依赖全部由 DI 装配（MainViewModel 只有这一个构造函数）：容器没起来就是致命错误，
@@ -29,10 +32,17 @@ public partial class MainWindow : Window
         Services.ToastService.Attach(Toasts);
 
         Loaded += OnLoaded;
-        Closing += (s, e) => _viewModel.Dispose();
+        Closing += (s, e) => { if (!_viewModel.ConfirmLeavePage()) { e.Cancel = true; return; } _viewModel.Dispose(); };
     }
 
     /// <summary>右上角用户入口：用主题化 ContextMenu 承载账号/置顶/设置等入口（§9）。</summary>
+    private void GlobalAccount_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_viewModel.IsAccountLoggedIn) { _viewModel.LoginAccountCommand.Execute(null); return; }
+        if (sender is System.Windows.Controls.Button b && b.ContextMenu != null) b.ContextMenu.DataContext = _viewModel;
+        AccountMenu_Click(sender, e);
+    }
+
     private void AccountMenu_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not System.Windows.Controls.Button button || button.ContextMenu is null) return;

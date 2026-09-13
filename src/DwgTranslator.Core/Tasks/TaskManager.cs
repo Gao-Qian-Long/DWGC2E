@@ -41,10 +41,24 @@ public enum TaskWritebackMode
 /// 线程安全：<see cref="ITaskManager.Tasks"/> 加锁复制后再交出去，所有公开方法都可以被
 /// UI 线程直接调用；事件在调用线程（通常是工作线程）上触发，订阅方自行 Dispatcher 调度。
 /// </summary>
-public sealed class TaskManager : ITaskManager
+public sealed class TaskManager : ITaskManager, IRuntimeTaskConfiguration
 {
     /// <summary>阶段总数：解析 → 提取 → 翻译 → 排版优化 → 写回 → 完成。</summary>
     private const int StageCount = 6;
+
+    public void ApplyConfiguration(AppConfig config)
+    {
+        if (config == null) throw new ArgumentNullException(nameof(config));
+        lock (_gate)
+        {
+            if (_running) throw new InvalidOperationException("Cannot change configuration during a queue run.");
+            foreach (var name in new[] { "ProtectDimensions", "ProtectTolerances", "ProtectModels", "GlossaryFirst", "MaxTranslationConcurrency", "LocalWorkerCount", "AiConcurrency", "MemoryOptimization", "MaxRetryCount", "ExportDirectory", "OutputNamingPattern", "DuplicatePolicy", "BackupSourceBeforeWrite", "AllowOverwriteSource", "AutoCadInstallPath", "CadPluginPath", "OpenOutputFolderAfterExport" })
+            {
+                var property = typeof(AppConfig).GetProperty(name)!;
+                property.SetValue(_config, property.GetValue(config));
+            }
+        }
+    }
 
     private readonly IDwgReaderService _dwgReader;
     private readonly IDxfReaderService? _dxfReader;

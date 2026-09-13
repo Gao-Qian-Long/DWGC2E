@@ -163,7 +163,7 @@ public partial class MainViewModel
             else if (importErrors.Count > 0)
             {
                 StatusMessage = Strings.Get("StatusCadImportFailed");
-                MessageBox.Show(Strings.Get("MsgCadImportError"), Strings.Get("MsgTitleError"), MessageBoxButton.OK, MessageBoxImage.Error);
+                DwgTranslator.App.Views.PromptDialog.Show(Strings.Get("MsgCadImportError"), Strings.Get("MsgTitleError"), MessageBoxButton.OK, MessageBoxImage.Error);
             }
             else
             {
@@ -207,7 +207,7 @@ public partial class MainViewModel
             StatusMessage = DrawingFiles.Count > 0
                 ? "请至少勾选一张要导出的图纸。"
                 : "缺少源图纸信息，请重新拖入 DWG/DXF 后再导出。";
-            MessageBox.Show(StatusMessage, Strings.Get("MsgTitleNoData"),
+            DwgTranslator.App.Views.PromptDialog.Show(StatusMessage, Strings.Get("MsgTitleNoData"),
                 MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
@@ -230,7 +230,7 @@ public partial class MainViewModel
             UpdateStatistics();
             ApplyFilter();
             StatusMessage = $"发现 {invalidTranslations.Count} 条未完整翻译内容，已阻止导出并标记为失败。";
-            MessageBox.Show(
+            DwgTranslator.App.Views.PromptDialog.Show(
                 $"检测到 {invalidTranslations.Count} 条仍包含原文的结果。\n\n程序已阻止这些内容写入图纸，请点击“重试失败”后再导出。",
                 "翻译完整性检查", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
@@ -239,7 +239,7 @@ public partial class MainViewModel
         if (translatedEntities.Count == 0)
         {
             StatusMessage = Strings.Get("StatusNoTranslatedText");
-            MessageBox.Show(Strings.Get("MsgNoTranslatedData"),
+            DwgTranslator.App.Views.PromptDialog.Show(Strings.Get("MsgNoTranslatedData"),
                 Strings.Get("MsgTitleNoData"), MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
@@ -263,7 +263,7 @@ public partial class MainViewModel
         if (targets.Count == 0)
         {
             StatusMessage = Strings.Get("StatusNoTranslatedText");
-            MessageBox.Show(Strings.Get("MsgNoTranslatedData"),
+            DwgTranslator.App.Views.PromptDialog.Show(Strings.Get("MsgNoTranslatedData"),
                 Strings.Get("MsgTitleNoData"), MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
@@ -491,7 +491,7 @@ public partial class MainViewModel
             string modeText = usedAcadInterop ? Strings.Get("ExportModeAutoCad") : Strings.Get("ExportModeOffline");
             string formatText = isDxfSource ? "DXF" : "DWG";
             StatusMessage = Strings.Get("StatusDwgExportComplete", formatText, modeText, result.SuccessCount, Path.GetFileName(destFilePath));
-            MessageBox.Show(
+            DwgTranslator.App.Views.PromptDialog.Show(
                 Strings.Get("MsgDwgExportSuccess", formatText, modeText, result.SuccessCount, result.FailCount, destFilePath.Replace('\\', '/')),
                 Strings.Get("MsgTitleExportSuccess"),
                 MessageBoxButton.OK,
@@ -505,7 +505,7 @@ public partial class MainViewModel
             var errorMsg = string.Join("\n", result.Errors.Take(5));
             string formatText = isDxfSource ? "DXF" : "DWG";
             StatusMessage = Strings.Get("StatusDwgExportFailed", formatText);
-            MessageBox.Show(Strings.Get("MsgDwgExportError", formatText, errorMsg),
+            DwgTranslator.App.Views.PromptDialog.Show(Strings.Get("MsgDwgExportError", formatText, errorMsg),
                 Strings.Get("MsgTitleExportError"), MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
@@ -626,7 +626,7 @@ public partial class MainViewModel
         {
             Log.Error(ex, "Operation failed: {Label}", operationLabel);
             StatusMessage = Strings.Get(errorStatusKey ?? "StatusCadExportFailed");
-            MessageBox.Show(Strings.Get(errorMsgKey ?? "MsgCadExportError"), Strings.Get("MsgTitleError"),
+            DwgTranslator.App.Views.PromptDialog.Show(Strings.Get(errorMsgKey ?? "MsgCadExportError"), Strings.Get("MsgTitleError"),
                 MessageBoxButton.OK, MessageBoxImage.Error);
         }
         finally

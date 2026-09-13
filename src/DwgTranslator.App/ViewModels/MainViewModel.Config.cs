@@ -65,7 +65,7 @@ public partial class MainViewModel
             // loads the matching plugin anyway, while the settings dialog shows — and would save —
             // the stale path, which is how a user ends up "fixing" a path that then breaks writeback.
             var bundledPlugin = AutoCadDetector.FindCadPlugin();
-            if (!string.IsNullOrWhiteSpace(bundledPlugin))
+            if (!string.IsNullOrWhiteSpace(bundledPlugin) && (string.IsNullOrWhiteSpace(_config.CadPluginPath) || !File.Exists(_config.CadPluginPath)))
             {
                 if (!string.Equals(bundledPlugin, _config.CadPluginPath, StringComparison.OrdinalIgnoreCase))
                 {
@@ -83,7 +83,10 @@ public partial class MainViewModel
             if (settingsChanged || !File.Exists(appDataPath))
             {
                 Directory.CreateDirectory(Path.GetDirectoryName(appDataPath)!);
-                File.WriteAllText(appDataPath, JsonSerializer.Serialize(_config, ConfigWriteOptions));
+                SettingsStore.Update(appDataPath, latest => {
+                    latest.AutoCadInstallPath = _config.AutoCadInstallPath;
+                    latest.CadPluginPath = _config.CadPluginPath;
+                });
                 _settingsPath = appDataPath;
                 Log.Information("CAD integration defaults saved: Install={Install}; Plugin={Plugin}",
                     _config.AutoCadInstallPath, _config.CadPluginPath);
@@ -118,6 +121,7 @@ public partial class MainViewModel
             // The glossary count has its own place in the status bar; repeating it here made the
             // bar say the same thing twice.
             StatusMessage = Strings.Get("StatusReady");
+            _runtimeBaseline = JsonSerializer.Deserialize<AppConfig>(JsonSerializer.Serialize(_config));
         }
         catch (Exception ex)
         {
@@ -173,6 +177,19 @@ public partial class MainViewModel
         var key = PairKey(CurrentSourceLang, CurrentTargetLang);
         if (string.Equals(key, _appliedLanguagePair, StringComparison.OrdinalIgnoreCase)) return;
 
+        var proposedSource = CurrentSourceLang;
+        var proposedTarget = CurrentTargetLang;
+        var previous = _appliedLanguagePair.Split('>');
+        if (previous.Length == 2)
+        {
+            _applyingLanguagePair = true;
+            CurrentSourceLang = previous[0]; CurrentTargetLang = previous[1];
+            _applyingLanguagePair = false;
+            if (IsProcessing || IsGlossaryLoading || !ConfirmLeaveGlossary()) return;
+            _applyingLanguagePair = true;
+            CurrentSourceLang = proposedSource; CurrentTargetLang = proposedTarget;
+            _applyingLanguagePair = false;
+        }
         _appliedLanguagePair = key;
         _config.SourceLanguage = CurrentSourceLang;
         _config.TargetLanguage = CurrentTargetLang;
@@ -212,14 +229,7 @@ public partial class MainViewModel
         try
         {
             var path = _settingsPath ?? Path.Combine(App.AppDataDir, "settings.json");
-            var config = File.Exists(path)
-                ? JsonSerializer.Deserialize<AppConfig>(File.ReadAllText(path), AppConfigJson.ReadOptions) ?? new AppConfig()
-                : new AppConfig();
-            config.SourceLanguage = CurrentSourceLang;
-            config.TargetLanguage = CurrentTargetLang;
-
-            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            File.WriteAllText(path, JsonSerializer.Serialize(config, ConfigWriteOptions));
+            SettingsStore.Update(path, config => { config.SourceLanguage = CurrentSourceLang; config.TargetLanguage = CurrentTargetLang; });
             _settingsPath = path;
             Log.Information("Language pair saved to settings: {Source} -> {Target}", CurrentSourceLang, CurrentTargetLang);
         }
@@ -235,22 +245,26 @@ public partial class MainViewModel
         foreach (var entry in _glossaryService.GetAllEntries())
             GlossaryEntries.Add(entry);
         GlossaryStatsText = Strings.Get("StatsGlossaryCount", GlossaryEntries.Count);
+        RefreshGlossaryConflicts();
+        if (IsGlossaryPage) LoadTermEditor();
     }
 
+    private readonly System.Threading.SemaphoreSlim _glossaryLoadGate = new(1, 1);
     private async Task RefreshGlossaryDataAsync()
     {
-        GlossaryEntries.Clear();
-
-        var glossaryFile = ResolveGlossaryPath();
-        if (File.Exists(glossaryFile))
+        await _glossaryLoadGate.WaitAsync();
+        IsGlossaryLoading = true;
+        try
         {
-            await _glossaryService.LoadGlossaryAsync(glossaryFile);
+            await _glossaryService.LoadGlossaryAsync(ResolveGlossaryPath());
+            RefreshGlossaryData();
         }
-
-        foreach (var entry in _glossaryService.GetAllEntries())
-            GlossaryEntries.Add(entry);
-
-        GlossaryStatsText = Strings.Get("StatsGlossaryCount", GlossaryEntries.Count);
+        catch (Exception ex)
+        {
+            TermFeedback = "术语加载失败，请检查文件格式与访问权限后重试。";
+            Log.Warning(ex, "Glossary load failed");
+        }
+        finally { IsGlossaryLoading = false; _glossaryLoadGate.Release(); }
     }
 
     private string ResolveGlossaryPath()

@@ -17,12 +17,13 @@ namespace DwgTranslator.App;
 /// </summary>
 public partial class App : Application
 {
-    public static string AppDataDir { get; } = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        "DwgTranslator");
+    public static string AppDataDir { get; } = Path.GetFullPath(
+        Environment.GetEnvironmentVariable("DWGC2E_DATA_DIR") ?? Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "DwgTranslator"));
 
     public static ILicenseService LicenseService { get; private set; } = null!;
     public static IServiceProvider Services { get; private set; } = null!;
+    public static Serilog.Core.LoggingLevelSwitch LogLevelSwitch { get; } = new();
     public static ILogStore LogStore { get; private set; } = null!;
     public static CadLogReaderService? CadLogReader { get; private set; }
 
@@ -64,6 +65,8 @@ public partial class App : Application
         }
         catch { /* last resort: ignore if even MessageBox fails */ }
         e.Handled = true;
+        // A startup XAML failure has no main window to close; do not leave a hidden process locking the release.
+        if (MainWindow == null || !MainWindow.IsLoaded) Shutdown(1);
     }
 
     private void OnUnhandledException(object sender, UnhandledExceptionEventArgs e)
@@ -120,8 +123,9 @@ public partial class App : Application
         // Read minimum log level from settings (default: Debug)
         var configuredLogLevel = ReadConfiguredLogLevel();
 
+        LogLevelSwitch.MinimumLevel = configuredLogLevel;
         Log.Logger = new LoggerConfiguration()
-            .MinimumLevel.Is(configuredLogLevel)
+            .MinimumLevel.ControlledBy(LogLevelSwitch)
             .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
             .MinimumLevel.Override("System", LogEventLevel.Warning)
             .WriteTo.Console(
@@ -154,6 +158,10 @@ public partial class App : Application
             }
         }
 
+        // Migrate before dependency injection creates the API client.
+        try { var defaults = DwgTranslator.Core.Services.SettingsStore.Read(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "settings.json")); DwgTranslator.Core.Services.SettingsStore.Migrate(settingsPath, defaults); }
+        catch (Exception ex) { Log.Warning(ex, "Configuration migration could not be saved"); }
+
         // Keep the licensing component available for a future commercial switch,
         // but do not load, validate or mutate license state while it is disabled.
         LicenseService = new LicenseService(AppDataDir);
@@ -167,28 +175,7 @@ public partial class App : Application
             Log.Information("Licensing is disabled for this build configuration");
         }
 
-        // First-launch: prompt for API key if not configured
-        if (File.Exists(settingsPath))
-        {
-            try
-            {
-                var json = File.ReadAllText(settingsPath);
-                var config = System.Text.Json.JsonSerializer.Deserialize<DwgTranslator.Core.Models.AppConfig>(
-                    json, DwgTranslator.Core.Models.AppConfigJson.ReadOptions);
-                if (config != null && string.IsNullOrEmpty(config.DeepSeekApiKey))
-                {
-                    MessageBox.Show(
-                        Strings.Get("MsgFirstLaunch"),
-                        Strings.Get("MsgTitleFirstSetup"),
-                        MessageBoxButton.OK,
-                        MessageBoxImage.Information);
-                }
-            }
-            catch (Exception ex)
-            {
-                Log.Warning(ex, "Failed to check first-launch settings");
-            }
-        }
+        // Customer builds use account login; never prompt for provider credentials.
 
         // Configure Dependency Injection
         var serviceCollection = new ServiceCollection();

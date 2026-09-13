@@ -8,6 +8,7 @@ namespace DwgTranslator.Core.Models;
 /// </summary>
 public class AppConfig
 {
+    public int ConfigurationVersion { get; set; }
     /// <summary>
     /// Commercial licensing switch. Disabled for the current pre-commercial build;
     /// the existing licensing implementation remains available for a later release.

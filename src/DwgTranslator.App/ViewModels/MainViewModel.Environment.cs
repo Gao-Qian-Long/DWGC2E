@@ -61,21 +61,9 @@ public partial class MainViewModel
     }
 
     /// <summary>Masked API key state for the environment report; the key itself is never shown.</summary>
-    public string ApiKeyStatusText
-    {
-        get
-        {
-            var key = _config.DeepSeekApiKey;
-            if (string.IsNullOrWhiteSpace(key)) return "未设置（无法翻译）";
-            var tail = key.Length > 4 ? key[^4..] : string.Empty;
-            return $"已设置（****{tail}）";
-        }
-    }
+    public string ApiKeyStatusText => "由产品服务管理";
 
-    public string TranslationServiceText =>
-        string.IsNullOrWhiteSpace(_config.DeepSeekBaseUrl)
-            ? "未配置接口地址"
-            : $"{_config.DeepSeekModel} @ {_config.DeepSeekBaseUrl}";
+    public string TranslationServiceText => !_apiClient.IsConfigured ? "服务配置异常" : IsAccountLoggedIn ? "云端翻译服务 · 已登录" : "云端翻译服务 · 请登录后使用";
 
     public string AppDataDirectory => App.AppDataDir;
     public string LogDirectory => _config.LogDirectory;
@@ -100,15 +88,7 @@ public partial class MainViewModel
     }
 
     [RelayCommand]
-    private void ShowEnvironmentCheck()
-    {
-        var dialog = new Views.EnvironmentCheckDialog(this)
-        {
-            Owner = Application.Current.MainWindow
-        };
-        dialog.ShowDialog();
-        StatusMessage = Strings.Get("StatusReady");
-    }
+    private void ShowEnvironmentCheck() { SettingsSection = 3; CurrentPage = PageSettings; }
 
     /// <summary>Opens a folder in Explorer; used by the self-check for logs and settings.</summary>
     public void OpenFolder(string path)
@@ -139,14 +119,7 @@ public partial class MainViewModel
         try
         {
             var path = _settingsPath ?? Path.Combine(App.AppDataDir, "settings.json");
-            var config = File.Exists(path)
-                ? JsonSerializer.Deserialize<AppConfig>(File.ReadAllText(path), AppConfigJson.ReadOptions) ?? new AppConfig()
-                : new AppConfig();
-            config.AutoCadInstallPath = _config.AutoCadInstallPath;
-            config.CadPluginPath = _config.CadPluginPath;
-
-            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            File.WriteAllText(path, JsonSerializer.Serialize(config, EnvironmentWriteOptions));
+            SettingsStore.Update(path, config => { config.AutoCadInstallPath = _config.AutoCadInstallPath; config.CadPluginPath = _config.CadPluginPath; });
             _settingsPath = path;
         }
         catch (Exception ex) { Log.Error(ex, "Saving CAD environment paths failed"); }

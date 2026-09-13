@@ -127,19 +127,8 @@ public partial class MainViewModel
         }
     }
 
-    public string ApiModeText => string.Equals(_config.ApiMode, "worker", StringComparison.OrdinalIgnoreCase)
-        ? "Cloudflare Worker（正式）"
-        : "直连模式（过渡内测）";
-
-    public string ApiBaseUrlText => string.IsNullOrWhiteSpace(_config.ApiBaseUrl)
-        ? "未配置（切到 Worker 模式时填写）"
-        : _config.ApiBaseUrl;
-
-    public string UpdateManifestText => string.IsNullOrWhiteSpace(_config.UpdateManifestUrl)
-        ? "未配置"
-        : _config.UpdateManifestUrl;
-
     /// <summary>把当前配置写回 settings.json（API Key 先加密，绝不写明文）。</summary>
+    private DwgTranslator.Core.Models.AppConfig? _runtimeBaseline;
     private void PersistRuntimeConfig()
     {
         try
@@ -155,11 +144,21 @@ public partial class MainViewModel
             toWrite.DeepSeekApiKey = DwgTranslator.Core.Models.AppConfig.EncryptApiKey(_config.DeepSeekApiKey);
             toWrite.AuthTokenEncrypted = _config.AuthTokenEncrypted; // Session is already DPAPI-encrypted.
 
-            File.WriteAllText(_settingsPath, JsonSerializer.Serialize(toWrite, ConfigWriteOptions));
+            DwgTranslator.Core.Services.SettingsStore.Update(_settingsPath, latest => {
+                foreach (var property in typeof(DwgTranslator.Core.Models.AppConfig).GetProperties())
+                {
+                    if (!property.CanRead || !property.CanWrite || property.Name == nameof(toWrite.AuthTokenEncrypted)) continue;
+                    if (_runtimeBaseline != null && Equals(property.GetValue(_config), property.GetValue(_runtimeBaseline))) continue;
+                    property.SetValue(latest, property.GetValue(toWrite));
+                }
+                _config.AuthTokenEncrypted = latest.AuthTokenEncrypted;
+            });
+            _runtimeBaseline = JsonSerializer.Deserialize<DwgTranslator.Core.Models.AppConfig>(JsonSerializer.Serialize(_config));
         }
         catch (Exception ex)
         {
             Log.Warning(ex, "Failed to persist runtime settings");
+            StatusMessage = "无法保存设置，请检查配置目录权限。";
         }
     }
     public bool MemoryOptimization

@@ -47,22 +47,7 @@ public partial class MainViewModel
     {
         if (IsProcessing) return;
 
-        var dialog = new Views.LanguagePairDialog(CurrentSourceLang, CurrentTargetLang)
-        {
-            Owner = Application.Current.MainWindow
-        };
-        if (dialog.ShowDialog() != true) return;
-        if (string.Equals(dialog.SourceCode, CurrentSourceLang, StringComparison.OrdinalIgnoreCase) &&
-            string.Equals(dialog.TargetCode, CurrentTargetLang, StringComparison.OrdinalIgnoreCase))
-            return;
-
-        if (!ConfirmDiscardTranslations()) return;
-
-        _applyingLanguagePair = true;
-        CurrentSourceLang = dialog.SourceCode;
-        CurrentTargetLang = dialog.TargetCode;
-        _applyingLanguagePair = false;
-        LanguagePairChanged();
+        CurrentPage = PageTranslate;
     }
 
     /// <summary>
@@ -75,7 +60,7 @@ public partial class MainViewModel
                 or TranslationStatus.WritebackSuccess);
         if (translatedCount == 0) return true;
 
-        return MessageBox.Show(
+        return DwgTranslator.App.Views.PromptDialog.Show(
             Strings.Get("MsgDirectionSwitchConfirm", translatedCount),
             Strings.Get("MsgTitleConfirm"),
             MessageBoxButton.YesNo,
@@ -87,20 +72,7 @@ public partial class MainViewModel
     #region Glossary Management
 
     [RelayCommand]
-    private void OpenGlossaryManager()
-    {
-        var titleSuffix = $"{LanguageDirection} ({GlossaryEntries.Count})";
-        var dialog = new Views.GlossaryManagerDialog(_glossaryService, GlossaryEntries, titleSuffix, _apiClient)
-        {
-            Owner = Application.Current.MainWindow
-        };
-
-        if (dialog.ShowDialog() == true && dialog.SavedEntries != null)
-        {
-            RefreshGlossaryDataFromList(dialog.SavedEntries);
-            StatusMessage = Strings.Get("StatusGlossarySaved", dialog.SavedEntries.Count);
-        }
-    }
+    private void OpenGlossaryManager() { CurrentPage = PageGlossary; LoadTermEditor(); }
 
     private void RefreshGlossaryDataFromList(List<GlossaryEntry> entries)
     {
@@ -113,52 +85,37 @@ public partial class MainViewModel
     [RelayCommand]
     private async Task ImportGlossaryAsync()
     {
-        if (IsProcessing) return;
+        if (IsProcessing || !ConfirmLeaveGlossary()) return;
 
         var dialog = new OpenFileDialog
         {
-            Filter = Strings.Get("FilterGlossaryFiles"),
+            Filter = "术语库文件|*.json;*.xlsx|JSON|*.json|Excel|*.xlsx",
             Title = Strings.Get("DialogTitleImportGlossary")
         };
         if (dialog.ShowDialog() != true) return;
 
-        var targetPath = Path.Combine(App.AppDataDir, "glossaries", "mechanical_zh_en.json");
-        var dir = Path.GetDirectoryName(targetPath);
-        if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
-
         try
         {
+            List<GlossaryEntry> entries;
             if (dialog.FileName.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
-            {
-                File.Copy(dialog.FileName, targetPath, overwrite: true);
-            }
+                entries = JsonSerializer.Deserialize<List<GlossaryEntry>>(await File.ReadAllTextAsync(dialog.FileName), AppConfigJson.ReadOptions) ?? throw new InvalidDataException();
             else if (dialog.FileName.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase))
-            {
-                var entries = await Task.Run(() => ReadGlossaryExcel(dialog.FileName));
-                if (entries.Count == 0)
-                    throw new InvalidDataException("Excel术语库中没有有效数据。请在前两列填写原文和译文，第三列可填写分类。");
-
-                var json = JsonSerializer.Serialize(entries, new JsonSerializerOptions
-                {
-                    WriteIndented = true,
-                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-                });
-                await File.WriteAllTextAsync(targetPath, json);
-            }
-            else
-            {
-                throw new InvalidDataException("仅支持 JSON 或 XLSX 术语库文件。");
-            }
-
-            await _glossaryService.LoadGlossaryAsync(targetPath);
-            RefreshGlossaryData();
-            StatusMessage = Strings.Get("StatusGlossaryImported", GlossaryEntries.Count);
+                entries = await Task.Run(() => ReadGlossaryExcel(dialog.FileName));
+            else throw new InvalidDataException();
+            if (entries.Count > 1000 || entries.Any(t => t == null || string.IsNullOrWhiteSpace(t.Source) || string.IsNullOrWhiteSpace(t.Target))) throw new InvalidDataException();
+            CurrentPage = PageGlossary;
+            if (CurrentPage != PageGlossary) return;
+            LoadTermEditor();
+            TermDraft.Clear();
+            foreach (var entry in entries) TermDraft.Add(entry);
+            SelectedTerm = null;
+            RefreshTermView();
+            TermFeedback = "已导入到草稿，请检查冲突并保存。原术语文件尚未更改。";
         }
-        catch (Exception ex)
+        catch
         {
-            StatusMessage = $"术语库导入失败：{ex.Message}";
-            MessageBox.Show(StatusMessage, Strings.Get("MsgTitleError"),
-                MessageBoxButton.OK, MessageBoxImage.Error);
+            TermFeedback = "导入失败：请选择有效的 JSON 或 XLSX 文件（原文、译文不能为空，最多 1000 条）。原术语未更改。";
+            StatusMessage = TermFeedback;
         }
     }
 
@@ -186,10 +143,7 @@ public partial class MainViewModel
             entries.Add(new GlossaryEntry { Source = source, Target = target, Category = category });
         }
 
-        return entries
-            .GroupBy(e => e.Source, StringComparer.Ordinal)
-            .Select(g => g.Last())
-            .ToList();
+        return entries;
     }
 
     #endregion
@@ -204,26 +158,10 @@ public partial class MainViewModel
 
     // 保留命令符号以兼容旧绑定，但不再打开本地高级设置窗口。
     [RelayCommand]
-    private void Settings()
-    {
-        if (IsProcessing) return;
-        var dialog = new Views.SettingsDialog { Owner = Application.Current.MainWindow };
-        if (dialog.ShowDialog() == true)
-        {
-            LoadConfig();
-            StatusMessage = "设置已保存";
-        }
-    }
+    private void Settings() => CurrentPage = PageSettings;
 
     [RelayCommand]
-    private void ShowHelp()
-    {
-        var dialog = new Views.HelpDialog
-        {
-            Owner = Application.Current.MainWindow
-        };
-        dialog.ShowDialog();
-    }
+    private void ShowHelp() { SettingsSection = 4; CurrentPage = PageSettings; }
 
     #endregion
 
@@ -242,7 +180,7 @@ public partial class MainViewModel
 
     private void PromptForActivation()
     {
-        var result = MessageBox.Show(
+        var result = DwgTranslator.App.Views.PromptDialog.Show(
             Strings.Get("MsgActivationPrompt"),
             Strings.Get("MsgTitleActivation"),
             MessageBoxButton.YesNo,
