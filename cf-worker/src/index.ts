@@ -552,7 +552,7 @@ export default {
       p = u.pathname;
     if (p === "/" && r.method === "GET")
       return json(
-        { service: "DWGC2E API", status: "ok", version: "0.1.0" },
+        { service: "DWGC2E API", status: "ok", version: e.LATEST_VERSION || "0.1.0" },
         200,
         origin,
       );
@@ -667,3 +667,4 @@ export default {
     );
   },
 };
+
