@@ -30,5 +30,6 @@ if %ERRORLEVEL% NEQ 0 (
 )
 
 echo.
-echo === [3/3] Run WPF app ===
+echo === [3/3] Run WPF app (Debug) ===
 dotnet run --project src/DwgTranslator.App/DwgTranslator.App.csproj --no-build -c Debug
+

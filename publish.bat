@@ -81,3 +81,4 @@ echo   %PUBDIR%\CadPlugin\DwgTranslator.Cad.dll
 echo Package: %ZIPFILE%
 echo The package is platform-locked and will reject installation into an incompatible CAD host.
 
+
