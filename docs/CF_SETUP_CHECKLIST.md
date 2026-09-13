@@ -179,6 +179,16 @@ tools\Test-WorkerContract.ps1
 
 它会检查健康接口、版本接口，以及登录保护接口是否拒绝未认证请求。该脚本不能代替真实账号、Brevo 邮件、设备和额度联调。
 
+## 十二、自动检查
+
+不读取 Secret 值、不发送邮件、不修改 D1：
+
+`powershell
+cd D:\DWGC2E.\tools\Test-CloudflareSetup.ps1`r
+` 
+
+脚本会检查当前 Worker 健康状态、版本接口和四个必需 Secret 的名称。
+
 ## 2026-09-13 对齐修正
 
 当前 Worker 已确认可用地址为 `https://dwgc2e-api.maplehousezz.workers.dev`。在 Worker 自定义域名 `api.cad.pocketter.dpdns.org` 尚未成功绑定前，官网和 APP 应使用该 workers.dev 地址；只有自定义域名绑定并验证成功后，才可切换。
@@ -196,5 +206,6 @@ tools\Test-WorkerContract.ps1
 ### 尚未能由静态检查证明的项目
 
 真实邮箱送达、真实账号完整流程、额度扣减、设备上限、DeepSeek 实际返回、APP 术语同步和 Pages 最新 commit 部署，必须在云端用真实账号继续验证，不能仅凭匿名接口测试宣称完成。
+
 
 
