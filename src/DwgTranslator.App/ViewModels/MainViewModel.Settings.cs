@@ -206,7 +206,13 @@ public partial class MainViewModel
     [RelayCommand]
     private void Settings()
     {
-        StatusMessage = "本地高级设置已停用，请使用云端账户管理翻译服务。";
+        if (IsProcessing) return;
+        var dialog = new Views.SettingsDialog { Owner = Application.Current.MainWindow };
+        if (dialog.ShowDialog() == true)
+        {
+            LoadConfig();
+            StatusMessage = "设置已保存";
+        }
     }
 
     [RelayCommand]
@@ -269,5 +275,8 @@ public partial class MainViewModel
 
     #endregion
 }
+
+
+
 
 

@@ -271,6 +271,7 @@
     <Style x:Key="WrapCellStyle" TargetType="TextBlock">
         <Setter Property="FontSize" Value="{DynamicResource FontSize.Table}"/>
         <Setter Property="VerticalAlignment" Value="Center"/>
+        <Setter Property="Margin" Value="12,0,0,0"/>
         <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
         <Setter Property="TextWrapping" Value="NoWrap"/>
     </Style>
@@ -600,3 +601,5 @@
         </Style.Triggers>
     </Style>
 </ResourceDictionary>
+
+

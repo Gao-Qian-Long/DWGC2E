@@ -43,6 +43,7 @@ public partial class MainViewModel
     private void NavigateTo(string? page)
     {
         if (string.IsNullOrWhiteSpace(page)) return;
+        if (page.Equals("settings", StringComparison.OrdinalIgnoreCase)) { SettingsCommand.Execute(null); return; }
         // 本地高级设置已从用户界面下线，避免旧入口或旧命令再次打开。
         if (page.Equals("settings", StringComparison.OrdinalIgnoreCase)) return;
         CurrentPage = page;
@@ -192,5 +193,4 @@ public partial class MainViewModel
 
     public string StatusReadyText => Strings.Get("StatusReady");
 }
-
 
