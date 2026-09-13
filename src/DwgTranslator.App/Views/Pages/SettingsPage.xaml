@@ -3,7 +3,7 @@
  <Grid Margin="18,14,18,12">
   <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
   <DockPanel Margin="0,0,0,8">
-   <Button DockPanel.Dock="Right" Content="高级设置" Command="{Binding SettingsCommand}" Style="{StaticResource Button.Secondary}" VerticalAlignment="Top"/>
+   <Button DockPanel.Dock="Right" Content="本地与高级设置" Command="{Binding SettingsCommand}" ToolTip="仅用于本地直连 AI、CAD 路径和调试配置；云端 Worker 模式无需填写 AI 密钥" Style="{StaticResource Button.Secondary}" VerticalAlignment="Top"/>
    <StackPanel><TextBlock Text="设置" Style="{StaticResource PageTitleStyle}"/><TextBlock Text="配置翻译偏好、文件输出与服务连接。" Style="{StaticResource PageSubtitleStyle}"/></StackPanel>
   </DockPanel>
   <Grid Grid.Row="1">
@@ -54,7 +54,7 @@
  </Grid>
 </Border></StackPanel></Border><Border Style="{StaticResource Card}" Padding="18,8,18,16" VerticalAlignment="Top" Visibility="{Binding SelectedIndex, ElementName=SettingsNav, Converter={StaticResource IndexToVis}, ConverterParameter=2}"><StackPanel><TextBlock Text="文件" Style="{StaticResource CardTitleStyle}" Margin="0,12,0,4"/><Border BorderBrush="{DynamicResource Brush.BorderLight}" BorderThickness="0,0,0,1" Padding="0,10">
  <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
- <StackPanel Margin="0,0,24,0"><TextBlock Text="输出目录" FontSize="14"/><TextBlock Text="在高级设置中修改保存路径。" Style="{StaticResource CaptionStyle}" Margin="0,6,0,0"/></StackPanel>
+ <StackPanel Margin="0,0,24,0"><TextBlock Text="输出目录" FontSize="14"/><TextBlock Text="在本地与高级设置中修改保存路径。" Style="{StaticResource CaptionStyle}" Margin="0,6,0,0"/></StackPanel>
  <ContentControl Grid.Column="1" VerticalAlignment="Center"><Button Content="打开目录" Command="{Binding OpenOutputFolderCommand}" Style="{StaticResource Button.Secondary}"/></ContentControl>
  </Grid>
 </Border><TextBlock Text="{Binding OutputDirectoryText}" Style="{StaticResource CaptionStyle}" Margin="0,12,0,0"/><Border BorderBrush="{DynamicResource Brush.BorderLight}" BorderThickness="0,0,0,1" Padding="0,10">
@@ -85,7 +85,7 @@
 </Border></StackPanel></Border><Border Style="{StaticResource Card}" Padding="18,8,18,16" VerticalAlignment="Top" Visibility="{Binding SelectedIndex, ElementName=SettingsNav, Converter={StaticResource IndexToVis}, ConverterParameter=4}"><StackPanel><TextBlock Text="账号" Style="{StaticResource CardTitleStyle}" Margin="0,12,0,4"/><Border BorderBrush="{DynamicResource Brush.BorderLight}" BorderThickness="0,0,0,1" Padding="0,10">
  <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
  <StackPanel Margin="0,0,24,0"><TextBlock Text="授权与服务" FontSize="14"/><TextBlock Text="管理本地授权及服务连接。" Style="{StaticResource CaptionStyle}" Margin="0,6,0,0"/></StackPanel>
- <ContentControl Grid.Column="1" VerticalAlignment="Center"><Button Content="高级设置" Command="{Binding SettingsCommand}" Style="{StaticResource Button.Secondary}"/></ContentControl>
+ <ContentControl Grid.Column="1" VerticalAlignment="Center"><Button Content="本地与高级设置" Command="{Binding SettingsCommand}" ToolTip="仅用于本地直连 AI、CAD 路径和调试配置；云端 Worker 模式无需填写 AI 密钥" Style="{StaticResource Button.Secondary}"/></ContentControl>
  </Grid>
 </Border><TextBlock Text="{Binding ApiKeyStatusText}" Style="{StaticResource CaptionStyle}" Margin="0,10,0,0"/></StackPanel></Border><Border Style="{StaticResource Card}" Padding="18,8,18,16" VerticalAlignment="Top" Visibility="{Binding SelectedIndex, ElementName=SettingsNav, Converter={StaticResource IndexToVis}, ConverterParameter=5}"><StackPanel><TextBlock Text="关于" Style="{StaticResource CardTitleStyle}" Margin="0,12,0,4"/><TextBlock Text="DWGC2E" FontSize="20" FontWeight="SemiBold" Margin="0,14,0,6"/><TextBlock Text="{Binding AppVersionText}" Style="{StaticResource CaptionStyle}"/><Border BorderBrush="{DynamicResource Brush.BorderLight}" BorderThickness="0,0,0,1" Padding="0,10">
  <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
@@ -101,4 +101,5 @@
   </Grid>
  </Grid>
 </UserControl>
+
 
