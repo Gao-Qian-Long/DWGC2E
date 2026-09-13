@@ -2,6 +2,11 @@
 echo Publishing DWG Translator as self-contained single-file...
 echo.
 
+
+:: Windows locks a running single-file EXE. Fail early with a clear message instead of
+:: reporting a misleading successful publish when release\DwgTranslator.exe cannot be replaced.
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$p = Get-Process -Name DwgTranslator -ErrorAction SilentlyContinue; if ($p) { Write-Error 'Please close DwgTranslator.exe before publishing.'; exit 3 }"
+if %ERRORLEVEL% NEQ 0 exit /b %ERRORLEVEL%
 set PUBDIR=artifacts\publish
 set RELEASEDIR=release
 
