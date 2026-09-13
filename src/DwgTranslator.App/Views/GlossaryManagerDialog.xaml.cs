@@ -18,6 +18,7 @@ public partial class GlossaryManagerDialog : Window
     private readonly IGlossaryService _glossaryService;
     private readonly ObservableCollection<GlossaryEntry> _editableEntries;
     private readonly string _titleSuffix;
+    private bool _isSaving;
 
     /// <summary>
     /// The saved entries if the user clicked Save; null if cancelled.
@@ -52,27 +53,23 @@ public partial class GlossaryManagerDialog : Window
 
     private async void Save_Click(object sender, RoutedEventArgs e)
     {
+        if (_isSaving) return;
+        GlossaryGrid.CommitEdit(DataGridEditingUnit.Cell, true);
+        GlossaryGrid.CommitEdit(DataGridEditingUnit.Row, true);
+        _isSaving = true;
         try
         {
             var list = _editableEntries
                 .Where(x => !string.IsNullOrWhiteSpace(x.Source) && !string.IsNullOrWhiteSpace(x.Target))
-                .ToList();
-
-            // Save to AppData glossary file
+                .Select(x => new GlossaryEntry { Source = x.Source.Trim(), Target = x.Target.Trim(), Category = x.Category?.Trim() ?? string.Empty })
+                .GroupBy(x => x.Source, StringComparer.OrdinalIgnoreCase)
+                .Select(g => g.First()).ToList();
             var targetPath = Path.Combine(App.AppDataDir, "glossaries", "mechanical_zh_en.json");
             var dir = Path.GetDirectoryName(targetPath);
             if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
-
-            var json = JsonSerializer.Serialize(list, new JsonSerializerOptions
-            {
-                WriteIndented = true,
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-            });
+            var json = JsonSerializer.Serialize(list, new JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
             await File.WriteAllTextAsync(targetPath, json);
-
-            // Reload into service
             await _glossaryService.LoadGlossaryAsync(targetPath);
-
             SavedEntries = list;
             DialogResult = true;
         }
@@ -81,13 +78,16 @@ public partial class GlossaryManagerDialog : Window
             System.Diagnostics.Debug.WriteLine($"Failed to save glossary: {ex}");
             MessageBox.Show(Strings.Get("GlossarySaveFailed"), Strings.Get("MsgTitleError"), MessageBoxButton.OK, MessageBoxImage.Error);
         }
+        finally { _isSaving = false; }
     }
 
     private void Cancel_Click(object sender, RoutedEventArgs e)
     {
+        if (_isSaving) return;
+        GlossaryGrid.CommitEdit(DataGridEditingUnit.Cell, true);
+        GlossaryGrid.CommitEdit(DataGridEditingUnit.Row, true);
         DialogResult = false;
     }
-
     /// <summary>
     /// Add a new empty glossary entry row to the editable grid.
     /// </summary>
@@ -132,6 +132,9 @@ public partial class GlossaryManagerDialog : Window
             _editableEntries.Remove(item);
     }
 }
+
+
+
 
 
 
