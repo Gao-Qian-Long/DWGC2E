@@ -25,6 +25,8 @@ public class WorkerTranslationServiceTests
         public Task<DeviceBindResult> BindDeviceAsync(string a,string b,CancellationToken ct=default)=>throw new NotSupportedException();
         public Task<bool> RevokeDeviceAsync(string deviceId,CancellationToken ct=default)=>throw new NotSupportedException();
         public Task<VersionInfo?> CheckVersionAsync(string v,CancellationToken ct=default)=>throw new NotSupportedException();
+        public Task<IReadOnlyList<CloudGlossaryEntry>?> GetGlossaryAsync(CancellationToken ct=default)=>Task.FromResult<IReadOnlyList<CloudGlossaryEntry>?>(null);
+        public Task<bool> PutGlossaryAsync(IReadOnlyList<CloudGlossaryEntry> e,CancellationToken ct=default)=>Task.FromResult(false);
     }
     private static TextEntity Entity(string path="a.dwg") => new()
     { Handle="A1", SourceFilePath=path, PlainText="倒角", RawText="倒角", Height=2.5, Rotation=Math.PI/2 };

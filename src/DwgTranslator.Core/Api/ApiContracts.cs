@@ -74,6 +74,15 @@ public sealed class TranslationItemResult
     public string? ErrorCode { get; set; }
 }
 
+public sealed class CloudGlossaryEntry
+{
+    public string Source { get; set; } = string.Empty;
+    public string Target { get; set; } = string.Empty;
+    public string Category { get; set; } = string.Empty;
+    public string Folder { get; set; } = string.Empty;
+    public bool Enabled { get; set; } = true;
+}
+
 public sealed class LoginResult
 {
     public bool Success { get; set; }
@@ -178,6 +187,10 @@ public interface IApiClient
     Task<bool> RevokeDeviceAsync(string deviceId, CancellationToken cancellationToken = default);
 
     Task<VersionInfo?> CheckVersionAsync(string currentVersion, CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<CloudGlossaryEntry>?> GetGlossaryAsync(CancellationToken cancellationToken = default);
+
+    Task<bool> PutGlossaryAsync(IReadOnlyList<CloudGlossaryEntry> entries, CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -203,7 +216,9 @@ public static class ApiErrorMessages
             "output_exists" => "输出文件已存在",
             "cad_version_unsupported" => "当前 CAD 版本暂不支持",
             "rate_limited" => "请求过于频繁，正在排队重试",
+            "glossary_limit" => "云端术语库最多保存 1000 条",
             _ => fallback ?? "操作失败"
         };
     }
 }
+

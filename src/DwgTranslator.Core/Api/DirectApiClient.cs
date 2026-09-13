@@ -140,6 +140,18 @@ public sealed class DirectApiClient : IApiClient
         return Task.FromResult(false);
     }
 
+    public Task<IReadOnlyList<CloudGlossaryEntry>?> GetGlossaryAsync(CancellationToken cancellationToken = default)
+    {
+        Log.Debug("直连模式：云端术语库不可用");
+        return Task.FromResult<IReadOnlyList<CloudGlossaryEntry>?>(null);
+    }
+
+    public Task<bool> PutGlossaryAsync(IReadOnlyList<CloudGlossaryEntry> entries, CancellationToken cancellationToken = default)
+    {
+        Log.Debug("直连模式：云端术语库不可用");
+        return Task.FromResult(false);
+    }
+
     public Task<VersionInfo?> CheckVersionAsync(string currentVersion, CancellationToken cancellationToken = default)
     {
         Log.Debug("直连模式：{Method} 无后端可用，跳过版本检查", nameof(CheckVersionAsync));
@@ -306,3 +318,4 @@ public sealed class DirectApiClient : IApiClient
         return result;
     }
 }
+

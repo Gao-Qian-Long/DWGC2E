@@ -29,10 +29,12 @@
             <Border Grid.Column="2" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1" CornerRadius="8" Padding="0">
                 <DockPanel>
                     <Grid DockPanel.Dock="Top" Margin="10,10,10,8">
-                        <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                         <TextBlock Text="当前文件夹中的术语" VerticalAlignment="Center" FontWeight="SemiBold"/>
                         <Button Grid.Column="1" Content="＋ 新增条目" Padding="10,5" Margin="8,0,6,0" Click="AddRow_Click" Cursor="Hand"/>
-                        <Button Grid.Column="2" x:Name="DeleteSelectedButton" Content="删除选中" Padding="10,5" Click="DeleteSelected_Click" Cursor="Hand"/>
+                        <Button Grid.Column="2" x:Name="UploadCloudButton" Content="↑ 上传云端" Padding="10,5" Margin="0,0,6,0" Click="UploadCloud_Click" Cursor="Hand" ToolTip="覆盖云端术语库"/>
+                        <Button Grid.Column="3" x:Name="DownloadCloudButton" Content="↓ 下载云端" Padding="10,5" Margin="0,0,6,0" Click="DownloadCloud_Click" Cursor="Hand" ToolTip="用云端术语替换当前编辑内容"/>
+                        <Button Grid.Column="4" x:Name="DeleteSelectedButton" Content="删除选中" Padding="10,5" Click="DeleteSelected_Click" Cursor="Hand"/>
                     </Grid>
                     <DataGrid x:Name="GlossaryGrid" ItemsSource="{Binding}" AutoGenerateColumns="False" CanUserAddRows="False" CanUserDeleteRows="False" SelectionMode="Extended" FontSize="12" RowHeight="32" HeadersVisibility="Column" GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="{DynamicResource Brush.BorderLight}" BorderThickness="0" Margin="0,0,0,4">
                         <DataGrid.Resources>
@@ -44,6 +46,7 @@
                             <DataGridTextColumn Header="译文" Binding="{Binding Target, UpdateSourceTrigger=PropertyChanged}" Width="2*"/>
                             <DataGridTextColumn Header="分类" Binding="{Binding Category, UpdateSourceTrigger=PropertyChanged}" Width="1.1*"/>
                             <DataGridTextColumn Header="文件夹" Binding="{Binding Folder, UpdateSourceTrigger=PropertyChanged}" Width="1.1*"/>
+                            <DataGridCheckBoxColumn Header="启用" Binding="{Binding Enabled, UpdateSourceTrigger=PropertyChanged}" Width="58"/>
                         </DataGrid.Columns>
                     </DataGrid>
                     <TextBlock DockPanel.Dock="Bottom" Text="支持批量选择删除；保存后立即用于本机翻译。" Foreground="{DynamicResource Brush.TextMuted}" Margin="10,0,10,8" FontSize="11"/>

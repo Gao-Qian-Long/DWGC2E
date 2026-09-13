@@ -1,4 +1,5 @@
 using DwgTranslator.Core.Models;
+using DwgTranslator.Core.Api;
 using DwgTranslator.Core.Resources;
 using DwgTranslator.Core.Services;
 using System.Collections.ObjectModel;
@@ -18,6 +19,7 @@ namespace DwgTranslator.App.Views;
 public partial class GlossaryManagerDialog : Window
 {
     private readonly IGlossaryService _glossaryService;
+    private readonly IApiClient? _apiClient;
     private readonly ObservableCollection<GlossaryEntry> _editableEntries;
     private readonly string _titleSuffix;
     private bool _isSaving;
@@ -34,12 +36,14 @@ public partial class GlossaryManagerDialog : Window
     public GlossaryManagerDialog(
         IGlossaryService glossaryService,
         IEnumerable<GlossaryEntry> currentEntries,
-        string titleSuffix)
+        string titleSuffix,
+        IApiClient? apiClient = null)
     {
         InitializeComponent();
 
         _glossaryService = glossaryService;
         _titleSuffix = titleSuffix;
+        _apiClient = apiClient;
         TitleText.Text = Strings.Get("GlossaryManagerTitleSuffix", titleSuffix);
 
         // Clone entries for editing so changes are not applied until Save
@@ -129,6 +133,40 @@ public partial class GlossaryManagerDialog : Window
         finally { _isSaving = false; }
     }
 
+    private List<CloudGlossaryEntry> ToCloudEntries() => _editableEntries
+        .Where(x => !string.IsNullOrWhiteSpace(x.Source) && !string.IsNullOrWhiteSpace(x.Target))
+        .Select(x => new CloudGlossaryEntry { Source = x.Source.Trim(), Target = x.Target.Trim(), Category = x.Category?.Trim() ?? string.Empty, Folder = x.Folder?.Trim() ?? string.Empty, Enabled = x.Enabled })
+        .GroupBy(x => x.Source, StringComparer.OrdinalIgnoreCase).Select(g => g.First()).ToList();
+
+    private async void UploadCloud_Click(object sender, RoutedEventArgs e)
+    {
+        if (_apiClient == null || !_apiClient.IsConfigured || !string.Equals(_apiClient.ModeName, "worker", StringComparison.OrdinalIgnoreCase)) { MessageBox.Show("当前未登录云端账号，无法上传。请先在账户中心登录。", "云端同步", MessageBoxButton.OK, MessageBoxImage.Information); return; }
+        var entries = ToCloudEntries();
+        if (entries.Count > MaxEntries) { MessageBox.Show($"术语条目最多 {MaxEntries} 条。", "数量限制", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
+        if (MessageBox.Show($"将本机 {entries.Count} 条术语覆盖到云端，是否继续？", "确认上传", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
+        try { UploadCloudButton.IsEnabled = false; if (!await _apiClient.PutGlossaryAsync(entries)) throw new InvalidOperationException("云端未接受本次上传"); MessageBox.Show("术语已上传到云端。", "云端同步", MessageBoxButton.OK, MessageBoxImage.Information); }
+        catch (ApiAuthenticationException) { MessageBox.Show("登录已过期，请重新登录后再试。", "云端同步", MessageBoxButton.OK, MessageBoxImage.Warning); }
+        catch (Exception ex) { MessageBox.Show($"上传失败：{ex.Message}", "云端同步", MessageBoxButton.OK, MessageBoxImage.Error); }
+        finally { UploadCloudButton.IsEnabled = true; }
+    }
+
+    private async void DownloadCloud_Click(object sender, RoutedEventArgs e)
+    {
+        if (_apiClient == null || !_apiClient.IsConfigured || !string.Equals(_apiClient.ModeName, "worker", StringComparison.OrdinalIgnoreCase)) { MessageBox.Show("当前未登录云端账号，无法下载。请先在账户中心登录。", "云端同步", MessageBoxButton.OK, MessageBoxImage.Information); return; }
+        if (MessageBox.Show("从云端下载会覆盖当前未保存的本机术语，是否继续？", "确认下载", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
+        try
+        {
+            DownloadCloudButton.IsEnabled = false;
+            var entries = await _apiClient.GetGlossaryAsync();
+            if (entries == null) throw new InvalidOperationException("云端未返回术语数据");
+            if (entries.Count > MaxEntries) throw new InvalidOperationException($"云端术语超过 {MaxEntries} 条，已拒绝导入");
+            _editableEntries.Clear(); foreach (var x in entries) _editableEntries.Add(new GlossaryEntry { Source=x.Source, Target=x.Target, Category=x.Category, Folder=x.Folder, Enabled=x.Enabled });
+            RefreshFolders(); _view?.Refresh(); MessageBox.Show($"已从云端下载 {entries.Count} 条术语。点击“保存到本机”后生效。", "云端同步", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (ApiAuthenticationException) { MessageBox.Show("登录已过期，请重新登录后再试。", "云端同步", MessageBoxButton.OK, MessageBoxImage.Warning); }
+        catch (Exception ex) { MessageBox.Show($"下载失败：{ex.Message}", "云端同步", MessageBoxButton.OK, MessageBoxImage.Error); }
+        finally { DownloadCloudButton.IsEnabled = true; }
+    }
     private void Cancel_Click(object sender, RoutedEventArgs e)
     {
         if (_isSaving) return;

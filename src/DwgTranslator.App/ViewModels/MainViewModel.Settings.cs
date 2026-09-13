@@ -90,7 +90,7 @@ public partial class MainViewModel
     private void OpenGlossaryManager()
     {
         var titleSuffix = $"{LanguageDirection} ({GlossaryEntries.Count})";
-        var dialog = new Views.GlossaryManagerDialog(_glossaryService, GlossaryEntries, titleSuffix)
+        var dialog = new Views.GlossaryManagerDialog(_glossaryService, GlossaryEntries, titleSuffix, _apiClient)
         {
             Owner = Application.Current.MainWindow
         };
