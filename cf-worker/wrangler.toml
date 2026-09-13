@@ -21,3 +21,7 @@ LATEST_VERSION = "2.1.0"
 DOWNLOAD_URL = ""
 BACKUP_DOWNLOAD_URL = ""
 RELEASE_NOTES = ""
+
+# Select brevo or resend; keys must remain Worker Secrets.
+MAIL_PROVIDER = "brevo"
+MAIL_FALLBACK_ENABLED = "true"

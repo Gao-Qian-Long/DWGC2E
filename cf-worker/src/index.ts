@@ -1,3 +1,4 @@
+import { deliverMail, mailProviders } from "./mail";
 interface Env {
   DB: D1Database;
   DEEPSEEK_API_KEY: string;
@@ -9,6 +10,8 @@ interface Env {
   MAX_TRANSLATE_ITEMS?: string;
   MAX_TEXT_LENGTH?: string;
   SESSION_TTL_DAYS?: string;
+  MAIL_PROVIDER?: string;
+  MAIL_FALLBACK_ENABLED?: string;
   RESEND_API_KEY?: string;
   BREVO_API_KEY?: string;
   MAIL_FROM?: string; DEVICE_PLATFORM?: string;
@@ -95,7 +98,7 @@ function normalizeAccount(v: any) {
     .toLowerCase();
 }
 async function sendCode(email: string, purpose: string, e: Env) {
-  if (!e.MAIL_FROM || (!e.BREVO_API_KEY && !e.RESEND_API_KEY))
+  try { mailProviders(e); } catch {
     return json(
       {
         success: false,
@@ -105,6 +108,7 @@ async function sendCode(email: string, purpose: string, e: Env) {
       503,
       cors(e),
     );
+  }
   const recent = await e.DB.prepare(
     "SELECT COUNT(*) n FROM email_verification_codes WHERE email=? AND purpose=? AND created_at>datetime('now','-10 minutes')",
   )
@@ -141,51 +145,22 @@ async function sendCode(email: string, purpose: string, e: Env) {
       ts,
     )
     .run();
-  const payload = {
-    sender: { name: "DWGC2E", email: e.MAIL_FROM.replace(/^.*<|>.*$/g, "") },
-    to: [{ email }],
-    subject:
-      purpose === "register" ? "DWGC2E 注册验证码" : "DWGC2E 密码重置验证码",
-    htmlContent:
-      '<p>你的验证码是：</p><p style="font-size:28px;font-weight:700;letter-spacing:6px">' +
-      code +
-      "</p><p>验证码 10 分钟内有效。如非本人操作，请忽略此邮件。</p>",
-  };
-  let resp: Response;
-  if (e.BREVO_API_KEY) {
-    resp = await fetch("https://api.brevo.com/v3/smtp/email", {
-      method: "POST",
-      headers: {
-        "api-key": e.BREVO_API_KEY,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
-    });
-  } else {
-    resp = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: "Bearer " + e.RESEND_API_KEY,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from: e.MAIL_FROM,
-        to: [email],
-        subject: payload.subject,
-        html: payload.htmlContent,
-      }),
-    });
+  const result = await deliverMail(e, {
+    id, to: email,
+    subject: purpose === "register" ? "DWGC2E 注册验证码" : "DWGC2E 密码重置验证码",
+    html: '<p>你的验证码是：</p><p style="font-size:28px;font-weight:700;letter-spacing:6px">' +
+      code + '</p><p>验证码 10 分钟内有效。如非本人操作，请忽略此邮件。</p>',
+  });
+  if (!result.ok) {
+    // Preserve uncertain deliveries in case the message arrives late.
+    if (!result.uncertain) await e.DB.prepare(
+      "UPDATE email_verification_codes SET used_at=? WHERE id=? AND used_at IS NULL",
+    ).bind(now(), id).run();
+    return json({ success: false,
+      error_code: result.uncertain ? "mail_delivery_uncertain" : "mail_send_failed",
+      message: result.uncertain ? "邮件发送状态暂未确认，请先检查收件箱，稍后再试" : "验证码邮件发送失败，请稍后再试",
+    }, 502, cors(e));
   }
-  if (!resp.ok)
-    return json(
-      {
-        success: false,
-        error_code: "mail_send_failed",
-        message: "验证码邮件发送失败",
-      },
-      502,
-      cors(e),
-    );
   return json(
     { success: true, message: "验证码已发送", expires_in: 600 },
     200,
@@ -354,7 +329,7 @@ async function register(r: Request, e: Env) {
       id,
       account,
       await pass(password, e.PASSWORD_PEPPER),
-      String(b.display_name || account),
+      String(b?.display_name || account),
       email,
       ts,
     ),
@@ -449,7 +424,7 @@ async function settleQuota(e: Env, userId: string, ym: string, reserved: number,
 async function translate(r: Request, e: Env, user: J) {
   const b = await text(r);
   const items = Array.isArray(b?.items) ? b.items : [];
-  if (!items.length || items.length > Number(e.MAX_TRANSLATE_ITEMS || 100))
+  if (!b || !items.length || items.length > Number(e.MAX_TRANSLATE_ITEMS || 100))
     return json(
       {
         success: false,

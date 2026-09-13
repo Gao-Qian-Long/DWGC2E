@@ -2,6 +2,15 @@
   "name": "dwgc2e-api",
   "private": true,
   "type": "module",
-  "scripts": { "deploy": "wrangler deploy", "dev": "wrangler dev" },
-  "devDependencies": { "@cloudflare/workers-types": "latest", "wrangler": "latest", "typescript": "latest" }
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev",
+    "test": "node --experimental-strip-types --test tests/*.test.mjs",
+    "typecheck": "tsc --noEmit --target es2022 --module esnext --moduleResolution bundler --lib es2022 --types @cloudflare/workers-types src/index.ts src/mail.ts"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "latest",
+    "wrangler": "latest",
+    "typescript": "latest"
+  }
 }

@@ -57,7 +57,8 @@ DEEPSEEK_API_KEY
 BREVO_API_KEY
 ```
 
-禁止写入 APP、Pages Variables、GitHub、`wrangler.toml`、前端 JS 或安装包。旧 Resend 方案不再使用时，可删除 `RESEND_API_KEY`。
+禁止写入 APP、Pages Variables、GitHub、`wrangler.toml`、前端 JS 或安装包。双平台方案额外保留 `RESEND_API_KEY`，不要删除已经可用的 `BREVO_API_KEY`。
+普通变量新增 `MAIL_PROVIDER=brevo`、`MAIL_FALLBACK_ENABLED=true`。详见 cf-worker/README.md 的双平台部署与分别验收步骤。
 
 ## 5. Brevo
 

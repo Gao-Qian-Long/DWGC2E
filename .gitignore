@@ -89,3 +89,9 @@ AGENTS.md
 
 # ===== 垃圾路径（某次未展开的 %SystemDrive% 变量在仓库里生成的 Windows 缓存副本）=====
 %SystemDrive%/
+
+# Worker dependencies, local state and secrets
+/cf-worker/node_modules/
+/cf-worker/.wrangler/
+/cf-worker/.dev.vars*
+/cf-worker/.env*
