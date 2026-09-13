@@ -1,0 +1,18 @@
+name = "dwgc2e-api"
+main = "src/index.ts"
+compatibility_date = "2026-09-13"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "dwg-translator-prod"
+database_id = "16fa90f6-ddc8-4341-a963-4e66fd902c63"
+
+[vars]
+APP_NAME = "DWGC2E"
+ENVIRONMENT = "production"
+CORS_ORIGINS = "https://cad.pocketter.dpdns.org"
+DEFAULT_PLAN = "free"
+MAX_TRANSLATE_ITEMS = "100"
+MAX_TEXT_LENGTH = "2000"
+SESSION_TTL_DAYS = "30"
+DEVICE_PLATFORM = "Windows"

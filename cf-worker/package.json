@@ -1,0 +1,7 @@
+{
+  "name": "dwgc2e-api",
+  "private": true,
+  "type": "module",
+  "scripts": { "deploy": "wrangler deploy", "dev": "wrangler dev" },
+  "devDependencies": { "@cloudflare/workers-types": "latest", "wrangler": "latest", "typescript": "latest" }
+}
