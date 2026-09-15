@@ -29,7 +29,7 @@ namespace DwgTranslator.Core.Api;
 /// Math.Clamp / Index-Range / string.Contains(char) 等），一律走
 /// HttpRequestMessage + SendAsync + JsonSerializer，保证在 net48 上同样能编译。
 /// </summary>
-public sealed class WorkerApiClient : IApiClient
+public sealed partial class WorkerApiClient : IApiClient, IAccountSessionClient
 {
     /// <summary>翻译请求可能要服务端排队调模型，给足 120 秒。</summary>
     private const int TranslateTimeoutSeconds = 120;
@@ -126,6 +126,9 @@ public sealed class WorkerApiClient : IApiClient
         if (!IsConfigured)
             return new LoginResult { Success = false, ErrorCode = UnconfiguredErrorCode, Message = UnconfiguredMessage };
 
+        if (string.IsNullOrWhiteSpace(_deviceId))
+            return new LoginResult { Success = false, ErrorCode = "device_identity_unavailable", Message = "无法保存设备标识，请检查配置目录权限后重启；未占用新设备名额。" };
+
         var payload = new WireLoginRequest
         {
             Account = account ?? string.Empty,
@@ -135,7 +138,7 @@ public sealed class WorkerApiClient : IApiClient
         };
 
         // 注意：账号口令只进请求体，绝不写日志（连 Debug 级也不写）。
-        var outcome = await SendAsync(HttpMethod.Post, Url("/v1/auth/login"), JsonContent(payload), DefaultTimeout, cancellationToken)
+        var outcome = await SendAsync(HttpMethod.Post, Url("/v1/auth/login"), JsonContent(payload), DefaultTimeout, cancellationToken, includeAuth: false)
             .ConfigureAwait(false);
 
         if (outcome.TransportFailed)
@@ -500,72 +503,6 @@ public sealed class WorkerApiClient : IApiClient
         public string? CharactersUsedHeader { get; set; }
 
         public bool IsSuccess => !TransportFailed && StatusCode >= 200 && StatusCode < 300;
-    }
-
-    private async Task<HttpOutcome> SendAsync(
-        HttpMethod method,
-        string requestUri,
-        HttpContent? content,
-        TimeSpan timeout,
-        CancellationToken cancellationToken,
-        bool includeAuth = true,
-        string? idempotencyKey = null)
-    {
-        var outcome = new HttpOutcome();
-
-        // 组合调用方令牌与本地超时：调用方取消要能中断，单次请求也不会无限挂着。
-        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        linked.CancelAfter(timeout);
-
-        try
-        {
-            using var request = new HttpRequestMessage(method, requestUri);
-            if (content != null) request.Content = content;
-            if (idempotencyKey != null) request.Headers.TryAddWithoutValidation("Idempotency-Key", idempotencyKey);
-
-            if (includeAuth)
-            {
-                var token = GetToken();
-                if (!string.IsNullOrEmpty(token))
-                {
-                    // 逐请求挂 Authorization，不改 HttpClient.DefaultRequestHeaders：
-                    // 共享 HttpClient 时改默认头会与并发请求互相踩，而且令牌一旦进默认头就很难保证不被日志带出去。
-                    request.Headers.TryAddWithoutValidation("Authorization", "Bearer " + token);
-                }
-            }
-
-            // 用 SendAsync 而不是 GetFromJsonAsync/PostAsJsonAsync：后两个在 net48 上不可用。
-            using var response = await _httpClient.SendAsync(request, linked.Token).ConfigureAwait(false);
-            outcome.StatusCode = (int)response.StatusCode;
-            outcome.Body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-
-            if (response.Headers.TryGetValues("X-Chars-Used", out var values))
-                outcome.CharactersUsedHeader = values.FirstOrDefault();
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            // 调用方主动取消：原样上抛，保持取消语义（上层靠它中止整批任务）。
-            throw;
-        }
-        catch (OperationCanceledException)
-        {
-            // 本地超时（或 HttpClient.Timeout 触发）。契约角度这是"上游没能及时响应"。
-            outcome.TransportFailed = true;
-            outcome.TransportErrorCode = "upstream_unavailable";
-            outcome.TransportMessage = "请求超时";
-            Log.Warning("{Method} {Uri} 超时（{Seconds}s）", method.Method, requestUri, timeout.TotalSeconds);
-        }
-        catch (Exception ex)
-        {
-            // HttpRequestException / SocketException / IOException / UriFormatException 等
-            // 都归到 network_error；只记异常类型与消息，响应体和令牌不入日志。
-            outcome.TransportFailed = true;
-            outcome.TransportErrorCode = "network_error";
-            outcome.TransportMessage = ex.Message;
-            Log.Warning(ex, "{Method} {Uri} 网络异常", method.Method, requestUri);
-        }
-
-        return outcome;
     }
 
     /// <summary>把业务失败的响应体（error_code + message）解析出来；解析不出时退回状态码映射。</summary>

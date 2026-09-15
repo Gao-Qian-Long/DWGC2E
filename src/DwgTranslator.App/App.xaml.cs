@@ -338,24 +338,11 @@ public partial class App : Application
         /// </summary>
         static string GetStableDeviceId()
         {
-            var path = Path.Combine(AppDataDir, "device-id");
-            try
-            {
-                Directory.CreateDirectory(AppDataDir);
-                if (File.Exists(path))
-                {
-                    var existing = File.ReadAllText(path).Trim();
-                    if (Guid.TryParse(existing, out _)) return existing;
-                }
-
-                var created = Guid.NewGuid().ToString("D");
-                File.WriteAllText(path, created);
-                return created;
-            }
+            try { return InstallationIdentityStore.GetOrCreate(Path.Combine(AppDataDir, "device-id")); }
             catch (Exception ex)
             {
-                Log.Warning(ex, "无法持久化设备标识，将使用临时设备标识");
-                return Guid.NewGuid().ToString("D");
+                Log.Warning(ex, "无法读取或保存设备标识，已禁用 APP 登录，未生成临时设备编号");
+                return string.Empty;
             }
         }
         // ViewModel

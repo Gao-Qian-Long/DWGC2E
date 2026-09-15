@@ -33,6 +33,7 @@ public partial class MainViewModel
     public string AccountEntryText => IsAccountLoggedIn ? AccountDisplayNameText : "登录账号";
     public bool RequireAccount()
     {
+        if (IsLoggingIn) { AccountFeedback = "账户正在切换，请稍后再执行操作。"; return false; }
         if (IsAccountLoggedIn) return true;
         _loginReturnPage = CurrentPage;
         LoginAccount();
@@ -173,7 +174,8 @@ public partial class MainViewModel
 
     public async Task SubmitLoginAsync(string password)
     {
-        if (IsLoggingIn) return;
+        if (IsLoggingIn || IsAccountRefreshing) return;
+        if (IsProcessing) { AccountFeedback = "任务正在执行，请完成或停止任务后再切换账号。"; return; }
         if (!_apiClient.IsConfigured) { AccountState = AccountSessionState.ConfigurationError; AccountFeedback = "服务配置异常，请联系管理员修复安装配置后重试。"; return; }
         if (string.IsNullOrWhiteSpace(LoginName) || string.IsNullOrEmpty(password)) { AccountFeedback = "请输入账号和密码。"; return; }
         IsLoggingIn = true;
@@ -181,9 +183,15 @@ public partial class MainViewModel
         AccountFeedback = "正在登录…";
         try
         {
+            if (HasSavedAccountSession)
+            {
+                AccountFeedback = "请先退出当前账号，再登录其他账号。";
+                AccountState = _sessionVerified ? AccountSessionState.SignedIn : AccountSessionState.Offline;
+                return;
+            }
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
             var result = await _apiClient.LoginAsync(LoginName.Trim(), password, cts.Token);
-            if (!result.Success || string.IsNullOrWhiteSpace(result.Token)) { AccountState = AccountSessionState.SignedOut; AccountFeedback = "登录失败，请检查账号、密码后重试。"; return; }
+            if (!result.Success || string.IsNullOrWhiteSpace(result.Token)) { AccountState = AccountSessionState.SignedOut; AccountFeedback = result.Message ?? "登录失败，请检查账号、密码后重试。"; return; }
             if (result.ExpiresAt.HasValue && result.ExpiresAt.Value.ToUniversalTime() <= DateTime.UtcNow) { AccountState = AccountSessionState.Expired; AccountFeedback = "登录会话已过期，请重试。"; return; }
             SaveAccountSession(result.Token);
             _sessionVerified = true;
@@ -200,16 +208,27 @@ public partial class MainViewModel
     }
 
     [RelayCommand]
-    private void LogoutAccount()
+    private async Task LogoutAccountAsync()
     {
+        if (IsLoggingIn || IsAccountRefreshing) return;
         if (IsProcessing) { AccountFeedback = "任务正在执行，完成或停止任务后可以退出登录。"; return; }
+        IsLoggingIn = true;
         try
         {
+            if (_apiClient is IAccountSessionClient sessions && HasSavedAccountSession)
+            {
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+                if (!await sessions.LogoutAsync(cts.Token))
+                {
+                    AccountFeedback = "服务端退出尚未确认，请检查网络后重试。";
+                    return;
+                }
+            }
             SaveAccountSession("");
             _sessionVerified = false;
             _devicesSynced = false;
             AccountState = AccountSessionState.SignedOut;
-            AccountFeedback = "已退出登录。";
+            AccountFeedback = "已退出登录；APP 绑定仍保留，可在网页解除绑定释放名额。";
             NotifyAccount();
             OnlineProfile = null;
             OnlineSubscription = null;
@@ -228,7 +247,8 @@ public partial class MainViewModel
             NotifyAccount();
             ToastService.Success("已清除本机登录会话。");
         }
-        catch { ToastService.Error("退出未完成：会话清除失败，请检查配置目录。"); }
+        catch { ToastService.Error("退出未完成，请检查网络和配置目录后重试。"); }
+        finally { IsLoggingIn = false; }
     }
 
     private void SaveAccountSession(string token)

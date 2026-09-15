@@ -105,9 +105,10 @@ public sealed class SmokeApp : App
             vm.SettingsDraft.ExportDirectory = "discard-test";
             vm.DiscardSettingsChangesCommand.Execute(null);
             Check(vm.SettingsDraft.ExportDirectory == original, "discard settings");
-            vm.SettingsDraft.ExportDirectory = "must-survive-write-failure";
+            var failureDraft = Path.Combine(AppDataDir, "must-survive-write-failure");
+            vm.SettingsDraft.ExportDirectory = failureDraft;
             using (var locked = new FileStream(Path.Combine(AppDataDir, "settings.json"), FileMode.Open, FileAccess.ReadWrite, FileShare.None))
-                Check(!vm.SaveSettingsPage() && vm.SettingsDraft.ExportDirectory == "must-survive-write-failure", "write failure preserves draft");
+                Check(!vm.SaveSettingsPage() && vm.SettingsDraft.ExportDirectory == failureDraft, "write failure preserves draft");
             vm.DiscardSettingsChangesCommand.Execute(null);
             Console.WriteLine("UI_SMOKE=PASS (controlled API; rendered screenshots, not physical DPI validation)");
             window.Close(); Shutdown(0);
