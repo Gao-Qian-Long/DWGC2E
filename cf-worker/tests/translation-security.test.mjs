@@ -2,9 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import { readFileSync } from 'node:fs';
-import { stripTypeScriptTypes } from 'node:module';
-const source=stripTypeScriptTypes(readFileSync(new URL('../src/index.ts',import.meta.url),'utf8')).replace('"./payments/index.ts"',JSON.stringify(new URL('../src/payments/index.ts',import.meta.url).href)).replace('"./mail"',JSON.stringify(new URL('../src/mail.ts',import.meta.url).href));
-const {default:worker}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
+import worker from '../src/index.ts';
 async function setup(t, answer) {
  const db=new DatabaseSync(':memory:');db.exec(readFileSync(new URL('../schema.sql',import.meta.url),'utf8'));t.after(()=>db.close());
  const DB={prepare(sql){return {sql,values:[],bind(...v){this.values=v;return this;},async first(){return db.prepare(sql).get(...this.values)||null;},async all(){return {results:db.prepare(sql).all(...this.values)};},async run(){return {meta:{changes:Number(db.prepare(sql).run(...this.values).changes)}};}};},async batch(statements){db.exec('BEGIN');try{const results=statements.map(s=>({meta:{changes:Number(db.prepare(s.sql).run(...s.values).changes)}}));db.exec('COMMIT');return results;}catch(e){db.exec('ROLLBACK');throw e;}}};
@@ -13,6 +11,7 @@ async function setup(t, answer) {
  db.prepare('INSERT INTO devices(device_id,user_id,first_seen,last_seen) VALUES(?,?,?,?)').run('d','u',ts,ts);
  const tokenHash=Buffer.from(await crypto.subtle.digest('SHA-256',new TextEncoder().encode('token'))).toString('hex');
  db.prepare('INSERT INTO sessions(id,user_id,token_hash,device_id,expires_at,created_at) VALUES(?,?,?,?,?,?)').run('s','u',tokenHash,'d',expiry,ts);
+ db.exec("INSERT INTO app_device_bindings(user_id,device_id,first_seen,last_seen) VALUES('u','d','',''); INSERT INTO session_contexts VALUES('s','app');");
  const calls=[];t.mock.method(globalThis,'fetch',async(url,init)=>{calls.push(JSON.parse(init.body));const value=typeof answer==='function'?await answer():answer;return Response.json({choices:[{message:{content:JSON.stringify(value)}}]});});
  const env={DB,PASSWORD_PEPPER:'test',DEFAULT_PLAN:'free',DEEPSEEK_API_KEY:'fake'};
  const payload={source_lang:'ZH',target_lang:'EN',items:[{id:0,text:'法兰'},{id:1,text:'管道'}]};
@@ -28,5 +27,5 @@ test('concurrent duplicate requests run upstream once',async t=>{let release;con
 test('quota guard rejects before upstream and never overdraws',async t=>{const x=await setup(t,[]);x.db.prepare('INSERT INTO usage_monthly(user_id,year_month,chars_used,chars_quota) VALUES(?,?,?,?)').run('u',new Date().toISOString().slice(0,7),99999,100000);assert.equal((await x.post()).status,402);assert.equal(x.calls.length,0);assert.equal(x.usage().chars_used,99999);});
 test('expired reservation is recovered before next request',async t=>{const x=await setup(t,[{id:0,translated_text:'Flange'}]);await x.post();x.db.prepare("INSERT INTO translation_requests(user_id,request_id,payload_hash,year_month,reserved,expires_at) VALUES('u','expired-key','old',?,5,0)").run(new Date().toISOString().slice(0,7));assert.equal(x.usage().chars_used,7);await x.post('request-0002');assert.equal(x.usage().chars_used,4);assert.equal(x.db.prepare("SELECT state FROM translation_requests WHERE request_id='expired-key'").get().state,'settled');});
 test('glossary and flags reach structured upstream prompt',async t=>{const x=await setup(t,[{id:0,translated_text:'Flange'}]);x.payload.glossary=[{source:'法兰',target:'Flange'}];x.payload.protection={protect_models:false};await x.post();const prompt=JSON.parse(x.calls[0].messages[1].content);assert.deepEqual(prompt.glossary,x.payload.glossary);assert.equal(prompt.protection.protect_models,false);});
-test('revoked device cannot translate even with unexpired session',async t=>{const x=await setup(t,[]);x.db.exec("UPDATE devices SET revoked=1");assert.equal((await x.post()).status,401);assert.equal(x.calls.length,0);});
+test('revoked device cannot translate even with unexpired session',async t=>{const x=await setup(t,[]);x.db.exec("UPDATE app_device_bindings SET revoked=1");assert.equal((await x.post()).status,401);assert.equal(x.calls.length,0);});
 test('database guards reject device theft and fourth active device',async t=>{const x=await setup(t,[]);x.db.prepare('INSERT INTO users(id,account,password_hash,email,created_at) VALUES(?,?,?,?,?)').run('other','other','unused','other@example.com',new Date().toISOString());assert.throws(()=>x.db.exec("INSERT INTO devices(device_id,user_id,first_seen,last_seen) VALUES('d','other','','') ON CONFLICT(device_id) DO UPDATE SET user_id='other'"),/device_conflict/);x.db.exec("INSERT INTO devices(device_id,user_id,first_seen,last_seen) VALUES('d2','u','',''),('d3','u','','')");assert.throws(()=>x.db.exec("INSERT INTO devices(device_id,user_id,first_seen,last_seen) VALUES('d4','u','','')"),/device_limit/);});

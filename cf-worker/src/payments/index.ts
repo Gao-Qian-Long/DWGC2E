@@ -247,16 +247,15 @@ export async function inspectPayment(r:Request,e:PaymentEnv):Promise<Response>{
  const n=await e.DB.prepare('INSERT INTO request_limits(key,window_start,count) VALUES(?,?,1) ON CONFLICT(key) DO UPDATE SET window_start=CASE WHEN window_start<? THEN excluded.window_start ELSE window_start END,count=CASE WHEN window_start<? THEN 1 ELSE count+1 END RETURNING count').bind('payment-inspect',t,t-60,t-60).first<{count:number}>();
  if(!n||n.count>5)return reply({error_code:'rate_limited'},429);
  try{
-  configured(e);const url=new URL('api/findorder',httpsBase(e.EZFPY_API_BASE_URL));
-  const res=await fetch(url,{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:new URLSearchParams({order_no:no,type:'1'}),redirect:'error',signal:AbortSignal.timeout(10000)});
-  if(!res.ok)throw Error();const text=await res.text();if(text.length>65536)throw Error();const raw=JSON.parse(text);
-  // Only bounded non-sensitive protocol fields are exposed to the private operator.
-  const selected:Record<string,string>={};const data=raw?.data&&typeof raw.data==='object'?raw.data:raw;
+  configured(e);
+  const data=await queryCreatedOrder(e,o,new CreateDiagnostic());
+  // Read-only, ownership-validated and size-bounded. Never grant membership here.
+  const selected:Record<string,string>={};
   for(const k of ['code','pid','out_trade_no','trade_no','status','trade_status','money','type','addtime','endtime']){
    const value=data?.[k];if(['string','number'].includes(typeof value))selected[k]=String(value).slice(0,128).replaceAll(e.EZFPY_KEY!,'[redacted]');
   }
-  await e.DB.prepare("INSERT INTO payment_events(order_no,event_type,reason,created_at) VALUES(?,'query_requested','read_only_schema_unverified',?)").bind(no,stamp()).run();
-  return reply({orderNo:no,settled:false,reviewRequired:true,observed:selected,message:'查单仅供核查，返回协议尚未验证，不会自动开通会员。'});
+  await e.DB.prepare("INSERT INTO payment_events(order_no,event_type,reason,created_at) VALUES(?,'query_requested','read_only_identity_verified',?)").bind(no,stamp()).run();
+  return reply({orderNo:no,settled:false,reviewRequired:true,observed:selected,message:'查单仅供核查，已校验订单归属和金额，不会自动开通会员。'});
  }catch{return reply({error_code:'query_unconfirmed',message:'平台查询未确认；没有修改订单或会员。'},502);}
 }
 

@@ -2,13 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import { readFileSync } from 'node:fs';
-import { stripTypeScriptTypes } from 'node:module';
 
-// Exercise the real Worker fetch router. Transpile only TS syntax; keep the real mail module.
-const source = readFileSync(new URL('../src/index.ts', import.meta.url), 'utf8');
-const compiled = stripTypeScriptTypes(source);
-const moduleSource = compiled.replace('"./payments/index.ts"',JSON.stringify(new URL('../src/payments/index.ts',import.meta.url).href)).replace('"./mail"', JSON.stringify(new URL('../src/mail.ts',import.meta.url).href));
-const {default: worker} = await import('data:text/javascript;base64,' + Buffer.from(moduleSource).toString('base64'));
+import worker from '../src/index.ts';
 const schema = readFileSync(new URL('../schema.sql',import.meta.url),'utf8');
 const registerCode = '/v1/auth/register/request-code';
 const passwordCode = '/v1/auth/password/request-code';

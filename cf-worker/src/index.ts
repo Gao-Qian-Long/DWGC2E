@@ -1,6 +1,7 @@
-import { feedbackRoute } from './feedback';
+import { authenticate, issueSession, logout } from './auth/sessions.ts';
+import { feedbackRoute } from './feedback.ts';
 import { billingRoute, notifyPayment, inspectPayment, type PaymentEnv } from "./payments/index.ts";
-import { deliverMail, mailProviders, selectMailProviders } from "./mail";
+import { deliverMail, mailProviders, selectMailProviders } from "./mail.ts";
 interface Env extends PaymentEnv {
   DB: D1Database;
   DEEPSEEK_API_KEY: string;
@@ -28,7 +29,8 @@ const json = (x: any, status = 200, origin = "*") =>
       "content-type": "application/json; charset=utf-8",
       "access-control-allow-origin": origin,
       "access-control-allow-headers": "Content-Type, Authorization, Idempotency-Key",
-      "access-control-allow-methods": "GET,POST,PUT,OPTIONS",
+      "access-control-allow-methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS",
+      "cache-control": "no-store",
     },
   });
 const cors = (env: Env) =>
@@ -65,19 +67,7 @@ async function takeLimit(e: Env, key: string, seconds: number, max: number) {
     .bind(key,timestamp,timestamp,seconds,timestamp,timestamp,seconds).first<J>();
   return Number(row?.count || 0) <= max;
 }
-async function auth(r: Request, e: Env) {
-  const h = r.headers.get("authorization") || "";
-  const t = h.startsWith("Bearer ") ? h.slice(7) : "";
-  if (!t) return null;
-  const row = await e.DB.prepare(
-    "SELECT s.user_id,s.device_id,u.account,u.display_name,u.email,u.is_active,s.expires_at FROM sessions s JOIN users u ON u.id=s.user_id JOIN devices dv ON dv.device_id=s.device_id AND dv.user_id=s.user_id AND dv.revoked=0 WHERE s.token_hash=? AND s.revoked_at IS NULL",
-  )
-    .bind(await digest(t))
-    .first<J>();
-  if (!row || !row.is_active || new Date(row.expires_at) <= new Date())
-    return null;
-  return row;
-}
+
 function quota(e: Env) {
   return Number(e.DEFAULT_PLAN === "free" ? 100000 : 1000000);
 }
@@ -354,7 +344,7 @@ async function register(r: Request, e: Env) {
   }
   return json({ success: true, message: "注册成功，请登录" }, 201, cors(e));
 }
-async function login(r: Request, e: Env) {
+async function login(r: Request, e: Env, kind: 'web' | 'app' = 'app') {
   const b = await text(r);
   if (!b?.account || !b?.password)
     return json(
@@ -386,55 +376,24 @@ async function login(r: Request, e: Env) {
       401,
       cors(e),
     );
-  if (!u.password_hash.startsWith("v2:")) await e.DB.prepare("UPDATE users SET password_hash=? WHERE id=? AND password_hash=?").bind(await pass(String(b.password), e.PASSWORD_PEPPER),u.id,u.password_hash).run();
-  const device = String(b.device_id || "").trim();
-  if (!device || device.length > 128) return json({ success: false, error_code: "invalid_device", message: "设备标识无效" },400,cors(e));
-  const owner = await e.DB.prepare("SELECT user_id FROM devices WHERE device_id=?").bind(device).first<J>();
-  if (owner && owner.user_id !== u.id) return json({success:false,error_code:"device_conflict",message:"该设备已绑定其他账号"},409,cors(e));
-  const count = await e.DB.prepare(
-    "SELECT COUNT(*) n FROM devices WHERE user_id=? AND revoked=0",
-  )
-    .bind(u.id)
-    .first<J>();
-  if (
-    !(await e.DB.prepare(
-      "SELECT 1 FROM devices WHERE user_id=? AND device_id=? AND revoked=0",
-    )
-      .bind(u.id, device)
-      .first()) &&
-    Number(count?.n || 0) >= 3
-  )
-    return json(
-      {
-        success: false,
-        error_code: "device_limit",
-        message: "设备数量已达到套餐上限",
-      },
-      403,
-      cors(e),
-    );
-  const token = random(),
-    expires = new Date(
-      Date.now() + Number(e.SESSION_TTL_DAYS || 30) * 86400000,
-    ).toISOString(),
-    ts = now();
-  await e.DB.batch([
-    e.DB.prepare(
-      "INSERT INTO sessions(id,user_id,token_hash,device_id,expires_at,created_at) VALUES(?,?,?,?,?,?)",
-    ).bind(random(), u.id, await digest(token), device, expires, ts),
-    e.DB.prepare(
-      "INSERT INTO devices(device_id,user_id,device_name,platform,first_seen,last_seen,revoked) VALUES(?,?,?,?,?,?,0) ON CONFLICT(device_id) DO UPDATE SET last_seen=excluded.last_seen,device_name=excluded.device_name,platform=excluded.platform,revoked=0",
-    ).bind(
-      device,
-      u.id,
-      String(b.device_name || ""),
-      e.DEVICE_PLATFORM || "Windows",
-      ts,
-      ts,
-    ),
-  ]);
-  return json({ success: true, token, expires_at: expires }, 200, cors(e));
+  if (!u.password_hash.startsWith("v2:")) {
+    const upgraded = await pass(String(b.password), e.PASSWORD_PEPPER);
+    const result = await e.DB.prepare("UPDATE users SET password_hash=? WHERE id=? AND password_hash=?").bind(upgraded,u.id,u.password_hash).run();
+    if (!result.meta.changes) return json({error_code:'invalid_credentials',message:'凭证已变更，请重新登录'},401,cors(e));
+    u.password_hash = upgraded;
+  }
+  const device = String(b.device_id || '').trim();
+  if (kind === 'app' && (!device || device.length > 128 || device.startsWith('web-')))
+    return json({success:false,error_code:'invalid_device',message:'请通过网页登录入口登录；APP 设备标识必须有效'},400,cors(e));
+  try {
+    return json(await issueSession(e, String(u.id), kind, String(u.password_hash), device, String(b.device_name || '')),200,cors(e));
+  } catch (error) {
+    if (String(error).includes('session_credentials_changed')) return json({error_code:'invalid_credentials',message:'凭证已变更，请重新登录'},401,cors(e));
+    if (String(error).includes('device_limit')) return json({success:false,error_code:'device_limit',message:'最多绑定 3 台 APP 安装实例，请在网页设备管理中解除旧绑定'},403,cors(e));
+    throw error;
+  }
 }
+
 async function effectiveQuota(e: Env, userId: string) {
   const sub = await e.DB.prepare("SELECT plan_name,expires_at FROM subscriptions WHERE user_id=?").bind(userId).first<J>();
   const expired = sub?.expires_at && Date.parse(sub.expires_at) <= Date.now();
@@ -532,6 +491,7 @@ async function route(r: Request,e: Env) {
       return resetPassword(r, e);
     if (p === "/v1/auth/register" && r.method === "POST") return register(r, e);
     if (p === "/v1/auth/login" && r.method === "POST") return login(r, e);
+    if (p === "/v1/auth/web/login" && r.method === "POST") return login(r, e, 'web');
     if (p === "/v1/version" && r.method === "GET")
       return json(
         {
@@ -546,7 +506,7 @@ async function route(r: Request,e: Env) {
       );
     if (/^\/v1\/admin\/billing\/orders\/[^/]+\/inspect$/.test(p)) return inspectPayment(r, e);
     if (p === "/v1/billing/notify/ezfpy") return notifyPayment(r, e);
-    const user = await auth(r, e);
+    const user = await authenticate(r, e);
     if (p === "/v1/glossary") {
       if (!user) return json({ error_code: "unauthenticated", message: "请先登录" }, 401, origin);
       return glossary(r, e, user);
@@ -557,8 +517,35 @@ async function route(r: Request,e: Env) {
         401,
         origin,
       );
+    if (p === '/v1/auth/logout' && r.method === 'POST') {
+      await logout(e, user); return json({success:true},200,origin);
+    }
     if (p.startsWith("/v1/billing/")) return billingRoute(r, e, { user_id: String(user.user_id), email: String(user.email || "") }, origin);
-    if (p === "/v1/profile")
+    if (p === '/v1/profile' && r.method === 'PATCH') {
+      const body = await text(r);
+      if (!body || typeof body.display_name !== 'string' || !body.display_name.trim() || body.display_name.trim().length > 80)
+        return json({error_code:'invalid_request',message:'显示名称需为 1–80 个字符'},400,origin);
+      if (body.email !== undefined && normalizeEmail(body.email) !== normalizeEmail(user.email))
+        return json({error_code:'email_change_requires_verification',message:'邮箱不能直接修改，请联系支持处理'},400,origin);
+      await e.DB.prepare('UPDATE users SET display_name=? WHERE id=?').bind(body.display_name.trim(),user.user_id).run();
+      return json({success:true,display_name:body.display_name.trim()},200,origin);
+    }
+    if (p === '/v1/auth/password' && r.method === 'PATCH') {
+      const body = await text(r);
+      if (!body || typeof body.current_password !== 'string' || typeof body.new_password !== 'string' || body.new_password.length < 8 || body.new_password.length > 128)
+        return json({error_code:'invalid_request',message:'请输入当前密码及 8–128 位新密码'},400,origin);
+      if (!await takeLimit(e,'password-change:'+user.user_id,600,5)) return json({error_code:'rate_limited',message:'尝试过于频繁，请稍后再试'},429,origin);
+      const existing = await e.DB.prepare('SELECT password_hash FROM users WHERE id=?').bind(user.user_id).first<J>();
+      if (!existing || !await passwordMatches(body.current_password,e.PASSWORD_PEPPER,existing.password_hash))
+        return json({error_code:'invalid_current_password',message:'当前密码不正确'},400,origin);
+      const next = await pass(body.new_password,e.PASSWORD_PEPPER);
+      const result = await e.DB.batch([
+        e.DB.prepare('UPDATE users SET password_hash=? WHERE id=? AND password_hash=?').bind(next,user.user_id,existing.password_hash),
+        e.DB.prepare('UPDATE sessions SET revoked_at=? WHERE user_id=? AND revoked_at IS NULL AND EXISTS(SELECT 1 FROM users WHERE id=? AND password_hash=?)').bind(now(),user.user_id,user.user_id,next)
+      ]);
+      return result[0].meta.changes ? json({success:true,message:'密码已修改，请重新登录'},200,origin) : json({error_code:'password_changed',message:'密码已发生变更，请重新登录'},409,origin);
+    }
+    if (p === "/v1/profile" && r.method === "GET")
       return json(
         {
           display_name: user.display_name || user.account,
@@ -569,14 +556,14 @@ async function route(r: Request,e: Env) {
         200,
         origin,
       );
-    if (p === "/v1/subscription") {
+    if (p === "/v1/subscription" && r.method === "GET") {
       const row = await e.DB.prepare("SELECT plan_name,starts_at,expires_at,auto_renew FROM subscriptions WHERE user_id=?").bind(user.user_id).first<J>();
       const planName = String(row?.plan_name || e.DEFAULT_PLAN || "free");
       const expiresAt = row?.expires_at ? String(row.expires_at) : null;
       const expired = expiresAt ? Date.parse(expiresAt) <= Date.now() : false;
       return json({ plan_name: expired ? "free" : planName, starts_at: row?.starts_at || null, expires_at: expiresAt, auto_renew: Boolean(row?.auto_renew), entitlements: [] }, 200, origin);
     }
-    if (p === "/v1/usage") {
+    if (p === "/v1/usage" && r.method === "GET") {
       const ym = now().slice(0, 7),
         x = await e.DB.prepare(
           "SELECT chars_used,chars_quota FROM usage_monthly WHERE user_id=? AND year_month=?",
@@ -599,42 +586,35 @@ async function route(r: Request,e: Env) {
         origin,
       );
     }
-    if (p === "/v1/devices" && r.method === "GET") {
-      const rows = await e.DB.prepare("SELECT device_id,device_name,platform,first_seen,last_seen FROM devices WHERE user_id=? AND revoked=0 ORDER BY last_seen DESC").bind(user.user_id).all<J>();
+    if (p === '/v1/devices' && r.method === 'GET') {
+      const rows = await e.DB.prepare('SELECT device_id,device_name,platform,first_seen,last_seen FROM app_device_bindings WHERE user_id=? AND revoked=0 ORDER BY last_seen DESC').bind(user.user_id).all<J>();
       const list = rows.results || [];
-      return json({ devices: list, used_devices: list.length, max_devices: 3 }, 200, origin);
+      return json({devices:list,used_devices:list.length,max_devices:3},200,origin);
     }
-    if (p === "/v1/devices/bind" && r.method === "POST") {
-      const body = await text(r), deviceId = String(body?.device_id || "").trim();
-      if (!deviceId || deviceId.length > 128) return json({ success: false, error_code: "invalid_device", message: "设备标识无效" }, 400, origin);
-      const existing = await e.DB.prepare("SELECT device_id,user_id,revoked FROM devices WHERE device_id=?").bind(deviceId).first<J>();
-      if (existing && String(existing.user_id) !== String(user.user_id))
-        return json({ success: false, error_code: "device_owned_by_other_account", message: "该设备已绑定其他账号" }, 409, origin);
-      const active = existing && Number(existing.revoked || 0) === 0;
-      const count = await e.DB.prepare("SELECT COUNT(*) n FROM devices WHERE user_id=? AND revoked=0").bind(user.user_id).first<J>();
-      if (!active && Number(count?.n || 0) >= 3) return json({ success: false, error_code: "device_limit", message: "设备数量已达到套餐上限" }, 403, origin);
-      const ts = now();
-      if (existing) {
-        await e.DB.prepare("UPDATE devices SET device_name=?,platform=?,last_seen=?,revoked=0 WHERE device_id=? AND user_id=?")
-          .bind(String(body?.device_name || "").slice(0, 128), e.DEVICE_PLATFORM || "Windows", ts, deviceId, user.user_id).run();
-      } else {
-        await e.DB.prepare("INSERT INTO devices(device_id,user_id,device_name,platform,first_seen,last_seen,revoked) VALUES(?,?,?,?,?,?,0)")
-          .bind(deviceId, user.user_id, String(body?.device_name || "").slice(0, 128), e.DEVICE_PLATFORM || "Windows", ts, ts).run();
-      }
-      return json({ success: true, used_devices: Number(count?.n || 0) + (active ? 0 : 1), max_devices: 3 }, 200, origin);
+    if (p === '/v1/devices/bind' && r.method === 'POST') {
+      const body = await text(r), deviceId = String(body?.device_id || '').trim();
+      if (user.client_kind !== 'app' || deviceId !== user.device_id)
+        return json({success:false,error_code:'app_binding_required',message:'仅允许 APP 确认当前安装实例绑定'},403,origin);
+      const result = await e.DB.prepare('UPDATE app_device_bindings SET device_name=?,last_seen=? WHERE user_id=? AND device_id=? AND revoked=0')
+        .bind(String(body?.device_name || '').slice(0,128),now(),user.user_id,deviceId).run();
+      if (!result.meta.changes) return json({error_code:'unauthenticated',message:'设备绑定已失效，请重新登录'},401,origin);
+      const count = await e.DB.prepare('SELECT COUNT(*) n FROM app_device_bindings WHERE user_id=? AND revoked=0').bind(user.user_id).first<J>();
+      return json({success:true,used_devices:Number(count?.n || 0),max_devices:3},200,origin);
     }
-    if (p === "/v1/devices/revoke" && r.method === "POST") {
-      const body = await text(r), deviceId = String(body?.device_id || "").trim();
-      if (!deviceId || deviceId.length > 128) return json({ success: false, error_code: "invalid_device", message: "设备标识无效" }, 400, origin);
-      const result = await e.DB.prepare("UPDATE devices SET revoked=1 WHERE device_id=? AND user_id=? AND revoked=0")
-        .bind(deviceId, user.user_id).run();
-      if (!result.meta.changes) return json({ success: false, error_code: "device_not_found", message: "设备不存在或已经移除" }, 404, origin);
-      await e.DB.prepare("UPDATE sessions SET revoked_at=? WHERE user_id=? AND device_id=? AND revoked_at IS NULL")
-        .bind(now(), user.user_id, deviceId).run();
-      return json({ success: true, device_id: deviceId }, 200, origin);
+    if (p === '/v1/devices/revoke' && r.method === 'POST') {
+      const body = await text(r), deviceId = String(body?.device_id || '').trim();
+      if (!deviceId || deviceId.length > 128) return json({success:false,error_code:'invalid_device',message:'设备标识无效'},400,origin);
+      const results = await e.DB.batch([
+        e.DB.prepare('UPDATE app_device_bindings SET revoked=1 WHERE device_id=? AND user_id=? AND revoked=0').bind(deviceId,user.user_id),
+        e.DB.prepare("UPDATE sessions SET revoked_at=? WHERE user_id=? AND device_id=? AND revoked_at IS NULL AND id IN (SELECT session_id FROM session_contexts WHERE client_kind='app')").bind(now(),user.user_id,deviceId)
+      ]);
+      if (!results[0].meta.changes) return json({success:false,error_code:'device_not_found',message:'设备不存在或已经移除'},404,origin);
+      return json({success:true,device_id:deviceId},200,origin);
     }
-    if (p === "/v1/translate" && r.method === "POST")
-      return translate(r, e, user);
+    if (p === '/v1/translate' && r.method === 'POST') {
+      if (user.client_kind !== 'app') return json({error_code:'app_binding_required',message:'请使用已绑定设备的 APP 执行翻译'},403,origin);
+      return translate(r,e,user);
+    }
     return json(
       { error_code: "not_found", message: "接口不存在" },
       404,
