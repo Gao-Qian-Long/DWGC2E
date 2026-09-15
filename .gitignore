@@ -94,3 +94,6 @@ AGENTS.md
 /cf-worker/.wrangler/
 /cf-worker/.dev.vars*
 /cf-worker/.env*
+
+# Local Cloudflare state (not a deployment asset)
+/.wrangler/
