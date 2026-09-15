@@ -5,8 +5,8 @@ compatibility_date = "2026-09-13"
 
 [[d1_databases]]
 binding = "DB"
-database_name = "dwg-translator-prod"
-database_id = "16fa90f6-ddc8-4341-a963-4e66fd902c63"
+database_name = "dwg-translator-prod-v2"
+database_id = "6e28247a-4de7-499a-9a94-176347e1a8c7"
 
 [vars]
 APP_NAME = "DWGC2E"

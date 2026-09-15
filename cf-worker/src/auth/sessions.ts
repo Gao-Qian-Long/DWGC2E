@@ -37,7 +37,7 @@ export async function issueSession(env: SessionEnv, userId: string, kind: 'web' 
   );
   const results = await env.DB.batch(statements);
   if (!results[results.length - 1].meta.changes) throw new Error('session_credentials_changed');
-  return {success:true,token,expires_at:expires};
+  return {success:true,token,expires_at:expires,user_id:userId};
 }
 export async function logout(env: SessionEnv, user: SessionUser) {
   await env.DB.prepare('UPDATE sessions SET revoked_at=? WHERE id=? AND user_id=? AND revoked_at IS NULL')

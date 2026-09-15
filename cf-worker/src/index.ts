@@ -1,3 +1,4 @@
+import { accountDataRoute } from './account/data.ts';
 import { authenticate, issueSession, logout } from './auth/sessions.ts';
 import { feedbackRoute } from './feedback.ts';
 import { billingRoute, notifyPayment, inspectPayment, type PaymentEnv } from "./payments/index.ts";
@@ -506,6 +507,7 @@ async function route(r: Request,e: Env) {
       );
     if (/^\/v1\/admin\/billing\/orders\/[^/]+\/inspect$/.test(p)) return inspectPayment(r, e);
     if (p === "/v1/billing/notify/ezfpy") return notifyPayment(r, e);
+    if (p === '/v1/billing/plans' && r.method === 'GET') return billingRoute(r,e,{user_id:'',email:''},origin);
     const user = await authenticate(r, e);
     if (p === "/v1/glossary") {
       if (!user) return json({ error_code: "unauthenticated", message: "请先登录" }, 401, origin);
@@ -520,6 +522,8 @@ async function route(r: Request,e: Env) {
     if (p === '/v1/auth/logout' && r.method === 'POST') {
       await logout(e, user); return json({success:true},200,origin);
     }
+    const accountData = await accountDataRoute(r,e,user,origin,text);
+    if(accountData) return accountData;
     if (p.startsWith("/v1/billing/")) return billingRoute(r, e, { user_id: String(user.user_id), email: String(user.email || "") }, origin);
     if (p === '/v1/profile' && r.method === 'PATCH') {
       const body = await text(r);
@@ -548,6 +552,7 @@ async function route(r: Request,e: Env) {
     if (p === "/v1/profile" && r.method === "GET")
       return json(
         {
+          user_id: user.user_id,
           display_name: user.display_name || user.account,
           account: user.account,
           email: user.email || user.account,
