@@ -15,7 +15,7 @@ CREATE TRIGGER IF NOT EXISTS translation_reserve AFTER INSERT ON translation_req
 BEGIN UPDATE usage_monthly SET chars_used=chars_used+NEW.reserved WHERE user_id=NEW.user_id AND year_month=NEW.year_month; END;
 CREATE TRIGGER IF NOT EXISTS translation_settle AFTER UPDATE OF state ON translation_requests
 WHEN OLD.state='reserved' AND NEW.state='settled'
-BEGIN UPDATE usage_monthly SET chars_used=chars_used-OLD.reserved+NEW.billed,task_count=task_count+CASE WHEN NEW.billed>0 THEN 1 ELSE 0 END WHERE user_id=NEW.user_id AND year_month=NEW.year_month; END;
+BEGIN UPDATE usage_monthly SET chars_used=chars_used-OLD.reserved+NEW.billed,task_count=task_count+ CASE WHEN NEW.billed>0 THEN 1 ELSE 0 END WHERE user_id=NEW.user_id AND year_month=NEW.year_month; END;
 CREATE TRIGGER IF NOT EXISTS device_owner_guard BEFORE INSERT ON devices
 WHEN EXISTS(SELECT 1 FROM devices WHERE device_id=NEW.device_id AND user_id<>NEW.user_id)
 BEGIN SELECT RAISE(ABORT,'device_conflict'); END;

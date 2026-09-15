@@ -41,7 +41,7 @@ public partial class MainViewModel
     }
     private void NotifyAccount()
     {
-        foreach (var name in new[] { nameof(IsAccountLoggedIn), nameof(AccountEntryText), nameof(AccountAvatarText), nameof(AccountDisplayNameText), nameof(AccountEmailText), nameof(OnlinePlanText), nameof(OnlineQuotaText), nameof(DeviceCountText), nameof(AccountSessionText), nameof(HasSavedAccountSession), nameof(TranslationServiceText) }) OnPropertyChanged(name);
+        foreach (var name in new[] { nameof(IsAccountLoggedIn), nameof(AccountEntryText), nameof(AccountAvatarText), nameof(AccountDisplayNameText), nameof(AccountEmailText), nameof(OnlinePlanText), nameof(OnlineMembershipExpiryText), nameof(OnlineQuotaText), nameof(DeviceCountText), nameof(AccountSessionText), nameof(HasSavedAccountSession), nameof(TranslationServiceText) }) OnPropertyChanged(name);
     }
     public string AccountAvatarText
     {
@@ -54,6 +54,21 @@ public partial class MainViewModel
     public string AccountDisplayNameText => string.IsNullOrWhiteSpace(OnlineProfile?.DisplayName) ? (IsAccountLoggedIn ? "已登录账号" : "未登录") : OnlineProfile.DisplayName;
     public string AccountEmailText => OnlineProfile?.Email ?? string.Empty;
     public string OnlinePlanText => string.IsNullOrWhiteSpace(OnlineSubscription?.PlanName) ? "未同步套餐" : OnlineSubscription.PlanName;
+    public string OnlineMembershipExpiryText => OnlineSubscription?.ExpiresAt is DateTime expiry
+        ? $"会员到期：{expiry.ToLocalTime():yyyy-MM-dd HH:mm}" : "当前无付费会员有效期";
+
+    [RelayCommand]
+    private void OpenMembershipCheckout()
+    {
+        try
+        {
+            // Never put an APP token or user identifier in a browser URL.
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("https://cad.pocketter.dpdns.org/billing.html") { UseShellExecute = true });
+            AccountFeedback = "已打开官网会员页面。请登录与 APP 相同的账号，付款后返回此处点击“刷新”。";
+        }
+        catch (Exception ex) { Log.Warning(ex, "打开会员页面失败"); AccountFeedback = "无法打开浏览器，请手动访问官网的套餐与订单页面。"; }
+    }
+
     public string OnlineQuotaText => OnlineUsage == null ? "额度待同步" : $"剩余 {OnlineUsage.Remaining:N0} / {OnlineUsage.MonthlyQuota:N0}";
     public string DeviceCountText => !_devicesSynced ? "设备待同步" : $"已绑定 {OnlineDevices.Count} 台设备";
 

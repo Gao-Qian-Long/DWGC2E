@@ -1,5 +1,7 @@
+import { feedbackRoute } from './feedback';
+import { billingRoute, notifyPayment, inspectPayment, type PaymentEnv } from "./payments/index.ts";
 import { deliverMail, mailProviders, selectMailProviders } from "./mail";
-interface Env {
+interface Env extends PaymentEnv {
   DB: D1Database;
   DEEPSEEK_API_KEY: string;
   JWT_SECRET?: string;
@@ -515,6 +517,7 @@ async function route(r: Request,e: Env) {
     if (r.method === "OPTIONS") return json({}, 204, origin);
     const u = new URL(r.url),
       p = u.pathname;
+    if (p === "/v1/feedback" || p === "/v1/health" || p.startsWith("/v1/admin/feedback")) return feedbackRoute(r,e);
     if (p === "/" && r.method === "GET")
       return json(
         { service: "DWGC2E API", status: "ok", version: e.LATEST_VERSION || "0.1.0" },
@@ -541,6 +544,8 @@ async function route(r: Request,e: Env) {
         200,
         origin,
       );
+    if (/^\/v1\/admin\/billing\/orders\/[^/]+\/inspect$/.test(p)) return inspectPayment(r, e);
+    if (p === "/v1/billing/notify/ezfpy") return notifyPayment(r, e);
     const user = await auth(r, e);
     if (p === "/v1/glossary") {
       if (!user) return json({ error_code: "unauthenticated", message: "请先登录" }, 401, origin);
@@ -552,6 +557,7 @@ async function route(r: Request,e: Env) {
         401,
         origin,
       );
+    if (p.startsWith("/v1/billing/")) return billingRoute(r, e, { user_id: String(user.user_id), email: String(user.email || "") }, origin);
     if (p === "/v1/profile")
       return json(
         {

@@ -1,4 +1,5 @@
 name = "dwgc2e-api"
+keep_vars = true
 main = "src/index.ts"
 compatibility_date = "2026-09-13"
 
@@ -27,3 +28,13 @@ RELEASE_NOTES = ""
 # Keys must remain Worker Secrets.
 MAIL_PROVIDER = "round_robin"
 MAIL_FALLBACK_ENABLED = "true"
+
+# Payments are open to all authenticated users, as requested on 2026-09-14.
+PAYMENTS_ENABLED = "true"
+# The legacy PAYMENTS_TEST_USERS variable is no longer read by the Worker.
+EZFPY_API_BASE_URL = "https://www.ezfpy.cn/"
+# EZFPY_PID is managed in the Dashboard; do not overwrite its value here.
+PUBLIC_WEB_URL = "https://cad.pocketter.dpdns.org"
+PUBLIC_API_URL = "https://dwgc2e-api.maplehousezz.workers.dev"
+EZFPY_QR_IMAGE_ORIGINS = ""
+# EZFPY_KEY is a Worker Secret, never a variable here.

@@ -1,4 +1,4 @@
-param([switch]$BuildOnly)
+param([switch]$BuildOnly, [switch]$SkipTests)
 $ErrorActionPreference = 'Stop'
 $root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 Set-Location -LiteralPath $root
@@ -17,10 +17,12 @@ try {
         $running = Get-Process DwgTranslator -ErrorAction SilentlyContinue | Where-Object { $_.Path -and [IO.Path]::GetFullPath($_.Path) -eq (Join-Path $release 'DwgTranslator.exe') }
         if ($running) { throw 'Close the release application before publishing. No processes were stopped.' }
     }
+    if (-not $SkipTests) {
     & dotnet test (Join-Path $root 'tests/DwgTranslator.Core.Tests/DwgTranslator.Core.Tests.csproj') -c Release -v quiet
     if ($LASTEXITCODE -ne 0) { throw 'Core regression tests failed' }
     & dotnet run --project (Join-Path $root 'tests/DwgTranslator.App.UiSmoke/DwgTranslator.App.UiSmoke.csproj') -c Release
     if ($LASTEXITCODE -ne 0) { throw 'Desktop UI smoke tests failed' }
+    } else { Write-Host 'TESTS_SKIPPED: explicitly requested; build and package checks still run.' }
     $revision = (& git rev-parse --short HEAD).Trim()
     $version = "2.1.0+ui.$stamp.$revision"
     & dotnet publish (Join-Path $root 'src/DwgTranslator.App/DwgTranslator.App.csproj') -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true "-p:InformationalVersion=$version" -p:IncludeSourceRevisionInInformationalVersion=false -o $stage

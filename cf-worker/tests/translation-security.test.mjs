@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import { readFileSync } from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
-const source=stripTypeScriptTypes(readFileSync(new URL('../src/index.ts',import.meta.url),'utf8')).replace('"./mail"',JSON.stringify(new URL('../src/mail.ts',import.meta.url).href));
+const source=stripTypeScriptTypes(readFileSync(new URL('../src/index.ts',import.meta.url),'utf8')).replace('"./payments/index.ts"',JSON.stringify(new URL('../src/payments/index.ts',import.meta.url).href)).replace('"./mail"',JSON.stringify(new URL('../src/mail.ts',import.meta.url).href));
 const {default:worker}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
 async function setup(t, answer) {
  const db=new DatabaseSync(':memory:');db.exec(readFileSync(new URL('../schema.sql',import.meta.url),'utf8'));t.after(()=>db.close());
