@@ -7,9 +7,9 @@
     <UseWPF>true</UseWPF>
     <RootNamespace>DwgTranslator.App</RootNamespace>
     <AssemblyName>DwgTranslator</AssemblyName>
-    <Version>2.1.0</Version>
-    <FileVersion>2.1.0.0</FileVersion>
-    <InformationalVersion>2.1.0</InformationalVersion>
+    <Version>2.1.1</Version>
+    <FileVersion>2.1.1.0</FileVersion>
+    <InformationalVersion>2.1.1</InformationalVersion>
     <Product>DWG Translator</Product>
     <Company>DWG Translator</Company>
     <ApplicationIcon>icon.ico</ApplicationIcon>
@@ -21,7 +21,7 @@
     <Resource Include="icon.ico" />
     <Content Include="..\..\settings.json.example" Link="settings.json"
              CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
-    <Content Include="..\..\glossaries\mechanical_zh_en.json" Link="glossaries\mechanical_zh_en.json"
+    <Content Include="..\..\glossaries\mechanical_zh_en.json" Link="assets\default-glossaries\mechanical_zh_en.json"
              CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\..\prompts\deepl_context.txt" Link="prompts\deepl_context.txt"
              CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />

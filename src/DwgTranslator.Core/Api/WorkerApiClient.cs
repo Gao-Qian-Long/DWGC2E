@@ -160,6 +160,7 @@ public sealed partial class WorkerApiClient : IApiClient, IAccountSessionClient
             // 服务端没给 success 时用"是否下发了令牌"兜底判断，避免把带 token 的成功响应当成失败。
             Success = response.Success ?? !string.IsNullOrEmpty(response.Token),
             Token = response.Token,
+            UserId = response.UserId,
             ExpiresAt = ParseTimestamp(response.ExpiresAt),
             ErrorCode = response.ErrorCode,
             Message = response.ErrorCode == null ? response.Message : ApiErrorMessages.Describe(response.ErrorCode, response.Message)
@@ -768,6 +769,7 @@ public sealed partial class WorkerApiClient : IApiClient, IAccountSessionClient
 
     private sealed class WireLoginResponse
     {
+        [JsonPropertyName("user_id")] public string? UserId { get; set; }
         [JsonPropertyName("success")] public bool? Success { get; set; }
         [JsonPropertyName("token")] public string? Token { get; set; }
         [JsonPropertyName("expires_at")] public string? ExpiresAt { get; set; }

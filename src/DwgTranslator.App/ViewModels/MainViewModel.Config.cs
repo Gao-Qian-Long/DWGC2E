@@ -94,8 +94,7 @@ public partial class MainViewModel
 
             _config.DeepSeekApiKey = AppConfig.DecryptApiKey(_config.DeepSeekApiKey);
 
-            if (!Path.IsPathRooted(_config.ExportDirectory))
-                _config.ExportDirectory = Path.Combine(App.AppDataDir, _config.ExportDirectory);
+            _config.ExportDirectory = Path.Combine(AccountDataDirectory, "exports");
             if (!Path.IsPathRooted(_config.LogDirectory))
                 _config.LogDirectory = Path.Combine(App.AppDataDir, _config.LogDirectory);
             if (!Path.IsPathRooted(_config.GlossaryPath))
@@ -270,17 +269,11 @@ public partial class MainViewModel
     private string ResolveGlossaryPath()
     {
         var fileName = TranslationLanguages.GlossaryFileName(CurrentSourceLang, CurrentTargetLang);
-        var appDataGlossary = Path.Combine(App.AppDataDir, "glossaries", fileName);
+        var appDataGlossary = Path.Combine(AccountDataDirectory, "glossaries", fileName);
         if (File.Exists(appDataGlossary)) return appDataGlossary;
 
-        var bundledGlossary = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "glossaries", fileName);
+        var bundledGlossary = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "assets", "default-glossaries", fileName);
         if (File.Exists(bundledGlossary)) return bundledGlossary;
-
-        // A custom glossary is direction-specific too. Never apply the legacy zh_en file to a
-        // different pair, because a fully-covered German/Japanese request would return English.
-        if (!string.IsNullOrWhiteSpace(_config.GlossaryPath) &&
-            string.Equals(Path.GetFileName(_config.GlossaryPath), fileName, StringComparison.OrdinalIgnoreCase))
-            return _config.GlossaryPath;
 
         return string.Empty;
     }

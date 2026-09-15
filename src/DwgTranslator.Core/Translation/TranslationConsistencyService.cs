@@ -14,11 +14,22 @@ public class TranslationConsistencyService : ITranslationConsistencyService
     private const string LegacyDirection = "ZH>EN";
 
     private readonly Dictionary<string, string> _cache;
-    private readonly string _cacheFilePath;
+    private string _cacheFilePath;
     private readonly object _lock = new();
     /// <summary>
     /// Number of cached entries.
     /// </summary>
+    public void SwitchAccountFile(string path)
+    {
+        lock (_lock)
+        {
+            FlushCache();
+            _cache.Clear();
+            _cacheFilePath = Path.GetFullPath(path);
+            LoadCache();
+        }
+    }
+
     public int CacheSize
     {
         get { lock (_lock) return _cache.Count; }

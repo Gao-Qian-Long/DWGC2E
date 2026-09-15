@@ -304,7 +304,7 @@ public partial class App : Application
         // 与任务层实际使用的缓存是两套数据（一个显示 0 命中，另一个其实没调 API）。
         services.AddSingleton<DwgTranslator.Core.Translation.ITranslationConsistencyService>(sp =>
             new DwgTranslator.Core.Translation.TranslationConsistencyService(
-                Path.Combine(AppDataDir, "translation_cache.json")));
+                Path.Combine(AccountWorkspace.DirectoryFor(AppDataDir, ReadAppConfig().ActiveAccountId), "translation_cache.json")));
 
         // 配置感知的 DeepSeek 客户端：每次调用前重读 settings.json，
         // 用户"先启动程序、再填 Key"的常规流程因此不需要重启。
@@ -350,7 +350,7 @@ public partial class App : Application
         // UI 通过 ITaskManager 提交/取消/重试任务并订阅事件，按钮事件里不再直接跑解析与翻译。
         // 并发参数来自用户配置：本地并发（同时处理的图纸数）与 AI 并发（单图内请求数）分开限流。
         services.AddSingleton<DwgTranslator.Core.Tasks.ITaskStore>(sp =>
-            new DwgTranslator.Core.Tasks.JsonTaskStore(Path.Combine(AppDataDir, "tasks.json")));
+            new DwgTranslator.Core.Tasks.JsonTaskStore(Path.Combine(AccountWorkspace.DirectoryFor(AppDataDir, ReadAppConfig().ActiveAccountId), "tasks.json")));
 
         services.AddSingleton<DwgTranslator.Core.Tasks.TaskManagerOptions>(sp =>
         {

@@ -17,7 +17,7 @@ public partial class MainViewModel
     [RelayCommand]
     private async Task ImportDwgAsync()
     {
-        if (IsProcessing) return;
+        if (IsProcessing || IsLoggingIn) return;
 
         var dialog = new OpenFileDialog
         {
@@ -55,7 +55,7 @@ public partial class MainViewModel
     /// </summary>
     public async Task ImportDroppedFilesAsync(IReadOnlyList<string> paths)
     {
-        if (IsProcessing) return;
+        if (IsProcessing || IsLoggingIn) return;
 
         var cadFiles = new List<string>();
         var excelFiles = new List<string>();
@@ -86,7 +86,7 @@ public partial class MainViewModel
         // they always run after the CAD pass.
         foreach (var excelFile in excelFiles)
         {
-            if (IsProcessing) break;
+            if (IsProcessing || IsLoggingIn) break;
             await ImportExcelFilesAsync(excelFile).ConfigureAwait(true);
         }
 
@@ -99,7 +99,7 @@ public partial class MainViewModel
     /// </summary>
     public async Task ImportCadFilesAsync(IReadOnlyList<string> filePaths)
     {
-        if (IsProcessing) return;
+        if (IsProcessing || IsLoggingIn) return;
         if (filePaths.Count == 0) return;
 
         // Resolve DXF reader before entering background thread
@@ -179,7 +179,7 @@ public partial class MainViewModel
     [RelayCommand]
     private async Task ExportDwgAsync()
     {
-        if (IsProcessing) return;
+        if (IsProcessing || IsLoggingIn) return;
 
         // Preserve internal mappings from older application/Excel sessions too.
         foreach (var metadata in Entities.Where(e => AttributeTranslationPolicy.IsMetadataHandle(e.Handle)))
@@ -518,7 +518,7 @@ public partial class MainViewModel
     [RelayCommand]
     private async Task ExportExcelAsync()
     {
-        if (IsProcessing) return;
+        if (IsProcessing || IsLoggingIn) return;
         if (Entities.Count == 0) { StatusMessage = Strings.Get("StatusNoExportData"); return; }
 
         var dialog = new SaveFileDialog
@@ -539,7 +539,7 @@ public partial class MainViewModel
     [RelayCommand]
     private async Task ImportExcelAsync()
     {
-        if (IsProcessing) return;
+        if (IsProcessing || IsLoggingIn) return;
 
         var dialog = new OpenFileDialog
         {
@@ -556,7 +556,7 @@ public partial class MainViewModel
     /// </summary>
     public async Task ImportExcelFilesAsync(string filePath)
     {
-        if (IsProcessing) return;
+        if (IsProcessing || IsLoggingIn) return;
 
         await RunWithProgress(async () =>
         {

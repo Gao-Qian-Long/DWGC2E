@@ -111,7 +111,7 @@ public partial class MainViewModel
         {
             if (sessionVersion != _sessionVersion) return;
             Log.Information("在线账户会话已失效：{ErrorCode}", ex.ErrorCode);
-            try { SaveAccountSession(""); } catch (Exception saveEx) { Log.Debug(saveEx, "清除失效会话失败"); }
+            try { SaveAccountSession(""); await SwitchAccountWorkspaceAsync(); } catch (Exception saveEx) { Log.Debug(saveEx, "清除失效会话失败"); }
             _sessionVerified = false;
             _devicesSynced = false;
             AccountState = AccountSessionState.Expired;
@@ -174,7 +174,8 @@ public partial class MainViewModel
 
     public async Task SubmitLoginAsync(string password)
     {
-        if (IsLoggingIn || IsAccountRefreshing) return;
+        if (IsLoggingIn || IsAccountRefreshing || IsExporting || IsGlossaryLoading || IsProcessing) return;
+        if (!ConfirmLeaveGlossary()) return;
         if (IsProcessing) { AccountFeedback = "任务正在执行，请完成或停止任务后再切换账号。"; return; }
         if (!_apiClient.IsConfigured) { AccountState = AccountSessionState.ConfigurationError; AccountFeedback = "服务配置异常，请联系管理员修复安装配置后重试。"; return; }
         if (string.IsNullOrWhiteSpace(LoginName) || string.IsNullOrEmpty(password)) { AccountFeedback = "请输入账号和密码。"; return; }
@@ -193,7 +194,8 @@ public partial class MainViewModel
             var result = await _apiClient.LoginAsync(LoginName.Trim(), password, cts.Token);
             if (!result.Success || string.IsNullOrWhiteSpace(result.Token)) { AccountState = AccountSessionState.SignedOut; AccountFeedback = result.Message ?? "登录失败，请检查账号、密码后重试。"; return; }
             if (result.ExpiresAt.HasValue && result.ExpiresAt.Value.ToUniversalTime() <= DateTime.UtcNow) { AccountState = AccountSessionState.Expired; AccountFeedback = "登录会话已过期，请重试。"; return; }
-            SaveAccountSession(result.Token);
+            SaveAccountSession(result.Token, result.UserId ?? LoginName.Trim().ToLowerInvariant());
+            await SwitchAccountWorkspaceAsync();
             _sessionVerified = true;
             AccountState = AccountSessionState.SignedIn;
             AccountFeedback = "登录成功。";
@@ -210,7 +212,8 @@ public partial class MainViewModel
     [RelayCommand]
     private async Task LogoutAccountAsync()
     {
-        if (IsLoggingIn || IsAccountRefreshing) return;
+        if (IsLoggingIn || IsAccountRefreshing || IsExporting || IsGlossaryLoading || IsProcessing) return;
+        if (!ConfirmLeaveGlossary()) return;
         if (IsProcessing) { AccountFeedback = "任务正在执行，完成或停止任务后可以退出登录。"; return; }
         IsLoggingIn = true;
         try
@@ -225,6 +228,7 @@ public partial class MainViewModel
                 }
             }
             SaveAccountSession("");
+            await SwitchAccountWorkspaceAsync();
             _sessionVerified = false;
             _devicesSynced = false;
             AccountState = AccountSessionState.SignedOut;
@@ -251,12 +255,31 @@ public partial class MainViewModel
         finally { IsLoggingIn = false; }
     }
 
-    private void SaveAccountSession(string token)
+    private string AccountDataDirectory => DwgTranslator.Core.Services.AccountWorkspace.DirectoryFor(App.AppDataDir, _config.ActiveAccountId);
+    private async Task SwitchAccountWorkspaceAsync()
+    {
+        if (_taskManager.IsRunning || IsExporting) throw new InvalidOperationException("请先停止当前任务。");
+        Directory.CreateDirectory(AccountDataDirectory);
+        if (_taskManager is DwgTranslator.Core.Tasks.TaskManager manager)
+            manager.SwitchAccountStore(new DwgTranslator.Core.Tasks.JsonTaskStore(Path.Combine(AccountDataDirectory, "tasks.json")));
+        if (_consistencyService is DwgTranslator.Core.Translation.TranslationConsistencyService cache)
+            cache.SwitchAccountFile(Path.Combine(AccountDataDirectory, "translation_cache.json"));
+        DrawingFiles.Clear(); Entities.Clear(); FilteredEntities.Clear(); _entityIndex = null;
+        SelectedDrawingFile = null; SelectedFilePath = ""; HasDrawingFiles = false; HasMultipleDrawingFiles = false;
+        TotalCount = TranslatedCount = FailedCount = GlossaryHitCount = CacheHitCount = 0;
+        _config.ExportDirectory = Path.Combine(AccountDataDirectory, "exports");
+        Directory.CreateDirectory(_config.ExportDirectory);
+        await RefreshGlossaryDataAsync();
+        foreach (var task in _taskManager.Tasks) OnTaskUpdated(task);
+    }
+
+    private void SaveAccountSession(string token, string? accountId = null)
     {
         if (string.IsNullOrWhiteSpace(_settingsPath))
             throw new InvalidOperationException("Settings path is not initialized.");
         var encrypted = AppConfig.EncryptApiKey(token);
-        DwgTranslator.Core.Services.SettingsStore.Update(_settingsPath, c => c.AuthTokenEncrypted = encrypted);
+        DwgTranslator.Core.Services.SettingsStore.Update(_settingsPath, c => { c.AuthTokenEncrypted = encrypted; c.ActiveAccountId = accountId ?? ""; });
+        _config.ActiveAccountId = accountId ?? "";
         _config.AuthTokenEncrypted = encrypted;
         _sessionVersion++;
     }

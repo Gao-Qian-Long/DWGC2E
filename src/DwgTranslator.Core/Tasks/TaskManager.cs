@@ -66,7 +66,7 @@ public sealed class TaskManager : ITaskManager, IRuntimeTaskConfiguration
     private readonly IDwgWriterService _dwgWriter;
     private readonly IDxfWriterService? _dxfWriter;
     private readonly IAutoCadInteropService? _autoCadInterop;
-    private readonly ITaskStore _store;
+    private ITaskStore _store;
     private readonly AppConfig _config;
     private readonly LayoutStatsProbe _layoutProbe;
 
@@ -1066,6 +1066,7 @@ public sealed class TaskManager : ITaskManager, IRuntimeTaskConfiguration
     /// <summary>阶段结束 / 入队出队 / 任务结束等关键点立即写盘（失败只记日志，见 JsonTaskStore）。</summary>
     private void SaveNow()
     {
+        lock (_gate)
         try
         {
             _store.Save(Snapshot());
@@ -1089,6 +1090,21 @@ public sealed class TaskManager : ITaskManager, IRuntimeTaskConfiguration
     /// 恢复上次运行遗留的任务。恢复出来的任务只是"显示在列表里、标记为等待"，
     /// 不会自动开跑——用户通过 <see cref="PendingFromLastRun"/> 确认后才调用 RunAsync。
     /// </summary>
+    /// <summary>Switch only while idle; flush old state before loading a different owner's store.</summary>
+    public void SwitchAccountStore(ITaskStore store)
+    {
+        ArgumentNullException.ThrowIfNull(store);
+        lock (_gate)
+        {
+            if (IsRunning) throw new InvalidOperationException("任务执行期间不能切换账号。");
+            _store.Save(_tasks.ToList());
+            _store = store;
+            _tasks.Clear();
+            _pendingFromLastRun.Clear();
+            RestoreFromStore();
+        }
+    }
+
     private void RestoreFromStore()
     {
         IReadOnlyList<TranslationTask> loaded;

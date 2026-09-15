@@ -59,7 +59,7 @@ public partial class MainViewModel
             var entries = TermDraft.Select(t => { var c = t.Clone(); c.Source = c.Source.Trim(); c.Target = c.Target.Trim(); return c; }).ToList();
             var conflicts = entries.Where(t => t.Enabled).GroupBy(t => (t.Source.ToUpperInvariant(), t.PriorityWeight)).Any(g => g.Select(t => t.Target).Distinct(StringComparer.OrdinalIgnoreCase).Count() > 1);
             if (conflicts) { TermFeedback = "存在同优先级的不同译法。请筛选冲突，修改译文或停用其中一条后保存。"; TermConflictsOnly = true; return false; }
-            var path = Path.Combine(App.AppDataDir, "glossaries", TranslationLanguages.GlossaryFileName(CurrentSourceLang, CurrentTargetLang));
+            var path = Path.Combine(AccountDataDirectory, "glossaries", TranslationLanguages.GlossaryFileName(CurrentSourceLang, CurrentTargetLang));
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             var tmp = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
             try { File.WriteAllText(tmp, JsonSerializer.Serialize(entries, AppConfigJson.WriteOptions)); File.Move(tmp, path, true); }

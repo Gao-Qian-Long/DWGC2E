@@ -87,6 +87,7 @@ public sealed class CloudGlossaryEntry
 
 public sealed class LoginResult
 {
+    public string? UserId { get; set; }
     public bool Success { get; set; }
     public string? Token { get; set; }
     public DateTime? ExpiresAt { get; set; }

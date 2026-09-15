@@ -28,10 +28,10 @@ public partial class MainViewModel
     /// <summary>构造函数里调用一次；Dispose 时（进程退出）不需要单独退订。</summary>
     private void SubscribeTaskEvents()
     {
-        _taskManager.TaskUpdated += (_, task) => OnUiThread(() => OnTaskUpdated(task));
-        _taskManager.ProgressMessage += (_, message) => OnUiThread(() => OnTaskProgressMessage(message));
-        _taskManager.OverallProgressChanged += (_, percent) => OnUiThread(() => OnTaskOverallProgress(percent));
-        _taskManager.TranslationCompleted += (_, pair) => OnUiThread(() => OnEntityTranslated(pair));
+        _taskManager.TaskUpdated += (_, task) => { var version = _sessionVersion; OnUiThread(() => { if (version == _sessionVersion) OnTaskUpdated(task); }); };
+        _taskManager.ProgressMessage += (_, message) => { var version = _sessionVersion; OnUiThread(() => { if (version == _sessionVersion) OnTaskProgressMessage(message); }); };
+        _taskManager.OverallProgressChanged += (_, percent) => { var version = _sessionVersion; OnUiThread(() => { if (version == _sessionVersion) OnTaskOverallProgress(percent); }); };
+        _taskManager.TranslationCompleted += (_, pair) => { var version = _sessionVersion; OnUiThread(() => { if (version == _sessionVersion) OnEntityTranslated(pair); }); };
     }
 
     private void OnTaskUpdated(TranslationTask task)

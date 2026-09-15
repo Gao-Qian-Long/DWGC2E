@@ -24,7 +24,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Desktop UI smoke tests failed' }
     } else { Write-Host 'TESTS_SKIPPED: explicitly requested; build and package checks still run.' }
     $revision = (& git rev-parse --short HEAD).Trim()
-    $version = "2.1.0+ui.$stamp.$revision"
+    $version = "2.1.1+ui.$stamp.$revision"
     & dotnet publish (Join-Path $root 'src/DwgTranslator.App/DwgTranslator.App.csproj') -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true "-p:InformationalVersion=$version" -p:IncludeSourceRevisionInInformationalVersion=false -o $stage
     if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed: $LASTEXITCODE" }
     foreach ($folder in @('glossaries','prompts')) { New-Item -ItemType Directory -Path (Join-Path $stage $folder) -Force | Out-Null }

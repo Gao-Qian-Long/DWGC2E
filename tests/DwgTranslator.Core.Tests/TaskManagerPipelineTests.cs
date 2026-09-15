@@ -167,6 +167,22 @@ public class TaskManagerPipelineTests : IDisposable
         }
     }
 
+    [Fact]
+    public void AccountStoreSwitchFlushesPreviousTasksAndNeverMergesOwners()
+    {
+        var a = new InMemoryTaskStore(); var b = new InMemoryTaskStore();
+        using var manager = CreateManager(new FakeReader(), new FakeTranslator(), new FakeWriter(), a, Config(), out _);
+        var first = manager.Enqueue(CreateDrawing("alice.dwg"));
+        manager.SwitchAccountStore(b);
+        Assert.Empty(manager.Tasks); Assert.Single(a.Saved);
+        var second = manager.Enqueue(CreateDrawing("bob.dwg"));
+        manager.SwitchAccountStore(a);
+        Assert.Equal(first.Id, Assert.Single(manager.Tasks).Id);
+        Assert.Equal(second.Id, Assert.Single(b.Saved).Id);
+        manager.SwitchAccountStore(b);
+        Assert.Equal(second.Id, Assert.Single(manager.Tasks).Id);
+    }
+
     private TaskManager CreateManager(
         IDwgReaderService reader, ITranslationService translator, IDwgWriterService writer,
         ITaskStore store, AppConfig config, out List<TranslationPair> completed)
