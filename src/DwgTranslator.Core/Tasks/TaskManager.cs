@@ -67,6 +67,7 @@ public sealed class TaskManager : ITaskManager, IRuntimeTaskConfiguration
     private readonly IDxfWriterService? _dxfWriter;
     private readonly IAutoCadInteropService? _autoCadInterop;
     private ITaskStore _store;
+    private bool _saveFailureReported;
     private readonly AppConfig _config;
     private readonly LayoutStatsProbe _layoutProbe;
 
@@ -1063,22 +1064,34 @@ public sealed class TaskManager : ITaskManager, IRuntimeTaskConfiguration
         SaveNow();
     }
 
-    /// <summary>阶段结束 / 入队出队 / 任务结束等关键点立即写盘（失败只记日志，见 JsonTaskStore）。</summary>
+    /// <summary>阶段结束 / 入队出队 / 任务结束等关键点立即写盘；失败提示但不停止翻译。</summary>
     private void SaveNow()
     {
         lock (_gate)
         try
         {
             _store.Save(Snapshot());
+            ReportSaveStatus(_store is ITaskStoreDiagnostics diagnostics && diagnostics.LastSaveFailed);
             lock (_gate) _lastSaveUtc = DateTime.UtcNow;
         }
         catch (Exception ex)
         {
             Log.Warning(ex, "任务状态保存失败（继续运行）");
+            ReportSaveStatus(true);
         }
     }
 
-    /// <summary>队列快照（加锁复制）。交给 UI 或落盘的都是副本，改动不会影响正在跑的队列。</summary>
+    /// <summary>Report transitions only, avoiding repeated warnings on every progress save.</summary>
+    private void ReportSaveStatus(bool failed)
+    {
+        if (failed == _saveFailureReported) return;
+        _saveFailureReported = failed;
+        RaiseProgressMessage(failed
+            ? "[保存警告] 任务进度未能保存，重启后可能无法恢复本次进度。请检查磁盘空间和目录权限；当前翻译继续。"
+            : "[保存恢复] 任务进度已重新成功保存。");
+    }
+
+    /// <summary>Copy queue membership under lock; task instances remain shared.</summary>
     private List<TranslationTask> Snapshot()
     {
         lock (_gate) return _tasks.ToList();
@@ -1098,7 +1111,9 @@ public sealed class TaskManager : ITaskManager, IRuntimeTaskConfiguration
         {
             if (IsRunning) throw new InvalidOperationException("任务执行期间不能切换账号。");
             _store.Save(_tasks.ToList());
+            ReportSaveStatus(_store is ITaskStoreDiagnostics diagnostics && diagnostics.LastSaveFailed);
             _store = store;
+            _saveFailureReported = false;
             _tasks.Clear();
             _pendingFromLastRun.Clear();
             RestoreFromStore();

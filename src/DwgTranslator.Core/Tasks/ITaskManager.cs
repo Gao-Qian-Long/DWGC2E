@@ -6,6 +6,12 @@ using DwgTranslator.Core.Models;
 
 namespace DwgTranslator.Core.Tasks;
 
+/// <summary>Optional save diagnostics for stores that deliberately keep save errors non-fatal.</summary>
+public interface ITaskStoreDiagnostics
+{
+    bool LastSaveFailed { get; }
+}
+
 /// <summary>
 /// 并发与重试参数。提示词要求"多线程不是无限线程"，因此本地解析/写回与 AI 请求
 /// 是两条独立限流：LocalWorkerCount 控制同时在跑的图纸数，AiConcurrency 控制

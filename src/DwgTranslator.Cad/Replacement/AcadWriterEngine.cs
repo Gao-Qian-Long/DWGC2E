@@ -9,6 +9,7 @@ using Gssoft.Gscad.Geometry;
 using Autodesk.AutoCAD.Geometry;
 #endif
 using DwgTranslator.Core.Models;
+using DwgTranslator.Core.Services;
 using DwgTranslator.Cad;
 using DwgTranslator.Cad.Replacement;
 
@@ -1026,13 +1027,10 @@ public class AcadWriterEngine
         // Font bearings and attachment points shift after font substitution.
         // Shrinking alone never fixes a min-edge offset; translate by only the
         // displacement needed to place a fitting box back inside the original.
-        double dx = 0, dy = 0;
-        if (current.MaxPoint.X - current.MinPoint.X <= original.MaxPoint.X - original.MinPoint.X)
-            dx = current.MinPoint.X < original.MinPoint.X ? original.MinPoint.X - current.MinPoint.X
-                : current.MaxPoint.X > original.MaxPoint.X ? original.MaxPoint.X - current.MaxPoint.X : 0;
-        if (current.MaxPoint.Y - current.MinPoint.Y <= original.MaxPoint.Y - original.MinPoint.Y)
-            dy = current.MinPoint.Y < original.MinPoint.Y ? original.MinPoint.Y - current.MinPoint.Y
-                : current.MaxPoint.Y > original.MaxPoint.Y ? original.MaxPoint.Y - current.MaxPoint.Y : 0;
+        double dx = TextEnvelopeGeometry.FittingAxisOffset(current.MinPoint.X, current.MaxPoint.X,
+            original.MinPoint.X, original.MaxPoint.X);
+        double dy = TextEnvelopeGeometry.FittingAxisOffset(current.MinPoint.Y, current.MaxPoint.Y,
+            original.MinPoint.Y, original.MaxPoint.Y);
         if (dx != 0 || dy != 0)
         {
             text.TransformBy(Matrix3d.Displacement(new Vector3d(dx, dy, 0)));
@@ -1044,17 +1042,13 @@ public class AcadWriterEngine
 
     private static bool IsInsideOriginalEnvelope(Extents3d current, Extents3d original, double originalHeight)
     {
-        const double tolerance = 0.01;
-        return current.MinPoint.X >= original.MinPoint.X - tolerance
-            && current.MaxPoint.X <= original.MaxPoint.X + tolerance
-            && current.MinPoint.Y >= original.MinPoint.Y - tolerance
-            && current.MaxPoint.Y <= original.MaxPoint.Y + tolerance;
+        return TextEnvelopeGeometry.IsAxisInside(current.MinPoint.X, current.MaxPoint.X, original.MinPoint.X, original.MaxPoint.X)
+            && TextEnvelopeGeometry.IsAxisInside(current.MinPoint.Y, current.MaxPoint.Y, original.MinPoint.Y, original.MaxPoint.Y);
     }
 
     private static double NormalizeHalfTurn(double rotation)
     {
-        double value = rotation % Math.PI;
-        return value < 0 ? value + Math.PI : value;
+        return TextEnvelopeGeometry.NormalizeHalfTurn(rotation);
     }
 
 }

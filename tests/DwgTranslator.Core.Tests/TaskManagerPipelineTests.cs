@@ -86,6 +86,29 @@ public class TaskManagerPipelineTests : IDisposable
         public void Clear() => Saved.Clear();
     }
 
+    private sealed class DiagnosticTaskStore : ITaskStore, ITaskStoreDiagnostics
+    {
+        public bool LastSaveFailed { get; set; }
+        public IReadOnlyList<TranslationTask> Load() => Array.Empty<TranslationTask>();
+        public void Save(IEnumerable<TranslationTask> tasks) { }
+        public void Clear() { }
+    }
+
+    [Fact]
+    public void PersistenceWarningsAreDeduplicatedAndReportRecovery()
+    {
+        var store = new DiagnosticTaskStore { LastSaveFailed = true };
+        using var manager = CreateManager(new FakeReader(), new FakeTranslator(), new FakeWriter(), store, Config(), out _);
+        var messages = new List<string>();
+        manager.ProgressMessage += (_, message) => messages.Add(message);
+        manager.Enqueue(CreateDrawing("one.dwg"));
+        manager.Enqueue(CreateDrawing("two.dwg"));
+        Assert.Single(messages.Where(m => m.StartsWith("[保存警告]")));
+        store.LastSaveFailed = false;
+        manager.Enqueue(CreateDrawing("three.dwg"));
+        Assert.Single(messages.Where(m => m.StartsWith("[保存恢复]")));
+        Assert.Equal(3, manager.Tasks.Count);
+    }
     private sealed class FakeReader : IDwgReaderService
     {
         private readonly bool _fail;

@@ -20,7 +20,7 @@ namespace DwgTranslator.Core.Tasks;
 /// 三处刻意的"不抛异常"设计：状态文件是断点续跑的辅助品，不是业务数据——
 /// 文件损坏、被占用、磁盘满都不应该让正在跑的翻译失败。因此读写失败一律只记日志。
 /// </summary>
-public sealed class JsonTaskStore : ITaskStore
+public sealed class JsonTaskStore : ITaskStore, ITaskStoreDiagnostics
 {
     /// <summary>
     /// 读选项：容忍 camelCase（settings.json 风格）与 PascalCase 两种写法，
@@ -46,6 +46,7 @@ public sealed class JsonTaskStore : ITaskStore
     };
 
     private readonly string _filePath;
+    public bool LastSaveFailed { get; private set; }
 
     /// <summary>读写互斥：TaskManager 会从工作线程节流保存，UI 线程同时可能读取。</summary>
     private readonly object _gate = new();
@@ -141,19 +142,8 @@ public sealed class JsonTaskStore : ITaskStore
 
                 if (File.Exists(_filePath))
                 {
-                    try
-                    {
-                        // 同目录内的 File.Replace 是原子替换：中途断电也只会留下旧文件或新文件，
-                        // 不会留下半个 JSON 让下次启动读不出来。
-                        File.Replace(tempPath, _filePath, null);
-                    }
-                    catch (Exception replaceEx)
-                    {
-                        // 少数文件系统（FAT、部分网络盘）不支持 File.Replace，退回复制覆盖。
-                        Log.Debug(replaceEx, "File.Replace 不可用，改用覆盖复制：{Path}", _filePath);
-                        File.Copy(tempPath, _filePath, overwrite: true);
-                        File.Delete(tempPath);
-                    }
+                    // Fail closed: never replace a recoverable file using non-atomic copy-overwrite.
+                    File.Replace(tempPath, _filePath, null);
                 }
                 else
                 {
@@ -161,11 +151,13 @@ public sealed class JsonTaskStore : ITaskStore
                 }
 
                 tempPath = null;
+                LastSaveFailed = false;
                 Log.Debug("任务状态已保存：{Count} 条 -> {Path}", list.Count, _filePath);
             }
         }
         catch (Exception ex)
         {
+            LastSaveFailed = true;
             // 保存失败不能影响翻译本身：最坏结果是重启后少了断点，而不是这一批图纸跑不完。
             Log.Warning(ex, "任务状态保存失败：{Path}", _filePath);
         }

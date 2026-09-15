@@ -44,5 +44,6 @@
     <Compile Include="Services\FontMapper.cs" />
     <Compile Include="Services\TextWidthEstimator.cs" />
     <Compile Include="Services\VerticalTextLayout.cs" />
+    <Compile Include="Services\TextEnvelopeGeometry.cs" />
   </ItemGroup>
 </Project>
