@@ -1,5 +1,8 @@
 using System;
 using System.Linq;
+using System.Collections.Generic;
+using System.Security.Cryptography;
+using System.Text;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
@@ -7,6 +10,29 @@ using Serilog;
 namespace DwgTranslator.Core.Api;
 public sealed partial class WorkerApiClient
 {
+    // Remember rejected credentials for this client lifetime without retaining plaintext tokens.
+    // A locked settings file must not cause a known-invalid bearer to be sent repeatedly.
+    private readonly object _rejectedSessionsGate = new();
+    private readonly HashSet<string> _rejectedSessions = new(StringComparer.Ordinal);
+
+    private static string SessionFingerprint(string token)
+    {
+        using var sha = SHA256.Create();
+        return Convert.ToBase64String(sha.ComputeHash(Encoding.UTF8.GetBytes(token)));
+    }
+
+    private void RejectSession(string? token)
+    {
+        if (string.IsNullOrEmpty(token)) return;
+        lock (_rejectedSessionsGate) _rejectedSessions.Add(SessionFingerprint(token));
+    }
+
+    private bool IsRejectedSession(string? token)
+    {
+        if (string.IsNullOrEmpty(token)) return false;
+        lock (_rejectedSessionsGate) return _rejectedSessions.Contains(SessionFingerprint(token));
+    }
+
     private async Task<HttpOutcome> SendAsync(
         HttpMethod method,
         string requestUri,
@@ -14,10 +40,20 @@ public sealed partial class WorkerApiClient
         TimeSpan timeout,
         CancellationToken cancellationToken,
         bool includeAuth = true,
-        string? idempotencyKey = null)
+        string? idempotencyKey = null,
+        string? expectedSession = null)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var outcome = new HttpOutcome();
-        var sessionAtStart = includeAuth ? GetToken() : null;
+        var sessionAtStart = includeAuth ? expectedSession ?? GetToken() : null;
+        if (includeAuth && expectedSession != null && !string.Equals(expectedSession, GetToken(), StringComparison.Ordinal))
+            throw new OperationCanceledException("账号会话已变更，未发送旧账号请求。");
+
+        if (includeAuth && IsRejectedSession(sessionAtStart))
+        {
+            content?.Dispose();
+            return new HttpOutcome { StatusCode = 401, Body = "{\"error_code\":\"token_expired\",\"message\":\"登录已失效，请重新登录。\"}" };
+        }
 
         // 组合调用方令牌与本地超时：调用方取消要能中断，单次请求也不会无限挂着。
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -47,6 +83,8 @@ public sealed partial class WorkerApiClient
 
             if (includeAuth && !string.Equals(sessionAtStart, GetToken(), StringComparison.Ordinal))
                 throw new OperationCanceledException("账号会话已变更，已丢弃旧响应。");
+
+            if (includeAuth && outcome.StatusCode == 401) RejectSession(sessionAtStart);
 
             if (response.Headers.TryGetValues("X-Chars-Used", out var values))
                 outcome.CharactersUsedHeader = values.FirstOrDefault();

@@ -67,10 +67,11 @@ public partial class MainViewModel
     [RelayCommand]
     private void OpenDrawingFileItems(DrawingFileItem? item)
     {
-        if (item == null) return;
+        if (item == null || !ConfirmLeaveProofreading()) return;
         SelectedDrawingFile = item;
         ApplyFilter();
         CurrentPage = PageBatch;
+        if (CurrentPage == PageBatch) { SelectedBatchTask = item; IsProofreading = true; IsTaskDetailOpen = false; }
     }
 
     /// <summary>True when the workspace has at least one drawing (drives the empty hint).</summary>

@@ -20,6 +20,7 @@ public partial class EnvironmentCheckPanel : System.Windows.Controls.UserControl
     private readonly Brush _ok;
     private readonly Brush _warn;
     private readonly Brush _unknown;
+    private bool _firstCheckPrompted;
 
     public EnvironmentCheckPanel(MainViewModel viewModel)
     {
@@ -30,7 +31,7 @@ public partial class EnvironmentCheckPanel : System.Windows.Controls.UserControl
         _warn = (Brush)FindResource("Brush.Warning");
         _unknown = (Brush)FindResource("Brush.TextDisabled");
 
-        Loaded += (_, _) => RefreshStatus();
+        Loaded += (_, _) => { RefreshStatus(); Dispatcher.BeginInvoke(new Action(PromptInstallIfNeeded), System.Windows.Threading.DispatcherPriority.ApplicationIdle); };
     }
 
     private void RefreshStatus()
@@ -82,12 +83,29 @@ public partial class EnvironmentCheckPanel : System.Windows.Controls.UserControl
 
             InstallButton.Content = status.PluginFilesPresent ? "修复 / 更新插件" : "安装插件";
             InstallButton.IsEnabled = true;
+            InstallButton.Visibility = status.PluginFilesPresent && status.PluginUpToDate && status.AutoLoadConfigured ? Visibility.Collapsed : Visibility.Visible;
             UninstallButton.IsEnabled = status.PluginFilesPresent || status.AutoLoadConfigured;
         }
 
         // Translation service
         ApiEndpointText.Text = _viewModel.TranslationServiceText;
         ApiLamp.Fill = _viewModel.TranslationServiceText.Contains("异常", StringComparison.Ordinal) ? _warn : _ok;
+    }
+
+
+    private void PromptInstallIfNeeded()
+    {
+        if (_firstCheckPrompted || !IsVisible) return;
+        _firstCheckPrompted = true;
+        var cadPath = _viewModel.ResolveCadInstallPath();
+        if (string.IsNullOrWhiteSpace(cadPath) || !AutoCadDetector.IsValidAutoCadPath(cadPath)) return;
+        var status = CadPluginInstaller.Inspect(cadPath, _viewModel.CadPluginDirectory);
+        if (status.PluginFilesPresent && status.AutoLoadConfigured) return;
+        var answer = PromptDialog.Show(
+            "已检测到 CAD，但当前电脑尚未安装 DWGC2E CAD 插件。\n\n安装插件后，翻译结果才能直接写回 CAD 图纸；插件文件已随本 APP 内置，不需要另行下载。\n\n现在安装吗？",
+            "安装 CAD 插件", MessageBoxButton.YesNo, MessageBoxImage.Question);
+        if (answer == MessageBoxResult.Yes) Install_Click(this, new RoutedEventArgs());
+        else AppendLog("用户暂不安装 CAD 插件；翻译和导出功能仍可继续使用。");
     }
 
     private void AppendLog(string line) =>

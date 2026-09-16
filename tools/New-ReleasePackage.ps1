@@ -1,9 +1,11 @@
-﻿# Builds the folder and zip that get sent to an end user.
+﻿# Input: verified PublishDir; optional InstallerDir, OutputDir, SkipZip. Output: installer folder and ZIP.
+# Usage: powershell -NoProfile -File tools/New-ReleasePackage.ps1 -PublishDir artifacts/publish-<timestamp> -OutputDir artifacts/package-<timestamp>
+# Builds the folder and zip that get sent to an end user.
 #
 # The publish output is the single source of truth: it is the only folder guaranteed to contain the
 # executable, the CAD plugin, the prompts, the glossary and a valid settings.json. This script adds
 # the installer bootstrap and the user documentation, normalises the encoding of the Chinese
-# command files (cmd.exe reads them as ANSI/GBK, Notepad wants UTF-8 with BOM for the readme), and
+# command files (the bootstrap selects UTF-8; the readme uses UTF-8 with BOM), and
 # zips the result.
 [CmdletBinding()]
 param(
@@ -19,23 +21,31 @@ function Write-Step([string]$t) { Write-Host "  $t" }
 # $PSScriptRoot is not populated while parameter defaults are evaluated under Windows PowerShell 5.1,
 # so the paths are resolved in the body instead of in the param block.
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
-if (-not $PublishDir) { $PublishDir = Join-Path $scriptRoot '..\artifacts\publish' }
+if (-not $PublishDir) { throw 'Pass -PublishDir with the verified artifacts/publish-<timestamp> directory; never package local release user data.' }
 if (-not $InstallerDir) { $InstallerDir = Join-Path $scriptRoot '..\installer' }
 if (-not $OutputDir) { $OutputDir = Join-Path $scriptRoot '..\artifacts' }
 
-$publish = (Resolve-Path $PublishDir).Path
-$installer = (Resolve-Path $InstallerDir).Path
-$output = $OutputDir
-New-Item -ItemType Directory -Force -Path $output | Out-Null
+$publish = (Resolve-Path -LiteralPath $PublishDir).Path
+$installer = (Resolve-Path -LiteralPath $InstallerDir).Path
+# Resolve against the caller's PowerShell location, not the process working directory.
+$output = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutputDir)
+$artifactRoot = [IO.Path]::GetFullPath((Join-Path $scriptRoot '..\artifacts')).TrimEnd('\')
+if ($output.TrimEnd('\') -ne $artifactRoot -and -not $output.StartsWith($artifactRoot + '\', [StringComparison]::OrdinalIgnoreCase)) {
+    throw 'Package output must stay under workspace artifacts; source and installed release are not output locations.'
+}
 
+# Share the publish lock: normal delivery/cleanup must not remove this candidate mid-copy.
+$packageLock = & (Join-Path $scriptRoot 'Enter-DesktopPublishLock.ps1') -WorkspaceRoot (Split-Path -Parent $scriptRoot)
+try {
+$buildInfo = & (Join-Path $scriptRoot 'Assert-CleanPackageInput.ps1') -PublishDir $publish
 $exe = Join-Path $publish 'DwgTranslator.exe'
-if (-not (Test-Path $exe)) { throw "发布产物不完整：未找到 $exe（请先运行 publish.bat 或 dotnet publish）" }
+if (-not (Test-Path -LiteralPath $exe)) { throw "发布产物不完整：未找到 $exe（请先运行 publish.bat 或 dotnet publish）" }
 
 # InformationalVersion ("2.1.0") is what the product advertises; FileVersion carries the extra
 # revision component ("2.1.0.0"), which only makes the download name look odd.
-$version = (Get-Item $exe).VersionInfo.ProductVersion
+$version = (Get-Item -LiteralPath $exe).VersionInfo.ProductVersion
 if ($version) { $version = $version.Split("+")[0] }   # 去掉 SDK 追加的源码修订后缀
-if ([string]::IsNullOrWhiteSpace($version)) { $version = (Get-Item $exe).VersionInfo.FileVersion }
+if ([string]::IsNullOrWhiteSpace($version)) { $version = (Get-Item -LiteralPath $exe).VersionInfo.FileVersion }
 $packageName = "DwgTranslator-$version-win-x64"
 $stage = Join-Path $output $packageName
 
@@ -44,60 +54,83 @@ Write-Step "发布目录：$publish"
 Write-Step "版本号：$version"
 Write-Step "输出目录：$stage"
 
-if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
+$outputFull = [IO.Path]::GetFullPath($output).TrimEnd('\')
+$stage = [IO.Path]::GetFullPath($stage)
+$ancestor = $outputFull
+while ($ancestor) {
+    if (Test-Path -LiteralPath $ancestor) {
+        if ((Get-Item -LiteralPath $ancestor -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Linked package output is not supported.' }
+    }
+    $ancestor = [IO.Path]::GetDirectoryName($ancestor)
+}
+if ($outputFull -eq $publish -or $outputFull.StartsWith($publish + '\', [StringComparison]::OrdinalIgnoreCase)) { throw 'Package output cannot be inside its input candidate.' }
+if (-not $stage.StartsWith($outputFull + '\', [StringComparison]::OrdinalIgnoreCase)) { throw 'Unsafe package output path' }
+if (Test-Path -LiteralPath $stage) { throw 'Package output already exists; choose a new OutputDir to preserve existing evidence.' }
+$zip = Join-Path $output "$packageName.zip"
+if (-not $SkipZip -and (Test-Path -LiteralPath $zip)) { throw 'Package ZIP already exists; choose a new OutputDir.' }
 New-Item -ItemType Directory -Force -Path $stage | Out-Null
 
 # ── 1. 程序本体 ──────────────────────────────────────────────
-$required = @('DwgTranslator.exe', 'settings.json')
+$required = @('DwgTranslator.exe', 'settings.json', 'build-info.json')
 foreach ($name in $required) {
     $src = Join-Path $publish $name
-    if (-not (Test-Path $src)) { throw "缺少必需文件：$name" }
-    if ($name -eq 'settings.json' -and (Get-Item $src).Length -eq 0) { throw "settings.json 为空文件，请检查发布产物" }
-    Copy-Item $src (Join-Path $stage $name) -Force
+    if (-not (Test-Path -LiteralPath $src)) { throw "缺少必需文件：$name" }
+    if ($name -eq 'settings.json' -and (Get-Item -LiteralPath $src).Length -eq 0) { throw "settings.json 为空文件，请检查发布产物" }
+    Copy-Item -LiteralPath $src -Destination (Join-Path $stage $name) -Force
     Write-Step "复制 $name"
 }
-foreach ($sub in 'CadPlugin', 'prompts', 'glossaries') {
+foreach ($sub in 'CadPlugin', 'prompts', 'glossaries', 'assets') {
     $src = Join-Path $publish $sub
-    if (-not (Test-Path $src)) { throw "缺少必需目录：$sub" }
-    Copy-Item $src (Join-Path $stage $sub) -Recurse -Force
-    $count = (Get-ChildItem (Join-Path $stage $sub) -Recurse -File | Measure-Object).Count
+    if (-not (Test-Path -LiteralPath $src)) { throw "缺少必需目录：$sub" }
+    Copy-Item -LiteralPath $src -Destination (Join-Path $stage $sub) -Recurse -Force
+    $count = (Get-ChildItem -LiteralPath (Join-Path $stage $sub) -Recurse -File | Measure-Object).Count
     Write-Step "复制 $sub\（$count 个文件）"
 }
 
 # ── 2. 安装引导 ─────────────────────────────────────────────
-$ansi = [System.Text.Encoding]::GetEncoding(936)     # GBK：cmd.exe 按 ANSI 读取批处理
+$cmdUtf8 = New-Object System.Text.UTF8Encoding($false) # Bootstrap selects chcp 65001; no BOM before @echo.
 $utf8Bom = New-Object System.Text.UTF8Encoding($true) # 记事本友好
 
 function Convert-File([string]$path, [System.Text.Encoding]$target) {
     $text = [IO.File]::ReadAllText($path, [Text.Encoding]::UTF8)
+    if ([IO.Path]::GetExtension($path) -eq '.cmd') { $text = $text.Replace("`r`n", "`n").Replace("`n", "`r`n") }
     [IO.File]::WriteAllText($path, $text, $target)
 }
 
-Copy-Item (Join-Path $installer 'Install.ps1') (Join-Path $stage 'Install.ps1') -Force
+Copy-Item -LiteralPath (Join-Path $installer 'Install.ps1') -Destination (Join-Path $stage 'Install.ps1') -Force
 Write-Step "复制 Install.ps1"
+Copy-Item -LiteralPath (Join-Path $installer 'InstallTransaction.ps1') -Destination (Join-Path $stage 'InstallTransaction.ps1') -Force
+Copy-Item -LiteralPath (Join-Path $installer 'Uninstall.ps1') -Destination (Join-Path $stage 'Uninstall.ps1') -Force
 
-Copy-Item (Join-Path $installer '安装.cmd') (Join-Path $stage '安装.cmd') -Force
-Convert-File (Join-Path $stage '安装.cmd') $ansi
+Copy-Item -LiteralPath (Join-Path $installer '安装.cmd') -Destination (Join-Path $stage '安装.cmd') -Force
+Convert-File (Join-Path $stage '安装.cmd') $cmdUtf8
 Write-Step "写入 安装.cmd"
 
-Copy-Item (Join-Path $installer '使用说明.txt') (Join-Path $stage '使用说明.txt') -Force
+Copy-Item -LiteralPath (Join-Path $installer '使用说明.txt') -Destination (Join-Path $stage '使用说明.txt') -Force
 Convert-File (Join-Path $stage '使用说明.txt') $utf8Bom
 Write-Step "写入 使用说明.txt"
 
 # ── 3. 校验 ─────────────────────────────────────────────────
-$files = Get-ChildItem $stage -Recurse -File
+$files = Get-ChildItem -LiteralPath $stage -Recurse -File
 $sizeMb = [Math]::Round((($files | Measure-Object Length -Sum).Sum / 1MB), 1)
 Write-Step ("打包内容：{0} 个文件，{1} MB" -f $files.Count, $sizeMb)
 $plugin = Join-Path $stage 'CadPlugin\DwgTranslator.Cad.dll'
-if (-not (Test-Path $plugin)) { throw "打包结果缺少 CAD 插件：$plugin" }
-Write-Step ("CAD 插件：{0} （{1} B）" -f (Split-Path $plugin -Leaf), (Get-Item $plugin).Length)
+if (-not (Test-Path -LiteralPath $plugin)) { throw "打包结果缺少 CAD 插件：$plugin" }
+Write-Step ("CAD 插件：{0} （{1} B）" -f (Split-Path $plugin -Leaf), (Get-Item -LiteralPath $plugin).Length)
+
+if ((Get-FileHash -LiteralPath (Join-Path $stage 'DwgTranslator.exe') -Algorithm SHA256).Hash -ne $buildInfo.sha256) {
+    throw 'Packaged executable hash differs from validated candidate; do not distribute this stage.'
+}
 
 # ── 4. 压缩包 ───────────────────────────────────────────────
 if (-not $SkipZip) {
     $zip = Join-Path $output "$packageName.zip"
-    if (Test-Path $zip) { Remove-Item $zip -Force }
-    Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $zip -CompressionLevel Optimal
-    Write-Step ("已生成压缩包：{0} （{1} MB）" -f $zip, [Math]::Round((Get-Item $zip).Length / 1MB, 1))
+    if (Test-Path -LiteralPath $zip) { throw 'Package ZIP already exists; refusing overwrite.' }
+    # Windows PowerShell 5.1 Compress-Archive internally expands bracket paths even
+    # with -LiteralPath. ZipFile uses literal filesystem paths and excludes the stage root.
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    [IO.Compression.ZipFile]::CreateFromDirectory($stage, $zip, [IO.Compression.CompressionLevel]::Optimal, $false)
+    Write-Step ("已生成压缩包：{0} （{1} MB）" -f $zip, [Math]::Round((Get-Item -LiteralPath $zip).Length / 1MB, 1))
     Write-Host ""
     Write-Host "  发给用户的就是这个压缩包：" -ForegroundColor Green
     Write-Host "    $zip"
@@ -107,3 +140,5 @@ if (-not $SkipZip) {
 Write-Host ""
 Write-Host "  免安装目录（可直接运行）：$stage"
 Write-Host ""
+
+} finally { if ($packageLock) { $packageLock.Dispose() } }

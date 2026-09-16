@@ -99,8 +99,10 @@ public partial class MainViewModel
     /// </summary>
     public async Task ImportCadFilesAsync(IReadOnlyList<string> filePaths)
     {
+        if (!ConfirmLeaveProofreading()) return;
         if (IsProcessing || IsLoggingIn) return;
         if (filePaths.Count == 0) return;
+        _proofreadingWorkspaceVersion++;
 
         // Resolve DXF reader before entering background thread
         var dxfReader = App.Services?.GetService<IDxfReaderService>();
@@ -179,7 +181,7 @@ public partial class MainViewModel
     [RelayCommand]
     private async Task ExportDwgAsync()
     {
-        if (IsProcessing || IsLoggingIn) return;
+        if (IsProcessing || IsLoggingIn || !ConfirmLeaveProofreading()) return;
 
         // Preserve internal mappings from older application/Excel sessions too.
         foreach (var metadata in Entities.Where(e => AttributeTranslationPolicy.IsMetadataHandle(e.Handle)))

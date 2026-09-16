@@ -5,6 +5,7 @@ using DwgTranslator.Core.Services;
 using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
+using System.Reflection;
 using System.Windows;
 using Serilog;
 
@@ -26,15 +27,60 @@ public partial class MainViewModel
     {
         get
         {
-            if (!string.IsNullOrWhiteSpace(_config.CadPluginPath))
+            var existing = CadPluginSourceResolver.ResolveExisting(
+                AppDomain.CurrentDomain.BaseDirectory, _config.CadPluginPath);
+            if (existing != null) return Path.GetDirectoryName(Path.GetFullPath(existing))!;
+            var extracted = Path.Combine(App.AppDataDir, "CadPlugin");
+            try
             {
-                var dir = Path.GetDirectoryName(_config.CadPluginPath);
-                if (!string.IsNullOrEmpty(dir) && File.Exists(Path.Combine(dir, CadPluginInstaller.PluginFileName)))
-                    return dir;
+                ExtractEmbeddedCadPlugin(extracted);
+                return extracted;
             }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Embedded CAD plugin extraction failed");
+                return AppDomain.CurrentDomain.BaseDirectory;
+            }
+        }
+    }
 
-            var bundled = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "CadPlugin");
-            return Directory.Exists(bundled) ? bundled : AppDomain.CurrentDomain.BaseDirectory;
+    private static void ExtractEmbeddedCadPlugin(string directory)
+    {
+        const string prefix = "DwgTranslator.App.Embedded.CadPlugin.";
+        var assembly = typeof(MainViewModel).Assembly;
+        var resources = assembly.GetManifestResourceNames().Where(name => name.StartsWith(prefix, StringComparison.Ordinal)).ToArray();
+        foreach (var required in new[] { CadPluginInstaller.PluginFileName, "DwgTranslator.Core.dll", "cad-platform.txt" })
+            if (!resources.Contains(prefix + required)) throw new FileNotFoundException(prefix + required);
+        foreach (var resource in resources)
+        {
+            var destination = Path.Combine(directory, resource[prefix.Length..]);
+            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+            ExtractEmbedded(assembly, resource, destination);
+        }
+    }
+
+    private static void ExtractEmbedded(Assembly assembly, string resource, string destination)
+    {
+        using var input = assembly.GetManifestResourceStream(resource) ?? throw new FileNotFoundException(resource);
+        if (File.Exists(destination))
+        {
+            using var existing = File.OpenRead(destination);
+            if (System.Security.Cryptography.SHA256.HashData(existing).AsSpan().SequenceEqual(System.Security.Cryptography.SHA256.HashData(input))) return;
+            input.Position = 0;
+        }
+        var temporary = destination + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        try
+        {
+            using (var output = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+            {
+                input.CopyTo(output);
+                output.Flush(true);
+            }
+            SafeFileCommit.Commit(temporary, destination, overwrite: true);
+        }
+        finally
+        {
+            if (File.Exists(temporary)) File.Delete(temporary);
         }
     }
 

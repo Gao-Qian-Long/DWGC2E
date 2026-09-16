@@ -22,6 +22,8 @@ public enum GlossarySource
 /// </summary>
 public class GlossaryEntry
 {
+    public string? CloudId { get; set; }
+    public string? CloudNote { get; set; }
     public string Source { get; set; } = string.Empty;
     public string Target { get; set; } = string.Empty;
     public string Category { get; set; } = string.Empty;
@@ -62,6 +64,8 @@ public class GlossaryEntry
 
     public GlossaryEntry Clone() => new()
     {
+        CloudId = CloudId,
+        CloudNote = CloudNote,
         Source = Source,
         Target = Target,
         Category = Category,

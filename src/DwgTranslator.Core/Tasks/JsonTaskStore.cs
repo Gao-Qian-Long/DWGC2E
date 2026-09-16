@@ -20,7 +20,7 @@ namespace DwgTranslator.Core.Tasks;
 /// 三处刻意的"不抛异常"设计：状态文件是断点续跑的辅助品，不是业务数据——
 /// 文件损坏、被占用、磁盘满都不应该让正在跑的翻译失败。因此读写失败一律只记日志。
 /// </summary>
-public sealed class JsonTaskStore : ITaskStore, ITaskStoreDiagnostics
+public sealed class JsonTaskStore : ITaskStore, ITaskStoreDiagnostics, ITaskRecoveryDiagnostics
 {
     /// <summary>
     /// 读选项：容忍 camelCase（settings.json 风格）与 PascalCase 两种写法，
@@ -47,6 +47,12 @@ public sealed class JsonTaskStore : ITaskStore, ITaskStoreDiagnostics
 
     private readonly string _filePath;
     public bool LastSaveFailed { get; private set; }
+    private bool _preserveUnreadState;
+    private bool _hadRecoveryIssue;
+    public string? RecoveryWarning => _hadRecoveryIssue
+        ? "部分任务记录或断点数据无法完整读取，已隔离异常内容；可读取的任务仍然保留。请核对任务列表后再继续。不要删除任务目录中的原记录或 .recovery-* 恢复文件。任务目录：" + Path.GetDirectoryName(_filePath)
+        : null;
+    public string? RecoveryFilePath { get; private set; }
 
     /// <summary>读写互斥：TaskManager 会从工作线程节流保存，UI 线程同时可能读取。</summary>
     private readonly object _gate = new();
@@ -77,20 +83,62 @@ public sealed class JsonTaskStore : ITaskStore, ITaskStoreDiagnostics
                 }
 
                 var json = File.ReadAllText(_filePath);
-                if (string.IsNullOrWhiteSpace(json)) return Array.Empty<TranslationTask>();
+                if (string.IsNullOrWhiteSpace(json)) throw new InvalidDataException("Empty task recovery file.");
 
-                var tasks = JsonSerializer.Deserialize<List<TranslationTask>>(json, ReadOptions);
-                if (tasks == null || tasks.Count == 0) return Array.Empty<TranslationTask>();
+                using var document = JsonDocument.Parse(json, new JsonDocumentOptions
+                {
+                    AllowTrailingCommas = true,
+                    CommentHandling = JsonCommentHandling.Skip
+                });
+                if (document.RootElement.ValueKind != JsonValueKind.Array)
+                    throw new InvalidDataException("Task recovery document must be an array.");
+                var tasks = new List<TranslationTask?>();
+                foreach (var record in document.RootElement.EnumerateArray())
+                {
+                    try { tasks.Add(JsonSerializer.Deserialize<TranslationTask>(record.GetRawText(), ReadOptions)); }
+                    catch (JsonException ex)
+                    {
+                        // One malformed row must not hide unrelated recoverable drawings.
+                        _preserveUnreadState = true;
+                        _hadRecoveryIssue = true;
+                        tasks.Add(null);
+                        Log.Warning(ex, "单条任务记录无法读取，其他任务继续恢复：{Path}", _filePath);
+                    }
+                }
+                if (tasks.Count == 0) return Array.Empty<TranslationTask>();
 
                 var restored = new List<TranslationTask>(tasks.Count);
                 int skipped = 0;
+                var restoredIds = new HashSet<string>(StringComparer.Ordinal);
                 foreach (var task in tasks)
                 {
                     // 缺路径的记录跑不起来，留着只会在队列里显示成一个永远失败的行。
-                    if (task == null || string.IsNullOrWhiteSpace(task.FilePath))
+                    if (task == null || string.IsNullOrWhiteSpace(task.FilePath)
+                        || string.IsNullOrWhiteSpace(task.Id)
+                        || !Enum.IsDefined(typeof(TranslationTaskStatus), task.Status)
+                        || !restoredIds.Add(task.Id))
                     {
+                        _preserveUnreadState = true;
+                        _hadRecoveryIssue = true;
                         skipped++;
                         continue;
+                    }
+
+                    // Invalid checkpoint structure must not reach entity lookup/writeback.
+                    // Retain the original document before persisting this safe, restartable row.
+                    var handles = new HashSet<string>(StringComparer.Ordinal);
+                    if (task.CheckpointSignature == null || task.SuccessfulTranslations == null
+                        || task.SuccessfulTranslations.Any(pair => pair == null
+                            || string.IsNullOrWhiteSpace(pair.Handle)
+                            || pair.SourceText == null || pair.TranslatedText == null
+                            || !Enum.IsDefined(typeof(DwgTranslator.Core.Models.TranslationStatus), pair.Status)
+                            || !handles.Add(pair.Handle)))
+                    {
+                        _preserveUnreadState = true;
+                        _hadRecoveryIssue = true;
+                        task.CheckpointSignature = string.Empty;
+                        task.SuccessfulTranslations = new();
+                        Log.Warning("任务断点数据无效，已禁用断点复用并保留原记录：{Path}", task.FilePath);
                     }
 
                     // 已完成/已取消是历史记录，保留原状（TranslationTask.ResetForResume 只保住
@@ -107,7 +155,7 @@ public sealed class JsonTaskStore : ITaskStore, ITaskStoreDiagnostics
                 }
 
                 if (skipped > 0)
-                    Log.Warning("任务状态文件里有 {Count} 条记录缺少文件路径，已忽略：{Path}", skipped, _filePath);
+                    Log.Warning("任务状态文件里有 {Count} 条记录路径、标识或状态无效，已忽略：{Path}", skipped, _filePath);
 
                 Log.Information("任务恢复：{Total} 条记录，其中 {Pending} 条未完成（{Path}）",
                     restored.Count, restored.Count(t => !t.IsFinished), _filePath);
@@ -117,6 +165,8 @@ public sealed class JsonTaskStore : ITaskStore, ITaskStoreDiagnostics
             {
                 // 文件损坏 / 被占用 / 半截 JSON：都只意味着"这次没有可恢复的任务"，
                 // 不能让它挡住应用启动，更不该把异常抛到 UI 线程的构造函数里。
+                _preserveUnreadState = true;
+                        _hadRecoveryIssue = true;
                 Log.Warning(ex, "任务状态文件读取失败，按空队列启动：{Path}", _filePath);
                 return Array.Empty<TranslationTask>();
             }
@@ -126,19 +176,27 @@ public sealed class JsonTaskStore : ITaskStore, ITaskStoreDiagnostics
     /// <inheritdoc/>
     public void Save(IEnumerable<TranslationTask> tasks)
     {
-        var list = tasks is null ? new List<TranslationTask>() : tasks.ToList();
         string? tempPath = null;
 
         try
         {
             lock (_gate)
             {
+                var list = tasks is null ? new List<TranslationTask>() : tasks.ToList();
                 var directory = Path.GetDirectoryName(_filePath);
                 if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
                     Directory.CreateDirectory(directory);
 
-                tempPath = _filePath + "." + Guid.NewGuid().ToString("N") + ".tmp";
-                File.WriteAllText(tempPath, JsonSerializer.Serialize(list, WriteOptions), new UTF8Encoding(false));
+                PreserveUnreadState();
+
+                tempPath = TaskTemporaryFiles.CreatePath(_filePath);
+                // Fully write and flush the candidate before replacing the last committed queue.
+                var bytes = new UTF8Encoding(false).GetBytes(JsonSerializer.Serialize(list, WriteOptions));
+                using (var stream = new FileStream(tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                {
+                    stream.Write(bytes);
+                    stream.Flush(flushToDisk: true);
+                }
 
                 if (File.Exists(_filePath))
                 {
@@ -152,6 +210,7 @@ public sealed class JsonTaskStore : ITaskStore, ITaskStoreDiagnostics
 
                 tempPath = null;
                 LastSaveFailed = false;
+                if (!_hadRecoveryIssue) TaskTemporaryFiles.Cleanup(_filePath, DateTime.UtcNow);
                 Log.Debug("任务状态已保存：{Count} 条 -> {Path}", list.Count, _filePath);
             }
         }
@@ -171,6 +230,23 @@ public sealed class JsonTaskStore : ITaskStore, ITaskStoreDiagnostics
         }
     }
 
+    // Recovery evidence is not a routine snapshot: keep it only when a read could not
+    // recover the complete document, and never overwrite it during later saves.
+    private void PreserveUnreadState()
+    {
+        if (!_preserveUnreadState) return;
+        if (!File.Exists(_filePath))
+        {
+            // The unreadable source no longer exists; do not carry this flag into a new queue.
+            _preserveUnreadState = false;
+            return;
+        }
+        var recovery = _filePath + ".recovery-" + Guid.NewGuid().ToString("N") + ".json";
+        File.Copy(_filePath, recovery, false);
+        RecoveryFilePath = recovery;
+        _preserveUnreadState = false;
+        Log.Warning("无法完整读取的原任务记录已保留：{RecoveryPath}", recovery);
+    }
     /// <inheritdoc/>
     public void Clear()
     {
@@ -179,6 +255,7 @@ public sealed class JsonTaskStore : ITaskStore, ITaskStoreDiagnostics
             try
             {
                 if (!File.Exists(_filePath)) return;
+                PreserveUnreadState();
                 File.Delete(_filePath);
                 Log.Information("已清除任务状态文件：{Path}", _filePath);
             }

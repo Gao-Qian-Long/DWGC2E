@@ -16,6 +16,10 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{AB2217E5
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DwgTranslator.Core.Tests", "tests\DwgTranslator.Core.Tests\DwgTranslator.Core.Tests.csproj", "{69796F40-6A0E-4163-B038-F25CC1A6DB1A}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LayoutRegression", "tests\DwgTranslator.LayoutRegression\LayoutRegression.csproj", "{3CCDA697-F02F-4010-BDD5-82D8EA3F08DB}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DwgTranslator.App.UiSmoke", "tests\DwgTranslator.App.UiSmoke\DwgTranslator.App.UiSmoke.csproj", "{9F67811A-9C32-46E1-A51D-8BEEE6FF1924}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -38,8 +42,18 @@ Global
 		{69796F40-6A0E-4163-B038-F25CC1A6DB1A}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{69796F40-6A0E-4163-B038-F25CC1A6DB1A}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{69796F40-6A0E-4163-B038-F25CC1A6DB1A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3CCDA697-F02F-4010-BDD5-82D8EA3F08DB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3CCDA697-F02F-4010-BDD5-82D8EA3F08DB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3CCDA697-F02F-4010-BDD5-82D8EA3F08DB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3CCDA697-F02F-4010-BDD5-82D8EA3F08DB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9F67811A-9C32-46E1-A51D-8BEEE6FF1924}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9F67811A-9C32-46E1-A51D-8BEEE6FF1924}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9F67811A-9C32-46E1-A51D-8BEEE6FF1924}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9F67811A-9C32-46E1-A51D-8BEEE6FF1924}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{69796F40-6A0E-4163-B038-F25CC1A6DB1A} = {AB2217E5-1271-4D34-AC23-C4382C58A0EA}
+		{3CCDA697-F02F-4010-BDD5-82D8EA3F08DB} = {AB2217E5-1271-4D34-AC23-C4382C58A0EA}
+		{9F67811A-9C32-46E1-A51D-8BEEE6FF1924} = {AB2217E5-1271-4D34-AC23-C4382C58A0EA}
 	EndGlobalSection
 EndGlobal

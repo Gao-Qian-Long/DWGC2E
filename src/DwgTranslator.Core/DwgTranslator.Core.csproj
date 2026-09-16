@@ -10,14 +10,12 @@
     <NoWarn Condition="'$(TargetFramework)' == 'net8.0'">$(NoWarn);CA1416</NoWarn>
   </PropertyGroup>
   <!--
-    TODO(architecture): This Core project references infrastructure packages (ACadSharp, ClosedXML)
-    and a UI framework (CommunityToolkit.Mvvm). In clean architecture Core should only contain
-    interfaces, models, and domain logic — with infrastructure and UI concerns in separate projects.
-    Recommended refactoring:
-      - Move DwgReaderService/DwgWriterService to a new DwgTranslator.Infrastructure project
-      - Move Excel import/export to DwgTranslator.Infrastructure (ClosedXML dependency)
-      - Make TextEntity a POCO and wrap it with an observable proxy in the UI layer
-    Deferred because the move would require touching nearly every project in the solution.
+    This is a shared, feature-organized Core assembly, not a pure Domain project.
+    ACadSharp/ClosedXML and storage/networking code are retained here for compatibility.
+    CommunityToolkit.Mvvm supplies observable models; it does not require WPF/WinForms.
+    Keep Core independent of App and UI types. The net48 CAD subset below intentionally
+    excludes the desktop infrastructure stack. Do not split assemblies or change model
+    identity solely to match directory names; preserve CAD and serialization contracts.
   -->
   <ItemGroup Condition="'$(TargetFramework)' == 'net8.0'">
     <Compile Remove="Compatibility\TextEntity.NetFramework.cs" />
@@ -38,12 +36,12 @@
     <Compile Include="Compatibility\TextEntity.NetFramework.cs" />
     <Compile Include="Models\CadWriteResult.cs" />
     <Compile Include="Models\WritebackOptions.cs" />
-    <Compile Include="Services\SafeFileCommit.cs" />
+    <Compile Include="Infrastructure\Files\SafeFileCommit.cs" />
     <Compile Include="Models\AttributeTranslationPolicy.cs" />
     <Compile Include="Models\WritebackConstants.cs" />
-    <Compile Include="Services\FontMapper.cs" />
-    <Compile Include="Services\TextWidthEstimator.cs" />
-    <Compile Include="Services\VerticalTextLayout.cs" />
-    <Compile Include="Services\TextEnvelopeGeometry.cs" />
+    <Compile Include="Drawing\Layout\FontMapper.cs" />
+    <Compile Include="Drawing\Layout\TextWidthEstimator.cs" />
+    <Compile Include="Drawing\Layout\VerticalTextLayout.cs" />
+    <Compile Include="Drawing\Layout\TextEnvelopeGeometry.cs" />
   </ItemGroup>
 </Project>

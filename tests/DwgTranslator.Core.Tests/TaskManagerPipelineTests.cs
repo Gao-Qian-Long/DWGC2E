@@ -86,6 +86,63 @@ public class TaskManagerPipelineTests : IDisposable
         public void Clear() => Saved.Clear();
     }
 
+    [Fact]
+    public void FailedAccountSaveKeepsQueueAndDoesNotCommitNewSession()
+    {
+        var store = new DiagnosticTaskStore();
+        var destination = new InMemoryTaskStore();
+        using var manager = CreateManager(new FakeReader(), new FakeTranslator(), new FakeWriter(), store, Config(), out _);
+        var first = manager.Enqueue(CreateDrawing("unsaved-owner.dwg"));
+        store.LastSaveFailed = true;
+        var committed = false;
+        Assert.Throws<IOException>(() => manager.SwitchAccountStore(destination, () => committed = true));
+        Assert.False(committed);
+        Assert.Same(first, Assert.Single(manager.Tasks));
+        Assert.Empty(destination.Saved);
+        Assert.Throws<IOException>(() => manager.EnsureAccountStoreSaved());
+        store.LastSaveFailed = false;
+        manager.SwitchAccountStore(destination, () => committed = true);
+        Assert.True(committed);
+        Assert.Empty(manager.Tasks);
+    }
+
+    [Fact]
+    public void FailedSessionCommitKeepsOriginalStoreAndPendingQueue()
+    {
+        var store = new InMemoryTaskStore();
+        var destination = new InMemoryTaskStore();
+        var previous = new TranslationTask(CreateDrawing("previous-owner.dwg"));
+        store.Saved.Add(previous);
+        using var manager = CreateManager(new FakeReader(), new FakeTranslator(), new FakeWriter(), store, Config(), out _);
+        Assert.Throws<IOException>(() => manager.SwitchAccountStore(destination, () => throw new IOException("settings locked")));
+        Assert.Same(previous, Assert.Single(manager.Tasks));
+        Assert.Same(previous, Assert.Single(manager.PendingFromLastRun));
+        var added = manager.Enqueue(CreateDrawing("still-original-owner.dwg"));
+        Assert.Contains(added, store.Saved);
+        Assert.Empty(destination.Saved);
+        manager.SwitchAccountStore(destination);
+        Assert.Empty(manager.Tasks);
+        manager.SwitchAccountStore(store);
+        Assert.Equal(2, manager.Tasks.Count);
+    }
+
+    [Fact]
+    public void RepeatedAccountSwitchesKeepBothOwnersSeparate()
+    {
+        var a = new InMemoryTaskStore(); var b = new InMemoryTaskStore();
+        using var manager = CreateManager(new FakeReader(), new FakeTranslator(), new FakeWriter(), a, Config(), out _);
+        var first = manager.Enqueue(CreateDrawing("repeat-alice.dwg"));
+        manager.SwitchAccountStore(b);
+        var second = manager.Enqueue(CreateDrawing("repeat-bob.dwg"));
+        for (var index = 0; index < 50; index++)
+        {
+            manager.SwitchAccountStore(a);
+            Assert.Same(first, Assert.Single(manager.Tasks));
+            manager.SwitchAccountStore(b);
+            Assert.Same(second, Assert.Single(manager.Tasks));
+        }
+    }
+
     private sealed class DiagnosticTaskStore : ITaskStore, ITaskStoreDiagnostics
     {
         public bool LastSaveFailed { get; set; }
@@ -128,7 +185,7 @@ public class TaskManagerPipelineTests : IDisposable
             => filePaths.ToDictionary(p => p, ExtractFromFile);
     }
 
-    /// <summary>替身翻译：改实体状态（真实 TranslationService 也这么做，写回集合依赖它）。</summary>
+    /// <summary>旧替身主动改实体状态；真实 TranslationService 返回结果而不改实体，另用真实服务回归覆盖。</summary>
     private sealed class FakeTranslator : ITranslationService
     {
         public int Calls { get; private set; }
@@ -179,12 +236,21 @@ public class TaskManagerPipelineTests : IDisposable
     private sealed class FakeWriter : IDwgWriterService
     {
         public List<string> Written { get; } = new();
+        public List<TextEntity> Entities { get; } = new();
 
         public CadWriteResult WriteTranslations(
             string sourceFilePath, string outputFilePath, List<TextEntity> entities,
             bool targetIsCjk = true, CancellationToken cancellationToken = default, WritebackOptions? options = null)
         {
             Written.Add(outputFilePath);
+            // Snapshot the arguments at the writer boundary. TaskManager subsequently marks
+            // successful originals WritebackSuccess; that must not rewrite this observation.
+            Entities.AddRange(entities.Select(e => new TextEntity
+            {
+                Handle = e.Handle, SourceFilePath = e.SourceFilePath, PlainText = e.PlainText,
+                RawText = e.RawText, TranslatedText = e.TranslatedText, Status = e.Status,
+                GlossaryHit = e.GlossaryHit
+            }));
             File.WriteAllText(outputFilePath, "written");
             return new CadWriteResult { SuccessCount = entities.Count, FailCount = 0 };
         }
@@ -215,6 +281,134 @@ public class TaskManagerPipelineTests : IDisposable
         manager.TranslationCompleted += (_, pair) => pairs.Add(pair);
         completed = pairs;
         return manager;
+    }
+
+    [Fact]
+    public async Task Pipeline_RealTranslationService_MapsReturnedPairsBeforeWriteback()
+    {
+        var source = CreateDrawing("real-service.dwg");
+        var client = new FixedReplyClient();
+        var translator = new TranslationService(new GlossaryService(), new FormatCodeParser(),
+            client, "Translate to English.", maxRetryCount: 0,
+            consistencyService: new TranslationConsistencyService(""), maxConcurrency: 1);
+        var writer = new FakeWriter();
+        using var manager = CreateManager(new FakeReader(), translator, writer,
+            new InMemoryTaskStore(), Config(), out var completed);
+        manager.ConfigureRun("ZH", "EN", _exportDir, TaskWritebackMode.Offline);
+        var task = manager.Enqueue(source);
+        await manager.RunAsync();
+
+        Assert.Equal(2, client.Calls);
+        Assert.Equal(2, completed.Count);
+        Assert.Equal(2, task.TranslatedCount);
+        Assert.Equal(0, task.FailedCount);
+        Assert.Equal(TranslationTaskStatus.Completed, task.Status);
+        Assert.False(string.IsNullOrWhiteSpace(task.OutputPath));
+        Assert.True(File.Exists(task.OutputPath));
+        Assert.Equal(task.OutputPath, Assert.Single(writer.Written));
+        Assert.Equal(2, writer.Entities.Count);
+        Assert.All(writer.Entities, e =>
+        {
+            Assert.Equal(TranslationStatus.Translated, e.Status);
+            Assert.Equal("Valve feedback", e.TranslatedText);
+            Assert.Equal(Path.GetFullPath(source), e.SourceFilePath);
+        });
+    }
+
+    [Theory]
+    [InlineData("source")]
+    [InlineData("handle")]
+    [InlineData("text")]
+    [InlineData("duplicate")]
+    public async Task ReturnedPairs_RejectWrongIdentityBeforeAnyWrite(string mismatch)
+    {
+        var writer = new FakeWriter();
+        var translator = new ReturnedPairTranslator(pairs =>
+        {
+            if (mismatch == "source") pairs[0].SourceFilePath = Path.Combine(_root, "other.dwg");
+            if (mismatch == "handle") pairs[0].Handle = "NOT-IN-DRAWING";
+            if (mismatch == "text") pairs[0].SourceText = "different source text";
+            if (mismatch == "duplicate") pairs.Add(pairs[0]);
+            return pairs;
+        });
+        using var manager = CreateManager(new FakeReader(), translator, writer,
+            new InMemoryTaskStore(), Config(), out _);
+        manager.ConfigureRun("ZH", "EN");
+        var source = CreateDrawing("identity.dwg");
+        var original = File.ReadAllBytes(source);
+        var task = manager.Enqueue(source);
+        await manager.RunAsync();
+        Assert.Equal(TranslationTaskStatus.Failed, task.Status);
+        Assert.Contains("不匹配或重复", task.Error);
+        Assert.Empty(writer.Written);
+        Assert.Null(task.OutputPath);
+        Assert.Equal(original, File.ReadAllBytes(source));
+    }
+
+    [Theory]
+    [InlineData(TranslationStatus.TranslationFailed)]
+    [InlineData(TranslationStatus.Skipped)]
+    public async Task ReturnedPairs_PreserveFormattedTranslationAndExcludeUnwritableStatus(TranslationStatus excluded)
+    {
+        const string formatted = @"{\C1;Surface Roughness}";
+        var writer = new FakeWriter();
+        var translator = new ReturnedPairTranslator(pairs =>
+        {
+            pairs[0].TranslatedText = formatted;
+            pairs[0].GlossaryHit = true;
+            pairs[1].Status = excluded;
+            pairs[1].TranslatedText = excluded == TranslationStatus.Skipped ? pairs[1].SourceText : "";
+            return pairs;
+        });
+        using var manager = CreateManager(new FakeReader(), translator, writer,
+            new InMemoryTaskStore(), Config(), out _);
+        manager.ConfigureRun("ZH", "EN");
+        var task = manager.Enqueue(CreateDrawing("formatted-result.dwg"));
+        await manager.RunAsync();
+        Assert.Equal(excluded == TranslationStatus.TranslationFailed
+            ? TranslationTaskStatus.PartiallyCompleted : TranslationTaskStatus.Completed, task.Status);
+        var received = Assert.Single(writer.Entities);
+        Assert.Equal("A1", received.Handle);
+        Assert.Equal(formatted, received.TranslatedText);
+        Assert.Equal("表面粗糙度", received.RawText);
+        Assert.Equal("表面粗糙度", received.PlainText);
+        Assert.Equal(TranslationStatus.Translated, received.Status);
+        Assert.True(received.GlossaryHit);
+        Assert.Equal(excluded == TranslationStatus.TranslationFailed ? 1 : 0, task.FailedCount);
+        Assert.True(File.Exists(task.OutputPath));
+    }
+
+    // Return-only contract: mutations performed by the old fake stay on copies, never originals.
+    private sealed class ReturnedPairTranslator(Func<List<TranslationPair>, List<TranslationPair>> transform)
+        : ITranslationService
+    {
+        public Task<string> TranslateAsync(string text, string sourceLanguage, string targetLanguage,
+            CancellationToken cancellationToken = default) => Task.FromResult("Translated Text");
+        public Task<List<TranslationPair>> TranslateBatchAsync(List<TextEntity> entities,
+            string sourceLanguage, string targetLanguage, CancellationToken cancellationToken = default)
+            => TranslateBatchWithProgressAsync(entities, sourceLanguage, targetLanguage, null, cancellationToken);
+        public async Task<List<TranslationPair>> TranslateBatchWithProgressAsync(List<TextEntity> entities,
+            string sourceLanguage, string targetLanguage, IProgress<TranslationPair>? progress,
+            CancellationToken cancellationToken = default)
+        {
+            var copies = entities.Select(e => new TextEntity { Handle=e.Handle,
+                SourceFilePath=e.SourceFilePath, PlainText=e.PlainText, RawText=e.RawText }).ToList();
+            var pairs = transform(await new FakeTranslator().TranslateBatchAsync(copies,
+                sourceLanguage, targetLanguage, cancellationToken));
+            foreach (var pair in pairs) progress?.Report(pair);
+            return pairs;
+        }
+    }
+    private sealed class FixedReplyClient : IDeepSeekClient
+    {
+        public int Calls { get; private set; }
+        public Task<string> ChatCompletionAsync(string systemPrompt, string userMessage,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            Calls++;
+            return Task.FromResult("Valve feedback");
+        }
     }
 
     [Fact]
@@ -288,6 +482,21 @@ public class TaskManagerPipelineTests : IDisposable
         Assert.Equal(0, translator.Calls);
         Assert.Contains("已存在", task.Error);
         Assert.Equal("previous result", File.ReadAllText(existing));
+    }
+
+    [Fact]
+    public void EmptyOutputConfigurationDoesNotFallBackToWorkingDirectory()
+    {
+        var config = Config();
+        config.ExportDirectory = "";
+        using var manager = new TaskManager(new FakeReader(), null, new FakeTranslator(), new FakeWriter(), null,
+            new InMemoryTaskStore(), Options(), config);
+        var actual = (string)typeof(TaskManager).GetMethod("ResolveOutputFolder",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(manager, null)!;
+        var expected = Path.Combine(Environment.GetEnvironmentVariable("DWGC2E_DATA_DIR")
+            ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "DwgTranslator"), "exports");
+        Assert.Equal(expected, actual);
+        Assert.NotEqual(Directory.GetCurrentDirectory(), actual);
     }
 
     [Fact]

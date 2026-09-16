@@ -1,71 +1,63 @@
-<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <!-- ═══════════════════════════════════════════════════════════════════════
          浅色工程软件配色（第二轮 UI 优化后的唯一颜色来源）。
 
          规则（与设计基线一致）：
-           蓝 = 主操作 / 当前选中 / 信息      绿 = 成功
+           棕橙 = 主操作 / 当前选中 / 信息      绿 = 成功
            橙 = 会员 / 警告 / 待确认          红 = 错误 / 危险
            灰 = 次级 / 禁用 / 等待
          不要在页面里写十六进制字面量：新增语义请在这里加键。
          键名保持不变（历史页面全部通过 DynamicResource 引用），只调整色值。
          ═══════════════════════════════════════════════════════════════════════ -->
-
-    <!-- 主色（品牌蓝） -->
-    <SolidColorBrush x:Key="Brush.Primary" Color="#4F46E5"/>
-    <SolidColorBrush x:Key="Brush.PrimaryHover" Color="#4338CA"/>
-    <SolidColorBrush x:Key="Brush.PrimaryPressed" Color="#3730A3"/>
-    <SolidColorBrush x:Key="Brush.PrimaryLight" Color="#EEF2FF"/>
-    <SolidColorBrush x:Key="Brush.PrimarySoft" Color="#E0E7FF"/>
-
+    <!-- Brand mapping: D:/DWGC2E_Website/css/theme.css (:root); desktop sizes remain productivity-oriented. -->
+    <SolidColorBrush x:Key="Brush.BrandAccent" Color="#D97728" />
+    <!-- 主色（网站 primary / brand-deep） -->
+    <SolidColorBrush x:Key="Brush.Primary" Color="#974719" />
+    <SolidColorBrush x:Key="Brush.PrimaryHover" Color="#843C16" />
+    <SolidColorBrush x:Key="Brush.PrimaryPressed" Color="#854018" />
+    <SolidColorBrush x:Key="Brush.PrimaryLight" Color="#F2E3D8" />
+    <SolidColorBrush x:Key="Brush.PrimarySoft" Color="#F2E3D8" />
     <!-- 表面与底色 -->
-    <SolidColorBrush x:Key="Brush.Surface" Color="#FFFFFF"/>
-    <SolidColorBrush x:Key="Brush.SurfaceAlt" Color="#FAFAFB"/>
-    <SolidColorBrush x:Key="Brush.SurfaceSubtle" Color="#FAFAFB"/>
-    <SolidColorBrush x:Key="Brush.Background" Color="#F4F5F7"/>
-    <SolidColorBrush x:Key="Brush.BackgroundAlt" Color="#ECEEF2"/>
-    <SolidColorBrush x:Key="Brush.Sidebar" Color="#FFFFFF"/>
-    <SolidColorBrush x:Key="Brush.Card" Color="#FFFFFF"/>
-    <SolidColorBrush x:Key="Brush.ToolBar" Color="#FFFFFF"/>
-    <SolidColorBrush x:Key="Brush.StatusBar" Color="#FFFFFF"/>
-
+    <SolidColorBrush x:Key="Brush.Surface" Color="#FFFCF5" />
+    <SolidColorBrush x:Key="Brush.SurfaceAlt" Color="#F7F5F0" />
+    <SolidColorBrush x:Key="Brush.SurfaceSubtle" Color="#F7F5F0" />
+    <SolidColorBrush x:Key="Brush.Background" Color="#F5F1E8" />
+    <SolidColorBrush x:Key="Brush.BackgroundAlt" Color="#EEEAE3" />
+    <SolidColorBrush x:Key="Brush.Sidebar" Color="#FFFCF5" />
+    <SolidColorBrush x:Key="Brush.Card" Color="#FFFCF5" />
+    <SolidColorBrush x:Key="Brush.ToolBar" Color="#FFFCF5" />
+    <SolidColorBrush x:Key="Brush.StatusBar" Color="#FFFCF5" />
     <!-- 文字层级：主 / 次 / 说明 / 禁用 -->
-    <SolidColorBrush x:Key="Brush.TextPrimary" Color="#20242C"/>
-    <SolidColorBrush x:Key="Brush.TextSecondary" Color="#535B69"/>
-    <SolidColorBrush x:Key="Brush.TextMuted" Color="#727B89"/>
-    <SolidColorBrush x:Key="Brush.TextDisabled" Color="#A3AAB5"/>
-
+    <SolidColorBrush x:Key="Brush.TextPrimary" Color="#262521" />
+    <SolidColorBrush x:Key="Brush.TextSecondary" Color="#60594F" />
+    <SolidColorBrush x:Key="Brush.TextMuted" Color="#777168" />
+    <SolidColorBrush x:Key="Brush.TextDisabled" Color="#777168" />
     <!-- 边框：常用 / 更浅（卡片分隔） / 更强（输入框 hover） -->
-    <SolidColorBrush x:Key="Brush.Border" Color="#E1E4E9"/>
-    <SolidColorBrush x:Key="Brush.BorderLight" Color="#EEF0F3"/>
-    <SolidColorBrush x:Key="Brush.BorderStrong" Color="#C9CED7"/>
-
+    <SolidColorBrush x:Key="Brush.Border" Color="#DED2BC" />
+    <SolidColorBrush x:Key="Brush.BorderLight" Color="#EDE6D8" />
+    <SolidColorBrush x:Key="Brush.BorderStrong" Color="#B7AB96" />
     <!-- 状态色（只表达状态，不做装饰） -->
-    <SolidColorBrush x:Key="Brush.Success" Color="#16805D"/>
-    <SolidColorBrush x:Key="Brush.SuccessLight" Color="#E9F8F1"/>
-    <Color x:Key="Color.Warning">#E89A17</Color>
-    <SolidColorBrush x:Key="Brush.Warning" Color="{DynamicResource Color.Warning}"/>
-    <SolidColorBrush x:Key="Brush.WarningLight" Color="#FFF5E4"/>
-    <SolidColorBrush x:Key="Brush.Danger" Color="#D14343"/>
-    <SolidColorBrush x:Key="Brush.DangerLight" Color="#FFF0F0"/>
-    <SolidColorBrush x:Key="Brush.Info" Color="#4F46E5"/>
-    <SolidColorBrush x:Key="Brush.InfoLight" Color="#EEF2FF"/>
-
+    <SolidColorBrush x:Key="Brush.Success" Color="#4E765E" />
+    <SolidColorBrush x:Key="Brush.SuccessLight" Color="#EAF0E9" />
+    <Color x:Key="Color.Warning">#986E30</Color>
+    <SolidColorBrush x:Key="Brush.Warning" Color="{DynamicResource Color.Warning}" />
+    <SolidColorBrush x:Key="Brush.WarningLight" Color="#F3ECDF" />
+    <SolidColorBrush x:Key="Brush.Danger" Color="#A34E49" />
+    <SolidColorBrush x:Key="Brush.DangerLight" Color="#F5E9E6" />
+    <SolidColorBrush x:Key="Brush.Info" Color="#974719" />
+    <SolidColorBrush x:Key="Brush.InfoLight" Color="#F2E3D8" />
     <!-- 橙色强调：会员标识 / 警告 / 待确认 -->
-    <SolidColorBrush x:Key="Brush.Accent" Color="#4F46E5"/>
-    <SolidColorBrush x:Key="Brush.AccentLight" Color="#EEF2FF"/>
-
+    <SolidColorBrush x:Key="Brush.Accent" Color="#974719" />
+    <SolidColorBrush x:Key="Brush.AccentLight" Color="#F2E3D8" />
     <!-- 浮层与滚动条（阴影只给浮层/菜单/弹窗用） -->
-    <SolidColorBrush x:Key="Brush.Overlay" Color="#8A0F1F3A"/>
-    <SolidColorBrush x:Key="Brush.ScrollThumb" Color="#C5CAD3"/>
-    <Color x:Key="Color.DropScrim">#20242C</Color>
-
-    <SolidColorBrush x:Key="Brush.TitleBarBackground" Color="#FFFFFF"/>
-    <SolidColorBrush x:Key="Brush.DataGridHeader" Color="#FAFAFB"/>
-
+    <SolidColorBrush x:Key="Brush.Overlay" Color="#801E1E1B" />
+    <SolidColorBrush x:Key="Brush.ScrollThumb" Color="#B7AB96" />
+    <Color x:Key="Color.DropScrim">#262521</Color>
+    <SolidColorBrush x:Key="Brush.TitleBarBackground" Color="#FFFCF5" />
+    <SolidColorBrush x:Key="Brush.DataGridHeader" Color="#F7F5F0" />
     <!-- 圆角：小控件 6 / 按钮输入卡片 8 / 大卡片 10；不要再出现 11~25 -->
-    <CornerRadius x:Key="CornerRadius.Small" TopLeft="6" TopRight="6" BottomLeft="6" BottomRight="6"/>
-    <CornerRadius x:Key="CornerRadius.Medium" TopLeft="8" TopRight="8" BottomLeft="8" BottomRight="8"/>
-    <CornerRadius x:Key="CornerRadius.Large" TopLeft="10" TopRight="10" BottomLeft="10" BottomRight="10"/>
-    <CornerRadius x:Key="CornerRadius.Pill" TopLeft="9" TopRight="9" BottomLeft="9" BottomRight="9"/>
+    <CornerRadius x:Key="CornerRadius.Small" TopLeft="4" TopRight="4" BottomLeft="4" BottomRight="4" />
+    <CornerRadius x:Key="CornerRadius.Medium" TopLeft="6" TopRight="6" BottomLeft="6" BottomRight="6" />
+    <CornerRadius x:Key="CornerRadius.Large" TopLeft="8" TopRight="8" BottomLeft="8" BottomRight="8" />
+    <CornerRadius x:Key="CornerRadius.Pill" TopLeft="4" TopRight="4" BottomLeft="4" BottomRight="4" />
 </ResourceDictionary>

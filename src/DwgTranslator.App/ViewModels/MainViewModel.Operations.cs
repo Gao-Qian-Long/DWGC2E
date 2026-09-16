@@ -12,7 +12,7 @@ public partial class MainViewModel
     [RelayCommand]
     private void MarkAllReviewed()
     {
-        if (IsProcessing) return;
+        if (IsProcessing || !ConfirmLeaveProofreading()) return;
 
         int count = 0;
         foreach (var entity in Entities.Where(e => e.Status == TranslationStatus.Translated))
@@ -25,8 +25,8 @@ public partial class MainViewModel
     [RelayCommand]
     private void ClearAll()
     {
-        if (IsProcessing) return;
-        if (Entities.Count == 0) return;
+        if (IsProcessing || !ConfirmLeaveProofreading()) return;
+        if (Entities.Count == 0 && DrawingFiles.Count == 0) return;
 
         // 危险操作走主题化确认框（§29）
         var confirmed = Views.ConfirmDialog.Ask(
@@ -34,7 +34,7 @@ public partial class MainViewModel
             Strings.Get("MsgClearConfirmTitle"),
             Strings.Get("MsgClearConfirmBody", Entities.Count),
             confirmText: "清空", danger: true);
-        if (!confirmed) return;
+        if (!confirmed || !TryClearSavedProofreading()) return;
 
         Entities.Clear();
         FilteredEntities.Clear();

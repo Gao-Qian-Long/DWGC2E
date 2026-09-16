@@ -71,6 +71,7 @@ public partial class MainViewModel
     }
     public bool ConfirmLeavePage()
     {
+        if (!ConfirmLeaveProofreading()) return false;
         if (HasUnsavedSettings || ValidateSettingsInputs?.Invoke() == false)
         {
             var result = Views.PromptDialog.Show("设置尚未保存。是否保存后继续？", "未保存的设置", System.Windows.MessageBoxButton.YesNoCancel);

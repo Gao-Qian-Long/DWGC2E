@@ -1,3 +1,5 @@
+# Input: BaseUrl (defaults to deployed API). Output: HTTP contract pass/fail; network requests occur.
+# Usage: powershell -NoProfile -File tools/Test-WorkerContract.ps1 -BaseUrl <approved-test-api>
 # Worker 公共契约冒烟检查（不需要登录，不会发送邮件或修改 D1）
 param([string]$BaseUrl = 'https://dwgc2e-api.maplehousezz.workers.dev')
 $ErrorActionPreference = 'Stop'

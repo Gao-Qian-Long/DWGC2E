@@ -37,17 +37,8 @@ public partial class MainViewModel
                     _config = new AppConfig();
             }
 
-            // Migrate installations that still point at the former custom API hostname.
-            // Only replace the exact legacy default so an intentional custom endpoint is not overwritten.
-            const string legacyWorkerUrl = "https://api.cad.pocketter.dpdns.org";
-            const string verifiedWorkerUrl = "https://dwgc2e-api.maplehousezz.workers.dev";
+            // API endpoint migration runs before client construction in SettingsStore/ApiClientFactory.
             var settingsChanged = false;
-            if (string.Equals(_config.ApiBaseUrl?.TrimEnd('/'), legacyWorkerUrl, StringComparison.OrdinalIgnoreCase))
-            {
-                _config.ApiBaseUrl = verifiedWorkerUrl;
-                settingsChanged = true;
-                Log.Information("Migrated legacy Worker API URL to the verified deployment endpoint");
-            }
             // Resolve the installed CAD host and bundled plugin automatically. Persist
             // encrypted/raw settings before decrypting the API key in memory.
             if (!AutoCadDetector.IsValidAutoCadPath(_config.AutoCadInstallPath))

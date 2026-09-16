@@ -6,6 +6,12 @@ using DwgTranslator.Core.Models;
 
 namespace DwgTranslator.Core.Tasks;
 
+/// <summary>Optional warning about incomplete task recovery.</summary>
+public interface ITaskRecoveryDiagnostics
+{
+    string? RecoveryWarning { get; }
+}
+
 /// <summary>Optional save diagnostics for stores that deliberately keep save errors non-fatal.</summary>
 public interface ITaskStoreDiagnostics
 {

@@ -50,6 +50,7 @@ public partial class DrawingFileItem : ObservableObject
     {
         _task = task;
         OnPropertyChanged(nameof(Task));
+        OnPropertyChanged(nameof(CreatedAtText));
         OnPropertyChanged(nameof(HasTask));
         RefreshFromTask();
     }
@@ -57,6 +58,7 @@ public partial class DrawingFileItem : ObservableObject
     public TranslationTask? Task => _task;
 
     public bool HasTask => _task != null;
+    public string CreatedAtText => _task?.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm") ?? "—";
 
     /// <summary>任务层推进后调用：把所有依赖任务的列一次性通知给界面。</summary>
     public void RefreshFromTask()
@@ -147,7 +149,7 @@ public partial class DrawingFileItem : ObservableObject
         ? string.Empty
         : Path.GetFileName(_task!.OutputPath!);
 
-    public bool HasOutput => !string.IsNullOrWhiteSpace(_task?.OutputPath);
+    public bool HasOutput => !string.IsNullOrWhiteSpace(_task?.OutputPath) && File.Exists(_task.OutputPath);
 
     public string SummaryText => _task != null
         ? $"{_task.TextCount} 条 · 已译 {_task.TranslatedCount} · 失败 {_task.FailedCount}"

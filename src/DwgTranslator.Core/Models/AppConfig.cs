@@ -9,6 +9,10 @@ namespace DwgTranslator.Core.Models;
 public class AppConfig
 {
     public int ConfigurationVersion { get; set; }
+
+    /// <summary>Round-trip fields introduced by newer clients without interpreting them.</summary>
+    [System.Text.Json.Serialization.JsonExtensionData]
+    public Dictionary<string, System.Text.Json.JsonElement>? AdditionalSettings { get; set; }
     /// <summary>
     /// Commercial licensing switch. Disabled for the current pre-commercial build;
     /// the existing licensing implementation remains available for a later release.
@@ -104,7 +108,7 @@ public class AppConfig
 
     // ── 后端对接（客户端只认 IApiClient）──
     public string ApiMode { get; set; } = "worker";
-    public string ApiBaseUrl { get; set; } = "https://dwgc2e-api.maplehousezz.workers.dev";
+    public string ApiBaseUrl { get; set; } = DwgTranslator.Core.Api.ProductApiEndpoint.Default;
     public string AuthTokenEncrypted { get; set; } = string.Empty;
     public string ActiveAccountId { get; set; } = string.Empty;
     public string UpdateManifestUrl { get; set; } = "https://cad.pocketter.dpdns.org/update/latest.json";

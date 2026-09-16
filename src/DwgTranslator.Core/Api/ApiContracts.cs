@@ -78,6 +78,8 @@ public sealed class TranslationItemResult
 
 public sealed class CloudGlossaryEntry
 {
+    public string? Id { get; set; }
+    public string? Note { get; set; }
     public string Source { get; set; } = string.Empty;
     public string Target { get; set; } = string.Empty;
     public string Category { get; set; } = string.Empty;

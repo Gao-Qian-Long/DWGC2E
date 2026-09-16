@@ -18,6 +18,8 @@ public class LogEntryViewModel
     public string Message => _entry.Message;
     public string? Exception => _entry.Exception;
     public string DisplayText => _entry.DisplayText;
+    // The compact activity feed excludes exception stacks; full diagnostics remain in the log viewer.
+    public string CompactDisplayText => $"[{Timestamp}] {Message.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()}";
     public string SourceTag => _entry.SourceTag;
     public LogSource LogSource => _entry.LogSource;
     public string? CorrelationId => _entry.CorrelationId;
@@ -27,25 +29,25 @@ public class LogEntryViewModel
     {
         LogLevel.Verbose => "#9E9E9E",
         LogLevel.Debug => "#78909C",
-        LogLevel.Information => "#1976D2",
-        LogLevel.Warning => "#FF9800",
-        LogLevel.Error => "#E53935",
-        LogLevel.Fatal => "#B71C1C",
+        LogLevel.Information => "#65615A",
+        LogLevel.Warning => "#986E30",
+        LogLevel.Error => "#A34E49",
+        LogLevel.Fatal => "#A34E49",
         _ => "#757575"
     };
 
     public string SourceColor => _entry.LogSource switch
     {
-        LogSource.CadPlugin => "#FF6F00",
-        LogSource.Translation => "#7B1FA2",
-        _ => "#546E7A"
+        LogSource.CadPlugin => "#65615A",
+        LogSource.Translation => "#65615A",
+        _ => "#65615A"
     };
 
     public string RowBackground => _entry.Level switch
     {
-        LogLevel.Error => "#FFF0F0",
-        LogLevel.Fatal => "#FFEBEE",
-        LogLevel.Warning => "#FFFDE7",
+        LogLevel.Error => "Transparent",
+        LogLevel.Fatal => "Transparent",
+        LogLevel.Warning => "Transparent",
         _ => "Transparent"
     };
 }

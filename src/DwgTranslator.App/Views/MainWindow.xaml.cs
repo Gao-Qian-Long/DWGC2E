@@ -13,6 +13,22 @@ public partial class MainWindow : Window
 {
     private readonly MainViewModel _viewModel;
 
+    // Avoid a circular dependency between the scroll viewport and page measurement.
+    private void PageViewport_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (PageHost == null) return;
+        var width = Math.Max(0, e.NewSize.Width - 2);
+        var height = Math.Max(0, e.NewSize.Height - 2);
+        var horizontal = width < 700;
+        var vertical = height < 640;
+        if (vertical && width - SystemParameters.VerticalScrollBarWidth < 700) horizontal = true;
+        if (horizontal && height - SystemParameters.HorizontalScrollBarHeight < 640) vertical = true;
+        PageViewport.HorizontalScrollBarVisibility = horizontal ? System.Windows.Controls.ScrollBarVisibility.Auto : System.Windows.Controls.ScrollBarVisibility.Disabled;
+        PageViewport.VerticalScrollBarVisibility = vertical ? System.Windows.Controls.ScrollBarVisibility.Auto : System.Windows.Controls.ScrollBarVisibility.Disabled;
+        PageHost.Width = Math.Max(700, width - (vertical ? SystemParameters.VerticalScrollBarWidth : 0));
+        PageHost.Height = Math.Max(640, height - (horizontal ? SystemParameters.HorizontalScrollBarHeight : 0));
+    }
+
     public MainWindow()
     {
         InitializeComponent();

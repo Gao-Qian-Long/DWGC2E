@@ -18,7 +18,7 @@
   "cadPluginPath": "",
   "language": "zh-CN",
   "apiMode": "worker",
-  "apiBaseUrl": "https://dwgc2e-api.maplehousezz.workers.dev",
+  "apiBaseUrl": "https://api.cad.pocketter.dpdns.org",
   "updateManifestUrl": "https://cad.pocketter.dpdns.org/update/latest.json"
 }
 

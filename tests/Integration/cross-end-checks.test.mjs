@@ -1,0 +1,30 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {checkApi, inspectCors, inspectVersion} from '../../tools/Test-CrossEndIntegration.mjs';
+const origin='https://site.test';
+const corsHeaders={'access-control-allow-origin':origin,'access-control-allow-headers':'Content-Type, Authorization, Idempotency-Key','access-control-allow-methods':'GET,POST,PUT,PATCH,DELETE,OPTIONS'};
+test('complete preflight passes',()=>assert.equal(inspectCors(new Response(null,{status:204,headers:corsHeaders}),origin).status,'pass'));
+for(const header of Object.keys(corsHeaders))test(`missing ${header} must fail, never report success`,()=>{const h={...corsHeaders};delete h[header];assert.equal(inspectCors(new Response(null,{status:204,headers:h}),origin).status,'fail');});
+for(const value of ['*','https://other.test',''])test(`incorrect CORS origin ${value} rejected`,()=>assert.equal(inspectCors(new Response(null,{status:204,headers:{...corsHeaders,'access-control-allow-origin':value}}),origin).status,'fail'));
+test('preflight failure rejected even with valid headers',()=>assert.equal(inspectCors(new Response(null,{status:500,headers:corsHeaders}),origin).status,'fail'));
+test('missing version rejected',()=>assert.equal(inspectVersion({},origin).status,'fail'));
+test('unpublished download warns, strict release gate fails',()=>{const d={latest_version:'2.1.1',download_url:''};assert.equal(inspectVersion(d,origin).status,'warn');assert.equal(inspectVersion(d,origin,true).status,'fail');});
+for(const download_url of ['http://downloads.test/app.zip','javascript:alert(1)','https://user:pass@downloads.test/app.zip',origin+'/'])test(`invalid download rejected: ${download_url}`,()=>assert.equal(inspectVersion({latest_version:'2.1.1',download_url},origin).status,'fail'));
+test('independent HTTPS download passes format check',()=>assert.equal(inspectVersion({latest_version:'2.1.1',download_url:'https://downloads.test/app.zip'},origin).status,'pass'));
+function transport(overrides={}){return async(url,options)=>{
+ assert.ok(['GET','OPTIONS'].includes(options.method||'GET'));assert.equal(options.redirect,'manual');assert.ok(options.signal);assert.equal(options.body,undefined);assert.equal(options.headers?.Authorization,undefined);
+ const p=new URL(url).pathname.replace(/^\/api(?=\/)/,'');
+ if(options.method==='OPTIONS')return new Response(null,{status:204,headers:corsHeaders});
+ if(overrides[p])return overrides[p]();
+ if(p==='/v1/health')return Response.json({api:'operational',database:'operational'});
+ if(p==='/v1/version')return Response.json({latest_version:'2.1.1',download_url:'https://downloads.test/app.zip'});
+ if(p==='/v1/billing/plans')return Response.json({plans:[],paymentsEnabled:false});
+ return Response.json({error_code:'unauthenticated'},{status:401});
+};}
+test('read-only matrix makes nine probes, no writes or credentials',async()=>{const checks=await checkApi({baseUrl:'https://api.test',websiteOrigin:origin,fetchImpl:transport()});assert.equal(checks.length,9);assert.ok(checks.every(c=>c.status==='pass'));});
+test('public health cannot mask failed database',async()=>{const checks=await checkApi({baseUrl:'https://api.test',websiteOrigin:origin,fetchImpl:transport({'/v1/health':()=>Response.json({api:'operational',database:'unavailable'},{status:503})})});assert.equal(checks[0].status,'fail');});
+test('anonymous data leakage rejected',async()=>{const checks=await checkApi({baseUrl:'https://api.test',websiteOrigin:origin,fetchImpl:transport({'/v1/profile':()=>Response.json({user_id:'leak'})})});assert.equal(checks.find(c=>c.id==='anonymous/v1/profile').status,'fail');});
+test('HTML or redirect version response does not pass',async()=>{for(const response of [()=>new Response('<html>'),()=>new Response(null,{status:302})]){const checks=await checkApi({baseUrl:'https://api.test',websiteOrigin:origin,fetchImpl:transport({'/v1/version':response})});assert.equal(checks.find(c=>c.id==='api.version').status,'fail');}});
+test('unreachable API reported for every probe, no silent skips',async()=>{const checks=await checkApi({baseUrl:'https://api.test',websiteOrigin:origin,fetchImpl:async()=>{throw Error('network')}});assert.equal(checks.length,9);assert.ok(checks.every(c=>c.status==='fail'));});
+test('HTTP or embedded credentials rejected before transport',async()=>{for(const baseUrl of ['http://api.test','https://u:p@api.test'])await assert.rejects(checkApi({baseUrl,websiteOrigin:origin,fetchImpl:()=>assert.fail('must not request')}));});
+test('same-origin proxy does not require cross-origin headers but must prevent caching',async()=>{for(const cache of ['no-store','public']){const mock=transport({'/v1/profile':()=>Response.json({error_code:'unauthenticated'},{status:401,headers:{'cache-control':cache}})});const checks=await checkApi({baseUrl:'https://site.test/api',websiteOrigin:origin,fetchImpl:mock,sameOriginProxy:true});assert.ok(!checks.some(c=>c.id==='api.cors'));assert.equal(checks.find(c=>c.id==='proxy.no-store').status,cache==='no-store'?'pass':'fail');}});

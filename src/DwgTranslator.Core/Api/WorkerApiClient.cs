@@ -475,7 +475,7 @@ public sealed partial class WorkerApiClient : IApiClient, IAccountSessionClient
         if (!IsConfigured) return null;
 
         var path = "/v1/version?current=" + Uri.EscapeDataString(currentVersion ?? string.Empty);
-        var outcome = await SendAsync(HttpMethod.Get, Url(path), null, DefaultTimeout, cancellationToken).ConfigureAwait(false);
+        var outcome = await SendAsync(HttpMethod.Get, Url(path), null, DefaultTimeout, cancellationToken, includeAuth: false).ConfigureAwait(false);
         if (!outcome.IsSuccess)
         {
             LogNonSuccess("GET /v1/version", outcome);
@@ -676,34 +676,6 @@ public sealed partial class WorkerApiClient : IApiClient, IAccountSessionClient
     // 0/false 这种"看起来正常"的值，映射时再各自兜底。
     // ────────────────────────────────────────────────────────────────────────
 
-    public async Task<IReadOnlyList<CloudGlossaryEntry>?> GetGlossaryAsync(CancellationToken cancellationToken = default)
-    {
-        if (!IsConfigured) return null;
-        var outcome = await SendAsync(HttpMethod.Get, Url("/v1/glossary"), null, DefaultTimeout, cancellationToken).ConfigureAwait(false);
-        if (!outcome.IsSuccess) { ThrowIfAuthenticationFailure(outcome); LogNonSuccess("GET /v1/glossary", outcome); return null; }
-        var wire = Deserialize<WireGlossaryResponse>(outcome.Body);
-        if (wire?.Entries == null) return Array.Empty<CloudGlossaryEntry>();
-        return wire.Entries.Select(x => new CloudGlossaryEntry { Source=x.Source ?? "", Target=x.Target ?? "", Category=x.Category ?? "", Folder=x.Folder ?? "", Enabled=x.Enabled }).ToList();
-    }
-
-    public async Task<bool> PutGlossaryAsync(IReadOnlyList<CloudGlossaryEntry> entries, CancellationToken cancellationToken = default)
-    {
-        if (!IsConfigured || entries == null || entries.Count > 1000) return false;
-        var payload = new WireGlossaryPutRequest { Entries = entries.Select(x => new WireCloudGlossaryEntry { Source=x.Source ?? "", Target=x.Target ?? "", Category=x.Category ?? "", Folder=x.Folder ?? "", Enabled=x.Enabled }).ToList() };
-        var outcome = await SendAsync(HttpMethod.Put, Url("/v1/glossary"), JsonContent(payload), DefaultTimeout, cancellationToken).ConfigureAwait(false);
-        if (!outcome.IsSuccess) { ThrowIfAuthenticationFailure(outcome); LogNonSuccess("PUT /v1/glossary", outcome); return false; }
-        return true;
-    }
-    private sealed class WireCloudGlossaryEntry
-    {
-        [JsonPropertyName("source")] public string Source { get; set; } = string.Empty;
-        [JsonPropertyName("target")] public string Target { get; set; } = string.Empty;
-        [JsonPropertyName("category")] public string Category { get; set; } = string.Empty;
-        [JsonPropertyName("folder")] public string Folder { get; set; } = string.Empty;
-        [JsonPropertyName("enabled")] public bool Enabled { get; set; } = true;
-    }
-    private sealed class WireGlossaryPutRequest { [JsonPropertyName("entries")] public List<WireCloudGlossaryEntry> Entries { get; set; } = new List<WireCloudGlossaryEntry>(); }
-    private sealed class WireGlossaryResponse { [JsonPropertyName("entries")] public List<WireCloudGlossaryEntry>? Entries { get; set; } }
     private sealed class WireProtection
     {
         [JsonPropertyName("protect_dimensions")] public bool ProtectDimensions { get; set; }

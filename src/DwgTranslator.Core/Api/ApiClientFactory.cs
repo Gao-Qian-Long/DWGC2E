@@ -13,6 +13,7 @@ public static class ApiClientFactory
         ArgumentNullException.ThrowIfNull(config);
         ArgumentNullException.ThrowIfNull(httpClient);
         config.ApiMode = "worker";
+        config.ApiBaseUrl = ProductApiEndpoint.Migrate(config.ApiBaseUrl);
         return new WorkerApiClient(httpClient, config.ApiBaseUrl, config.UpdateManifestUrl,
             tokenProvider, deviceId, deviceName);
     }

@@ -1,0 +1,420 @@
+using System.Security.Cryptography;
+using System.Text;
+
+namespace DwgTranslator.Core.Services;
+
+/// <summary>What the environment check found for one CAD installation.</summary>
+public sealed record CadPluginStatus(
+    string CadInstallPath,
+    string CadProductName,
+    string Executable,
+    string SupportPath,
+    string PluginDirectory,
+    bool PluginFilesPresent,
+    bool PluginUpToDate,
+    bool PlatformCompatible,
+    bool AutoLoadConfigured,
+    string InstalledPluginVersion,
+    string Detail)
+{
+    /// <summary>True when the CAD host can already run the writeback plugin without a repair.</summary>
+    public bool Ready => PluginFilesPresent && PluginUpToDate && PlatformCompatible && AutoLoadConfigured;
+}
+
+/// <summary>Outcome of an install, repair or uninstall request.</summary>
+public sealed record CadPluginActionResult(bool Success, string Summary, IReadOnlyList<string> Steps, string? Error)
+{
+    public static CadPluginActionResult Fail(string error) => new(false, error, [], error);
+}
+
+/// <summary>
+/// Installs the out-of-process writeback plugin into a CAD installation so the user can run it from
+/// inside the CAD, not only from the desktop application.
+///
+/// The desktop app always loads the plugin for its own batch runs (NETLOAD with a generated script),
+/// so a drawing can be translated without this step. Installing it makes the plugin a first-class
+/// command in the CAD itself, which is what a delivered build is expected to offer, and it is the
+/// only part of the "environment" that has to be set up on a fresh machine: the application itself
+/// is published self-contained, so no .NET runtime has to be present.
+///
+/// Everything here is written to be reversible and idempotent: the plugin lives in its own
+/// sub-folder, the auto-load entry sits between explicit markers inside acaddoc.lsp, and an existing
+/// acaddoc.lsp is backed up before the first modification and never deleted on uninstall unless this
+/// installer created it and only our block was in it.
+/// </summary>
+public static class CadPluginInstaller
+{
+    public const string PluginFileName = "DwgTranslator.Cad.dll";
+    public const string CoreFileName = "DwgTranslator.Core.dll";
+    public const string PlatformFileName = "cad-platform.txt";
+    public const string PluginFolderName = "DwgTranslator";
+    public const string AutoLoadFileName = "acaddoc.lsp";
+    public const string BeginMarker = ";;; ==== DWG Translator plugin : begin (managed block, do not edit) ====";
+    public const string EndMarker = ";;; ==== DWG Translator plugin : end ====";
+
+    private static readonly string[] ManagedFileNames = CadPluginPayload.LegacyFiles;
+
+    /// <summary>Support folder the CAD host searches, preferring the spelling it actually ships.</summary>
+    public static string ResolveSupportPath(string cadInstallPath)
+    {
+        var upper = Path.Combine(cadInstallPath, "Support");
+        if (Directory.Exists(upper)) return upper;
+        var lower = Path.Combine(cadInstallPath, "support");
+        if (Directory.Exists(lower)) return lower;
+        return upper;
+    }
+
+    public static string ResolvePluginDirectory(string cadInstallPath) =>
+        Path.Combine(ResolveSupportPath(cadInstallPath), PluginFolderName);
+
+    public static string ResolveAutoLoadPath(string cadInstallPath) =>
+        Path.Combine(ResolveSupportPath(cadInstallPath),
+            File.Exists(Path.Combine(cadInstallPath, "gcad.exe")) ? "gcad.lsp" : AutoLoadFileName);
+
+    /// <summary>Human readable CAD product name for the given install folder.</summary>
+    public static string DescribeProduct(string cadInstallPath)
+    {
+        if (File.Exists(Path.Combine(cadInstallPath, "gcad.exe"))) return "GstarCAD / 浩辰CAD";
+        if (File.Exists(Path.Combine(cadInstallPath, "acad.exe"))) return "AutoCAD";
+        return "CAD";
+    }
+
+    /// <summary>True when a packaged plugin was compiled for the selected CAD host.</summary>
+    public static bool IsPackageCompatible(string cadInstallPath, string pluginDirectory) =>
+        string.Equals(ReadPlatform(pluginDirectory), DescribePlatform(cadInstallPath),
+            StringComparison.OrdinalIgnoreCase);
+
+    private static string ResolveExecutable(string cadInstallPath)
+    {
+        var gcad = Path.Combine(cadInstallPath, "gcad.exe");
+        if (File.Exists(gcad)) return gcad;
+        var acad = Path.Combine(cadInstallPath, "acad.exe");
+        return File.Exists(acad) ? acad : string.Empty;
+    }
+
+    /// <summary>
+    /// Reports whether the plugin is installed for the given CAD and whether it matches the copy
+    /// shipped with this build. Comparing content hashes is what makes "repair" meaningful: a user
+    /// who updated the application but kept an older installed plugin must be told, not silently
+    /// left running the old one.
+    /// </summary>
+    public static CadPluginStatus Inspect(string cadInstallPath, string pluginSourceDirectory)
+    {
+        var productName = DescribeProduct(cadInstallPath);
+        var support = ResolveSupportPath(cadInstallPath);
+        var pluginDir = ResolvePluginDirectory(cadInstallPath);
+        var autoLoadPath = ResolveAutoLoadPath(cadInstallPath);
+
+        var installedPlugin = Path.Combine(pluginDir, PluginFileName);
+        string[] payloadFiles;
+        bool filesPresent, sourceFilesPresent;
+        try
+        {
+            payloadFiles = CadPluginPayload.Read(pluginSourceDirectory);
+            filesPresent = payloadFiles.All(name => File.Exists(CadPluginPayload.Resolve(pluginDir, name)));
+            sourceFilesPresent = payloadFiles.All(name => File.Exists(CadPluginPayload.Resolve(pluginSourceDirectory, name)));
+        }
+        catch (Exception ex)
+        {
+            return new CadPluginStatus(cadInstallPath, productName, ResolveExecutable(cadInstallPath), support,
+                pluginDir, false, false, false, false, "-", "插件清单无效：" + ex.Message);
+        }
+        var upToDate = false;
+        var expectedPlatform = DescribePlatform(cadInstallPath);
+        var installedPlatform = ReadPlatform(pluginDir);
+        var sourcePlatform = ReadPlatform(pluginSourceDirectory);
+        var platformCompatible = string.Equals(installedPlatform, expectedPlatform, StringComparison.OrdinalIgnoreCase) &&
+                                 string.Equals(sourcePlatform, expectedPlatform, StringComparison.OrdinalIgnoreCase);
+        var version = filesPresent ? DescribeFileVersion(installedPlugin) : "-";
+
+        if (filesPresent && sourceFilesPresent)
+        {
+            try
+            {
+                upToDate = platformCompatible && payloadFiles.All(name =>
+                    HashFile(Path.Combine(pluginDir, name)) == HashFile(Path.Combine(pluginSourceDirectory, name)));
+            }
+            catch { upToDate = false; }
+        }
+
+        var autoLoadConfigured = false;
+        try
+        {
+            if (File.Exists(autoLoadPath))
+            {
+                var text = File.ReadAllText(autoLoadPath);
+                autoLoadConfigured = text.Contains(BeginMarker, StringComparison.Ordinal);
+            }
+        }
+        catch { autoLoadConfigured = false; }
+
+        var detail = (filesPresent, platformCompatible, upToDate, autoLoadConfigured) switch
+        {
+            (false, _, _, _) => "插件文件不完整（必须同时包含 Cad、Core 和平台清单）",
+            (true, false, _, _) => $"插件平台不匹配：当前 CAD={expectedPlatform}，安装包={sourcePlatform}",
+            (true, true, false, _) => "已安装，但版本与当前程序不一致，建议修复",
+            (true, true, true, false) => "文件已就位，但缺少自动加载配置，建议修复",
+            _ => "已安装且与当前程序一致"
+        };
+
+        return new CadPluginStatus(cadInstallPath, productName, ResolveExecutable(cadInstallPath),
+            support, pluginDir, filesPresent, upToDate, platformCompatible, autoLoadConfigured, version, detail);
+    }
+
+    /// <summary>
+    /// Copies the plugin into the CAD support folder and wires the auto-load entry.
+    /// Runs as install, repair and update: the desired end state is identical.
+    /// </summary>
+    public static CadPluginActionResult Install(string cadInstallPath, string pluginSourceDirectory)
+    {
+        var steps = new List<string>();
+        try
+        {
+            if (string.IsNullOrWhiteSpace(cadInstallPath) || !AutoCadDetector.IsValidAutoCadPath(cadInstallPath))
+                return CadPluginActionResult.Fail("未找到有效的 CAD 安装目录，请先在设置中选择 CAD 安装路径。");
+
+            var payloadFiles = CadPluginPayload.Read(pluginSourceDirectory);
+            var missing = payloadFiles
+                .Where(name => !File.Exists(Path.Combine(pluginSourceDirectory, name))).ToArray();
+            if (missing.Length > 0)
+                return CadPluginActionResult.Fail($"安装包内缺少插件文件：{string.Join(", ", missing)}");
+
+            var expectedPlatform = DescribePlatform(cadInstallPath);
+            var sourcePlatform = ReadPlatform(pluginSourceDirectory);
+            if (!string.Equals(sourcePlatform, expectedPlatform, StringComparison.OrdinalIgnoreCase))
+                return CadPluginActionResult.Fail($"插件平台不匹配：当前 CAD={expectedPlatform}，安装包={sourcePlatform}");
+
+            var support = ResolveSupportPath(cadInstallPath);
+            if (!Directory.Exists(support))
+                return CadPluginActionResult.Fail($"CAD 支持目录不存在：{support}");
+            if (!CanWriteDirectory(support))
+                return CadPluginActionResult.Fail($"当前账户不能写入 CAD 支持目录，请以管理员身份运行一次环境自检：{support}");
+
+            var pluginDir = ResolvePluginDirectory(cadInstallPath);
+            // Validate every source/target path and existing receipt before making installation changes.
+            foreach (var name in payloadFiles)
+            {
+                CadPluginPayload.Resolve(pluginSourceDirectory, name);
+                CadPluginPayload.Resolve(pluginDir, name);
+            }
+            var existingReceipt = CadPluginPayload.ReadReceipt(pluginDir);
+            foreach (var name in payloadFiles)
+            {
+                var target = CadPluginPayload.Resolve(pluginDir, name);
+                if (File.Exists(target) && !ManagedFileNames.Contains(name, StringComparer.OrdinalIgnoreCase) &&
+                    name != CadPluginPayload.ManifestName && !existingReceipt.ContainsKey(name.Replace('\\', '/')))
+                    return CadPluginActionResult.Fail($"目标存在未登记文件，未覆盖：{name}");
+            }
+            Directory.CreateDirectory(pluginDir);
+            steps.Add($"创建插件目录 {pluginDir}");
+
+            foreach (var name in payloadFiles)
+            {
+                var source = Path.Combine(pluginSourceDirectory, name);
+                var target = CadPluginPayload.Resolve(pluginDir, name);
+                Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+                File.Copy(source, target, overwrite: true);
+                steps.Add($"复制 {name}（{new FileInfo(source).Length / 1024} KB）");
+            }
+
+            CadPluginPayload.WriteReceipt(pluginDir, payloadFiles);
+
+            var autoLoadPath = ResolveAutoLoadPath(cadInstallPath);
+            var block = BuildAutoLoadBlock(pluginDir);
+            var existing = File.Exists(autoLoadPath) ? File.ReadAllText(autoLoadPath) : string.Empty;
+
+            if (existing.Contains(BeginMarker, StringComparison.Ordinal))
+            {
+                var replaced = ReplaceBlock(existing, block);
+                File.WriteAllText(autoLoadPath, replaced, new UTF8Encoding(false));
+                steps.Add($"更新自动加载配置 {autoLoadPath}");
+            }
+            else
+            {
+                if (existing.Length > 0)
+                {
+                    var backup = autoLoadPath + ".dwgtranslator-backup";
+                    if (!File.Exists(backup))
+                    {
+                        File.Copy(autoLoadPath, backup, overwrite: true);
+                        steps.Add($"已备份原有 {Path.GetFileName(autoLoadPath)} → {Path.GetFileName(backup)}");
+                    }
+                }
+                var combined = existing.TrimEnd() + Environment.NewLine + Environment.NewLine + block;
+                File.WriteAllText(autoLoadPath, combined, new UTF8Encoding(false));
+                steps.Add($"写入自动加载配置 {autoLoadPath}");
+            }
+
+            var status = Inspect(cadInstallPath, pluginSourceDirectory);
+            var summary = status.Ready
+                ? $"已在 {status.CadProductName} 中安装插件，重新打开 CAD 后可使用 DwgTranslateWrite 命令。"
+                : "插件文件已写入，但自检未通过，请查看下方步骤。";
+            return new CadPluginActionResult(status.Ready, summary, steps, status.Ready ? null : status.Detail);
+        }
+        catch (Exception ex)
+        {
+            return new CadPluginActionResult(false, "安装插件失败：" + ex.Message, steps, ex.Message);
+        }
+    }
+
+    /// <summary>Removes the plugin files and the managed auto-load block.</summary>
+    public static CadPluginActionResult Uninstall(string cadInstallPath)
+    {
+        var steps = new List<string>();
+        try
+        {
+            if (string.IsNullOrWhiteSpace(cadInstallPath))
+                return CadPluginActionResult.Fail("未指定 CAD 安装目录。");
+
+            var autoLoadPath = ResolveAutoLoadPath(cadInstallPath);
+            var ownedFiles = CadPluginPayload.ReadReceipt(ResolvePluginDirectory(cadInstallPath));
+            var createdByUs = false;
+            if (File.Exists(autoLoadPath))
+            {
+                var text = File.ReadAllText(autoLoadPath);
+                if (text.Contains(BeginMarker, StringComparison.Ordinal))
+                {
+                    var withoutBlock = RemoveBlock(text);
+                    createdByUs = withoutBlock.Trim().Length == 0 &&
+                                  text.Contains("managed block, do not edit", StringComparison.Ordinal) &&
+                                  !File.Exists(autoLoadPath + ".dwgtranslator-backup");
+                    if (createdByUs)
+                    {
+                        File.Delete(autoLoadPath);
+                        steps.Add($"删除 {Path.GetFileName(autoLoadPath)}（由本程序创建）");
+                    }
+                    else
+                    {
+                        File.WriteAllText(autoLoadPath, withoutBlock, new UTF8Encoding(false));
+                        steps.Add($"从 {Path.GetFileName(autoLoadPath)} 中移除自动加载配置");
+                    }
+                }
+            }
+
+            var pluginDir = ResolvePluginDirectory(cadInstallPath);
+            if (Directory.Exists(pluginDir))
+            {
+                // Only remove the files this installer owns, never the folder wholesale.
+                var receiptPath = CadPluginPayload.Resolve(pluginDir, CadPluginPayload.ReceiptName);
+                var hasReceipt = File.Exists(receiptPath);
+                var retainedModified = false;
+                foreach (var name in hasReceipt ? ownedFiles.Keys : ManagedFileNames.AsEnumerable())
+                {
+                    var file = CadPluginPayload.Resolve(pluginDir, name);
+                    if (!File.Exists(file)) continue;
+                    if (hasReceipt && !string.Equals(CadPluginPayload.Hash(file), ownedFiles[name], StringComparison.OrdinalIgnoreCase))
+                    {
+                        retainedModified = true;
+                        steps.Add($"保留已修改文件 {name}");
+                        continue;
+                    }
+                    File.Delete(file);
+                    steps.Add($"删除 {name}");
+                }
+                if (hasReceipt && !retainedModified) File.Delete(receiptPath);
+                if (!Directory.EnumerateFileSystemEntries(pluginDir).Any())
+                {
+                    Directory.Delete(pluginDir);
+                    steps.Add($"删除插件目录 {pluginDir}");
+                }
+            }
+
+            return new CadPluginActionResult(true, "已从 CAD 中卸载插件（桌面程序不受影响）。", steps, null);
+        }
+        catch (Exception ex)
+        {
+            return new CadPluginActionResult(false, "卸载插件失败：" + ex.Message, steps, ex.Message);
+        }
+    }
+
+    private static string BuildAutoLoadBlock(string pluginDirectory)
+    {
+        var dll = Path.Combine(pluginDirectory, PluginFileName).Replace('\\', '/');
+        var sb = new StringBuilder();
+        sb.AppendLine(BeginMarker);
+        sb.AppendLine(";; Installed by DWG Translator. Loads the writeback plugin into every drawing session");
+        sb.AppendLine(";; so DwgTranslateWrite is available inside the CAD. Reinstalling replaces this block.");
+        sb.AppendLine("(if (and (null dwgtranslator:loaded) (findfile \"" + dll + "\"))");
+        sb.AppendLine("  (progn");
+        sb.AppendLine("    (command \"_.NETLOAD\" \"" + dll + "\")");
+        sb.AppendLine("    (setq dwgtranslator:loaded T)))");
+        sb.AppendLine(EndMarker);
+        return sb.ToString();
+    }
+
+    private static string ReplaceBlock(string text, string block)
+    {
+        var start = text.IndexOf(BeginMarker, StringComparison.Ordinal);
+        var end = text.IndexOf(EndMarker, StringComparison.Ordinal);
+        if (start < 0 || end < start) return text.TrimEnd() + Environment.NewLine + block;
+        end += EndMarker.Length;
+        return text[..start] + block.TrimEnd() + text[end..];
+    }
+
+    private static string RemoveBlock(string text)
+    {
+        var start = text.IndexOf(BeginMarker, StringComparison.Ordinal);
+        if (start < 0) return text;
+        var end = text.IndexOf(EndMarker, StringComparison.Ordinal);
+        if (end < start) return text;
+        end += EndMarker.Length;
+        return text.Remove(start, end - start).TrimEnd() + Environment.NewLine;
+    }
+
+    private static string DescribeFileVersion(string path)
+    {
+        try
+        {
+            var info = System.Diagnostics.FileVersionInfo.GetVersionInfo(path);
+            var version = string.IsNullOrWhiteSpace(info.FileVersion) ? null : info.FileVersion;
+            return version ?? new FileInfo(path).LastWriteTime.ToString("yyyy-MM-dd HH:mm");
+        }
+        catch { return "-"; }
+    }
+
+    private static string DescribePlatform(string cadInstallPath)
+    {
+        if (File.Exists(Path.Combine(cadInstallPath, "gcad.exe"))) return "GstarCAD";
+        var acad = Path.Combine(cadInstallPath, "acad.exe");
+        try
+        {
+            // AutoCAD 2025 (R25) is the first release hosted on modern .NET 8. The current
+            // AutoCAD build cannot be loaded by the CLR 4.x hosts in AutoCAD 2024 and earlier.
+            return System.Diagnostics.FileVersionInfo.GetVersionInfo(acad).FileMajorPart >= 25
+                ? "AutoCAD"
+                : "AutoCAD-legacy-unsupported";
+        }
+        catch { return "AutoCAD-legacy-unsupported"; }
+    }
+
+    private static string ReadPlatform(string directory)
+    {
+        try
+        {
+            var path = Path.Combine(directory, PlatformFileName);
+            return File.Exists(path) ? File.ReadAllText(path).Trim() : "missing";
+        }
+        catch { return "unreadable"; }
+    }
+
+    private static bool CanWriteDirectory(string directory)
+    {
+        var probe = Path.Combine(directory, $".dwgtranslator-write-{Guid.NewGuid():N}.tmp");
+        try
+        {
+            using (File.Create(probe, 1, FileOptions.DeleteOnClose)) { }
+            return true;
+        }
+        catch { return false; }
+        finally
+        {
+            try { if (File.Exists(probe)) File.Delete(probe); } catch { }
+        }
+    }
+
+    private static string HashFile(string path)
+    {
+        using var stream = File.OpenRead(path);
+        return Convert.ToHexString(SHA256.HashData(stream));
+    }
+}

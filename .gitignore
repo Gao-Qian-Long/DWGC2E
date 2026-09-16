@@ -79,7 +79,6 @@ installer/Output/
 功能开发.md
 BUG反馈.md
 CLAUDE.md
-dev.bat
 建议.md
 启动
 UI布局意见.md
@@ -97,3 +96,18 @@ AGENTS.md
 
 # Local Cloudflare state (not a deployment asset)
 /.wrangler/
+
+# Local runtime/IDE residue (do not ignore formal resources or fixtures)
+*.tmp
+*.old
+*.cache
+*.suo
+/temp/
+/tmp/
+/cache/
+/accounts/
+/orders/
+/.env
+/.env.*
+!/.env.example
+!assets/glossaries/*.xlsx

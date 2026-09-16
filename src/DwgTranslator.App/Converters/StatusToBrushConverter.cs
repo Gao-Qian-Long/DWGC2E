@@ -10,16 +10,17 @@ namespace DwgTranslator.App.Converters;
 /// </summary>
 public class StatusToBrushConverter : IValueConverter
 {
-    // Color token palette -- Tailwind slate/amber/emerald/red
-    private static readonly SolidColorBrush PendingBrush = new(Color.FromRgb(0x94, 0xA3, 0xB8));           // slate-400
-    private static readonly SolidColorBrush GlossaryBrush = new(Color.FromRgb(0xD9, 0x77, 0x06));           // amber-600
-    private static readonly SolidColorBrush TranslatedBrush = new(Color.FromRgb(0x05, 0x96, 0x69));         // emerald-600
-    private static readonly SolidColorBrush ReviewedBrush = new(Color.FromRgb(0x04, 0x78, 0x57));           // emerald-700
-    private static readonly SolidColorBrush FailedBrush = new(Color.FromRgb(0xDC, 0x26, 0x26));            // red-600
-    private static readonly SolidColorBrush WritebackSuccessBrush = new(Color.FromRgb(0x06, 0x5F, 0x46));  // emerald-800
-    private static readonly SolidColorBrush WritebackFailedBrush = new(Color.FromRgb(0xB9, 0x1C, 0x1C));  // red-700
-    private static readonly SolidColorBrush SkippedBrush = new(Color.FromRgb(0xCB, 0xD5, 0xE1));           // slate-300
-    private static readonly SolidColorBrush DefaultBrush = new(Color.FromRgb(0x47, 0x55, 0x69));           // slate-600
+    private static SolidColorBrush ThemeBrush(string key) =>
+        System.Windows.Application.Current?.TryFindResource(key) as SolidColorBrush ?? Brushes.Gray;
+    private static SolidColorBrush PendingBrush => ThemeBrush("Brush.TextMuted");
+    private static SolidColorBrush GlossaryBrush => ThemeBrush("Brush.Warning");
+    private static SolidColorBrush TranslatedBrush => ThemeBrush("Brush.Success");
+    private static SolidColorBrush ReviewedBrush => ThemeBrush("Brush.Success");
+    private static SolidColorBrush FailedBrush => ThemeBrush("Brush.Danger");
+    private static SolidColorBrush WritebackSuccessBrush => ThemeBrush("Brush.Success");
+    private static SolidColorBrush WritebackFailedBrush => ThemeBrush("Brush.Danger");
+    private static SolidColorBrush SkippedBrush => ThemeBrush("Brush.TextMuted");
+    private static SolidColorBrush DefaultBrush => ThemeBrush("Brush.TextSecondary");
 
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
     {

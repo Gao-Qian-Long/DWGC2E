@@ -17,6 +17,7 @@ public partial class MainViewModel
     [RelayCommand]
     private async Task TranslateAsync()
     {
+        if (IsProcessing || !ConfirmLeaveProofreading()) return;
         await RunTaskQueueAsync(retryFailedFirst: false).ConfigureAwait(true);
     }
 
@@ -43,7 +44,7 @@ public partial class MainViewModel
     [RelayCommand]
     private async Task RetryFailedAsync()
     {
-        if (IsProcessing) return;
+        if (IsProcessing || !ConfirmLeaveProofreading()) return;
         await RunTaskQueueAsync(retryFailedFirst: true).ConfigureAwait(true);
     }
 

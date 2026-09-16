@@ -12,7 +12,10 @@ $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
 
 if (-not $NoLaunch) {
-    Get-Process DwgTranslator -ErrorAction SilentlyContinue | Stop-Process -Force
+    # Never terminate a user's active application to obtain screenshots.
+    if (Get-Process DwgTranslator -ErrorAction SilentlyContinue) {
+        throw 'APP_ALREADY_RUNNING: Close the application normally, or use -NoLaunch to review the existing window. No process was stopped.'
+    }
     Start-Sleep -Milliseconds 800
     Start-Process $ExePath | Out-Null
 }

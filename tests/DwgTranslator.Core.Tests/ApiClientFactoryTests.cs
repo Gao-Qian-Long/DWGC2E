@@ -17,7 +17,7 @@ public class ApiClientFactoryTests
             () => throw new Exception("Direct must not be constructed"));
         Assert.Equal("worker", client.ModeName);
         Assert.True(client.IsConfigured);
-        Assert.Equal("https://dwgc2e-api.maplehousezz.workers.dev", config.ApiBaseUrl);
+        Assert.Equal("https://api.cad.pocketter.dpdns.org", config.ApiBaseUrl);
     }
 
     [Theory]

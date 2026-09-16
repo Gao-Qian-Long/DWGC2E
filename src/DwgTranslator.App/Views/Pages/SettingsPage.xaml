@@ -1,115 +1,121 @@
-<UserControl x:Class="DwgTranslator.App.Views.Pages.SettingsPage" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:views="clr-namespace:DwgTranslator.App.Views">
-  <Grid Margin="24,18">
-    <Grid.RowDefinitions>
-      <RowDefinition Height="Auto" />
-      <RowDefinition Height="*" />
-      <RowDefinition Height="Auto" />
-    </Grid.RowDefinitions>
-    <TextBlock Text="设置" Style="{StaticResource PageTitleStyle}" Margin="0,0,0,18" />
-    <Grid Grid.Row="1">
-      <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="156" />
-        <ColumnDefinition Width="*" />
-      </Grid.ColumnDefinitions>
-      <ListBox SelectedIndex="{Binding SettingsSection}" BorderThickness="0" Background="Transparent">
-        <ListBoxItem Content="常规" Padding="12" />
-        <ListBoxItem Content="翻译与保护" Padding="12" />
-        <ListBoxItem Content="文件与输出" Padding="12" />
-        <ListBoxItem Content="CAD 与环境" Padding="12" />
-        <ListBoxItem Content="日志与关于" Padding="12" />
-      </ListBox>
-      <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto" Margin="20,0,0,0">
-        <Border Style="{StaticResource Card}" MaxWidth="850" HorizontalAlignment="Stretch">
-          <StackPanel>
-            <StackPanel Visibility="{Binding SettingsSection, Converter={StaticResource IndexToVis}, ConverterParameter=0}">
-              <TextBlock Text="常规" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,12" />
-              <TextBlock Text="界面语言（重启后生效）" Margin="0,12,0,5" />
-              <ComboBox SelectedValuePath="Tag" SelectedValue="{Binding SettingsDraft.Language}" MinHeight="34">
-                <ComboBoxItem Content="简体中文" Tag="zh-CN" />
-                <ComboBoxItem Content="English" Tag="en-US" />
-              </ComboBox>
-              <CheckBox Content="开机启动" IsChecked="{Binding SettingsDraft.StartWithWindows}" Margin="0,8" />
-              <CheckBox Content="自动检查更新" IsChecked="{Binding SettingsDraft.AutoCheckUpdate}" Margin="0,8" />
-              <CheckBox Content="导出后打开输出目录" IsChecked="{Binding SettingsDraft.OpenOutputFolderAfterExport}" Margin="0,8" />
-            </StackPanel>
-            <StackPanel Visibility="{Binding SettingsSection, Converter={StaticResource IndexToVis}, ConverterParameter=1}">
-              <TextBlock Text="翻译与保护" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,12" />
-              <CheckBox Content="保护尺寸" IsChecked="{Binding SettingsDraft.ProtectDimensions}" Margin="0,8" />
-              <CheckBox Content="保护公差" IsChecked="{Binding SettingsDraft.ProtectTolerances}" Margin="0,8" />
-              <CheckBox Content="保护型号" IsChecked="{Binding SettingsDraft.ProtectModels}" Margin="0,8" />
-              <CheckBox Content="优先使用术语库" IsChecked="{Binding SettingsDraft.GlossaryFirst}" Margin="0,8" />
-              <CheckBox Content="内存优化" IsChecked="{Binding SettingsDraft.MemoryOptimization}" Margin="0,8" />
-              <TextBlock Text="同时处理的图纸数（1–6）" Margin="0,12,0,5" />
-              <TextBox Text="{Binding SettingsDraft.LocalWorkerCount, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}" MinHeight="34" Padding="8,4" />
-              <TextBlock Text="单图翻译并发（1–8）" Margin="0,12,0,5" />
-              <TextBox Text="{Binding SettingsDraft.AiConcurrency, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}" MinHeight="34" Padding="8,4" />
-              <TextBlock Text="翻译请求上限（1–20）" Margin="0,12,0,5" />
-              <TextBox Text="{Binding SettingsDraft.MaxTranslationConcurrency, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}" MinHeight="34" Padding="8,4" />
-              <TextBlock Text="失败重试次数（0–5）" Margin="0,12,0,5" />
-              <TextBox Text="{Binding SettingsDraft.MaxRetryCount, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}" MinHeight="34" Padding="8,4" />
-            </StackPanel>
-            <StackPanel Visibility="{Binding SettingsSection, Converter={StaticResource IndexToVis}, ConverterParameter=2}">
-              <TextBlock Text="文件与输出" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,12" />
-              <TextBlock Text="输出目录" Margin="0,12,0,5" />
-              <TextBox Text="{Binding SettingsDraft.ExportDirectory, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}" MinHeight="34" Padding="8,4" />
-              <Button Content="选择输出目录" Click="BrowseOutput_Click" Style="{StaticResource Button.Secondary}" HorizontalAlignment="Left" Margin="0,8" />
-              <TextBlock Text="命名规则：{name} / {lang} / {date}" Margin="0,12,0,5" />
-              <TextBox Text="{Binding SettingsDraft.OutputNamingPattern, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}" MinHeight="34" Padding="8,4" />
-              <Button Content="预览文件名" Click="PreviewNaming_Click" Style="{StaticResource Button.Tertiary}" HorizontalAlignment="Left" />
-              <TextBlock x:Name="NamingPreview" TextWrapping="Wrap" />
-              <TextBlock Text="重名处理：skip 跳过 / overwrite 覆盖 / rename 重命名" Margin="0,12,0,5" />
-              <ComboBox SelectedValuePath="Tag" SelectedValue="{Binding SettingsDraft.DuplicatePolicy}" MinHeight="34">
-                <ComboBoxItem Content="跳过已有文件" Tag="skip" />
-                <ComboBoxItem Content="覆盖输出文件" Tag="overwrite" />
-                <ComboBoxItem Content="自动重命名" Tag="rename" />
-              </ComboBox>
-              <CheckBox Content="写回前备份源文件" IsChecked="{Binding SettingsDraft.BackupSourceBeforeWrite}" Margin="0,8" />
-              <CheckBox Content="允许覆盖源文件（谨慎开启）" IsChecked="{Binding SettingsDraft.AllowOverwriteSource}" Margin="0,8" />
-            </StackPanel>
-            <StackPanel Visibility="{Binding SettingsSection, Converter={StaticResource IndexToVis}, ConverterParameter=3}">
-              <TextBlock Text="CAD 与环境" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,12" />
-              <TextBlock Text="CAD 安装目录" Margin="0,12,0,5" />
-              <TextBox Text="{Binding SettingsDraft.AutoCadInstallPath, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}" MinHeight="34" Padding="8,4" />
-              <TextBlock Text="CAD 插件文件路径" Margin="0,12,0,5" />
-              <TextBox Text="{Binding SettingsDraft.CadPluginPath, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}" MinHeight="34" Padding="8,4" />
-              <Button Content="自动检测路径" Command="{Binding DetectSettingsCadCommand}" Style="{StaticResource Button.Secondary}" HorizontalAlignment="Left" Margin="0,10" />
-              <TextBlock Text="修改路径后请先保存，再重新检测环境。" TextWrapping="Wrap" />
-              <ContentControl x:Name="EnvironmentHost" Margin="0,16,0,0" />
-            </StackPanel>
-            <StackPanel Visibility="{Binding SettingsSection, Converter={StaticResource IndexToVis}, ConverterParameter=4}">
-              <TextBlock Text="日志与关于" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,12" />
-              <TextBlock Text="日志级别" Margin="0,12,0,5" />
-              <ComboBox SelectedValuePath="Content" SelectedValue="{Binding SettingsDraft.MinimumLogLevel}" MinHeight="34">
-                <ComboBoxItem Content="Verbose" />
-                <ComboBoxItem Content="Debug" />
-                <ComboBoxItem Content="Information" />
-                <ComboBoxItem Content="Warning" />
-                <ComboBoxItem Content="Error" />
-                <ComboBoxItem Content="Fatal" />
-              </ComboBox>
-              <WrapPanel Margin="0,16">
-                <Button Content="打开日志目录" Click="OpenLogs_Click" Style="{StaticResource Button.Secondary}" Margin="0,0,8,0" />
-                <Button Content="检查更新" Command="{Binding CheckForUpdateCommand}" Style="{StaticResource Button.Secondary}" />
-              </WrapPanel>
-              <TextBlock Text="{Binding AppVersionText}" FontSize="16" />
-              <TextBlock Text="翻译服务" Margin="0,16,0,4" FontWeight="SemiBold" />
-              <TextBlock Text="{Binding TranslationServiceText}" TextWrapping="Wrap" />
-              <Button Content="重新检测服务" Command="{Binding CheckServiceCommand}" Style="{StaticResource Button.Tertiary}" HorizontalAlignment="Left" />
-              <TextBlock Text="{Binding AccountFeedback}" TextWrapping="Wrap" />
-              <Expander Header="使用帮助" Margin="0,18,0,0">
-                <views:HelpPanel Height="420" />
-              </Expander>
-            </StackPanel>
-          </StackPanel>
-        </Border>
-      </ScrollViewer>
-    </Grid>
-    <DockPanel Grid.Row="2" Margin="176,16,0,0">
-      <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-        <Button Content="放弃更改" Command="{Binding DiscardSettingsChangesCommand}" Style="{StaticResource Button.Secondary}" Margin="8,0" />
-        <Button Content="保存更改" Click="Save_Click" Style="{StaticResource Button.Primary}" />
-      </StackPanel>
-      <TextBlock Text="{Binding SettingsFeedback}" TextWrapping="Wrap" VerticalAlignment="Center" />
-    </DockPanel>
+<UserControl x:Class="DwgTranslator.App.Views.Pages.SettingsPage" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:controls="clr-namespace:DwgTranslator.App.Views.Controls" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:views="clr-namespace:DwgTranslator.App.Views">
+    <Grid Margin="{DynamicResource Spacing.Page}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+<controls:PageHeader x:Name="WorkspaceHeader" Header="设置" Description="常规配置、翻译保护、文件输出与应用信息。" />
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="{StaticResource Size.SettingsNav}" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <ListBox ItemContainerStyle="{StaticResource Settings.NavigationItem}" SelectedIndex="{Binding SettingsSection}" BorderThickness="0" Background="Transparent">
+                <ListBoxItem Content="常规" Padding="12" />
+                <ListBoxItem Content="翻译与保护" Padding="12" />
+                <ListBoxItem Content="文件与输出" Padding="12" />
+                <ListBoxItem Content="CAD 与环境" Padding="12" />
+                <ListBoxItem Content="日志" Padding="12" />
+                <ListBoxItem Content="关于" Padding="12" />
+            </ListBox>
+            <ScrollViewer x:Name="SettingsScroll" Grid.Column="1" VerticalScrollBarVisibility="Auto" Margin="32,0,0,0">
+                <Border x:Name="SettingsContent" Width="{Binding ViewportWidth, ElementName=SettingsScroll}" HorizontalAlignment="Left"><Border.Style><Style TargetType="Border" BasedOn="{StaticResource Section.Surface}"><Setter Property="MaxWidth" Value="740"/><Style.Triggers><DataTrigger Binding="{Binding SettingsSection}" Value="5"><Setter Property="MaxWidth" Value="820"/></DataTrigger></Style.Triggers></Style></Border.Style>
+                    <StackPanel>
+                        <StackPanel Visibility="{Binding SettingsSection, Converter={StaticResource IndexToVis}, ConverterParameter=0}">
+                            <TextBlock Text="界面" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,12" />
+                            <TextBlock Text="界面语言（重启后生效）" Margin="0,16,0,8" />
+                            <ComboBox MaxWidth="300" HorizontalAlignment="Left" MinWidth="220" SelectedValuePath="Tag" SelectedValue="{Binding SettingsDraft.Language}" MinHeight="{DynamicResource Size.Control}">
+                                <ComboBoxItem Content="简体中文" Tag="zh-CN" />
+                                <ComboBoxItem Content="English" Tag="en-US" />
+                            </ComboBox>
+                            <TextBlock Text="应用行为" Style="{StaticResource SectionTitleStyle}" Margin="0,24,0,8"/><CheckBox Style="{StaticResource Toggle.Switch}" Content="开机启动" IsChecked="{Binding SettingsDraft.StartWithWindows}" Margin="0,8" />
+                            <CheckBox Style="{StaticResource Toggle.Switch}" Content="自动检查更新" IsChecked="{Binding SettingsDraft.AutoCheckUpdate}" Margin="0,8" />
+                            <CheckBox Style="{StaticResource Toggle.Switch}" Content="导出后打开输出目录" IsChecked="{Binding SettingsDraft.OpenOutputFolderAfterExport}" Margin="0,8" />
+                        </StackPanel>
+                        <StackPanel Visibility="{Binding SettingsSection, Converter={StaticResource IndexToVis}, ConverterParameter=1}">
+                            <TextBlock Text="图纸保护" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,12" />
+                            <CheckBox Content="保护尺寸" IsChecked="{Binding SettingsDraft.ProtectDimensions}" Margin="0,8" />
+                            <CheckBox Content="保护公差" IsChecked="{Binding SettingsDraft.ProtectTolerances}" Margin="0,8" />
+                            <CheckBox Content="保护型号" IsChecked="{Binding SettingsDraft.ProtectModels}" Margin="0,8" />
+                            <CheckBox Content="优先使用术语库" IsChecked="{Binding SettingsDraft.GlossaryFirst}" Margin="0,8" />
+                            <CheckBox Content="内存优化" IsChecked="{Binding SettingsDraft.MemoryOptimization}" Margin="0,8" />
+                            <TextBlock Text="性能" Style="{StaticResource SectionTitleStyle}" Margin="0,24,0,8"/><DockPanel Margin="0,8"><TextBlock Text="同时处理的图纸数（1–6）" Width="260" VerticalAlignment="Center"/><TextBox Width="120" HorizontalAlignment="Left" Text="{Binding SettingsDraft.LocalWorkerCount, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}" MinHeight="{DynamicResource Size.Control}" Padding="8,4" /></DockPanel>
+                            <DockPanel Margin="0,8"><TextBlock Text="单图翻译并发（1–8）" Width="260" VerticalAlignment="Center"/><TextBox Width="120" HorizontalAlignment="Left" Text="{Binding SettingsDraft.AiConcurrency, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}" MinHeight="{DynamicResource Size.Control}" Padding="8,4" /></DockPanel>
+                            <DockPanel Margin="0,8"><TextBlock Text="翻译请求上限（1–20）" Width="260" VerticalAlignment="Center"/><TextBox Width="120" HorizontalAlignment="Left" Text="{Binding SettingsDraft.MaxTranslationConcurrency, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}" MinHeight="{DynamicResource Size.Control}" Padding="8,4" /></DockPanel>
+                            <DockPanel Margin="0,8"><TextBlock Text="失败重试次数（0–5）" Width="260" VerticalAlignment="Center"/><TextBox Width="120" HorizontalAlignment="Left" Text="{Binding SettingsDraft.MaxRetryCount, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}" MinHeight="{DynamicResource Size.Control}" Padding="8,4" /></DockPanel>
+                        </StackPanel>
+                        <StackPanel Visibility="{Binding SettingsSection, Converter={StaticResource IndexToVis}, ConverterParameter=2}">
+                            <TextBlock Text="文件与输出" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,12" />
+                            <TextBlock Text="输出目录" Margin="0,16,0,8" />
+                            <DockPanel><Button DockPanel.Dock="Right" Content="浏览" Click="BrowseOutput_Click" Style="{StaticResource Button.Secondary}" Margin="8,0,0,0"/><TextBox Text="{Binding SettingsDraft.ExportDirectory, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}" MinHeight="{DynamicResource Size.Control}" Padding="8,4" />
+                            </DockPanel>
+                            <TextBlock Text="命名规则：{name} / {lang} / {date}" Margin="0,16,0,8" />
+                            <TextBox TextChanged="NamingChanged" Text="{Binding SettingsDraft.OutputNamingPattern, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}" MinHeight="{DynamicResource Size.Control}" Padding="8,4" />
+                            <Button Content="预览文件名" Click="PreviewNaming_Click" Style="{StaticResource Button.Tertiary}" HorizontalAlignment="Left" />
+                            <TextBlock x:Name="NamingPreview" TextWrapping="Wrap" />
+                            <TextBlock Text="遇到同名文件" Margin="0,16,0,8" />
+                            <ComboBox MaxWidth="300" HorizontalAlignment="Left" MinWidth="220" SelectedValuePath="Tag" SelectedValue="{Binding SettingsDraft.DuplicatePolicy}" MinHeight="{DynamicResource Size.Control}">
+                                <ComboBoxItem Content="跳过已有文件" Tag="skip" />
+                                <ComboBoxItem Content="覆盖输出文件" Tag="overwrite" />
+                                <ComboBoxItem Content="自动重命名" Tag="rename" />
+                            </ComboBox>
+                            <CheckBox Content="写回前备份源文件" IsChecked="{Binding SettingsDraft.BackupSourceBeforeWrite}" Margin="0,8" />
+                            <TextBlock Text="危险操作" Foreground="{DynamicResource Brush.Danger}" FontWeight="SemiBold" Margin="0,24,0,8"/><TextBlock Text="开启后可能直接修改原始 DWG 文件，请谨慎使用。" TextWrapping="Wrap" Style="{StaticResource CaptionStyle}"/><CheckBox Content="允许覆盖源文件" IsChecked="{Binding SettingsDraft.AllowOverwriteSource}" Margin="0,8" />
+                        </StackPanel>
+                        <StackPanel Visibility="{Binding SettingsSection, Converter={StaticResource IndexToVis}, ConverterParameter=3}">
+                            <TextBlock Text="CAD 配置" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,12" />
+                            <TextBlock Text="CAD 安装目录" Margin="0,16,0,8" />
+                            <DockPanel><Button DockPanel.Dock="Right" Content="浏览" Click="BrowseCad_Click" Style="{StaticResource Button.Secondary}" Margin="8,0,0,0"/><TextBox Text="{Binding SettingsDraft.AutoCadInstallPath, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}" MinHeight="{DynamicResource Size.Control}" Padding="8,4" />
+                            </DockPanel><TextBlock Text="CAD 插件文件路径" Margin="0,16,0,8" />
+                            <DockPanel><Button DockPanel.Dock="Right" Content="浏览" Click="BrowsePlugin_Click" Style="{StaticResource Button.Secondary}" Margin="8,0,0,0"/><TextBox Text="{Binding SettingsDraft.CadPluginPath, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}" MinHeight="{DynamicResource Size.Control}" Padding="8,4" />
+                            </DockPanel><Button Content="自动检测路径" Command="{Binding DetectSettingsCadCommand}" Style="{StaticResource Button.Secondary}" HorizontalAlignment="Left" Margin="0,10" />
+                            <TextBlock Text="修改路径后请先保存，再重新检测环境。" TextWrapping="Wrap" />
+                            <ContentControl x:Name="EnvironmentHost" Margin="0,16,0,0" />
+                        </StackPanel>
+                        <StackPanel Visibility="{Binding SettingsSection, Converter={StaticResource IndexToVis}, ConverterParameter=4}">
+                            <TextBlock Text="日志" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,12" />
+                            <TextBlock Text="日志级别" Margin="0,16,0,8" />
+                            <ComboBox MaxWidth="300" HorizontalAlignment="Left" MinWidth="220" SelectedValuePath="Content" SelectedValue="{Binding SettingsDraft.MinimumLogLevel}" MinHeight="{DynamicResource Size.Control}">
+                                <ComboBoxItem Content="Verbose" />
+                                <ComboBoxItem Content="Debug" />
+                                <ComboBoxItem Content="Information" />
+                                <ComboBoxItem Content="Warning" />
+                                <ComboBoxItem Content="Error" />
+                                <ComboBoxItem Content="Fatal" />
+                            </ComboBox>
+                            <TextBlock Text="Debug 会记录详细运行信息，主要用于问题排查。日志文件保存在应用数据目录。" TextWrapping="Wrap" Style="{StaticResource CaptionStyle}" Margin="0,12,0,0"/><WrapPanel Margin="0,16">
+                                <Button Content="打开日志目录" Click="OpenLogs_Click" Style="{StaticResource Button.Secondary}" Margin="0,0,8,0" />
+                            </WrapPanel>
+                        </StackPanel>
+                        <StackPanel Visibility="{Binding SettingsSection, Converter={StaticResource IndexToVis}, ConverterParameter=5}" MaxWidth="820">
+ <TextBlock Text="关于 DWGC2E" Style="{StaticResource SectionTitleStyle}" Margin="0,0,0,28" />
+ <Border Style="{StaticResource Section.Surface}" Padding="20" Margin="0,0,0,28">
+  <Grid><Grid.RowDefinitions><RowDefinition/><RowDefinition/></Grid.RowDefinitions><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+   <StackPanel><TextBlock Text="DWGC2E" FontSize="18" FontWeight="SemiBold"/><TextBlock Text="DWG Translation" Style="{StaticResource CaptionStyle}" Margin="0,4,0,16"/><StackPanel Orientation="Horizontal"><TextBlock Text="版本" Style="{StaticResource InfoLabel}" Margin="0,0,12,0"/><TextBlock Text="{Binding AppVersionText}"/></StackPanel></StackPanel>
+   <Button Grid.Column="1" Grid.RowSpan="2" Content="检查更新" Command="{Binding CheckForUpdateCommand}" Style="{StaticResource Button.Secondary}" VerticalAlignment="Center"/>
   </Grid>
+ </Border>
+ <TextBlock Text="服务状态" Style="{StaticResource SectionTitleStyle}" Margin="0,0,0,12"/>
+ <Border Style="{StaticResource Section.Surface}" Padding="20" Margin="0,0,0,28"><Grid><Grid.RowDefinitions><RowDefinition Height="52"/><RowDefinition Height="52"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+  <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><StackPanel><TextBlock Text="● 云端翻译服务" FontWeight="SemiBold"/><TextBlock Text="{Binding TranslationServiceText}" Style="{StaticResource CaptionStyle}" Margin="16,4,0,0"/></StackPanel></Grid>
+  <Grid Grid.Row="1"><TextBlock Text="● 账户状态" FontWeight="SemiBold"/><TextBlock Text="{Binding AccountFeedback}" Style="{StaticResource CaptionStyle}" Margin="16,24,0,0"/></Grid>
+  <Button Grid.Row="2" Content="重新检测服务" Command="{Binding CheckServiceCommand}" Style="{StaticResource Button.Tertiary}" HorizontalAlignment="Right" Margin="0,12,0,0"/>
+ </Grid></Border>
+ <TextBlock Text="帮助" Style="{StaticResource SectionTitleStyle}" Margin="0,0,0,12"/>
+ <Expander Header="使用帮助" Margin="0,0,0,16"><views:HelpPanel Height="420" /></Expander>
+
+</StackPanel>
+                    </StackPanel>
+                </Border>
+            </ScrollViewer>
+        </Grid>
+        <DockPanel x:Name="SettingsSaveBar" Width="{Binding ActualWidth, ElementName=SettingsContent}" HorizontalAlignment="Left" Grid.Row="2" Margin="200,16,0,0"><DockPanel.Style><Style TargetType="DockPanel"><Style.Triggers><DataTrigger Binding="{Binding SettingsSection}" Value="5"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></DockPanel.Style>
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                <Button x:Name="DiscardSettingsButton" Click="Discard_Click" Content="放弃更改" Command="{Binding DiscardSettingsChangesCommand}" Style="{StaticResource Button.Secondary}" Margin="8,0" />
+                <Button x:Name="SaveSettingsButton" Content="保存更改" Click="Save_Click" Style="{StaticResource Button.Primary}" />
+            </StackPanel>
+            <TextBlock Text="{Binding SettingsFeedback}" TextWrapping="Wrap" VerticalAlignment="Center" />
+        </DockPanel>
+    </Grid>
 </UserControl>

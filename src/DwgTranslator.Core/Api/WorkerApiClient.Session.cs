@@ -7,7 +7,10 @@ public sealed partial class WorkerApiClient
     public async Task<bool> LogoutAsync(CancellationToken cancellationToken = default)
     {
         if (!IsConfigured) return false;
-        var result = await SendAsync(HttpMethod.Post, Url("/v1/auth/logout"), null, DefaultTimeout, cancellationToken).ConfigureAwait(false);
-        return !result.TransportFailed && (result.IsSuccess || result.StatusCode == 401);
+        var session = GetToken();
+        var result = await SendAsync(HttpMethod.Post, Url("/v1/auth/logout"), null, DefaultTimeout, cancellationToken, expectedSession: session).ConfigureAwait(false);
+        var revoked = !result.TransportFailed && (result.IsSuccess || result.StatusCode == 401);
+        if (revoked) RejectSession(session);
+        return revoked;
     }
 }

@@ -15,6 +15,7 @@ public partial class BatchTasksPage : UserControl
         InitializeComponent();
     }
 
+    private void ClearFilters_Click(object sender, RoutedEventArgs e) { if(DataContext is MainViewModel vm) { vm.BatchSearch=""; vm.BatchStatusFilter=0; vm.BatchDateFilter=0; } }
     /// <summary>Explicit source updates keep Escape from changing the saved translation.</summary>
     private void TranslationGrid_CellEditEnding(object sender, DataGridCellEditEndingEventArgs e)
     {
@@ -31,13 +32,14 @@ public partial class BatchTasksPage : UserControl
         }
 
         if (entity.TranslatedText == editor.Text) return;
+        vm.TrackProofreadingEdit(entity);
         entity.TranslatedText = editor.Text;
         entity.Status = string.IsNullOrWhiteSpace(editor.Text)
             ? TranslationStatus.Pending
             : TranslationStatus.Reviewed;
 
         // Rebuilding the filtered collection during CellEditEnding interrupts DataGrid commit.
-        Dispatcher.InvokeAsync(() => vm.MarkTranslationEdited(entity), DispatcherPriority.Background);
+        Dispatcher.InvokeAsync(() => { if (vm.HasUnsavedProofreading) vm.StatusMessage = "校对更改尚未保存。请保存更改或取消编辑。"; }, DispatcherPriority.Background);
     }
     /// <summary>行内 "···" 按钮：左键也能展开任务操作菜单（§24）。</summary>
     private void RowMenu_Click(object sender, RoutedEventArgs e)

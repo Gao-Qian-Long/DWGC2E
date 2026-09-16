@@ -32,5 +32,26 @@ public sealed class SafeFileCommitTests : IDisposable
             Assert.Throws<IOException>(() => SafeFileCommit.Commit(temp, target, true));
         Assert.Equal("original", File.ReadAllText(target));
     }
+    [Fact]
+    public async Task ConcurrentNonOverwriteCommitsHaveExactlyOneWinner()
+    {
+        var target = Path.Combine(directory, "race.dwg");
+        var inputs = Enumerable.Range(0, 12).Select(i => Path.Combine(directory, $"candidate-{i}.tmp")).ToArray();
+        for (var i = 0; i < inputs.Length; i++) File.WriteAllText(inputs[i], $"drawing-{i}");
+        var start = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var attempts = inputs.Select((input, index) => Task.Run(async () =>
+        {
+            await start.Task;
+            try { SafeFileCommit.Commit(input, target, false); return (Index: index, Won: true); }
+            catch (IOException) { return (Index: index, Won: false); }
+        })).ToArray();
+        start.SetResult(true);
+        var results = await Task.WhenAll(attempts);
+        var winner = Assert.Single(results.Where(result => result.Won));
+        Assert.Equal($"drawing-{winner.Index}", File.ReadAllText(target));
+        Assert.False(File.Exists(inputs[winner.Index]));
+        foreach (var loser in results.Where(result => !result.Won))
+            Assert.Equal($"drawing-{loser.Index}", File.ReadAllText(inputs[loser.Index]));
+    }
     public void Dispose() => Directory.Delete(directory, true);
 }

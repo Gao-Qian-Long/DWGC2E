@@ -6,6 +6,38 @@ public sealed class SettingsStoreTests : IDisposable
     private readonly string directory = Path.Combine(Path.GetTempPath(), "dwgc2e-settings-" + Guid.NewGuid().ToString("N"));
     private string FilePath => Path.Combine(directory, "settings.json");
     public SettingsStoreTests() => Directory.CreateDirectory(directory);
+    [Fact] public void RejectedCredentialCleanupPreservesOtherFields()
+    {
+        SettingsStore.Update(FilePath, c => { c.AuthTokenEncrypted = "old"; c.ActiveAccountId = "owner"; c.ExportDirectory = "custom"; });
+        Assert.True(SettingsStore.ClearAuthenticationIfMatches(FilePath, "old"));
+        var current = SettingsStore.Read(FilePath);
+        Assert.Equal("", current.AuthTokenEncrypted);
+        Assert.Equal("owner", current.ActiveAccountId);
+        Assert.Equal("custom", current.ExportDirectory);
+    }
+    [Fact] public void RejectedCredentialCleanupDoesNotRewriteNewSession()
+    {
+        SettingsStore.Update(FilePath, c => c.AuthTokenEncrypted = "new");
+        var bytes = File.ReadAllBytes(FilePath);
+        Assert.False(SettingsStore.ClearAuthenticationIfMatches(FilePath, "old"));
+        Assert.Equal(bytes, File.ReadAllBytes(FilePath));
+        Assert.False(SettingsStore.ClearAuthenticationIfMatches(FilePath + ".missing", "old"));
+        Assert.False(File.Exists(FilePath + ".missing"));
+    }
+    [Fact] public void RejectedCredentialCleanupCanRetryAfterFileUnlock()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        SettingsStore.Update(FilePath, c => c.AuthTokenEncrypted = "old");
+        var bytes = File.ReadAllBytes(FilePath);
+        using (var locked = new FileStream(FilePath, FileMode.Open, FileAccess.Read, FileShare.Read))
+        {
+            var failure = Record.Exception(() => SettingsStore.ClearAuthenticationIfMatches(FilePath, "old"));
+            Assert.True(failure is IOException or UnauthorizedAccessException);
+            Assert.Equal(bytes, File.ReadAllBytes(FilePath));
+        }
+        Assert.Empty(Directory.GetFiles(directory, "*.tmp"));
+        Assert.True(SettingsStore.ClearAuthenticationIfMatches(FilePath, "old"));
+    }
     [Fact] public void MigrationBacksUpAndPreservesOrdinarySettings()
     {
         SettingsStore.Update(FilePath, c => { c.ApiMode = "direct"; c.ApiBaseUrl = ""; c.ExportDirectory = "custom-output"; c.AuthTokenEncrypted = "opaque-session"; });

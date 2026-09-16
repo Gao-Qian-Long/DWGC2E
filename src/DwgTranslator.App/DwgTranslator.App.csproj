@@ -12,18 +12,18 @@
     <InformationalVersion>2.1.1</InformationalVersion>
     <Product>DWG Translator</Product>
     <Company>DWG Translator</Company>
-    <ApplicationIcon>icon.ico</ApplicationIcon>
+    <ApplicationIcon>..\..\assets\icons\icon.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
     <!-- Embed the WPF window icon. A loose Content file is not reliable in
          compressed single-file publishes because no physical base path exists. -->
-    <Resource Include="icon.ico" />
+    <Resource Include="..\..\assets\icons\icon.ico" Link="icon.ico" />
     <Content Include="..\..\settings.json.example" Link="settings.json"
              CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
-    <Content Include="..\..\glossaries\mechanical_zh_en.json" Link="assets\default-glossaries\mechanical_zh_en.json"
+    <Content Include="..\..\assets\glossaries\mechanical_zh_en.json" Link="assets\default-glossaries\mechanical_zh_en.json"
              CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
-    <Content Include="..\..\prompts\deepl_context.txt" Link="prompts\deepl_context.txt"
+    <Content Include="..\..\assets\prompts\deepl_context.txt" Link="prompts\deepl_context.txt"
              CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
@@ -36,6 +36,7 @@
     <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="QRCoder" Version="1.6.0" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.2" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.0" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.0" />
@@ -53,11 +54,27 @@
 
   <!-- A solution build already builds Cad first through the .sln dependency below. Standalone App
        builds/publishes still invoke it here so the packaged plugin is never stale. -->
-  <Target Name="BuildCadPlugin" BeforeTargets="Build" Condition="'$(BuildingSolutionFile)' != 'true'">
+  <Target Name="BuildCadPlugin" BeforeTargets="AssignTargetPaths" Condition="'$(BuildingSolutionFile)' != 'true'">
     <MSBuild Projects="..\DwgTranslator.Cad\DwgTranslator.Cad.csproj"
              Targets="Build"
              RemoveProperties="RuntimeIdentifier;SelfContained;PublishSingleFile;PublishDir"
              Properties="Configuration=$(Configuration);NuGetAudit=false" />
+  </Target>
+
+  <!-- Use this build's complete private plugin payload, never a manually copied source DLL.
+       Add items after the plugin build so clean builds can discover generated files. -->
+  <Target Name="EmbedCurrentCadPlugin" BeforeTargets="AssignTargetPaths" DependsOnTargets="BuildCadPlugin">
+    <ItemGroup>
+      <_CadEmbeddedPayload Include="..\DwgTranslator.Cad\bin\$(Configuration)\$(CadPluginTargetFramework)\**\*"
+                        Exclude="..\DwgTranslator.Cad\bin\$(Configuration)\$(CadPluginTargetFramework)\**\*.pdb" />
+      <_CadEmbeddedPayload>
+        <LogicalName>DwgTranslator.App.Embedded.CadPlugin.%(_CadEmbeddedPayload.RecursiveDir)%(_CadEmbeddedPayload.Filename)%(_CadEmbeddedPayload.Extension)</LogicalName>
+        <WithCulture>false</WithCulture>
+      </_CadEmbeddedPayload>
+      <EmbeddedResource Remove="@(_CadEmbeddedPayload)" />
+      <EmbeddedResource Include="@(_CadEmbeddedPayload)" />
+    </ItemGroup>
+    <Error Condition="!Exists('..\DwgTranslator.Cad\bin\$(Configuration)\$(CadPluginTargetFramework)\DwgTranslator.Core.dll')" Text="CAD plugin private dependencies are missing." />
   </Target>
 
   <Target Name="CopyCadPluginToBuildOutput" AfterTargets="Build">

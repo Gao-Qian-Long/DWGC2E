@@ -1,0 +1,318 @@
+﻿{
+  "baselineCommit": "a3f6f1f66e7884cdcd21ae88de9b1f9e3d1ab9ad",
+  "scope": "Directory governance only. Does not approve unrelated working-tree changes or prove runtime behavior. Git clean filters account for configured CRLF checkout.",
+  "entries": [
+    {
+      "from": "src/DwgTranslator.Core/Services/IAutoCadInteropService.cs",
+      "to": "src/DwgTranslator.Core/Interfaces/IAutoCadInteropService.cs",
+      "kind": "move"
+    },
+    {
+      "from": "src/DwgTranslator.Core/Services/IDeepSeekClient.cs",
+      "to": "src/DwgTranslator.Core/Interfaces/IDeepSeekClient.cs",
+      "kind": "move"
+    },
+    {
+      "from": "src/DwgTranslator.Core/Services/IDwgReaderService.cs",
+      "to": "src/DwgTranslator.Core/Interfaces/IDwgReaderService.cs",
+      "kind": "move"
+    },
+    {
+      "from": "src/DwgTranslator.Core/Services/IDwgWriterService.cs",
+      "to": "src/DwgTranslator.Core/Interfaces/IDwgWriterService.cs",
+      "kind": "move"
+    },
+    {
+      "from": "src/DwgTranslator.Core/Services/IDxfReaderService.cs",
+      "to": "src/DwgTranslator.Core/Interfaces/IDxfReaderService.cs",
+      "kind": "move"
+    },
+    {
+      "from": "src/DwgTranslator.Core/Services/IDxfWriterService.cs",
+      "to": "src/DwgTranslator.Core/Interfaces/IDxfWriterService.cs",
+      "kind": "move"
+    },
+    {
+      "from": "src/DwgTranslator.Core/Services/IExcelService.cs",
+      "to": "src/DwgTranslator.Core/Interfaces/IExcelService.cs",
+      "kind": "move"
+    },
+    {
+      "from": "src/DwgTranslator.Core/Services/IGlossaryService.cs",
+      "to": "src/DwgTranslator.Core/Interfaces/IGlossaryService.cs",
+      "kind": "move"
+    },
+    {
+      "from": "src/DwgTranslator.Core/Services/ILicenseService.cs",
+      "to": "src/DwgTranslator.Core/Interfaces/ILicenseService.cs",
+      "kind": "move"
+    },
+    {
+      "from": "src/DwgTranslator.Core/Services/ILocalizationService.cs",
+      "to": "src/DwgTranslator.Core/Interfaces/ILocalizationService.cs",
+      "kind": "move"
+    },
+    {
+      "from": "src/DwgTranslator.Core/Services/ITranslationService.cs",
+      "to": "src/DwgTranslator.Core/Interfaces/ITranslationService.cs",
+      "kind": "move"
+    },
+    {
+      "from": "src/DwgTranslator.Core/Services/AutoCadDetector.cs",
+      "to": "src/DwgTranslator.Core/CadIntegration/Detection/AutoCadDetector.cs",
+      "kind": "move"
+    },
+    {
+      "from": "src/DwgTranslator.Core/Services/CadPluginInstaller.cs",
+      "to": "src/DwgTranslator.Core/CadIntegration/Deployment/CadPluginInstaller.cs",
+      "kind": "move-with-reviewed-change",
+      "review": "GstarCAD startup correction, modern AutoCAD compatibility guard, and explicit CAD private-payload install/check with hash-protected uninstall. See cad-payload-review report; not a pure move, no drawing writeback change.",
+      "reviewedBlob": "7d323e6516dd6a7e6733fb1adf42a5a48c39e37d"
+    },
+    {
+      "from": "src/DwgTranslator.Core/Services/BatchExportPlanner.cs",
+      "to": "src/DwgTranslator.Core/Application/Files/BatchExportPlanner.cs",
+      "kind": "move"
+    },
+    {
+      "from": "src/DwgTranslator.Core/Services/GlossaryConflictDetector.cs",
+      "to": "src/DwgTranslator.Core/Application/Glossary/GlossaryConflictDetector.cs",
+      "kind": "move"
+    },
+    {
+      "from": "src/DwgTranslator.Core/Services/GlossaryService.cs",
+      "to": "src/DwgTranslator.Core/Application/Glossary/GlossaryService.cs",
+      "kind": "move"
+    },
+    {
+      "from": "src/DwgTranslator.Core/Services/SettingsBackedDeepSeekClient.cs",
+      "to": "src/DwgTranslator.Core/Application/Translation/SettingsBackedDeepSeekClient.cs",
+      "kind": "move"
+    },
+    {
+      "from": "src/DwgTranslator.Core/Services/TranslationFilter.cs",
+      "to": "src/DwgTranslator.Core/Application/Translation/TranslationFilter.cs",
+      "kind": "move"
+    },
+    {
+      "from": "src/DwgTranslator.Core/Services/TranslationPrompt.cs",
+      "to": "src/DwgTranslator.Core/Application/Translation/TranslationPrompt.cs",
+      "kind": "move"
+    },
+    {
+      "from": "src/DwgTranslator.Core/Services/TranslationQualityValidator.cs",
+      "to": "src/DwgTranslator.Core/Application/Translation/TranslationQualityValidator.cs",
+      "kind": "move"
+    },
+    {
+      "from": "src/DwgTranslator.Core/Services/TranslationService.cs",
+      "to": "src/DwgTranslator.Core/Application/Translation/TranslationService.cs",
+      "kind": "move"
+    },
+    {
+      "from": "src/DwgTranslator.Core/Services/WorkerTranslationService.cs",
+      "to": "src/DwgTranslator.Core/Application/Translation/WorkerTranslationService.cs",
+      "kind": "move"
+    },
+    {
+      "from": "src/DwgTranslator.Core/Services/AccountWorkspace.cs",
+      "to": "src/DwgTranslator.Core/Infrastructure/Accounts/AccountWorkspace.cs",
+      "kind": "move"
+    },
+    {
+      "from": "src/DwgTranslator.Core/Services/InstallationIdentityStore.cs",
+      "to": "src/DwgTranslator.Core/Infrastructure/Accounts/InstallationIdentityStore.cs",
+      "kind": "move"
+    },
+    {
+      "from": "src/DwgTranslator.Core/Services/MachineIdentifier.cs",
+      "to": "src/DwgTranslator.Core/Infrastructure/Accounts/MachineIdentifier.cs",
+      "kind": "move"
+    },
+    {
+      "from": "src/DwgTranslator.Core/Services/LicenseService.cs",
+      "to": "src/DwgTranslator.Core/Infrastructure/Accounts/LicenseService.cs",
+      "kind": "move"
+    },
+    {
+      "from": "src/DwgTranslator.Core/Services/SettingsStore.cs",
+      "to": "src/DwgTranslator.Core/Infrastructure/Configuration/SettingsStore.cs",
+      "kind": "move-with-reviewed-change",
+      "review": "Existing endpoint migration plus reviewed conditional credential cleanup (2026-09-16): compare encrypted snapshot under process lock; preserve owner/other fields; skip new sessions and missing files. Three new Core regressions and UI unlock retry coverage. See session-rejection/report.md. Not a pure directory move.",
+      "reviewedBlob": "fd06d73e9e01601c789df720e47d1a8c20cba382"
+    },
+    {
+      "from": "src/DwgTranslator.Core/Services/LocalizationService.cs",
+      "to": "src/DwgTranslator.Core/Infrastructure/Localization/LocalizationService.cs",
+      "kind": "move"
+    },
+    {
+      "from": "src/DwgTranslator.Core/Services/DeepSeekClient.cs",
+      "to": "src/DwgTranslator.Core/Infrastructure/Api/DeepSeekClient.cs",
+      "kind": "move"
+    },
+    {
+      "from": "src/DwgTranslator.Core/Services/DeepSeekClientFactory.cs",
+      "to": "src/DwgTranslator.Core/Infrastructure/Api/DeepSeekClientFactory.cs",
+      "kind": "move"
+    },
+    {
+      "from": "src/DwgTranslator.Core/Services/DwgReaderService.cs",
+      "to": "src/DwgTranslator.Core/Infrastructure/Files/DwgReaderService.cs",
+      "kind": "move-with-reviewed-change",
+      "review": "Reviewed 2026-09-16: moved reader plus parsing-copy removal of numeric MText width controls; RawText and FormatTemplate unchanged. MTextReaderRoundTripTests covers 10 DWG/DXF and decoder cases; no drawing writeback change.",
+      "reviewedBlob": "47db65f456f6f20ae53ad639b40c3320ad6e0bef"
+    },
+    {
+      "from": "src/DwgTranslator.Core/Services/DwgWriterService.cs",
+      "to": "src/DwgTranslator.Core/Infrastructure/Files/DwgWriterService.cs",
+      "kind": "move"
+    },
+    {
+      "from": "src/DwgTranslator.Core/Services/ExcelService.cs",
+      "to": "src/DwgTranslator.Core/Infrastructure/Files/ExcelService.cs",
+      "kind": "move"
+    },
+    {
+      "from": "src/DwgTranslator.Core/Services/OutputPathResolver.cs",
+      "to": "src/DwgTranslator.Core/Infrastructure/Files/OutputPathResolver.cs",
+      "kind": "move-with-reviewed-change",
+      "reviewedBlob": "2b990300d41775e2efd3b9c4ba16142272f8a7b6",
+      "review": "Output path safety: reject cross-source overwrite and exhausted rename/backup slots; preserve explicit own-source overwrite. No CAD writer algorithm change. Evidence: artifacts/installer-safety-20260916-resumed/output-boundary-repro/safety-fix-report.md (18 resolver tests); full release gates pass."
+    },
+    {
+      "from": "src/DwgTranslator.Core/Services/SafeFileCommit.cs",
+      "to": "src/DwgTranslator.Core/Infrastructure/Files/SafeFileCommit.cs",
+      "kind": "move"
+    },
+    {
+      "from": "src/DwgTranslator.Core/Services/CadGeometryHelper.cs",
+      "to": "src/DwgTranslator.Core/Drawing/Layout/CadGeometryHelper.cs",
+      "kind": "move"
+    },
+    {
+      "from": "src/DwgTranslator.Core/Services/CadLabelCompactor.cs",
+      "to": "src/DwgTranslator.Core/Drawing/Layout/CadLabelCompactor.cs",
+      "kind": "move"
+    },
+    {
+      "from": "src/DwgTranslator.Core/Services/DwgBoundsEstimator.cs",
+      "to": "src/DwgTranslator.Core/Drawing/Layout/DwgBoundsEstimator.cs",
+      "kind": "move"
+    },
+    {
+      "from": "src/DwgTranslator.Core/Services/DwgCollisionDetector.cs",
+      "to": "src/DwgTranslator.Core/Drawing/Layout/DwgCollisionDetector.cs",
+      "kind": "move"
+    },
+    {
+      "from": "src/DwgTranslator.Core/Services/DwgFontManager.cs",
+      "to": "src/DwgTranslator.Core/Drawing/Layout/DwgFontManager.cs",
+      "kind": "move"
+    },
+    {
+      "from": "src/DwgTranslator.Core/Services/DwgFrameDetector.cs",
+      "to": "src/DwgTranslator.Core/Drawing/Layout/DwgFrameDetector.cs",
+      "kind": "move"
+    },
+    {
+      "from": "src/DwgTranslator.Core/Services/DwgTextReplacer.cs",
+      "to": "src/DwgTranslator.Core/Drawing/Layout/DwgTextReplacer.cs",
+      "kind": "move"
+    },
+    {
+      "from": "src/DwgTranslator.Core/Services/DwgTextScaler.cs",
+      "to": "src/DwgTranslator.Core/Drawing/Layout/DwgTextScaler.cs",
+      "kind": "move"
+    },
+    {
+      "from": "src/DwgTranslator.Core/Services/FontMapper.cs",
+      "to": "src/DwgTranslator.Core/Drawing/Layout/FontMapper.cs",
+      "kind": "move"
+    },
+    {
+      "from": "src/DwgTranslator.Core/Services/TextEnvelopeGeometry.cs",
+      "to": "src/DwgTranslator.Core/Drawing/Layout/TextEnvelopeGeometry.cs",
+      "kind": "move"
+    },
+    {
+      "from": "src/DwgTranslator.Core/Services/TextWidthEstimator.cs",
+      "to": "src/DwgTranslator.Core/Drawing/Layout/TextWidthEstimator.cs",
+      "kind": "move"
+    },
+    {
+      "from": "src/DwgTranslator.Core/Services/VerticalTextLayout.cs",
+      "to": "src/DwgTranslator.Core/Drawing/Layout/VerticalTextLayout.cs",
+      "kind": "move"
+    },
+    {
+      "from": "src/DwgTranslator.App/Services/AutoCadInteropService.cs",
+      "to": "src/DwgTranslator.App/CadIntegration/AutoCadInteropService.cs",
+      "kind": "move-with-reviewed-change",
+      "review": "Reviewed 2026-09-16: only ResolveCadPluginPath now uses shared bundled/flat/configured selection; existing detection/development fallback retained. Environment installer shares that selection. Eight Core path cases and caller consistency UI regression; no writeback algorithm changes. Evidence installer-safety-20260916-resumed/plugin-source.",
+      "reviewedBlob": "5e5828270cd1acc1d6256bb676d1cf1b86cbfbbe"
+    },
+    {
+      "from": "glossaries/mechanical_zh_en.json",
+      "to": "assets/glossaries/mechanical_zh_en.json",
+      "kind": "move"
+    },
+    {
+      "from": "prompts/deepl_context.txt",
+      "to": "assets/prompts/deepl_context.txt",
+      "kind": "move"
+    },
+    {
+      "from": "assets/icon.ico",
+      "to": "assets/icons/icon.ico",
+      "kind": "move-with-reviewed-change",
+      "review": "Reviewed 2026-09-16: icon consolidation plus separate brand-unification resource change, not byte-identical move. Preview inspected; ICO SHA256 BC3806164A793243137CEEBC8375575E5773EAD8BDCB20D207A1CDA1B28233F7; nine sizes verified. Evidence artifacts/brand-unification-20260916.",
+      "reviewedBlob": "2e6f494ca2c0c5bd18df27df575de78903c14d46"
+    },
+    {
+      "from": "tools/LayoutRegression/Program.cs",
+      "to": "tests/DwgTranslator.LayoutRegression/Program.cs",
+      "kind": "move"
+    },
+    {
+      "from": "tools/LayoutRegression/LayoutRegression.csproj",
+      "to": "tests/DwgTranslator.LayoutRegression/LayoutRegression.csproj",
+      "kind": "move"
+    },
+    {
+      "from": "tools/tests/Test-CadPluginInstaller.fsx",
+      "to": "tests/CadIntegration/Test-CadPluginInstaller.fsx",
+      "kind": "move-with-reviewed-change",
+      "review": "Release assembly path, CAD startup regression and bounded fixture cleanup checks.",
+      "reviewedBlob": "1187a823558d11f3db4c76c3c93593961d0db7aa"
+    },
+    {
+      "from": "CODE_REVIEW.md",
+      "to": "docs/architecture/legacy-code-review.md",
+      "kind": "move"
+    },
+    {
+      "from": "tools/Test-DesktopArtifactCleanup.ps1",
+      "to": "tests/BuildPipeline/Test-DesktopArtifactCleanup.ps1",
+      "kind": "compatibility-entry",
+      "review": "New compatibility wrapper retained at old location; not claimed as a Git baseline move."
+    },
+    {
+      "from": "src/DwgTranslator.App/icon.ico",
+      "to": "assets/icons/icon.ico",
+      "kind": "move-with-reviewed-change",
+      "review": "Reviewed 2026-09-16: icon consolidation plus separate brand-unification resource change, not byte-identical move. Preview inspected; ICO SHA256 BC3806164A793243137CEEBC8375575E5773EAD8BDCB20D207A1CDA1B28233F7; nine sizes verified. Evidence artifacts/brand-unification-20260916.",
+      "reviewedBlob": "2e6f494ca2c0c5bd18df27df575de78903c14d46"
+    },
+    {
+      "from": "docs/APP_GOVERNANCE_20260915.md",
+      "to": "docs/history/desktop-20260916/APP_GOVERNANCE_20260915.md",
+      "kind": "move"
+    },
+    {
+      "from": "docs/APP_REFACTOR_PLAN.md",
+      "to": "docs/history/desktop-20260916/APP_REFACTOR_PLAN.md",
+      "kind": "move"
+    }
+  ]
+}

@@ -157,7 +157,9 @@ public class OutputPathResolverTests : IDisposable
         var a = CreateFile("A.dwg");
         var b = CreateFile("A_zh.dwg");
 
-        var results = new OutputPathResolver(Config("rename")).ResolveBatch(new[] { a, b }, "zh");
+        var config = Config("rename");
+        config.ExportDirectory = "."; // Target must share the source directory to exercise the collision.
+        var results = new OutputPathResolver(config).ResolveBatch(new[] { a, b }, "zh");
 
         var outputA = results[Path.GetFullPath(a)].OutputPath;
         var outputB = results[Path.GetFullPath(b)].OutputPath;
@@ -187,5 +189,73 @@ public class OutputPathResolverTests : IDisposable
 
         Assert.False(string.IsNullOrWhiteSpace(Path.GetFileName(result.OutputPath)));
         Assert.NotEqual(Path.GetFullPath(source), Path.GetFullPath(result.OutputPath));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void OverwriteCannotTargetAnotherBatchSource(bool allowOwnSource)
+    {
+        var a = CreateFile("A.dwg", "source-a");
+        var b = CreateFile("A_zh.dwg", "source-b");
+        var config = Config("overwrite", allowOverwriteSource: allowOwnSource);
+        config.ExportDirectory = ".";
+        var result = new OutputPathResolver(config).ResolveBatch(new[] { a, b }, "zh")[a];
+        Assert.True(result.ShouldSkip);
+        Assert.Equal(DuplicateResolution.Error, result.Resolution);
+        Assert.Equal("source-a", File.ReadAllText(a));
+        Assert.Equal("source-b", File.ReadAllText(b));
+    }
+
+    [Fact]
+    public void OverwriteCannotReuseAssignedBatchOutput()
+    {
+        var a = CreateFile("a.dwg"); var b = CreateFile("b.dwg");
+        var config = Config("overwrite"); config.OutputNamingPattern = "shared";
+        var results = new OutputPathResolver(config).ResolveBatch(new[] { a, b }, "zh");
+        Assert.False(results[a].ShouldSkip);
+        Assert.True(results[b].ShouldSkip);
+    }
+
+    [Fact]
+    public void RenameExhaustionFailsClosed()
+    {
+        var source = CreateFile("full.dwg"); var config = Config("rename");
+        config.ExportDirectory = ".";
+        CreateFile("full_zh.dwg", "original-output");
+        for (var i = 2; i < 1000; i++) CreateFile($"full_zh_{i}.dwg");
+        var result = new OutputPathResolver(config).Resolve(source, "zh");
+        Assert.True(result.ShouldSkip);
+        Assert.Equal(DuplicateResolution.Error, result.Resolution);
+        Assert.Equal("original-output", File.ReadAllText(Path.Combine(_root, "full_zh.dwg")));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void BackupExhaustionFailsClosedIncludingExplicitSourceOverwrite(bool overwriteSource)
+    {
+        var source = CreateFile("backup.dwg");
+        var config = Config("overwrite", backup: true, allowOverwriteSource: overwriteSource);
+        if (overwriteSource) { config.ExportDirectory = "."; config.OutputNamingPattern = "{name}"; }
+        CreateFile("backup.dwg.bak", "original-backup");
+        for (var i = 2; i < 1000; i++) CreateFile($"backup.dwg.{i}.bak");
+        var result = new OutputPathResolver(config).Resolve(source, "zh");
+        Assert.True(result.ShouldSkip);
+        Assert.Equal(DuplicateResolution.Error, result.Resolution);
+        Assert.Null(result.BackupPath);
+        Assert.Equal("original-backup", File.ReadAllText(source + ".bak"));
+    }
+
+    [Fact]
+    public void ExplicitOwnSourceOverwriteStillWorksWithAvailableBackup()
+    {
+        var source = CreateFile("own.dwg");
+        var config = Config("overwrite", backup: true, allowOverwriteSource: true);
+        config.ExportDirectory = "."; config.OutputNamingPattern = "{name}";
+        var result = new OutputPathResolver(config).Resolve(source, "zh");
+        Assert.False(result.ShouldSkip);
+        Assert.Equal(source, result.OutputPath);
+        Assert.Equal(source + ".bak", result.BackupPath);
     }
 }

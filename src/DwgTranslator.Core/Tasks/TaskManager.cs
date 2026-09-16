@@ -41,7 +41,7 @@ public enum TaskWritebackMode
 /// 线程安全：<see cref="ITaskManager.Tasks"/> 加锁复制后再交出去，所有公开方法都可以被
 /// UI 线程直接调用；事件在调用线程（通常是工作线程）上触发，订阅方自行 Dispatcher 调度。
 /// </summary>
-public sealed class TaskManager : ITaskManager, IRuntimeTaskConfiguration
+public sealed class TaskManager : ITaskManager, ITaskRecoveryDiagnostics, IRuntimeTaskConfiguration
 {
     /// <summary>阶段总数：解析 → 提取 → 翻译 → 排版优化 → 写回 → 完成。</summary>
     private const int StageCount = 6;
@@ -729,6 +729,11 @@ public sealed class TaskManager : ITaskManager, IRuntimeTaskConfiguration
                         toTranslate, _sourceLanguage, _targetLanguage, progress, ct)
                     .ConfigureAwait(false);
 
+                ApplyTranslationResults(toTranslate, pairs);
+                // Flush the completed batch before CAD dispatch; throttled progress saves
+                // can otherwise leave a fast batch absent from crash-recovery state.
+                SaveNow();
+
                 Log.Information("图纸 {File}：翻译阶段结束，返回 {Pairs} 条译文", task.FileName, pairs?.Count ?? 0);
             }
 
@@ -907,6 +912,32 @@ public sealed class TaskManager : ITaskManager, IRuntimeTaskConfiguration
         return entities;
     }
 
+    /// <summary>Validate returned pair identities and apply only translation result fields.</summary>
+    private static void ApplyTranslationResults(List<TextEntity> entities, List<TranslationPair> pairs)
+    {
+        // Services may return pairs without mutating input entities. Match only this drawing's
+        // original items; never reuse a handle from another source or restore formatting twice.
+        var originals = entities.ToLookup(e =>
+            (NormalizePath(e.SourceFilePath).ToUpperInvariant(), e.Handle, e.PlainText));
+        var assignments = new List<(TextEntity Entity, TranslationPair Pair)>();
+        var seen = new HashSet<TextEntity>();
+        foreach (var pair in pairs)
+        {
+            var matches = originals[(NormalizePath(pair.SourceFilePath).ToUpperInvariant(),
+                pair.Handle, pair.SourceText)].ToList();
+            if (matches.Count != 1 || !seen.Add(matches[0]))
+                throw new InvalidOperationException("译文结果与当前图纸条目不匹配或重复，已停止写回");
+            assignments.Add((matches[0], pair));
+        }
+
+        // Validate the entire result set before applying any returned values.
+        foreach (var (entity, pair) in assignments)
+        {
+            entity.TranslatedText = pair.TranslatedText;
+            entity.Status = pair.Status;
+            entity.GlossaryHit = pair.GlossaryHit;
+        }
+    }
     /// <summary>
     /// 圈定要写回的实体：先按 MainViewModel.ExportDwgAsync 的状态筛选，
     /// 再过一次导出前的完整性闸门（仍含原文的译文一律不写进图纸）。
@@ -1007,12 +1038,14 @@ public sealed class TaskManager : ITaskManager, IRuntimeTaskConfiguration
         }
     }
 
-    /// <summary>输出目录：调用方显式指定 &gt; AppConfig.ExportDirectory &gt; 进程当前目录。</summary>
+    /// <summary>输出目录：调用方显式指定 &gt; AppConfig.ExportDirectory &gt; 正式用户数据目录。</summary>
     private string ResolveOutputFolder()
     {
         var folder = OutputDirectory;
         if (string.IsNullOrWhiteSpace(folder)) folder = _config.ExportDirectory;
-        if (string.IsNullOrWhiteSpace(folder)) folder = Directory.GetCurrentDirectory();
+        if (string.IsNullOrWhiteSpace(folder))
+            folder = Path.Combine(Environment.GetEnvironmentVariable("DWGC2E_DATA_DIR")
+                ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "DwgTranslator"), "exports");
         return folder;
     }
 
@@ -1104,20 +1137,47 @@ public sealed class TaskManager : ITaskManager, IRuntimeTaskConfiguration
     /// 不会自动开跑——用户通过 <see cref="PendingFromLastRun"/> 确认后才调用 RunAsync。
     /// </summary>
     /// <summary>Switch only while idle; flush old state before loading a different owner's store.</summary>
-    public void SwitchAccountStore(ITaskStore store)
+    public void SwitchAccountStore(ITaskStore store, Action? commitSession = null)
     {
         ArgumentNullException.ThrowIfNull(store);
         lock (_gate)
         {
             if (IsRunning) throw new InvalidOperationException("任务执行期间不能切换账号。");
-            _store.Save(_tasks.ToList());
-            ReportSaveStatus(_store is ITaskStoreDiagnostics diagnostics && diagnostics.LastSaveFailed);
+            EnsureAccountStoreSaved();
+            // Session persistence must succeed before discarding the current in-memory owner.
+            commitSession?.Invoke();
             _store = store;
             _saveFailureReported = false;
             _tasks.Clear();
             _pendingFromLastRun.Clear();
             RestoreFromStore();
         }
+    }
+
+    /// <summary>Fail closed before account authentication or revocation when the queue cannot be saved.</summary>
+    public void EnsureAccountStoreSaved()
+    {
+        lock (_gate)
+        {
+            if (IsRunning) throw new InvalidOperationException("任务执行期间不能切换账号。");
+            try
+            {
+                _store.Save(_tasks.ToList());
+                var failed = _store is ITaskStoreDiagnostics diagnostics && diagnostics.LastSaveFailed;
+                ReportSaveStatus(failed);
+                if (failed) throw new IOException("当前任务未能保存，已阻止账号切换。请检查磁盘空间和目录权限后重试。");
+            }
+            catch
+            {
+                ReportSaveStatus(true);
+                throw;
+            }
+        }
+    }
+
+    public string? RecoveryWarning
+    {
+        get { lock (_gate) return (_store as ITaskRecoveryDiagnostics)?.RecoveryWarning; }
     }
 
     private void RestoreFromStore()

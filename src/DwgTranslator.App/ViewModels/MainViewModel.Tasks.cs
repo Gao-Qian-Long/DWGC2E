@@ -23,6 +23,15 @@ namespace DwgTranslator.App.ViewModels;
 /// </summary>
 public partial class MainViewModel
 {
+    public string TaskRecoveryWarning => (_taskManager as ITaskRecoveryDiagnostics)?.RecoveryWarning ?? string.Empty;
+    public bool HasTaskRecoveryWarning => !string.IsNullOrEmpty(TaskRecoveryWarning);
+
+    private void RefreshTaskRecoveryNotice()
+    {
+        OnPropertyChanged(nameof(TaskRecoveryWarning));
+        OnPropertyChanged(nameof(HasTaskRecoveryWarning));
+    }
+
     #region 事件订阅
 
     /// <summary>构造函数里调用一次；Dispose 时（进程退出）不需要单独退订。</summary>
@@ -316,10 +325,11 @@ public partial class MainViewModel
     /// <summary>
     /// 启动时检测上次未完成的任务（任务层从 tasks.json 恢复）。
     /// 选择"继续"则直接开跑（沿用上次的写回方式，不再多弹一个对话框）；
-    /// 选择"否"则清掉这些记录，界面回到干净状态。
+    /// 仅显式选择清除才删除记录；关闭、Esc 或暂不处理均保留恢复队列。
     /// </summary>
     private void ResumePendingTasks()
     {
+        RefreshTaskRecoveryNotice();
         var pending = _taskManager.PendingFromLastRun;
         if (pending.Count == 0) return;
 
@@ -336,21 +346,21 @@ public partial class MainViewModel
         HasDrawingFiles = DrawingFiles.Count > 0;
         HasMultipleDrawingFiles = DrawingFiles.Count > 1;
 
-        var answer = Views.ConfirmDialog.Ask(
-            Application.Current?.MainWindow,
-            "未完成的任务",
+        var answer = Views.PromptDialog.Show(
             $"检测到上次有 {pending.Count} 张图纸没有跑完：\n\n    {string.Join("\n    ", pending.Take(8).Select(t => t.FileName))}"
                 + (pending.Count > 8 ? $"\n    …等 {pending.Count} 张" : string.Empty)
-                + "\n\n是否继续处理？（选择「取消」会清除这些未完成记录）",
-            confirmText: "继续", danger: false) ? MessageBoxResult.Yes : MessageBoxResult.No;
+                + "\n\n可继续处理，或暂不处理并保留任务。只有选择「清除未完成记录」才会清除；关闭窗口不会清除。",
+            "未完成的任务", MessageBoxButton.YesNoCancel,
+            confirmText: "继续处理", rejectText: "清除未完成记录", cancelText: "暂不处理");
         if (answer == MessageBoxResult.Yes)
         {
             // 不 await：OnLoaded 还在跑初始化，队列在后台自己跑完并回填界面。
             _ = RunTaskQueueAsync(retryFailedFirst: false, askWritebackMode: false);
         }
-        else
+        else if (answer == MessageBoxResult.No)
         {
-            _taskManager.Clear(includeUnfinished: true);
+            // The recovery choice applies only to the displayed unfinished tasks.
+            foreach (var task in pending.ToArray()) _taskManager.Remove(task);
             StatusMessage = Strings.Get("StatusReady");
         }
     }

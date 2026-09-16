@@ -154,6 +154,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
             StatusMessage = Strings.Get("StatusReady");
 
             // 上次运行没跑完的任务：问用户是否继续（选"否"则清掉记录）。
+            await RestoreSavedProofreadingAsync();
             ResumePendingTasks();
             _ = RefreshAccountAsync();
         }
@@ -173,6 +174,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     public void Dispose()
     {
+        StopRejectedCredentialCleanup();
         _cts?.Cancel();
         _cts?.Dispose();
         _exportCts?.Cancel();
