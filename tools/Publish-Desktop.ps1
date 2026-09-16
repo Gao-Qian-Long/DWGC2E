@@ -81,6 +81,8 @@ try {
 
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root 'tests/BuildPipeline/Test-DesktopDelivery.ps1') -ResultDir (Join-Path $deliveryDir 'delivery-regression')
     if ($LASTEXITCODE -ne 0) { throw 'Desktop delivery safety regression failed' }
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root 'tests/BuildPipeline/Test-DesktopArtifactCleanup.ps1')
+    if ($LASTEXITCODE -ne 0) { throw 'Artifact retention regression failed' }
     & dotnet test (Join-Path $root 'tests/DwgTranslator.Core.Tests/DwgTranslator.Core.Tests.csproj') -c Release -v quiet
     if ($LASTEXITCODE -ne 0) { throw 'Core regression tests failed' }
     & dotnet run --project (Join-Path $root 'tests/TaskStoreCrashProbe/TaskStoreCrashProbe.csproj') -c Release
@@ -164,7 +166,7 @@ try {
             $recordJson | Set-Content -LiteralPath (Join-Path $deliveryDir 'installed-release.json') -Encoding UTF8
             $currentTemp = Join-Path $deliveryDir 'current-release.tmp'
             $recordJson | Set-Content -LiteralPath $currentTemp -Encoding UTF8
-            if (Test-Path -LiteralPath $currentPath) { [IO.File]::Replace($currentTemp, $currentPath, $null) }
+            if (Test-Path -LiteralPath $currentPath) { [IO.File]::Replace($currentTemp, $currentPath, (Join-Path $deliveryDir 'previous-current-release.json')) }
             else { [IO.File]::Move($currentTemp, $currentPath) }
         }
         catch {

@@ -1,4 +1,4 @@
-# ===== .NET Build Output =====
+﻿# ===== .NET Build Output =====
 [Bb]in/
 [Oo]bj/
 *.pdb
@@ -111,3 +111,6 @@ AGENTS.md
 /.env.*
 !/.env.example
 !assets/glossaries/*.xlsx
+
+# Obsolete manually copied plugin; builds embed the freshly built CAD payload instead.
+/src/DwgTranslator.App/Embedded/CadPlugin/

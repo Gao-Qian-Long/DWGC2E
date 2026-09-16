@@ -32,5 +32,19 @@ Check ($publisher.IndexOf('New-DesktopInstaller.ps1') -lt $publisher.IndexOf('Mo
 Check ($publisher.Contains('Build inputs changed during delivery')) 'source-mutation gate wired'
 Check ($publisher.Contains('Release was started during validation')) 'late process guard wired'
 Check ((Get-Content (Join-Path $root 'tools/New-DesktopInstaller.ps1') -Raw).Contains('& powershell.exe @arguments | Out-Host')) 'installer logs do not corrupt receipt'
+# Exercise the exact .NET atomic replacement overload under Windows PowerShell 5.1.
+# Passing $null as the third argument is coerced to an invalid empty path there.
+$current=Join-Path $fixture 'artifacts/current-release.json'
+$temp=Join-Path $fixture 'artifacts/current-release.tmp'
+$previous=Join-Path $fixture 'artifacts/previous-current-release.json'
+Put $current 'old';Put $temp 'new'
+[IO.File]::Replace($temp,$current,$previous)
+Check ((Get-Content $current -Raw) -eq 'new' -and (Get-Content $previous -Raw) -eq 'old') 'second delivery atomically replaces current manifest with explicit backup'
+Put $temp 'rejected'
+$handle=[IO.File]::Open($current,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::None)
+$rejected=$false
+try{try{[IO.File]::Replace($temp,$current,$previous)}catch{$rejected=$true}}finally{$handle.Dispose()}
+Check ($rejected -and (Get-Content $current -Raw) -eq 'new') 'locked current manifest rejects replacement without changing it'
+Check ($publisher.Contains("[IO.File]::Replace("+'$currentTemp, $currentPath, (Join-Path $deliveryDir')) 'publisher uses tested explicit-backup overload'
 @{passed=$true;checks=@($checks);scope='synthetic data preservation, parser checks and structural gate wiring; full publisher tested separately'} | ConvertTo-Json -Depth 3 | Set-Content (Join-Path $ResultDir 'results.json') -Encoding UTF8
 Write-Host "DESKTOP_DELIVERY_TESTS=PASS ($($checks.Count))"
