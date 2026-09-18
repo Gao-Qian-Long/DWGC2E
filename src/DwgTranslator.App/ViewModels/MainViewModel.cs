@@ -174,6 +174,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     public void Dispose()
     {
+        StopUpdateChecks();
         StopRejectedCredentialCleanup();
         _cts?.Cancel();
         _cts?.Dispose();

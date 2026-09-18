@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Windows;
 using System.Windows.Media;
 using DwgTranslator.App.Views.Controls;
@@ -18,6 +18,9 @@ namespace DwgTranslator.App.Services;
 public static class ToastService
 {
     private static ToastHost? _host;
+    private static readonly List<ToastHost> Scopes = new();
+    internal static void RegisterScope(ToastHost host) { if (!Scopes.Contains(host)) Scopes.Add(host); }
+    internal static void UnregisterScope(ToastHost host) => Scopes.Remove(host);
 
     public static void Attach(ToastHost host) => _host = host;
 
@@ -42,7 +45,11 @@ public static class ToastService
 
         try
         {
-            host.Dispatcher.Invoke(() => host.Show(message, Accent(kind)));
+            host.Dispatcher.Invoke(() =>
+            {
+                var destination = Scopes.LastOrDefault(scope => scope.ScopeIsActive && Window.GetWindow(scope)?.IsEnabled == true) ?? host;
+                destination.Show(message, Accent(kind));
+            });
         }
         catch (Exception ex)
         {

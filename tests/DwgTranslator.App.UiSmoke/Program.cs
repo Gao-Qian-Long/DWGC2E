@@ -367,6 +367,8 @@ public sealed partial class SmokeApp : App
             Check(!vm.HasUnsavedTerms && !FindVisuals<System.Windows.Controls.Button>(glossaryPage).First(b => Equals(b.Content, "保存到本机")).IsEnabled, "term discard clears dirty state and disables save");
             await VerifyCloudGlossaryAsync(window, vm);
             await Task.Delay(4200);
+            await VerifyAnnouncementCaptionAsync(window, vm);
+            await VerifyUpdatesAsync(window, vm);
             await VerifyWorkspaceUi(window, vm);
             foreach (var layout in new[] { (1366d,768d,1d), (1920d,1080d,1d), (1920d,1080d,1.25d), (2560d,1440d,1.5d) })
                 foreach (var page in new[] { "translate", "batch", "glossary", "account", "settings" })
@@ -455,7 +457,10 @@ public sealed class FakeApi : IApiClient, IBillingClient, IAccountSessionClient
     public Task<TranslationBatchResult> TranslateAsync(TranslationBatchRequest request, CancellationToken cancellationToken = default) { TranslationCalls++; throw new InvalidOperationException("Paid operation forbidden in UI smoke"); }
     public Task<DeviceBindResult> BindDeviceAsync(string deviceId, string deviceName, CancellationToken cancellationToken = default) => Task.FromResult(new DeviceBindResult { Success=true });
     public Task<bool> RevokeDeviceAsync(string deviceId, CancellationToken cancellationToken = default) => Task.FromResult(true);
-    public Task<VersionInfo?> CheckVersionAsync(string currentVersion, CancellationToken cancellationToken = default) => Task.FromResult<VersionInfo?>(new() { LatestVersion="2.1.0-test" });
+    public VersionInfo? UpdateResponse = new() { LatestVersion="2.1.0-test" };
+    public bool FailUpdate; public int UpdateCalls;
+    public Task<VersionInfo?> CheckVersionAsync(string currentVersion, CancellationToken cancellationToken = default)
+    { UpdateCalls++; return FailUpdate ? Task.FromException<VersionInfo?>(new IOException("controlled update outage")) : Task.FromResult(UpdateResponse); }
     public Task<IReadOnlyList<CloudGlossaryEntry>?> GetGlossaryAsync(CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<CloudGlossaryEntry>?>(Array.Empty<CloudGlossaryEntry>());
     public Task<bool> PutGlossaryAsync(IReadOnlyList<CloudGlossaryEntry> entries, CancellationToken cancellationToken = default) => Task.FromResult(true);
 }

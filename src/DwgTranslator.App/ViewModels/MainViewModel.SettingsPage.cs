@@ -83,12 +83,7 @@ public partial class MainViewModel
     }
     [RelayCommand] private void SaveSettingsChanges() => SaveSettingsPage();
     [RelayCommand] private void DiscardSettingsChanges() { _settingsDraft = null; OnPropertyChanged(nameof(SettingsDraft)); SettingsFeedback = "已放弃未保存更改。"; }
-    [RelayCommand] private async Task CheckForUpdateAsync()
-    {
-        SettingsFeedback = "正在检查更新…";
-        try { var version = await _apiClient.CheckVersionAsync(typeof(MainViewModel).Assembly.GetName().Version?.ToString(3) ?? "2.1.0"); SettingsFeedback = version == null ? "未取得更新信息，请稍后重试。" : "服务发布版本：" + version.LatestVersion + "；当前版本：" + AppVersionText; }
-        catch { SettingsFeedback = "无法检查更新，请检查网络后重试。"; }
-    }
+    [RelayCommand] private Task CheckForUpdateAsync() => CheckUpdatesAsync(true);
     [RelayCommand] private async Task CheckServiceAsync()
     {
         SettingsFeedback = "正在检测服务…";

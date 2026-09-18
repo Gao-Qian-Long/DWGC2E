@@ -1,6 +1,6 @@
 <Window x:Class="DwgTranslator.App.Views.MainWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:conv="clr-namespace:DwgTranslator.App.Converters" xmlns:controls="clr-namespace:DwgTranslator.App.Views.Controls" xmlns:pages="clr-namespace:DwgTranslator.App.Views.Pages" xmlns:views="clr-namespace:DwgTranslator.App.Views" Title="{conv:Localize AppTitle}" Height="820" Width="1500" MinHeight="360" MinWidth="600" FontFamily="Microsoft YaHei UI, Segoe UI" FontSize="13" UseLayoutRounding="True" Icon="pack://application:,,,/DwgTranslator;component/icon.ico" WindowStartupLocation="CenterScreen" Topmost="False" WindowStyle="None" ResizeMode="CanResize" AllowDrop="True" PreviewDragOver="OnPreviewDragOver" PreviewDragLeave="OnPreviewDragLeave" PreviewDrop="OnPreviewDrop" Background="{DynamicResource Brush.Background}">
     <WindowChrome.WindowChrome>
-        <WindowChrome CaptionHeight="36" ResizeBorderThickness="6" GlassFrameThickness="0" CornerRadius="0" />
+        <WindowChrome CaptionHeight="44" ResizeBorderThickness="6" GlassFrameThickness="0" CornerRadius="0" />
     </WindowChrome.WindowChrome>
     <!-- Keyboard shortcuts: F1 帮助 / Ctrl+E 环境自检 / Ctrl+L 日志 … -->
     <Window.InputBindings>
@@ -65,6 +65,7 @@
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
+                <controls:AnnouncementBanner x:Name="SiteAnnouncement" Grid.Column="0" Margin="16,0,0,0" HorizontalAlignment="Left" VerticalAlignment="Center" WindowChrome.IsHitTestVisibleInChrome="True" />
                 <StackPanel Grid.Column="0" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,12,0">
                     <!-- 会员状态：只显示真实授权状态（后端未接通时不伪造套餐/额度） -->
                     <Border Style="{StaticResource Badge.Accent}" Padding="9,3" Margin="0,0,12,0" Visibility="Collapsed">
@@ -74,6 +75,7 @@
                         </StackPanel>
                     </Border>
                     <!-- 用户入口：账号 / 置顶 / 环境自检 / 帮助 -->
+                    <Button Content="建议更新" Command="{Binding ShowUpdateDetailsCommand}" Visibility="{Binding HasAvailableUpdate, Converter={StaticResource BoolToVis}}" ToolTip="{Binding UpdateSummary}" Style="{StaticResource Button.Secondary}" Margin="0,0,8,0" Height="30" WindowChrome.IsHitTestVisibleInChrome="True" />
                     <Button x:Name="TopmostButton" Command="{Binding ToggleTopmostCommand}" Width="36" Height="36" WindowChrome.IsHitTestVisibleInChrome="True" >
                         <Button.Style><Style TargetType="Button" BasedOn="{StaticResource Button.TitleBarIcon}">
                             <Setter Property="ToolTip" Value="固定窗口"/>

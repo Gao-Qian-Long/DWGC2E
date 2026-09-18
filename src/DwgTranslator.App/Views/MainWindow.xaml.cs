@@ -71,6 +71,7 @@ public partial class MainWindow : Window
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
         await _viewModel.InitializeAsync();
+        _viewModel.StartUpdateChecks();
         await ImportStartupFilesAsync();
 
         // A freshly installed copy is started with --env-check so the user lands on the screen that
