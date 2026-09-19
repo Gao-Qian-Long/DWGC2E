@@ -84,9 +84,9 @@
        </ComboBox>
       </DataTemplate></DataGridTemplateColumn.CellTemplate>
      </DataGridTemplateColumn>
-     <DataGridTextColumn Header="适用方向" Binding="{Binding DirectionText}" Width="80" MinWidth="76" MaxWidth="110" ElementStyle="{StaticResource TermMetaText}" IsReadOnly="True"/>
+     <DataGridTextColumn Header="适用方向" Binding="{Binding DirectionText}" Width="88" MinWidth="84" MaxWidth="120" ElementStyle="{StaticResource TermMetaText}" IsReadOnly="True"/>
      <DataGridTextColumn Header="同步状态" Binding="{Binding SyncStatus}" Width="84" MinWidth="80" Visibility="Collapsed" ElementStyle="{StaticResource TermMetaText}" IsReadOnly="True"/>
-     <DataGridTextColumn Header="来源" Binding="{Binding SourceShortText}" Width="64" MinWidth="60" ElementStyle="{StaticResource TermSourceText}" IsReadOnly="True"/>
+     <DataGridTextColumn Header="来源" Binding="{Binding SourceShortText}" Width="56" MinWidth="52" ElementStyle="{StaticResource TermSourceText}" IsReadOnly="True"/>
      <DataGridTemplateColumn Header="启用" Width="56" MinWidth="54" IsReadOnly="True"><DataGridTemplateColumn.CellTemplate><DataTemplate><CheckBox Style="{StaticResource TermToggle}" IsChecked="{Binding Enabled, Mode=OneWay}" Click="Toggle_Click" ToolTip="即时保存到本机 (Space)" AutomationProperties.Name="启用术语"/></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
      <DataGridTemplateColumn Header="操作" Width="166" MinWidth="160" IsReadOnly="True">
       <DataGridTemplateColumn.CellTemplate><DataTemplate>
