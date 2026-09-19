@@ -4,6 +4,11 @@
 [CmdletBinding(SupportsShouldProcess)]
 param([string]$WorkspaceRoot)
 if (!$WorkspaceRoot) { $WorkspaceRoot = Join-Path $PSScriptRoot '..' }
+# Keep -WhatIf out of the read-only inventory phase below: under Windows PowerShell 5.1 the
+# preference propagates into Get-Item/Get-FileHash there, hash comparison then fails, and the
+# preview always reported "No verified candidate". Deletion stays gated by
+# $PSCmdlet.ShouldProcess, which honours -WhatIf directly and does not read this preference.
+$WhatIfPreference = $false
 $ErrorActionPreference = 'Stop'
 $root = [IO.Path]::GetFullPath($WorkspaceRoot)
 $artifacts = Join-Path $root 'artifacts'
@@ -83,7 +88,7 @@ foreach ($item in $items) {
         $unique = $false
         # Only declared program files are disposable. Unknown DBs/files, including files
         # under assets or CadPlugin, must have an identical live copy before deletion.
-        $owned=@('DwgTranslator.exe','DwgTranslator.pdb','DwgTranslator.Core.pdb','build-info.json','architecture-audit.json','assets\default-glossaries\mechanical_zh_en.json','CadPlugin\cad-files.txt')
+        $owned=@('DwgTranslator.exe','DwgTranslator.pdb','DwgTranslator.Core.pdb','build-info.json','architecture-audit.json','assets\default-glossaries\mechanical_zh_en.json','glossaries\mechanical_zh_en.json','CadPlugin\cad-files.txt')
         # settings.json in a verified publish-* candidate is a byte copy of the reviewed
         # settings.json.example (Assert-CleanPackageInput.ps1 enforces that at publish time), and the
         # publish flow states it must never carry personal settings. It therefore cannot be unique
