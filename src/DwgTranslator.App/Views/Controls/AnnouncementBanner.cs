@@ -42,7 +42,11 @@ public sealed class AnnouncementBanner : Border
         _ticker.SetResourceReference(TextBlock.ForegroundProperty, "Brush.TextSecondary");
         _ticker.RenderTransform = _offset;
         // Canvas gives the text its natural width; the parent clips it to the fixed region.
-        var canvas = new Canvas { Height = 20, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left }; canvas.Children.Add(_ticker);
+        // 顶栏基线：Canvas 不对子元素做对齐，高度必须贴合文本自然行高。写死 Height=20 时
+        // 文本仍顶对齐在 canvas 的 y=0，而 canvas 在 32 高的按钮内容区里居中，于是整行文本
+        // 比右侧图标按钮高约 2 DIP。保持 auto 高度（Canvas 的 DesiredSize 取子元素并集）
+        // 后，canvas 自身贴着文本行高居中，文本基线与同排按钮、窗口控制按钮落在同一中线。
+        var canvas = new Canvas { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left }; canvas.Children.Add(_ticker);
         _viewport = new Border { ClipToBounds = true, HorizontalAlignment = HorizontalAlignment.Stretch, Child = canvas, Margin = new Thickness(6,0,0,0) };
         Grid.SetColumn(_viewport, 1); row.Children.Add(_viewport); _button.Content = row; Child = _button;
         _button.Click += (_, _) => OpenAnnouncement();

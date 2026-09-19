@@ -46,7 +46,7 @@ public sealed partial class SmokeApp
             await WaitForStableAsync(() => host.ActualWidth, $"page canvas {size.Width}x{size.Height}");
             var expectedCompact = false; // The desktop shell enforces a usable normal-workspace minimum.
             Check(ResponsiveLayout.GetIsCompact(window) == expectedCompact, "sidebar breakpoint " + size);
-            Check(host.ActualWidth <= size.Width - (expectedCompact ? 64 : 224) + 1, $"no oversized minimum page canvas {size} (host={host.ActualWidth:F1}, window={window.ActualWidth:F1}, page={vm.CurrentPage})");
+            Check(host.ActualWidth <= size.Width - (expectedCompact ? 64 : 200) + 1, $"no oversized minimum page canvas {size} (host={host.ActualWidth:F1}, window={window.ActualWidth:F1}, page={vm.CurrentPage})");
             foreach (var page in new[] { "translate", "batch", "glossary", "account", "settings" })
             {
                 vm.CurrentPage = page;

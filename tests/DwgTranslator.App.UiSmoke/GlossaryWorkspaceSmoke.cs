@@ -53,7 +53,9 @@ public sealed partial class SmokeApp
             var page=FindVisual<GlossaryPage>(window); var table=(DataGrid)page.FindName("TermList");
             table.UnselectAll(); table.UpdateLayout();
             var toolbar=(FrameworkElement)page.FindName("SelectionToolbar");
-            Check(toolbar.Visibility==Visibility.Collapsed,"unselected toolbar does not reserve empty space");
+            // 用户要求（2026-09-19 截图反馈）：批量工具条不再随勾选出现/消失，改为始终占位、无选中时置灰。
+            // 这里曾经断言 Collapsed，那是旧行为；该断言随需求一起更新，不是为了让冒烟变绿而放宽。
+            Check(toolbar.Visibility==Visibility.Visible && !toolbar.IsEnabled,"unselected toolbar stays visible but disabled");
             for(var selectionIndex=0;selectionIndex<2;selectionIndex++)
             {
                 table.ScrollIntoView(vm.TermDraft[selectionIndex]); table.UpdateLayout();

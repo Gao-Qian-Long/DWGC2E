@@ -24,7 +24,7 @@ public partial class MainViewModel
     private bool _termsLoaded;
     [ObservableProperty] private GlossaryEntry? _selectedTerm;
     [ObservableProperty] private string _termSearch = "";
-    [ObservableProperty] private string _termFeedback = "本地编辑即时保存 · 云端需手动同步";
+    [ObservableProperty] private string _termFeedback = "";
     [ObservableProperty] private bool _termConflictsOnly;
     [ObservableProperty] private string _termStatusFilter = "All";
     [ObservableProperty] private int _termScope;
@@ -107,7 +107,7 @@ public partial class MainViewModel
     private bool CompleteTermSave(List<GlossaryEntry> entries)
     {
         RefreshGlossaryDataFromList(entries); RefreshGlossaryConflicts();
-        _termBaseline = JsonSerializer.Serialize(TermDraft); if (IsTermDrawerOpen) CloseTermDrawer(); TermFeedback = "本机已保存 · 云端需手动同步"; RefreshTermView(); return true;
+        _termBaseline = JsonSerializer.Serialize(TermDraft); if (IsTermDrawerOpen) CloseTermDrawer(); TermFeedback = "本机已保存"; RefreshTermView(); return true;
     }
 
     /// <summary>Failure path for both save flavours: keeps the message and the log in one place.</summary>

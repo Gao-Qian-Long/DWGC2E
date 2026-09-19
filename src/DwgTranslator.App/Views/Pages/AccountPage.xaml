@@ -4,12 +4,35 @@
             <Setter Property="Background" Value="{DynamicResource Brush.Surface}"/>
             <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border}"/>
             <Setter Property="BorderThickness" Value="1"/><Setter Property="CornerRadius" Value="{DynamicResource CornerRadius.Medium}"/>
-            <Setter Property="Padding" Value="20"/>
+            <Setter Property="Padding" Value="{DynamicResource Spacing.16}"/>
+        </Style>
+        <!-- 用户反馈「更换布局思路」：常用入口由一行裸文字按钮改成一整块可点的导航磁贴
+             （标题 + 一行说明 + 悬停反馈），三块等宽成组，读起来是导航而不是残留按钮。
+             颜色一律沿用现有 Brush.* 令牌，不新增色值。 -->
+        <Style x:Key="Account.NavTile" TargetType="Button">
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Tile" Background="{DynamicResource Brush.Surface}" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1" CornerRadius="{DynamicResource CornerRadius.Medium}" Padding="{DynamicResource Spacing.16}">
+                            <ContentPresenter HorizontalAlignment="Stretch" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Tile" Property="Background" Value="{DynamicResource Brush.BackgroundAlt}"/></Trigger>
+                            <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.5"/></Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
     </UserControl.Resources>
     <Grid Margin="{DynamicResource Spacing.Page}">
         <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
         <controls:PageHeader x:Name="WorkspaceHeader" Header="会员中心" Description="查看当前套餐、剩余额度、有效期与订单。" />
+        <!-- 用户反馈「一页显示完，不要下滑」：身份条 + 三张指标卡 + 两栏详情 + 导航磁贴四段合计约 511 DIP，
+             1500×820 的可用体高约 613（1366×768 约 561），因此正常窗口下不出现纵向滚动。 -->
         <Grid Grid.Row="1">
         <ScrollViewer x:Name="AccountScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
         <StackPanel MaxWidth="1200" Width="{Binding ViewportWidth, RelativeSource={RelativeSource AncestorType=ScrollViewer}}" HorizontalAlignment="Left">
@@ -48,12 +71,13 @@
                 </StackPanel>
             </Border>
             <StackPanel Visibility="{Binding IsAccountLoggedIn, Converter={StaticResource BoolToVis}}">
-                <Border Style="{StaticResource Account.Card}" Margin="{DynamicResource Spacing.StackLoose}">
+                <!-- 身份条：头像、名称、邮箱与账号操作压成一行（原为独立卡片，独占 88 DIP 行高）。 -->
+                <Border Style="{StaticResource Account.Card}" Padding="{DynamicResource Spacing.CardHeader}" Margin="{DynamicResource Spacing.StackWide}">
                     <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                        <Border Width="48" Height="48" CornerRadius="12" Background="{DynamicResource Brush.SurfaceAlt}" Margin="{DynamicResource Spacing.InlineLoose}"><TextBlock Text="{Binding AccountAvatarText}" Foreground="{DynamicResource Brush.TextPrimary}" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" HorizontalAlignment="Center"/></Border>
+                        <Border Width="40" Height="40" CornerRadius="10" Background="{DynamicResource Brush.SurfaceAlt}" Margin="{DynamicResource Spacing.InlineLoose}"><TextBlock Text="{Binding AccountAvatarText}" Foreground="{DynamicResource Brush.TextPrimary}" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" HorizontalAlignment="Center"/></Border>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                            <TextBlock Text="{Binding AccountDisplayNameText}" FontSize="20" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
-                            <TextBlock Text="{Binding AccountEmailText}" Foreground="{DynamicResource Brush.TextSecondary}" TextTrimming="CharacterEllipsis" ToolTip="{Binding AccountEmailText}" Margin="0,4,12,0"/>
+                            <TextBlock Text="{Binding AccountDisplayNameText}" FontSize="18" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                            <TextBlock Text="{Binding AccountEmailText}" FontSize="{DynamicResource FontSize.Secondary}" Foreground="{DynamicResource Brush.TextSecondary}" TextTrimming="CharacterEllipsis" ToolTip="{Binding AccountEmailText}"/>
                         </StackPanel>
                         <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                             <Button Content="{Binding RefreshAccountButtonText}" Command="{Binding RefreshAccountCommand}" IsEnabled="{Binding IsAccountRefreshing, Converter={StaticResource InverseBoolConverter}}" Style="{StaticResource Button.Secondary}" Margin="{DynamicResource Spacing.Inline}"/>
@@ -61,37 +85,45 @@
                         </StackPanel>
                     </Grid>
                 </Border>
-                <!-- AdaptiveCardGrid owns row/column placement and inter-card margins for its
-                     children, so the cards declare neither Grid.Column nor Margin here. -->
-                <controls:AdaptiveCardGrid x:Name="MembershipMetrics" Margin="{DynamicResource Spacing.StackLoose}">
-
+                <!-- 三张指标卡：标题与数值同一行，说明文字收进 ToolTip，行高由 134 降到约 97。
+                     AdaptiveCardGrid 仍负责 1/2/3 列的响应式分配，卡片本身不声明 Grid.Column / Margin。 -->
+                <controls:AdaptiveCardGrid x:Name="MembershipMetrics">
                     <Border Style="{StaticResource Account.Card}"><StackPanel>
-                        <TextBlock Text="当前套餐" Style="{StaticResource InfoLabel}"/>
-                        <StackPanel Orientation="Horizontal" Margin="0,10,0,8"><TextBlock Text="{Binding OnlinePlanText}" FontSize="24" FontWeight="SemiBold" Foreground="{DynamicResource Brush.TextPrimary}"/></StackPanel>
-                        <TextBlock Text="以当前账号同步权益为准" Style="{StaticResource CaptionStyle}" TextWrapping="Wrap"/>
+                        <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <TextBlock Text="当前套餐" Style="{StaticResource InfoLabel}" VerticalAlignment="Center"/>
+                            <TextBlock Grid.Column="1" Text="{Binding OnlinePlanText}" FontSize="24" FontWeight="SemiBold" Foreground="{DynamicResource Brush.TextPrimary}" TextTrimming="CharacterEllipsis" ToolTip="以当前账号同步权益为准"/>
+                        </Grid>
                     </StackPanel></Border>
                     <Border Style="{StaticResource Account.Card}"><StackPanel>
-                        <TextBlock Text="字符额度" Style="{StaticResource InfoLabel}"/>
-                        <TextBlock Text="{Binding OnlineQuotaText}" FontSize="17" FontWeight="SemiBold" Foreground="{DynamicResource Brush.Primary}" TextWrapping="Wrap" Margin="{DynamicResource Spacing.BlockTop}"/>
-                        <ProgressBar x:Name="QuotaProgress" Minimum="0" Maximum="{Binding OnlineUsage.MonthlyQuota}" Value="{Binding OnlineUsage.Remaining, Mode=OneWay}" Height="5" Margin="0,12,0,10"><ProgressBar.Style><Style TargetType="ProgressBar" BasedOn="{StaticResource {x:Type ProgressBar}}"><Style.Triggers><DataTrigger Binding="{Binding OnlineUsage}" Value="{x:Null}"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger><DataTrigger Binding="{Binding OnlineUsage.MonthlyQuota}" Value="0"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></ProgressBar.Style></ProgressBar>
-                        <TextBlock Text="离线翻译按原文字符的 30% 计量" Style="{StaticResource CaptionStyle}" TextWrapping="Wrap"/>
+                        <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <TextBlock Text="字符额度" Style="{StaticResource InfoLabel}" VerticalAlignment="Center"/>
+                            <TextBlock Grid.Column="1" Text="{Binding OnlineQuotaText}" FontSize="17" FontWeight="SemiBold" Foreground="{DynamicResource Brush.Primary}" TextTrimming="CharacterEllipsis" ToolTip="离线翻译按原文字符的 30% 计量"/>
+                        </Grid>
+                        <ProgressBar x:Name="QuotaProgress" Minimum="0" Maximum="{Binding OnlineUsage.MonthlyQuota}" Value="{Binding OnlineUsage.Remaining, Mode=OneWay}" Height="5" Margin="{DynamicResource Spacing.StackWide}"><ProgressBar.Style><Style TargetType="ProgressBar" BasedOn="{StaticResource {x:Type ProgressBar}}"><Style.Triggers><DataTrigger Binding="{Binding OnlineUsage}" Value="{x:Null}"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger><DataTrigger Binding="{Binding OnlineUsage.MonthlyQuota}" Value="0"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></ProgressBar.Style></ProgressBar>
                     </StackPanel></Border>
-                    <Border Style="{StaticResource Account.Card}"><StackPanel><TextBlock Text="会员有效期" Style="{StaticResource InfoLabel}"/><TextBlock Text="{Binding OnlineMembershipExpiryText}" FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap" Margin="{DynamicResource Spacing.Vertical}"/><TextBlock Text="购买后刷新，可同步最新权益" Style="{StaticResource CaptionStyle}" TextWrapping="Wrap"/></StackPanel></Border>
+                    <Border Style="{StaticResource Account.Card}"><StackPanel>
+                        <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <TextBlock Text="会员有效期" Style="{StaticResource InfoLabel}" VerticalAlignment="Center"/>
+                            <TextBlock Grid.Column="1" Text="{Binding OnlineMembershipExpiryText}" FontSize="17" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="购买后刷新，可同步最新权益"/>
+                        </Grid>
+                    </StackPanel></Border>
                 </controls:AdaptiveCardGrid>
                 <Grid x:Name="MembershipDetails" SizeChanged="MembershipDetails_SizeChanged">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                    <Border x:Name="PlansCard" Style="{StaticResource Account.Card}" Margin="0,0,16,16"><StackPanel>
-                        <TextBlock Text="套餐与订单" Style="{StaticResource SectionTitleStyle}"/>
-                        <TextBlock Text="按使用需求选择会员或补充额度" Style="{StaticResource CaptionStyle}" Margin="0,6,0,16"/>
-                        <TextBlock Text="套餐、价格、有效期与可购买状态以服务器返回结果为准，请打开套餐与订单查看。" TextWrapping="Wrap" Margin="{DynamicResource Spacing.StackLoose}"/>
-
-                        <Button x:Name="MembershipPlansButton" Content="查看套餐价格 / 续费与订单" Command="{Binding OpenMembershipCheckoutCommand}" Style="{StaticResource Button.Primary}" HorizontalAlignment="Stretch" Margin="0,20,0,10"/>
-                        <TextBlock Text="价格与额度实时读取后台配置，不在客户端写死。" TextWrapping="Wrap" Style="{StaticResource CaptionStyle}"/>
-                    </StackPanel></Border>
+                    <Border x:Name="PlansCard" Style="{StaticResource Account.Card}" Margin="{DynamicResource Spacing.StackLoose}">
+                        <!-- 主按钮贴卡片底边，与右侧设备卡等高时不留下半空白的下半张卡。 -->
+                        <Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="套餐与订单" Style="{StaticResource SectionTitleStyle}"/>
+                                <TextBlock Text="选择会员或补充额度" Style="{StaticResource CaptionStyle}" Margin="{DynamicResource Spacing.BlockTopTight}"/>
+                            </StackPanel>
+                            <Button x:Name="MembershipPlansButton" Grid.Row="1" Content="查看套餐价格 / 续费与订单" Command="{Binding OpenMembershipCheckoutCommand}" Style="{StaticResource Button.Primary}" HorizontalAlignment="Stretch" VerticalAlignment="Bottom" Margin="{DynamicResource Spacing.BlockTopSection}"/>
+                        </Grid>
+                    </Border>
                     <Border x:Name="DevicesCard" Grid.Column="1" Style="{StaticResource Account.Card}" Margin="{DynamicResource Spacing.StackLoose}"><StackPanel>
                         <DockPanel><TextBlock DockPanel.Dock="Right" Text="{Binding DeviceCountText}" Style="{StaticResource CaptionStyle}" VerticalAlignment="Center"/><TextBlock Text="登录设备" Style="{StaticResource SectionTitleStyle}"/></DockPanel>
-                        <TextBlock Text="设备绑定超过 20 天后才可解绑换绑；当前设备不可直接移除。" TextWrapping="Wrap" Style="{StaticResource CaptionStyle}" Margin="0,8,0,16"/>
+                        <TextBlock Text="设备绑定超过 20 天后才可解绑换绑；不认识的设备请及时核查，退出登录不会自动解绑。" TextWrapping="Wrap" Style="{StaticResource CaptionStyle}" Margin="{DynamicResource Spacing.StackLoose}"/>
                         <controls:EmptyState Header="暂无设备记录" Description="刷新账户信息后查看已绑定设备。"><controls:EmptyState.Style><Style TargetType="controls:EmptyState" BasedOn="{StaticResource {x:Type controls:EmptyState}}"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding DeviceCountText}" Value="已绑定 0 台设备"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></controls:EmptyState.Style></controls:EmptyState>
                         <ItemsControl ItemsSource="{Binding OnlineDevices}"><ItemsControl.ItemTemplate><DataTemplate>
                             <Border BorderBrush="{DynamicResource Brush.BorderLight}" BorderThickness="0,1,0,0" Padding="0,12" Margin="{DynamicResource Spacing.StackTight}"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
@@ -99,10 +131,21 @@
                                 <Button Grid.Column="1" Content="移除设备" VerticalAlignment="Center" IsEnabled="{Binding IsCurrent, Converter={StaticResource InverseBoolConverter}}" Style="{StaticResource Button.Secondary}" Command="{Binding DataContext.RevokeDeviceCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" ToolTip="仅可移除满足解绑条件的非当前设备" ToolTipService.ShowOnDisabled="True"/>
                             </Grid></Border>
                         </DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
-                        <TextBlock Text="安全提醒：不认识的设备请及时核查，退出登录不会自动解绑。" Style="{StaticResource CaptionStyle}" TextWrapping="Wrap" Margin="{DynamicResource Spacing.BlockTopWide}"/>
                     </StackPanel></Border>
                 </Grid>
-                <Border Style="{StaticResource Account.Card}" Margin="{DynamicResource Spacing.StackLoose}"><WrapPanel VerticalAlignment="Center"><TextBlock Text="常用入口" FontWeight="SemiBold" VerticalAlignment="Center" Margin="{DynamicResource Spacing.InlineLoose}"/><Button Content="图纸翻译" Command="{Binding NavigateToCommand}" CommandParameter="translate" Style="{StaticResource Button.Tertiary}" Margin="{DynamicResource Spacing.Inline}"/><Button Content="管理术语" Command="{Binding NavigateToCommand}" CommandParameter="glossary" Style="{StaticResource Button.Tertiary}" Margin="{DynamicResource Spacing.Inline}"/><Button Content="输出设置" Command="{Binding NavigateToCommand}" CommandParameter="output-settings" Style="{StaticResource Button.Tertiary}"/></WrapPanel></Border>
+                <!-- 导航磁贴：三块等宽，整块可点（Command / CommandParameter 与原按钮完全一致）。 -->
+                <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <Button Style="{StaticResource Account.NavTile}" Command="{Binding NavigateToCommand}" CommandParameter="translate" Margin="{DynamicResource Spacing.InlineLoose}" ToolTip="打开图纸翻译">
+                        <StackPanel><TextBlock Text="图纸翻译" FontWeight="SemiBold"/><TextBlock Text="导入图纸 · 翻译 · 写回" Style="{StaticResource CaptionStyle}" Margin="{DynamicResource Spacing.BlockTopTight}"/></StackPanel>
+                    </Button>
+                    <Button Grid.Column="1" Style="{StaticResource Account.NavTile}" Command="{Binding NavigateToCommand}" CommandParameter="glossary" Margin="{DynamicResource Spacing.InlineLoose}" ToolTip="打开术语库">
+                        <StackPanel><TextBlock Text="管理术语" FontWeight="SemiBold"/><TextBlock Text="术语库、分类与云端核对" Style="{StaticResource CaptionStyle}" Margin="{DynamicResource Spacing.BlockTopTight}"/></StackPanel>
+                    </Button>
+                    <Button Grid.Column="2" Style="{StaticResource Account.NavTile}" Command="{Binding NavigateToCommand}" CommandParameter="output-settings" ToolTip="打开输出设置">
+                        <StackPanel><TextBlock Text="输出设置" FontWeight="SemiBold"/><TextBlock Text="导出模式与文件命名" Style="{StaticResource CaptionStyle}" Margin="{DynamicResource Spacing.BlockTopTight}"/></StackPanel>
+                    </Button>
+                </Grid>
             </StackPanel>
         </StackPanel>
         </ScrollViewer>

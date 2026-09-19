@@ -66,6 +66,30 @@
                 <!-- §L20 公告与用户入口各自占列，不再靠 Left/Right 对齐挤在同一列 -->
                 <controls:AnnouncementBanner x:Name="SiteAnnouncement" Grid.Column="0" Margin="16,0,0,0" HorizontalAlignment="Left" VerticalAlignment="Center" WindowChrome.IsHitTestVisibleInChrome="True" />
                 <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="{DynamicResource Spacing.InlineWide}">
+                    <!-- 额度 chip：图纸翻译页原来的 AccountStrip 已删除，剩余额度现在只在这里露出。
+                         未登录（IsAccountLoggedIn=false）或还没拿到额度快照（OnlineUsage=null）时整块收起，
+                         不显示「额度待同步」这类占位文案。绑定的就是原 AccountStrip 用的同一组属性。
+                         整个 chip 标记为可命中，否则它在 44 DIP 拖拽标题栏里只当作拖动区，按钮点不动。 -->
+                    <Border x:Name="ShellQuotaChip" Padding="8,0" Margin="{DynamicResource Spacing.InlineWide}" ToolTip="{Binding OnlineQuotaText}" WindowChrome.IsHitTestVisibleInChrome="True">
+                        <Border.Style>
+                            <Style TargetType="Border" BasedOn="{StaticResource Badge}">
+                                <Setter Property="Visibility" Value="Visible" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsAccountLoggedIn}" Value="False">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding OnlineUsage}" Value="{x:Null}">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding OnlinePlanText}" Style="{StaticResource Badge.PrimaryText}" Margin="{DynamicResource Spacing.InlineTight}" />
+                            <TextBlock Text="{Binding OnlineQuotaText}" Style="{StaticResource Badge.Text}" MaxWidth="200" TextTrimming="CharacterEllipsis" Margin="{DynamicResource Spacing.InlineTight}" />
+                            <Button Content="查看套餐" Command="{Binding NavigateToCommand}" CommandParameter="account" Style="{StaticResource Button.Compact.Tertiary}" />
+                        </StackPanel>
+                    </Border>
                     <!-- 会员状态：只显示真实授权状态（后端未接通时不伪造套餐/额度） -->
                     <Border Style="{StaticResource Badge.Accent}" Padding="9,3" Margin="{DynamicResource Spacing.InlineWide}" Visibility="Collapsed">
                         <StackPanel Orientation="Horizontal">
@@ -206,9 +230,11 @@
                             <Grid x:Name="AccountEntryContent" HorizontalAlignment="Stretch">
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="28"/><ColumnDefinition Width="*"/><ColumnDefinition Width="14"/></Grid.ColumnDefinitions>
                                 <Border Background="{DynamicResource Brush.SurfaceAlt}" Width="28" Height="28" CornerRadius="6"><TextBlock Text="{Binding AccountAvatarText}" Foreground="{DynamicResource Brush.TextPrimary}" FontSize="14" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+                                <!-- 用户名不再常驻显示（用户要求：头像首字母旁边有套餐徽标就够了）。
+                                     全名仍可通过 Tooltip 看到——徽标自己补了一个，因为它正好盖住
+                                     Button 的 Tooltip 区域；未登录时徽标隐藏，Button 的 Tooltip 照常生效。 -->
                                 <StackPanel x:Name="AccountEntryLabels" Grid.Column="1" Margin="12,0,8,0" VerticalAlignment="Center">
-                                    <TextBlock Text="{Binding AccountEntryText}" FontSize="14" TextTrimming="CharacterEllipsis"/>
-                                    <Border Background="{DynamicResource Brush.SurfaceAlt}" CornerRadius="4" Padding="6,0" Height="20" HorizontalAlignment="Left" Margin="{DynamicResource Spacing.BlockTopTight}" Visibility="{Binding IsAccountLoggedIn, Converter={StaticResource BoolToVis}}"><TextBlock Text="{Binding OnlinePlanText}" Foreground="{Binding MembershipTierColor}" FontSize="11" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="110"/></Border>
+                                    <Border Background="{DynamicResource Brush.SurfaceAlt}" CornerRadius="4" Padding="6,0" Height="20" HorizontalAlignment="Left" ToolTip="{Binding AccountEntryText}" Visibility="{Binding IsAccountLoggedIn, Converter={StaticResource BoolToVis}}"><TextBlock Text="{Binding OnlinePlanText}" Foreground="{Binding MembershipTierColor}" FontSize="11" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="110"/></Border>
                                 </StackPanel>
                                 <Path x:Name="AccountChevron" Grid.Column="2" Data="M 1,1 L 6,6 L 1,11" Stroke="{DynamicResource Brush.TextMuted}" StrokeThickness="1.5" Width="14" Height="14" VerticalAlignment="Center"/>
                             </Grid>
@@ -225,16 +251,18 @@
         </Border>
         <!-- ═══════════ 内容列 ═══════════ -->
         <Grid Grid.Column="1" Grid.Row="1" Background="{DynamicResource Brush.SurfaceAlt}">
-            <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
             <!-- 顶部 Header（52px）：会员状态 · 用户入口 · 窗口控制（§9） -->
             <!-- Only the active page is attached to the visual tree. Each page owns exactly one
                  primary scrolling surface, which keeps mouse-wheel routing and virtualization stable. -->
             <ContentControl x:Name="PageHost" SizeChanged="PageViewport_SizeChanged"
                             MaxWidth="1600" HorizontalAlignment="Stretch"
                             HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" />
-            <!-- Reserve notification space only inside the content column, never in the shell rows. -->
-            <controls:ToastHost x:Name="Toasts" Grid.Row="1" MaximumVisible="1" />
         </Grid>
+        <!-- 通知浮层：挂在 shell 行上而不是页面列里，所以它出现/消失都不会改变 PageHost 的高度
+             （此前 ToastHost 是页面列的第 2 行，每来一条提示就把页面整体挤矮一截）。
+             底部对齐 + Spacing.Stack 让它停在状态栏正上方：既不遮住状态栏文本，也不挤压页面。
+             声明位置保持在 ModalScrim 之前、内容列之后，绘制层级与改造前一致。 -->
+        <controls:ToastHost x:Name="Toasts" Grid.Row="1" Grid.Column="1" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="{DynamicResource Spacing.Stack}" MaximumVisible="1" />
         <Border x:Name="ModalScrim" Grid.RowSpan="3" Grid.ColumnSpan="2" Background="#660F172A" Panel.ZIndex="99" Visibility="Collapsed" />
 
 

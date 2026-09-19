@@ -11,9 +11,7 @@ public partial class SettingsPage : UserControl
         var compact = Controls.ResponsiveLayout.GetIsCompact(this);
         SettingsNav.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
         CompactSections.Visibility = compact ? Visibility.Visible : Visibility.Collapsed;
-        SettingsNavColumn.Width = new GridLength(compact ? 0 : 168);
-        SettingsScroll.Margin = new Thickness(compact ? 0 : 32,0,0,0);
-        SettingsSaveBar.Margin = new Thickness(0,12,0,0);
+        // 页面已无左侧导航列：分区切换条在窄窗让位给下拉选择器，内容与操作条不再需要水平偏移。
         var compactAbout = compact && DataContext is MainViewModel { SettingsSection: 5 };
         WorkspaceHeader.Visibility = compactAbout ? Visibility.Collapsed : Visibility.Visible;
         AboutSubtitle.Visibility = compactAbout ? Visibility.Collapsed : Visibility.Visible;

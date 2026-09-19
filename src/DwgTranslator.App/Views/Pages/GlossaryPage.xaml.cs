@@ -36,13 +36,14 @@ public partial class GlossaryPage : UserControl
         await vm.CommitWorkspaceChangeAsync(()=>{foreach(var t in terms){t.SourceLang=pair.Value.Source;t.TargetLang=pair.Value.Target;}});
     }
     private List<GlossaryEntry> Selection() => TermList.SelectedItems.Cast<GlossaryEntry>().ToList();
+    /// <summary>批量操作条常显：该 Tag 触发 SelectionToolbarState 把整条置灰，而不是把工具栏收起来。</summary>
+    private const string EmptySelectionTag = "Empty";
     private void Selection_Changed(object sender, SelectionChangedEventArgs e)
     {
         if (NormalToolbar == null) return;
         var count = TermList.SelectedItems.Count;
-        NormalToolbar.Visibility = Visibility.Visible;
-        SelectionToolbar.Visibility = count > 0 ? Visibility.Visible : Visibility.Collapsed;
-        SelectionCount.Text = $"已选择 {count} 项";
+        SelectionToolbar.Tag = count > 0 ? null : EmptySelectionTag;
+        SelectionCount.Text = count > 0 ? $"已选择 {count} 项" : "未选择术语";
         DeleteSelectionButton.IsEnabled = Selection().Any(t => t.SourceKind == GlossarySource.User);
         SelectAll.IsChecked = count == 0 ? false : count == TermList.Items.Count ? true : null;
     }
@@ -76,7 +77,7 @@ public partial class GlossaryPage : UserControl
     {
         if (Vm is not { } vm) return;
         var terms = Selection(); var enabled = ((Button)s).Tag?.ToString() == "True";
-        if (await vm.SetWorkspaceEnabledAsync(terms, enabled)) vm.TermFeedback = $"已{(enabled ? "启用" : "停用")} {terms.Count} 条 · 本机已保存";
+        if (await vm.SetWorkspaceEnabledAsync(terms, enabled)) vm.TermFeedback = $"已{(enabled ? "启用" : "停用")} {terms.Count} 条";
         TermList.Items.Refresh();
     }
     private async void BatchCategory_Click(object s, RoutedEventArgs e)

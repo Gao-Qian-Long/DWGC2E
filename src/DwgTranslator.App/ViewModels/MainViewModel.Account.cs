@@ -402,7 +402,7 @@ public partial class MainViewModel
         DrawingFiles.Clear(); Entities.Clear(); FilteredEntities.Clear(); _entityIndex = null;
         SelectedDrawingFile = null; SelectedFilePath = ""; HasDrawingFiles = false; HasMultipleDrawingFiles = false;
         TotalCount = TranslatedCount = FailedCount = GlossaryHitCount = CacheHitCount = 0;
-        _config.ExportDirectory = DwgTranslator.Core.Services.AccountWorkspace.OutputDirectoryFor(_config, App.AppDataDir);
+        _config.ExportDirectory = DwgTranslator.Core.Services.AccountWorkspace.OutputDirectoryFor(_config, App.AppDataDir, null, DefaultOutputFolderName);
         _settingsDraft = null;
         OnPropertyChanged(nameof(SettingsDraft));
         if (!string.IsNullOrWhiteSpace(_config.ExportDirectory))

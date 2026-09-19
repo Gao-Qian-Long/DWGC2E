@@ -309,9 +309,10 @@
                             <ColumnDefinition Width="1.5*" />
                             <ColumnDefinition Width="120" />
                         </Grid.ColumnDefinitions>
-                        <TextBox Grid.Column="0" MinWidth="180" Margin="{DynamicResource Spacing.Inline}" Tag="搜索原文或译文" Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
-                        <TextBox Grid.Column="1" MinWidth="150" Margin="{DynamicResource Spacing.Inline}" Tag="查找译文" Text="{Binding BatchFindText, UpdateSourceTrigger=PropertyChanged}" />
-                        <TextBox Grid.Column="2" MinWidth="150" Margin="{DynamicResource Spacing.Inline}" Tag="替换为" Text="{Binding BatchReplacementText, UpdateSourceTrigger=PropertyChanged}" />
+                        <!-- 校对工具条这三个输入框只有 Search.Input 会把 Tag 渲染成占位提示；缺 Style 时用户无法区分"查找/替换"。 -->
+                        <TextBox Grid.Column="0" Style="{StaticResource Search.Input}" MinWidth="180" Margin="{DynamicResource Spacing.Inline}" Tag="搜索原文或译文" Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBox Grid.Column="1" Style="{StaticResource Search.Input}" MinWidth="150" Margin="{DynamicResource Spacing.Inline}" Tag="查找译文" Text="{Binding BatchFindText, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBox Grid.Column="2" Style="{StaticResource Search.Input}" MinWidth="150" Margin="{DynamicResource Spacing.Inline}" Tag="替换为" Text="{Binding BatchReplacementText, UpdateSourceTrigger=PropertyChanged}" />
                         <ComboBox Grid.Column="3" SelectedIndex="{Binding ProofreadingScope}"><ComboBoxItem Content="当前图纸"/><ComboBoxItem Content="所选图纸"/><ComboBoxItem Content="全部图纸"/></ComboBox>
                     </Grid>
                     <Grid Grid.Row="1">
@@ -322,7 +323,7 @@
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="0" Text="{Binding BatchReplaceMatchCount, StringFormat=命中 {0} 条}" VerticalAlignment="Center" />
-                        <Button Grid.Column="1" Content="预览并替换" Command="{Binding ApplyBatchReplaceCommand}" Style="{StaticResource Button.Secondary}" Margin="8,0,8,0" />
+                        <Button Grid.Column="1" Content="预览并替换" Command="{Binding ApplyBatchReplaceCommand}" Style="{StaticResource Button.Secondary}" Margin="{DynamicResource Spacing.4}" />
                         <Button Grid.Column="2" Content="撤销批量操作" Command="{Binding UndoBulkEditCommand}" IsEnabled="{Binding CanUndoBulkEdit}" Style="{StaticResource Button.Tertiary}" Margin="{DynamicResource Spacing.Inline}" />
                         <Button Grid.Column="3" Content="应用术语到当前项目" Command="{Binding ApplyGlossaryToProjectCommand}" Style="{StaticResource Button.Secondary}" />
                     </Grid>
@@ -359,19 +360,20 @@
                     <UniformGrid Grid.Row="0" Columns="2">
                         <Button Content="进入译文校对" Command="{Binding OpenTaskProofreadingCommand}"
                                 IsEnabled="{Binding SelectedBatchTask.CanOpenProofreading}"
-                                Style="{StaticResource Button.Primary}" Margin="0,0,4,8" />
+                                Style="{StaticResource Button.Primary}" Margin="{DynamicResource Spacing.4}" />
+                        <!-- 抽屉内主按钮只保留"进入译文校对"一个，导出降为次级，避免同屏两个 Primary。 -->
                         <Button Content="导出此图纸" Command="{Binding ExportSelectedDrawingCommand}"
                                 CommandParameter="{Binding SelectedBatchTask}"
                                 Visibility="{Binding SelectedBatchTask.CanExport, Converter={StaticResource BoolToVis}}"
-                                Style="{StaticResource Button.Primary}" Margin="4,0,0,8" />
+                                Style="{StaticResource Button.Secondary}" Margin="{DynamicResource Spacing.4}" />
                         <Button Content="打开输出文件" Command="{Binding OpenDrawingOutputCommand}"
                                 CommandParameter="{Binding SelectedBatchTask}"
                                 Visibility="{Binding SelectedBatchTask.HasOutput, Converter={StaticResource BoolToVis}}"
-                                Style="{StaticResource Button.Secondary}" Margin="0,0,4,8" />
+                                Style="{StaticResource Button.Secondary}" Margin="{DynamicResource Spacing.4}" />
                         <Button Content="重试此任务" Command="{Binding RetryDrawingCommand}"
                                 CommandParameter="{Binding SelectedBatchTask}"
                                 Visibility="{Binding SelectedBatchTask.CanRetry, Converter={StaticResource BoolToVis}}"
-                                Style="{StaticResource Button.Secondary}" Margin="4,0,0,8" />
+                                Style="{StaticResource Button.Secondary}" Margin="{DynamicResource Spacing.4}" />
                     </UniformGrid>
                     <Button Grid.Row="1" Content="查看运行日志" Command="{Binding ToggleLogViewerCommand}"
                             Style="{StaticResource Button.Tertiary}" HorizontalAlignment="Stretch" />
@@ -384,10 +386,10 @@
                     <StackPanel Margin="{DynamicResource Spacing.BlockTopWide}">
                         <TextBlock Text="{Binding SelectedBatchTask.FileName}" FontSize="16" FontWeight="SemiBold"
                                    TextWrapping="Wrap" ToolTip="{Binding SelectedBatchTask.FullPath}" />
-                        <TextBlock Text="{Binding SelectedBatchTask.FullPath}" Margin="0,4,0,12"
+                        <TextBlock Text="{Binding SelectedBatchTask.FullPath}" Margin="{DynamicResource Spacing.BlockTopTight}"
                                    Style="{StaticResource CaptionStyle}" TextWrapping="Wrap" />
 
-                        <Border Background="{DynamicResource Brush.SurfaceSubtle}" CornerRadius="6" Padding="12,10">
+                        <Border Background="{DynamicResource Brush.SurfaceSubtle}" CornerRadius="6" Padding="12,10" Margin="{DynamicResource Spacing.BlockTopWide}">
                             <Grid>
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="Auto" />

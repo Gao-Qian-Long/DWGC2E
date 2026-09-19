@@ -126,10 +126,21 @@ public partial class MainViewModel
         {
             if (string.IsNullOrWhiteSpace(_config.ExportDirectory))
             {
-                ToastService.Warning("尚未设置输出目录，请先在“文件与输出”中选择路径。");
-                return;
+                // 还没导出过：默认目录是"源图纸旁边"，队列里有图纸就直接给它算出来并落盘，
+                // 而不是让用户先去设置里选一次（旧默认值在 AppData 里，那条路已经作废）。
+                ResolveExportDirectory();
+                if (string.IsNullOrWhiteSpace(_config.ExportDirectory))
+                {
+                    ToastService.Warning("还没有可打开的输出目录：请先导出一次，或先在“文件与输出”中选择路径。");
+                    return;
+                }
+                OnPropertyChanged(nameof(OutputDirectoryText));
+                OnPropertyChanged(nameof(WorkspaceActionHintText));
+                OnPropertyChanged(nameof(WorkspaceOutputLocationText));
+                OnPropertyChanged(nameof(ShellStatusText));
             }
-            Directory.CreateDirectory(_config.ExportDirectory);
+            var parent = Path.GetDirectoryName(_config.ExportDirectory);
+            if (!string.IsNullOrWhiteSpace(parent) && Directory.Exists(parent)) Directory.CreateDirectory(_config.ExportDirectory);
             if (OpenFolder(_config.ExportDirectory)) ToastService.Info("输出目录已打开。");
         }
         catch (Exception ex)

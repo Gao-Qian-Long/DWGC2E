@@ -1,4 +1,4 @@
-﻿using DwgTranslator.Core.Models;
+using DwgTranslator.Core.Models;
 using DwgTranslator.Core.Resources;
 using DwgTranslator.Core.Services;
 using DwgTranslator.Core.Translation;
@@ -83,7 +83,7 @@ public partial class MainViewModel
                     _config.AutoCadInstallPath, _config.CadPluginPath);
             }
 
-            _config.ExportDirectory = AccountWorkspace.OutputDirectoryFor(_config, App.AppDataDir);
+            ResolveExportDirectory();
             if (!Path.IsPathRooted(_config.LogDirectory))
                 _config.LogDirectory = Path.Combine(App.AppDataDir, _config.LogDirectory);
             if (!Path.IsPathRooted(_config.GlossaryPath))
@@ -123,6 +123,23 @@ public partial class MainViewModel
 
     /// <summary>settings.json 是否未能读出（见 LoadConfig 的 catch）。</summary>
     private bool _configLoadFailed;
+
+    /// <summary>源图纸目录下的默认输出子目录名（随图纸走，而不是写进 AppData）。</summary>
+    internal const string DefaultOutputFolderName = "已翻译图纸";
+
+    /// <summary>
+    /// 把账号默认输出目录解析进 <c>_config.ExportDirectory</c>。
+    /// 产品数据目录下的旧默认值（AppData\DWGC2E\exports）按"未设置"处理；没有历史选择时，
+    /// 默认落到当前队列首张图纸旁边的 <see cref="DefaultOutputFolderName"/>，由用户显式选过的
+    /// 目录（AccountOutputDirectories）始终优先，不会被覆盖。
+    /// </summary>
+    private void ResolveExportDirectory()
+        => _config.ExportDirectory = AccountWorkspace.OutputDirectoryFor(
+            _config, App.AppDataDir, SourceDirectoryHint(), DefaultOutputFolderName);
+
+    /// <summary>当前队列首张图纸所在目录：导出默认目录的锚点。</summary>
+    private string? SourceDirectoryHint()
+        => DrawingFiles.Count == 0 ? null : Path.GetDirectoryName(DrawingFiles[0].FullPath);
 
     private string _appliedLanguagePair = string.Empty;
     private bool _applyingLanguagePair;

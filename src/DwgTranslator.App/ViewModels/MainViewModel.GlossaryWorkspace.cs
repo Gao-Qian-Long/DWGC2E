@@ -93,7 +93,7 @@ public partial class MainViewModel
         {
             RestoreWorkspace(before); TermFeedback = "保存失败：字段为空或超长。状态已恢复。"; Services.ToastService.Error(TermFeedback); return false;
         }
-        IsWorkspaceSaving = true; IsGlossaryLoading = true; TermFeedback = "正在保存到本机 · 云端需手动同步"; RefreshTermView();
+        IsWorkspaceSaving = true; IsGlossaryLoading = true; TermFeedback = "正在保存到本机…"; RefreshTermView();
         await _glossaryLoadGate.WaitAsync();
         var committed = false;
         try
@@ -111,7 +111,7 @@ public partial class MainViewModel
             if (context != CloudGlossaryContext) return true;
             RefreshGlossaryDataFromList(entries); RefreshGlossaryConflicts();
             _termBaseline = System.Text.Json.JsonSerializer.Serialize(TermDraft);
-            TermFeedback = "本机已保存 · 云端需手动同步"; RefreshTermView(); return true;
+            TermFeedback = "本机已保存"; RefreshTermView(); return true;
         }
         catch (Exception ex)
         {

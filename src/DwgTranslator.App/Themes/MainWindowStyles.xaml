@@ -10,7 +10,7 @@
          ═══════════════════════════════════════════════════════════════════════ -->
     <!-- One compact header across all five workspaces. The action slot keeps page commands out of filters. -->
     <Style TargetType="controls:PageHeader">
-        <Setter Property="MinHeight" Value="72" />
+        <Setter Property="MinHeight" Value="{DynamicResource Size.PageHeader}" />
         <Setter Property="Margin" Value="0,0,0,16" />
         <Setter Property="Focusable" Value="False" />
         <Setter Property="Template">
@@ -22,7 +22,9 @@
                             <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
                             <StackPanel VerticalAlignment="Center" Margin="0,0,16,0">
                                 <TextBlock Text="{TemplateBinding Header}" Style="{StaticResource PageTitleStyle}" />
-                                <TextBlock x:Name="HeaderDescription" Text="{TemplateBinding Description}" Style="{StaticResource PageSubtitleStyle}" TextTrimming="CharacterEllipsis" ToolTip="{TemplateBinding Description}" />
+                                <!-- 副标题强制单行：它的长度随运行状态变化（TranslatePage 是 MultiBinding），
+                                     换行会顶破 MinHeight 定下的页头节奏；省略号 + ToolTip 既保高度也不吞信息。 -->
+                                <TextBlock x:Name="HeaderDescription" Text="{TemplateBinding Description}" Style="{StaticResource PageSubtitleStyle}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" ToolTip="{TemplateBinding Description}" />
                             </StackPanel>
                             <ContentPresenter x:Name="HeaderActions" Grid.Column="1" VerticalAlignment="Center" ContentSource="Content" />
                         </Grid>

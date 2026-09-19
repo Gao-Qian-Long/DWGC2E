@@ -8,88 +8,111 @@
                 </Trigger>
             </Style.Triggers>
         </Style>
+        <!-- 分区区块（替代原来的 168 DIP 左侧导航列）：双排 3×2，选中态沿用 Primary/PrimaryLight 配色。 -->
+        <Style x:Key="Settings.SectionTile" TargetType="ListBoxItem">
+            <Setter Property="MinHeight" Value="{DynamicResource Size.NavItem}" />
+            <Setter Property="Padding" Value="14,10" />
+            <Setter Property="Margin" Value="{DynamicResource Spacing.4}" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="Foreground" Value="{DynamicResource Brush.TextSecondary}" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="Surface" Background="{DynamicResource Brush.Surface}" BorderBrush="{DynamicResource Brush.BorderLight}" BorderThickness="1" CornerRadius="{DynamicResource CornerRadius.Medium}" Padding="{TemplateBinding Padding}" SnapsToDevicePixels="True">
+                            <ContentPresenter VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Surface" Property="Background" Value="{DynamicResource Brush.BackgroundAlt}" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Surface" Property="Background" Value="{DynamicResource Brush.PrimaryLight}" />
+                                <Setter TargetName="Surface" Property="BorderBrush" Value="{DynamicResource Brush.Primary}" />
+                                <Setter Property="Foreground" Value="{DynamicResource Brush.Primary}" />
+                                <Setter Property="FontWeight" Value="SemiBold" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                                <Setter TargetName="Surface" Property="BorderBrush" Value="{DynamicResource Brush.Primary}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </UserControl.Resources>
     <Grid Margin="{DynamicResource Spacing.Page}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
-<controls:PageHeader x:Name="WorkspaceHeader" Header="设置" Description="常规配置、翻译保护、文件输出与应用信息。" />
+<controls:PageHeader x:Name="WorkspaceHeader" Header="设置" Description="常用选项集中在这一页；按分区调整后统一保存。" />
         <Grid x:Name="SettingsBody" Grid.Row="1">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition x:Name="SettingsNavColumn" Width="{StaticResource Size.SettingsNav}" />
-                <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
-            <ComboBox x:Name="CompactSections" Grid.ColumnSpan="2" Visibility="Collapsed" SelectedIndex="{Binding SettingsSection}" SelectionChanged="SettingsSection_Changed" Margin="{DynamicResource Spacing.StackWide}" AutomationProperties.Name="设置分类"><ComboBoxItem Content="常规"/><ComboBoxItem Content="翻译与保护"/><ComboBoxItem Content="文件与输出"/><ComboBoxItem Content="CAD 与环境"/><ComboBoxItem Content="日志"/><ComboBoxItem Content="关于"/></ComboBox>
-            <ListBox x:Name="SettingsNav" Grid.Row="1" Grid.RowSpan="2" ItemContainerStyle="{StaticResource Settings.NavigationItem}" SelectionChanged="SettingsSection_Changed" SelectedIndex="{Binding SettingsSection}" BorderThickness="0" Background="Transparent">
-                <ListBoxItem Content="常规" Padding="12" />
-                <ListBoxItem Content="翻译与保护" Padding="12" />
-                <ListBoxItem Content="文件与输出" Padding="12" />
-                <ListBoxItem Content="CAD 与环境" Padding="12" />
-                <ListBoxItem Content="日志" Padding="12" />
-                <ListBoxItem Content="关于" Padding="12" />
-            </ListBox>
-            <ScrollViewer x:Name="SettingsScroll" Grid.Row="1" Grid.Column="1" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" HorizontalContentAlignment="Stretch" Margin="32,0,0,0" controls:ResponsiveLayout.HandoffMouseWheelAtBoundary="True">
-                <Border x:Name="SettingsContent" HorizontalAlignment="Stretch"><Border.Style><Style TargetType="Border" BasedOn="{StaticResource Section.Surface}"><Setter Property="MaxWidth" Value="1080"/><Style.Triggers><DataTrigger Binding="{Binding SettingsSection}" Value="5"><Setter Property="MaxWidth" Value="1080"/></DataTrigger></Style.Triggers></Style></Border.Style>
+            <StackPanel Grid.Row="0">
+                <!-- 分区切换条：从左侧竖排导航列改为页内双排区块，页面只保留"设置"这一个一级入口。 -->
+                <ListBox x:Name="SettingsNav" AutomationProperties.Name="设置分区" SelectedIndex="{Binding SettingsSection}" SelectionChanged="SettingsSection_Changed" BorderThickness="0" Background="Transparent" Margin="{DynamicResource Spacing.Stack}" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Disabled">
+                    <ListBox.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <UniformGrid Rows="2" Columns="3" />
+                        </ItemsPanelTemplate>
+                    </ListBox.ItemsPanel>
+                    <ListBoxItem Content="常规" Style="{StaticResource Settings.SectionTile}" />
+                    <ListBoxItem Content="翻译与保护" Style="{StaticResource Settings.SectionTile}" />
+                    <ListBoxItem Content="文件与输出" Style="{StaticResource Settings.SectionTile}" />
+                    <ListBoxItem Content="CAD 与环境" Style="{StaticResource Settings.SectionTile}" />
+                    <ListBoxItem Content="日志" Style="{StaticResource Settings.SectionTile}" />
+                    <ListBoxItem Content="关于与帮助" Style="{StaticResource Settings.SectionTile}" />
+                </ListBox>
+                <ComboBox x:Name="CompactSections" Visibility="Collapsed" SelectedIndex="{Binding SettingsSection}" SelectionChanged="SettingsSection_Changed" Margin="{DynamicResource Spacing.StackWide}" AutomationProperties.Name="设置分类"><ComboBoxItem Content="常规"/><ComboBoxItem Content="翻译与保护"/><ComboBoxItem Content="文件与输出"/><ComboBoxItem Content="CAD 与环境"/><ComboBoxItem Content="日志"/><ComboBoxItem Content="关于与帮助"/></ComboBox>
+                <TextBlock Text="{Binding SettingsSectionApplyHint}" Style="{StaticResource CaptionStyle}" />
+            </StackPanel>
+            <ScrollViewer x:Name="SettingsScroll" Grid.Row="1" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" HorizontalContentAlignment="Stretch" controls:ResponsiveLayout.HandoffMouseWheelAtBoundary="True">
+                <Border x:Name="SettingsContent" HorizontalAlignment="Stretch"><Border.Style><Style TargetType="Border" BasedOn="{StaticResource Section.Surface}"><Setter Property="MaxWidth" Value="1080"/></Style></Border.Style>
                     <StackPanel>
-                        <Border x:Name="SettingsDraftStatus" Background="{DynamicResource Brush.SurfaceAlt}" BorderBrush="{DynamicResource Brush.BorderLight}" BorderThickness="1" CornerRadius="{DynamicResource CornerRadius.Medium}" Padding="12,10" Margin="{DynamicResource Spacing.StackLoose}">
-                            <Border.Style>
-                                <Style TargetType="Border">
-                                    <Style.Triggers><DataTrigger Binding="{Binding SettingsSection}" Value="5"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger></Style.Triggers>
-                                </Style>
-                            </Border.Style>
-                            <Grid>
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                <Border x:Name="SettingsStateBadge" CornerRadius="10" Padding="9,3" VerticalAlignment="Top" Background="{DynamicResource Brush.SuccessLight}">
-                                    <Border.Style>
-                                        <Style TargetType="Border">
-                                            <Setter Property="Background" Value="{DynamicResource Brush.SuccessLight}" />
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding HasUnsavedSettings}" Value="True"><Setter Property="Background" Value="{DynamicResource Brush.WarningLight}" /></DataTrigger>
-                                                <DataTrigger Binding="{Binding HasPendingSettingsApplication}" Value="True"><Setter Property="Background" Value="{DynamicResource Brush.InfoLight}" /></DataTrigger>
-                                                <DataTrigger Binding="{Binding HasSettingsValidationErrors}" Value="True"><Setter Property="Background" Value="{DynamicResource Brush.DangerLight}" /></DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Border.Style>
-                                    <TextBlock Text="{Binding SettingsStateText}" FontWeight="SemiBold" FontSize="12" />
-                                </Border>
-                                <StackPanel Grid.Column="1" Margin="12,0,0,0">
-                                    <TextBlock Text="{Binding SettingsSectionApplyHint}" TextWrapping="Wrap" />
-                                    <TextBlock Text="修改先保存在草稿中；点击“保存更改”后才写入配置。" Style="{StaticResource CaptionStyle}" Margin="{DynamicResource Spacing.BlockTopTight}" />
-                                </StackPanel>
-                            </Grid>
-                        </Border>
-                        <Grid Visibility="{Binding SettingsSection, Converter={StaticResource IndexToVis}, ConverterParameter=0}">
-                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-                            <TextBlock Grid.Row="0" Grid.ColumnSpan="2" Text="界面与应用行为" FontSize="{DynamicResource FontSize.SectionTitle}" FontWeight="SemiBold" Margin="{DynamicResource Spacing.StackLoose}" />
-                            <StackPanel Grid.Row="1" Grid.Column="0" Margin="{DynamicResource Spacing.InlineLeading}">
-                                <TextBlock Text="界面语言（重启后生效）" Margin="{DynamicResource Spacing.Stack}" />
-                                <ComboBox MaxWidth="300" HorizontalAlignment="Left" MinWidth="220" SelectedValuePath="Tag" SelectedValue="{Binding SettingsDraft.Language}" MinHeight="{DynamicResource Size.Control}">
+                        <!-- 常规：原「界面语言」与「应用行为」两张宽窄不一的卡片合并成同一张表单，统一 220 DIP 标签列。 -->
+                        <StackPanel Visibility="{Binding SettingsSection, Converter={StaticResource IndexToVis}, ConverterParameter=0}">
+                            <TextBlock Text="常规" Style="{StaticResource SectionTitleStyle}" Margin="{DynamicResource Spacing.StackLoose}" />
+                            <controls:SettingsRow>
+                                <TextBlock Text="界面语言" Style="{StaticResource FormRowLabel}" />
+                                <ComboBox MaxWidth="300" HorizontalAlignment="Left" MinWidth="220" SelectedValuePath="Tag" SelectedValue="{Binding SettingsDraft.Language}" MinHeight="{DynamicResource Size.Control}" AutomationProperties.Name="界面语言" ToolTip="界面语言在下次启动时生效。">
                                     <ComboBoxItem Content="简体中文" Tag="zh-CN" />
                                     <ComboBoxItem Content="English" Tag="en-US" />
                                 </ComboBox>
-                            </StackPanel>
-                            <StackPanel Grid.Row="1" Grid.Column="1">
-                                <TextBlock Text="应用行为" Style="{StaticResource SectionTitleStyle}" Margin="{DynamicResource Spacing.StackTight}"/>
-                                <CheckBox Style="{StaticResource Toggle.Switch}" Content="开机启动" IsChecked="{Binding SettingsDraft.StartWithWindows}" Margin="{DynamicResource Spacing.Vertical}" />
-                                <CheckBox Style="{StaticResource Toggle.Switch}" Content="启动时恢复上次工作区" ToolTip="恢复上次选的语言方向和上次打开的图纸；关掉后每次启动都是空工作区。" IsChecked="{Binding SettingsDraft.RestoreLastWorkspace}" Margin="{DynamicResource Spacing.Vertical}" />
-                                <CheckBox Style="{StaticResource Toggle.Switch}" Content="自动检查更新" IsChecked="{Binding SettingsDraft.AutoCheckUpdate}" Margin="{DynamicResource Spacing.Vertical}" />
-                                <CheckBox Style="{StaticResource Toggle.Switch}" Content="导出后打开输出目录" IsChecked="{Binding SettingsDraft.OpenOutputFolderAfterExport}" Margin="{DynamicResource Spacing.Vertical}" />
-                                <TextBlock Text="开机启动、更新检查和导出行为在保存后立即生效；会话恢复在下次启动时生效。" TextWrapping="Wrap" Style="{StaticResource CaptionStyle}" Margin="{DynamicResource Spacing.BlockTop}" />
-                            </StackPanel>
-                        </Grid>
+                            </controls:SettingsRow>
+                            <controls:SettingsRow>
+                                <TextBlock Text="开机启动" Style="{StaticResource FormRowLabel}" />
+                                <CheckBox Style="{StaticResource Toggle.Switch}" HorizontalAlignment="Left" AutomationProperties.Name="开机启动" IsChecked="{Binding SettingsDraft.StartWithWindows}" />
+                            </controls:SettingsRow>
+                            <controls:SettingsRow>
+                                <StackPanel>
+                                    <TextBlock Text="启动时恢复上次工作区" Style="{StaticResource FormRowLabel}" />
+                                    <TextBlock Text="恢复上次的语言方向和已打开图纸；关闭后每次启动都是空工作区。" Style="{StaticResource FormRowDescription}" />
+                                </StackPanel>
+                                <CheckBox Style="{StaticResource Toggle.Switch}" HorizontalAlignment="Left" AutomationProperties.Name="启动时恢复上次工作区" IsChecked="{Binding SettingsDraft.RestoreLastWorkspace}" />
+                            </controls:SettingsRow>
+                            <controls:SettingsRow>
+                                <TextBlock Text="自动检查更新" Style="{StaticResource FormRowLabel}" />
+                                <CheckBox Style="{StaticResource Toggle.Switch}" HorizontalAlignment="Left" AutomationProperties.Name="自动检查更新" IsChecked="{Binding SettingsDraft.AutoCheckUpdate}" />
+                            </controls:SettingsRow>
+                            <controls:SettingsRow>
+                                <TextBlock Text="导出后打开输出目录" Style="{StaticResource FormRowLabel}" />
+                                <CheckBox Style="{StaticResource Toggle.Switch}" HorizontalAlignment="Left" AutomationProperties.Name="导出后打开输出目录" IsChecked="{Binding SettingsDraft.OpenOutputFolderAfterExport}" />
+                            </controls:SettingsRow>
+                            <TextBlock Text="开机启动、更新检查和导出行为保存后立即生效；会话恢复与界面语言在下次启动时生效。" Style="{StaticResource CaptionStyle}" Margin="{DynamicResource Spacing.BlockTopTight}" />
+                        </StackPanel>
                         <Grid Visibility="{Binding SettingsSection, Converter={StaticResource IndexToVis}, ConverterParameter=1}">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                             <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-                            <TextBlock Grid.Row="0" Grid.ColumnSpan="2" Text="翻译与保护" FontSize="{DynamicResource FontSize.SectionTitle}" FontWeight="SemiBold" Margin="{DynamicResource Spacing.StackLoose}" />
+                            <TextBlock Grid.Row="0" Grid.ColumnSpan="2" Text="翻译与保护" Style="{StaticResource SectionTitleStyle}" Margin="{DynamicResource Spacing.StackLoose}" />
                             <StackPanel Grid.Row="1" Grid.Column="0" Margin="{DynamicResource Spacing.InlineLeading}">
-                                <TextBlock Text="图纸保护" Style="{StaticResource SectionTitleStyle}" Margin="{DynamicResource Spacing.StackTight}" />
+                                <TextBlock Text="图纸保护" Style="{StaticResource FormRowLabel}" Margin="{DynamicResource Spacing.Stack}" />
                                 <CheckBox Content="保护尺寸" IsChecked="{Binding SettingsDraft.ProtectDimensions}" Margin="{DynamicResource Spacing.Vertical}" />
                                 <CheckBox Content="保护公差" IsChecked="{Binding SettingsDraft.ProtectTolerances}" Margin="{DynamicResource Spacing.Vertical}" />
                                 <CheckBox Content="保护型号" IsChecked="{Binding SettingsDraft.ProtectModels}" Margin="{DynamicResource Spacing.Vertical}" />
@@ -97,73 +120,95 @@
                                 <TextBlock Text="已启用术语始终优先于 AI 和旧缓存；请在术语库中启用或停用条目。" TextWrapping="Wrap" Margin="{DynamicResource Spacing.BlockTop}" Style="{StaticResource CaptionStyle}" />
                             </StackPanel>
                             <StackPanel Grid.Row="1" Grid.Column="1">
-                                <TextBlock Text="性能" Style="{StaticResource SectionTitleStyle}" Margin="{DynamicResource Spacing.StackTight}"/>
-                                <controls:SettingsRow><TextBlock Text="同时处理的图纸数" VerticalAlignment="Center"/><TextBox x:Name="LocalWorkerCountInput" Width="120" HorizontalAlignment="Left" Style="{StaticResource Settings.ValidatedInput}" MinHeight="{DynamicResource Size.Control}" Padding="8,4"><TextBox.Text><Binding Path="SettingsDraft.LocalWorkerCount" UpdateSourceTrigger="PropertyChanged" ValidatesOnExceptions="True"><Binding.ValidationRules><controls:IntegerRangeValidationRule Minimum="1" Maximum="6" FieldName="图纸并发"/></Binding.ValidationRules></Binding></TextBox.Text></TextBox></controls:SettingsRow>
-                                <controls:SettingsRow><TextBlock Text="单图翻译并发" VerticalAlignment="Center"/><TextBox x:Name="AiConcurrencyInput" Width="120" HorizontalAlignment="Left" Style="{StaticResource Settings.ValidatedInput}" MinHeight="{DynamicResource Size.Control}" Padding="8,4"><TextBox.Text><Binding Path="SettingsDraft.AiConcurrency" UpdateSourceTrigger="PropertyChanged" ValidatesOnExceptions="True"><Binding.ValidationRules><controls:IntegerRangeValidationRule Minimum="1" Maximum="8" FieldName="单图翻译并发"/></Binding.ValidationRules></Binding></TextBox.Text></TextBox></controls:SettingsRow>
-                                <controls:SettingsRow><TextBlock Text="翻译请求上限" VerticalAlignment="Center"/><TextBox x:Name="MaxTranslationConcurrencyInput" Width="120" HorizontalAlignment="Left" Style="{StaticResource Settings.ValidatedInput}" MinHeight="{DynamicResource Size.Control}" Padding="8,4"><TextBox.Text><Binding Path="SettingsDraft.MaxTranslationConcurrency" UpdateSourceTrigger="PropertyChanged" ValidatesOnExceptions="True"><Binding.ValidationRules><controls:IntegerRangeValidationRule Minimum="1" Maximum="20" FieldName="翻译请求上限"/></Binding.ValidationRules></Binding></TextBox.Text></TextBox></controls:SettingsRow>
-                                <controls:SettingsRow><TextBlock Text="失败重试次数" VerticalAlignment="Center"/><TextBox x:Name="MaxRetryCountInput" Width="120" HorizontalAlignment="Left" Style="{StaticResource Settings.ValidatedInput}" MinHeight="{DynamicResource Size.Control}" Padding="8,4"><TextBox.Text><Binding Path="SettingsDraft.MaxRetryCount" UpdateSourceTrigger="PropertyChanged" ValidatesOnExceptions="True"><Binding.ValidationRules><controls:IntegerRangeValidationRule Minimum="0" Maximum="5" FieldName="重试次数"/></Binding.ValidationRules></Binding></TextBox.Text></TextBox></controls:SettingsRow>
+                                <TextBlock Text="性能" Style="{StaticResource FormRowLabel}" Margin="{DynamicResource Spacing.Stack}" />
+                                <controls:SettingsRow><TextBlock Text="同时处理的图纸数" Style="{StaticResource FormRowLabel}"/><TextBox x:Name="LocalWorkerCountInput" Width="120" HorizontalAlignment="Left" Style="{StaticResource Settings.ValidatedInput}" MinHeight="{DynamicResource Size.Control}" Padding="8,4"><TextBox.Text><Binding Path="SettingsDraft.LocalWorkerCount" UpdateSourceTrigger="PropertyChanged" ValidatesOnExceptions="True"><Binding.ValidationRules><controls:IntegerRangeValidationRule Minimum="1" Maximum="6" FieldName="图纸并发"/></Binding.ValidationRules></Binding></TextBox.Text></TextBox></controls:SettingsRow>
+                                <controls:SettingsRow><TextBlock Text="单图翻译并发" Style="{StaticResource FormRowLabel}"/><TextBox x:Name="AiConcurrencyInput" Width="120" HorizontalAlignment="Left" Style="{StaticResource Settings.ValidatedInput}" MinHeight="{DynamicResource Size.Control}" Padding="8,4"><TextBox.Text><Binding Path="SettingsDraft.AiConcurrency" UpdateSourceTrigger="PropertyChanged" ValidatesOnExceptions="True"><Binding.ValidationRules><controls:IntegerRangeValidationRule Minimum="1" Maximum="8" FieldName="单图翻译并发"/></Binding.ValidationRules></Binding></TextBox.Text></TextBox></controls:SettingsRow>
+                                <controls:SettingsRow><TextBlock Text="翻译请求上限" Style="{StaticResource FormRowLabel}"/><TextBox x:Name="MaxTranslationConcurrencyInput" Width="120" HorizontalAlignment="Left" Style="{StaticResource Settings.ValidatedInput}" MinHeight="{DynamicResource Size.Control}" Padding="8,4"><TextBox.Text><Binding Path="SettingsDraft.MaxTranslationConcurrency" UpdateSourceTrigger="PropertyChanged" ValidatesOnExceptions="True"><Binding.ValidationRules><controls:IntegerRangeValidationRule Minimum="1" Maximum="20" FieldName="翻译请求上限"/></Binding.ValidationRules></Binding></TextBox.Text></TextBox></controls:SettingsRow>
+                                <controls:SettingsRow><TextBlock Text="失败重试次数" Style="{StaticResource FormRowLabel}"/><TextBox x:Name="MaxRetryCountInput" Width="120" HorizontalAlignment="Left" Style="{StaticResource Settings.ValidatedInput}" MinHeight="{DynamicResource Size.Control}" Padding="8,4"><TextBox.Text><Binding Path="SettingsDraft.MaxRetryCount" UpdateSourceTrigger="PropertyChanged" ValidatesOnExceptions="True"><Binding.ValidationRules><controls:IntegerRangeValidationRule Minimum="0" Maximum="5" FieldName="重试次数"/></Binding.ValidationRules></Binding></TextBox.Text></TextBox></controls:SettingsRow>
                                 <TextBlock Text="推荐：2 个图纸、单图 4 路、请求上限 12、失败重试 3 次。配置过高可能增加内存占用或触发服务限流。" TextWrapping="Wrap" Style="{StaticResource CaptionStyle}" Margin="{DynamicResource Spacing.BlockTop}" />
                             </StackPanel>
                         </Grid>
-                        <Grid Visibility="{Binding SettingsSection, Converter={StaticResource IndexToVis}, ConverterParameter=2}">
-                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-                            <TextBlock Grid.Row="0" Grid.ColumnSpan="2" Text="文件与输出" FontSize="{DynamicResource FontSize.SectionTitle}" FontWeight="SemiBold" Margin="{DynamicResource Spacing.StackLoose}" />
-                            <StackPanel Grid.Row="1" Grid.Column="0" Margin="{DynamicResource Spacing.InlineLeading}">
-                                <TextBlock Text="输出目录" Margin="{DynamicResource Spacing.Stack}" />
+                        <StackPanel Visibility="{Binding SettingsSection, Converter={StaticResource IndexToVis}, ConverterParameter=2}">
+                            <TextBlock Text="文件与输出" Style="{StaticResource SectionTitleStyle}" Margin="{DynamicResource Spacing.StackLoose}" />
+                            <controls:SettingsRow>
+                                <StackPanel>
+                                    <TextBlock Text="输出目录" Style="{StaticResource FormRowLabel}" />
+                                    <TextBlock Text="可暂时留空并在首次导出时选择；填写时必须是可写的绝对目录。" Style="{StaticResource FormRowDescription}" />
+                                </StackPanel>
                                 <DockPanel><Button DockPanel.Dock="Right" Content="浏览" Click="BrowseOutput_Click" Style="{StaticResource Button.Secondary}" Margin="{DynamicResource Spacing.LeftGap}"/><TextBox x:Name="ExportDirectoryInput" Style="{StaticResource Settings.ValidatedInput}" MinHeight="{DynamicResource Size.Control}" Padding="8,4"><TextBox.Text><Binding Path="SettingsDraft.ExportDirectory" UpdateSourceTrigger="PropertyChanged"><Binding.ValidationRules><controls:AbsoluteDirectoryValidationRule/></Binding.ValidationRules></Binding></TextBox.Text></TextBox></DockPanel>
-                                <TextBlock Text="可暂时留空并在首次导出时选择；填写时必须是可写的绝对目录。" TextWrapping="Wrap" Style="{StaticResource CaptionStyle}" Margin="{DynamicResource Spacing.BlockTopTight}" />
-                                <TextBlock Text="命名规则：{name} / {lang} / {date}" Margin="0,14,0,8" />
+                            </controls:SettingsRow>
+                            <controls:SettingsRow>
+                                <StackPanel>
+                                    <TextBlock Text="命名规则" Style="{StaticResource FormRowLabel}" />
+                                    <TextBlock Text="支持 {name} / {lang} / {date} 三个变量。" Style="{StaticResource FormRowDescription}" />
+                                </StackPanel>
                                 <TextBox x:Name="OutputNamingPatternInput" TextChanged="NamingChanged" Style="{StaticResource Settings.ValidatedInput}" MinHeight="{DynamicResource Size.Control}" Padding="8,4"><TextBox.Text><Binding Path="SettingsDraft.OutputNamingPattern" UpdateSourceTrigger="PropertyChanged"><Binding.ValidationRules><controls:OutputNamingPatternValidationRule/></Binding.ValidationRules></Binding></TextBox.Text></TextBox>
-                                <Button Content="预览文件名" Click="PreviewNaming_Click" Style="{StaticResource Button.Tertiary}" HorizontalAlignment="Left" Margin="{DynamicResource Spacing.BlockTop}" />
-                                <TextBlock x:Name="NamingPreview" TextWrapping="Wrap" Margin="{DynamicResource Spacing.BlockTopTight}" />
-                            </StackPanel>
-                            <StackPanel Grid.Row="1" Grid.Column="1">
-                                <TextBlock Text="输出策略" Style="{StaticResource SectionTitleStyle}" Margin="{DynamicResource Spacing.StackTight}" />
-                                <TextBlock Text="遇到同名文件" Margin="{DynamicResource Spacing.Stack}" />
-                                <ComboBox MaxWidth="300" HorizontalAlignment="Left" MinWidth="220" SelectedValuePath="Tag" SelectedValue="{Binding SettingsDraft.DuplicatePolicy}" MinHeight="{DynamicResource Size.Control}">
+                            </controls:SettingsRow>
+                            <controls:SettingsRow>
+                                <TextBlock Text="文件名预览" Style="{StaticResource FormRowLabel}" />
+                                <StackPanel>
+                                    <Button Content="预览文件名" Click="PreviewNaming_Click" Style="{StaticResource Button.Tertiary}" HorizontalAlignment="Left" />
+                                    <TextBlock x:Name="NamingPreview" TextWrapping="Wrap" Margin="{DynamicResource Spacing.BlockTopTight}" />
+                                </StackPanel>
+                            </controls:SettingsRow>
+                            <controls:SettingsRow>
+                                <TextBlock Text="遇到同名文件" Style="{StaticResource FormRowLabel}" />
+                                <ComboBox MaxWidth="300" HorizontalAlignment="Left" MinWidth="220" SelectedValuePath="Tag" SelectedValue="{Binding SettingsDraft.DuplicatePolicy}" MinHeight="{DynamicResource Size.Control}" AutomationProperties.Name="遇到同名文件">
                                     <ComboBoxItem Content="跳过已有文件" Tag="skip" />
                                     <ComboBoxItem Content="覆盖输出文件" Tag="overwrite" />
                                     <ComboBoxItem Content="自动重命名" Tag="rename" />
                                 </ComboBox>
-                                <CheckBox Content="写回前备份源文件" IsChecked="{Binding SettingsDraft.BackupSourceBeforeWrite}" Margin="0,14,0,7" />
-                                <TextBlock Text="建议保留备份，以便在 CAD 写回冲突或异常时恢复原图。" TextWrapping="Wrap" Style="{StaticResource CaptionStyle}" />
-                            </StackPanel>
-                        </Grid>
-                        <Grid Visibility="{Binding SettingsSection, Converter={StaticResource IndexToVis}, ConverterParameter=3}">
-                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                            <TextBlock Grid.Row="0" Grid.ColumnSpan="2" Text="CAD 与环境" FontSize="{DynamicResource FontSize.SectionTitle}" FontWeight="SemiBold" Margin="{DynamicResource Spacing.StackLoose}" />
-                            <StackPanel Grid.Row="1" Grid.Column="0" Margin="{DynamicResource Spacing.InlineLeading}">
-                                <TextBlock Text="CAD 安装目录" Margin="{DynamicResource Spacing.Stack}" />
+                            </controls:SettingsRow>
+                            <controls:SettingsRow>
+                                <StackPanel>
+                                    <TextBlock Text="写回前备份源文件" Style="{StaticResource FormRowLabel}" />
+                                    <TextBlock Text="建议保留备份，以便在 CAD 写回冲突或异常时恢复原图。" Style="{StaticResource FormRowDescription}" />
+                                </StackPanel>
+                                <CheckBox Style="{StaticResource Toggle.Switch}" HorizontalAlignment="Left" AutomationProperties.Name="写回前备份源文件" IsChecked="{Binding SettingsDraft.BackupSourceBeforeWrite}" />
+                            </controls:SettingsRow>
+                        </StackPanel>
+                        <StackPanel Visibility="{Binding SettingsSection, Converter={StaticResource IndexToVis}, ConverterParameter=3}">
+                            <TextBlock Text="CAD 与环境" Style="{StaticResource SectionTitleStyle}" Margin="{DynamicResource Spacing.StackLoose}" />
+                            <controls:SettingsRow>
+                                <StackPanel>
+                                    <TextBlock Text="CAD 安装目录" Style="{StaticResource FormRowLabel}" />
+                                    <TextBlock Text="修改路径后请先保存，再重新检测环境。" Style="{StaticResource FormRowDescription}" />
+                                </StackPanel>
                                 <DockPanel><Button DockPanel.Dock="Right" Content="浏览" Click="BrowseCad_Click" Style="{StaticResource Button.Secondary}" Margin="{DynamicResource Spacing.LeftGap}"/><TextBox Text="{Binding SettingsDraft.AutoCadInstallPath, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}" MinHeight="{DynamicResource Size.Control}" Padding="8,4" /></DockPanel>
-                                <TextBlock Text="修改路径后请先保存，再重新检测环境。" TextWrapping="Wrap" Style="{StaticResource CaptionStyle}" Margin="{DynamicResource Spacing.BlockTop}" />
-                            </StackPanel>
-                            <StackPanel Grid.Row="1" Grid.Column="1">
-                                <TextBlock Text="CAD 插件文件路径" Margin="{DynamicResource Spacing.Stack}" />
+                            </controls:SettingsRow>
+                            <controls:SettingsRow>
+                                <StackPanel>
+                                    <TextBlock Text="CAD 插件文件路径" Style="{StaticResource FormRowLabel}" />
+                                    <TextBlock Text="自动检测只更新草稿；保存后才会供后续 CAD 操作使用。" Style="{StaticResource FormRowDescription}" />
+                                </StackPanel>
                                 <DockPanel><Button DockPanel.Dock="Right" Content="浏览" Click="BrowsePlugin_Click" Style="{StaticResource Button.Secondary}" Margin="{DynamicResource Spacing.LeftGap}"/><TextBox Text="{Binding SettingsDraft.CadPluginPath, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}" MinHeight="{DynamicResource Size.Control}" Padding="8,4" /></DockPanel>
-                                <Button Content="自动检测路径" Command="{Binding DetectSettingsCadCommand}" Style="{StaticResource Button.Secondary}" HorizontalAlignment="Left" Margin="{DynamicResource Spacing.BlockTop}" />
-                                <TextBlock Text="自动检测只更新草稿；保存后才会供后续 CAD 操作使用。" TextWrapping="Wrap" Style="{StaticResource CaptionStyle}" Margin="{DynamicResource Spacing.BlockTop}" />
-                            </StackPanel>
-                            <ContentControl x:Name="EnvironmentHost" Grid.Row="2" Grid.ColumnSpan="2" Margin="{DynamicResource Spacing.BlockTopSection}" />
-                        </Grid>
-                        <Grid Visibility="{Binding SettingsSection, Converter={StaticResource IndexToVis}, ConverterParameter=4}">
-                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-                            <TextBlock Grid.Row="0" Grid.ColumnSpan="2" Text="日志" FontSize="{DynamicResource FontSize.SectionTitle}" FontWeight="SemiBold" Margin="{DynamicResource Spacing.StackLoose}" />
-                            <StackPanel Grid.Row="1" Grid.Column="0" Margin="{DynamicResource Spacing.InlineLeading}">
-                                <TextBlock Text="日志级别" Margin="{DynamicResource Spacing.Stack}" />
-                                <ComboBox MaxWidth="300" HorizontalAlignment="Left" MinWidth="220" SelectedValuePath="Content" SelectedValue="{Binding SettingsDraft.MinimumLogLevel}" MinHeight="{DynamicResource Size.Control}">
+                            </controls:SettingsRow>
+                            <controls:SettingsRow>
+                                <TextBlock Text="路径检测" Style="{StaticResource FormRowLabel}" />
+                                <Button Content="自动检测路径" Command="{Binding DetectSettingsCadCommand}" Style="{StaticResource Button.Secondary}" HorizontalAlignment="Left" />
+                            </controls:SettingsRow>
+                            <ContentControl x:Name="EnvironmentHost" Margin="{DynamicResource Spacing.BlockTopSection}" />
+                        </StackPanel>
+                        <StackPanel Visibility="{Binding SettingsSection, Converter={StaticResource IndexToVis}, ConverterParameter=4}">
+                            <TextBlock Text="日志" Style="{StaticResource SectionTitleStyle}" Margin="{DynamicResource Spacing.StackLoose}" />
+                            <controls:SettingsRow>
+                                <StackPanel>
+                                    <TextBlock Text="日志级别" Style="{StaticResource FormRowLabel}" />
+                                    <TextBlock Text="保存后立即调整新产生的日志；已有日志不会被删除。" Style="{StaticResource FormRowDescription}" />
+                                </StackPanel>
+                                <ComboBox MaxWidth="300" HorizontalAlignment="Left" MinWidth="220" SelectedValuePath="Content" SelectedValue="{Binding SettingsDraft.MinimumLogLevel}" MinHeight="{DynamicResource Size.Control}" AutomationProperties.Name="日志级别">
                                     <ComboBoxItem Content="Verbose" /><ComboBoxItem Content="Debug" /><ComboBoxItem Content="Information" /><ComboBoxItem Content="Warning" /><ComboBoxItem Content="Error" /><ComboBoxItem Content="Fatal" />
                                 </ComboBox>
-                            </StackPanel>
-                            <StackPanel Grid.Row="1" Grid.Column="1">
-                                <TextBlock Text="诊断工具" Style="{StaticResource SectionTitleStyle}" Margin="{DynamicResource Spacing.StackTight}" />
-                                <TextBlock Text="Debug 会记录详细运行信息，主要用于问题排查。日志文件保存在应用数据目录。" TextWrapping="Wrap" Style="{StaticResource CaptionStyle}" />
-                                <Button Content="打开日志目录" Click="OpenLogs_Click" Style="{StaticResource Button.Secondary}" HorizontalAlignment="Left" Margin="{DynamicResource Spacing.BlockTopWide}" />
-                                <TextBlock Text="商用运行推荐 Information；排查问题时临时切换为 Debug。" TextWrapping="Wrap" Style="{StaticResource CaptionStyle}" Margin="{DynamicResource Spacing.BlockTop}" />
-                            </StackPanel>
-                        </Grid><StackPanel Visibility="{Binding SettingsSection, Converter={StaticResource IndexToVis}, ConverterParameter=5}" MaxWidth="1080">
+                            </controls:SettingsRow>
+                            <controls:SettingsRow>
+                                <StackPanel>
+                                    <TextBlock Text="诊断工具" Style="{StaticResource FormRowLabel}" />
+                                    <TextBlock Text="Debug 会记录详细运行信息，主要用于问题排查；商用运行推荐 Information。" Style="{StaticResource FormRowDescription}" />
+                                </StackPanel>
+                                <Button Content="打开日志目录" Click="OpenLogs_Click" Style="{StaticResource Button.Secondary}" HorizontalAlignment="Left" />
+                            </controls:SettingsRow>
+                        </StackPanel>
+                        <StackPanel Visibility="{Binding SettingsSection, Converter={StaticResource IndexToVis}, ConverterParameter=5}" MaxWidth="1080">
                             <StackPanel.Resources>
                                 <Style x:Key="About.ShortcutCard" TargetType="Button" BasedOn="{StaticResource Button.Secondary}">
                                     <Setter Property="Height" Value="Auto" />
@@ -173,8 +218,8 @@
                                     <Setter Property="VerticalContentAlignment" Value="Center" />
                                 </Style>
                             </StackPanel.Resources>
-                            <TextBlock Text="关于与帮助" Style="{StaticResource PageTitleStyle}" />
-                            <TextBlock x:Name="AboutSubtitle" Text="查看版本、软件更新、使用帮助与服务状态" Style="{StaticResource PageSubtitleStyle}" Margin="0,4,0,20" />
+                            <TextBlock Text="关于与帮助" Style="{StaticResource SectionTitleStyle}" />
+                            <TextBlock x:Name="AboutSubtitle" Text="查看版本、软件更新、使用帮助与服务状态" Style="{StaticResource PageSubtitleStyle}" />
 
                             <Border Background="{DynamicResource Brush.Surface}" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1" CornerRadius="{DynamicResource CornerRadius.Large}" Padding="20" Margin="{DynamicResource Spacing.StackLoose}">
                                 <Grid>
@@ -189,7 +234,7 @@
                                     </Border>
                                     <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="{DynamicResource Spacing.InlineLeading}">
                                         <TextBlock Text="DWGC2E" FontSize="23" FontWeight="SemiBold" Foreground="{DynamicResource Brush.TextPrimary}" />
-                                        <TextBlock Text="DWG Translation · 图纸翻译工作台" Style="{StaticResource CaptionStyle}" Margin="0,3,0,9" />
+                                        <TextBlock Text="DWG Translation · 图纸翻译工作台" Style="{StaticResource CaptionStyle}" Margin="{DynamicResource Spacing.Stack}" />
                                         <WrapPanel>
                                             <TextBlock Text="{Binding AppReleaseVersionText}" FontSize="16" FontWeight="SemiBold" Margin="{DynamicResource Spacing.InlineWide}" />
                                             <TextBlock Text="{Binding AppBuildText, StringFormat=构建 {0}}" Style="{StaticResource CaptionStyle}" VerticalAlignment="Center" ToolTip="{Binding AppVersionText}" />
@@ -218,30 +263,30 @@
                                 </Grid>
                             </Border>
 
-                            <TextBlock Text="快捷入口" Style="{StaticResource SectionTitleStyle}" Margin="{DynamicResource Spacing.Stack}" />
+                            <TextBlock Text="快捷入口" Style="{StaticResource FormRowLabel}" Margin="{DynamicResource Spacing.Stack}" />
                             <controls:AdaptiveCardGrid x:Name="AboutShortcuts" Margin="{DynamicResource Spacing.StackTight}">
-                                <Button Command="{Binding OpenHelpCommand}" Style="{StaticResource About.ShortcutCard}" Margin="{DynamicResource Spacing.Stack}" AutomationProperties.Name="使用帮助">
+                                <Button Command="{Binding OpenHelpCommand}" Style="{StaticResource About.ShortcutCard}" AutomationProperties.Name="使用帮助">
                                     <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="42"/><ColumnDefinition Width="*"/><ColumnDefinition Width="20"/></Grid.ColumnDefinitions>
                                         <Border Width="34" Height="34" CornerRadius="9" Background="{DynamicResource Brush.PrimaryLight}" HorizontalAlignment="Left"><Path Data="{DynamicResource Icon.HelpRing}" Stroke="{DynamicResource Brush.Primary}" StrokeThickness="1.4" Width="18" Height="18" Stretch="Uniform"/></Border>
                                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="10,0,8,0"><TextBlock Text="使用帮助" Style="{StaticResource CardTitleStyle}"/><TextBlock Text="查看软件使用说明和常见操作" Style="{StaticResource CaptionStyle}" TextTrimming="CharacterEllipsis" Margin="{DynamicResource Spacing.BlockTopTight}"/></StackPanel>
                                         <TextBlock Grid.Column="2" Text="›" FontSize="22" Foreground="{DynamicResource Brush.TextMuted}" VerticalAlignment="Center" HorizontalAlignment="Right"/>
                                     </Grid>
                                 </Button>
-                                <Button Command="{Binding OpenFeedbackCommand}" Style="{StaticResource About.ShortcutCard}" Margin="8,0,0,8" AutomationProperties.Name="问题反馈">
+                                <Button Command="{Binding OpenFeedbackCommand}" Style="{StaticResource About.ShortcutCard}" AutomationProperties.Name="问题反馈">
                                     <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="42"/><ColumnDefinition Width="*"/><ColumnDefinition Width="20"/></Grid.ColumnDefinitions>
                                         <Border Width="34" Height="34" CornerRadius="9" Background="{DynamicResource Brush.PrimaryLight}" HorizontalAlignment="Left"><Path Data="{DynamicResource Icon.Warning}" Stroke="{DynamicResource Brush.Primary}" StrokeThickness="1.4" Width="18" Height="18" Stretch="Uniform"/></Border>
                                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="10,0,8,0"><TextBlock Text="问题反馈" Style="{StaticResource CardTitleStyle}"/><TextBlock Text="提交问题、建议或错误信息" Style="{StaticResource CaptionStyle}" TextTrimming="CharacterEllipsis" Margin="{DynamicResource Spacing.BlockTopTight}"/></StackPanel>
                                         <TextBlock Grid.Column="2" Text="›" FontSize="22" Foreground="{DynamicResource Brush.TextMuted}" VerticalAlignment="Center" HorizontalAlignment="Right"/>
                                     </Grid>
                                 </Button>
-                                <Button Command="{Binding OpenWebsiteCommand}" Style="{StaticResource About.ShortcutCard}" Margin="0,8,8,0" AutomationProperties.Name="官方网站">
+                                <Button Command="{Binding OpenWebsiteCommand}" Style="{StaticResource About.ShortcutCard}" AutomationProperties.Name="官方网站">
                                     <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="42"/><ColumnDefinition Width="*"/><ColumnDefinition Width="20"/></Grid.ColumnDefinitions>
                                         <Border Width="34" Height="34" CornerRadius="9" Background="{DynamicResource Brush.PrimaryLight}" HorizontalAlignment="Left"><Path Data="{DynamicResource Icon.Monitor}" Stroke="{DynamicResource Brush.Primary}" StrokeThickness="1.4" Width="18" Height="18" Stretch="Uniform"/></Border>
                                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="10,0,8,0"><TextBlock Text="官方网站" Style="{StaticResource CardTitleStyle}"/><TextBlock Text="查看公告和产品信息" Style="{StaticResource CaptionStyle}" TextTrimming="CharacterEllipsis" Margin="{DynamicResource Spacing.BlockTopTight}"/></StackPanel>
                                         <TextBlock Grid.Column="2" Text="›" FontSize="22" Foreground="{DynamicResource Brush.TextMuted}" VerticalAlignment="Center" HorizontalAlignment="Right"/>
                                     </Grid>
                                 </Button>
-                                <Button Command="{Binding CheckServiceCommand}" IsEnabled="{Binding IsCheckingService, Converter={StaticResource InverseBoolConverter}}" Style="{StaticResource About.ShortcutCard}" Margin="{DynamicResource Spacing.BlockTop}" AutomationProperties.Name="服务状态">
+                                <Button Command="{Binding CheckServiceCommand}" IsEnabled="{Binding IsCheckingService, Converter={StaticResource InverseBoolConverter}}" Style="{StaticResource About.ShortcutCard}" AutomationProperties.Name="服务状态">
                                     <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="42"/><ColumnDefinition Width="*"/><ColumnDefinition Width="20"/></Grid.ColumnDefinitions>
                                         <Border Width="34" Height="34" CornerRadius="9" Background="{DynamicResource Brush.PrimaryLight}" HorizontalAlignment="Left"><Path Data="{DynamicResource Icon.Refresh}" Stroke="{DynamicResource Brush.Primary}" StrokeThickness="1.4" Width="18" Height="18" Stretch="Uniform"/></Border>
                                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="10,0,8,0"><TextBlock Text="服务状态" Style="{StaticResource CardTitleStyle}"/><TextBlock Text="检测后台服务连接状态" Style="{StaticResource CaptionStyle}" TextTrimming="CharacterEllipsis" Margin="{DynamicResource Spacing.BlockTopTight}"/></StackPanel>
@@ -253,28 +298,45 @@
                             <Border Background="{DynamicResource Brush.SurfaceAlt}" BorderBrush="{DynamicResource Brush.BorderLight}" BorderThickness="1" CornerRadius="{DynamicResource CornerRadius.Medium}" Padding="16" Margin="{DynamicResource Spacing.StackLoose}">
                                 <Grid>
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-                                    <StackPanel>
+                                    <StackPanel Margin="{DynamicResource Spacing.InlineLoose}">
                                         <TextBlock Text="版本详情" Style="{StaticResource CardTitleStyle}" />
                                         <TextBlock Text="{Binding AppBuildText, StringFormat=构建：{0}}" Style="{StaticResource CaptionStyle}" Margin="{DynamicResource Spacing.BlockTopTight}" />
                                         <TextBlock Text="{Binding AppBuildDateText, StringFormat=构建时间：{0}}" Style="{StaticResource CaptionStyle}" />
                                         <TextBlock Text="{Binding AppRuntimeText, StringFormat=运行环境：{0}}" Style="{StaticResource CaptionStyle}" />
                                         <TextBlock Text="更新版本来自独立发布清单或版本接口；公告不参与版本判断，网盘仅作为下载地址。" Style="{StaticResource CaptionStyle}" TextWrapping="Wrap" Margin="{DynamicResource Spacing.BlockTop}" />
                                     </StackPanel>
-                                    <Button Grid.Column="1" Content="复制版本信息" Command="{Binding CopyVersionInfoCommand}" Style="{StaticResource Button.Compact.Secondary}" VerticalAlignment="Top" Margin="16,0,0,0" />
+                                    <Button Grid.Column="1" Content="复制版本信息" Command="{Binding CopyVersionInfoCommand}" Style="{StaticResource Button.Compact.Secondary}" VerticalAlignment="Top" />
                                 </Grid>
                             </Border>
-                            <TextBlock Text="© DWGC2E · DWG Translation" Style="{StaticResource CaptionStyle}" HorizontalAlignment="Center" Margin="0,4,0,10" />
+                            <TextBlock Text="© DWGC2E · DWG Translation" Style="{StaticResource CaptionStyle}" HorizontalAlignment="Center" Margin="{DynamicResource Spacing.Vertical}" />
                         </StackPanel>
                     </StackPanel>
                 </Border>
             </ScrollViewer>
-            <DockPanel x:Name="SettingsSaveBar" Grid.Row="2" Grid.Column="1" HorizontalAlignment="Left" Width="{Binding ActualWidth, ElementName=SettingsContent}" MaxWidth="1080" Margin="32,12,0,0" MinHeight="48" Background="{DynamicResource Brush.SurfaceAlt}"><DockPanel.Style><Style TargetType="DockPanel"><Style.Triggers><DataTrigger Binding="{Binding SettingsSection}" Value="5"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></DockPanel.Style>
+            <!-- 操作条：草稿状态徽标 + 说明文字与按钮同排，提示不再单独漂浮在页面中部。 -->
+            <DockPanel x:Name="SettingsSaveBar" Grid.Row="2" HorizontalAlignment="Left" Width="{Binding ActualWidth, ElementName=SettingsContent}" MaxWidth="1080" Margin="{DynamicResource Spacing.BlockTopWide}" MinHeight="48" Background="{DynamicResource Brush.SurfaceAlt}"><DockPanel.Style><Style TargetType="DockPanel"><Style.Triggers><DataTrigger Binding="{Binding SettingsSection}" Value="5"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></DockPanel.Style>
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                     <Button x:Name="RestoreSettingsButton" Content="恢复本节推荐值" Command="{Binding RestoreSettingsSectionDefaultsCommand}" Style="{StaticResource Button.Tertiary}" Margin="{DynamicResource Spacing.Inline}" />
                     <Button x:Name="DiscardSettingsButton" Content="放弃更改" Command="{Binding DiscardSettingsChangesCommand}" IsEnabled="{Binding CanDiscardSettings}" Style="{StaticResource Button.Secondary}" Margin="{DynamicResource Spacing.Inline}" />
                     <Button x:Name="SaveSettingsButton" Content="保存更改" Command="{Binding SaveSettingsChangesCommand}" IsEnabled="{Binding CanSaveSettings}" Style="{StaticResource Button.Primary}" />
                 </StackPanel>
-                <TextBlock Text="{Binding SettingsFeedback}" TextWrapping="Wrap" VerticalAlignment="Center" Margin="{DynamicResource Spacing.InlineWide}" TextTrimming="CharacterEllipsis" ToolTip="{Binding SettingsFeedback}" />
+                <Grid VerticalAlignment="Center" Margin="{DynamicResource Spacing.InlineWide}">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <Border x:Name="SettingsDraftStatus" CornerRadius="10" Padding="9,3" VerticalAlignment="Center" Margin="{DynamicResource Spacing.Inline}">
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Setter Property="Background" Value="{DynamicResource Brush.SuccessLight}" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding HasUnsavedSettings}" Value="True"><Setter Property="Background" Value="{DynamicResource Brush.WarningLight}" /></DataTrigger>
+                                    <DataTrigger Binding="{Binding HasPendingSettingsApplication}" Value="True"><Setter Property="Background" Value="{DynamicResource Brush.InfoLight}" /></DataTrigger>
+                                    <DataTrigger Binding="{Binding HasSettingsValidationErrors}" Value="True"><Setter Property="Background" Value="{DynamicResource Brush.DangerLight}" /></DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+                        <TextBlock Text="{Binding SettingsStateText}" FontWeight="SemiBold" FontSize="12" />
+                    </Border>
+                    <TextBlock Grid.Column="1" Text="{Binding SettingsFeedback}" TextWrapping="NoWrap" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip="{Binding SettingsFeedback}" />
+                </Grid>
             </DockPanel>
         </Grid>
     </Grid>

@@ -58,7 +58,9 @@ public partial class MainWindow : Window
         Controls.ResponsiveLayout.SetIsCompact(this, compact);
         // IsShort 与宽度无关，只按高度判定（同样先吸附整 DIP，避开 DPI 尾差）。
         Controls.ResponsiveLayout.SetIsShort(this, Math.Round(ActualHeight) < 640);
-        SidebarColumn.Width = new GridLength(compact ? 64 : 224);
+        // 展开宽度只有 Size.Sidebar 一个来源（Themes/Metrics.xaml）：这里再写死一个数字的话，
+        // 令牌改动后窗口一在 compact 边界来回切换就会跳回旧宽度。
+        SidebarColumn.Width = compact ? new GridLength(64) : (GridLength)FindResource("Size.Sidebar");
         Resources["Spacing.Page"] = compact ? new Thickness(20) : new Thickness(32,24,32,24);
         ShellStatusLabel.MaxWidth = compact ? 180 : 420;
         ShellProgressLabel.MaxWidth = compact ? 100 : 260;

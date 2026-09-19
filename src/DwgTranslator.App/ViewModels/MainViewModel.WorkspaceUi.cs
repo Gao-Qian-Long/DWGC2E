@@ -23,7 +23,21 @@ public partial class MainViewModel
     private ListCollectionView? _batchView;
     private readonly HashSet<DrawingFileItem> _batchRows = new();
     public ICollectionView BatchView => _batchView ??= CreateBatchView();
-    public string ShellStatusText => IsProcessing ? StatusMessage : "就绪";
+    /// <summary>
+    /// 状态栏文本。等待状态下把"输出到哪里 / 队列里有多少张"放进状态栏——这属于外壳的常驻信息，
+    /// 放在页面主体里会让页面骨架随状态变化而重排（用户截图里那条 "共 0 张图纸 … exports"）。
+    /// </summary>
+    public string ShellStatusText
+    {
+        get
+        {
+            if (IsProcessing) return StatusMessage;
+            if (!HasDrawingFiles) return "就绪";
+            return string.IsNullOrWhiteSpace(_config.ExportDirectory)
+                ? $"就绪 — {DrawingFiles.Count} 张图纸 · 输出随图纸保存"
+                : $"就绪 — {DrawingFiles.Count} 张图纸 · 输出到 {_config.ExportDirectory}";
+        }
+    }
 
     public int WorkspaceFileCount => DrawingFiles.Count;
     public int WorkspaceActiveCount => DrawingFiles.Count(x => x.IsActive);
@@ -68,6 +82,24 @@ public partial class MainViewModel
     public bool CanExportWorkspace => !IsProcessing && !IsTranslating && !IsExporting
         && DrawingFiles.Any(x => x.IsIncludedForExport && x.NeedsExport);
 
+    /// <summary>
+    /// 输出目录的人话版本。未导出过时说明默认规则（落到源图纸旁边），导出过一次后显示真实目录，
+    /// 所以这一行在"还没有目录"时也不是空白（空白会让整块区域上下跳动）。
+    /// </summary>
+    public string WorkspaceOutputLocationText => string.IsNullOrWhiteSpace(_config.ExportDirectory)
+        ? $"随图纸保存：<图纸所在目录>\\{DefaultOutputFolderName}"
+        : _config.ExportDirectory;
+
+    /// <summary>
+    /// 操作条右侧的常驻说明。它永远不会返回空串——空串会让那一格随状态出现/消失，
+    /// 整条操作栏的宽度就会跳（这是用户截图里"共 0 张图纸…exports"那条的成因）。
+    /// </summary>
+    public string WorkspaceActionHintText => DrawingFiles.Count == 0
+        ? "添加图纸后即可开始翻译"
+        : string.IsNullOrWhiteSpace(_config.ExportDirectory)
+            ? $"共 {DrawingFiles.Count} 张图纸 · 输出随图纸保存"
+            : $"共 {DrawingFiles.Count} 张图纸 · 输出到 {_config.ExportDirectory}";
+
     private void RaiseWorkspaceSummaryProperties()
     {
         OnPropertyChanged(nameof(WorkspaceFileCount));
@@ -81,6 +113,10 @@ public partial class MainViewModel
         OnPropertyChanged(nameof(WorkspaceProgressText));
         OnPropertyChanged(nameof(WorkspaceRunStateText));
         OnPropertyChanged(nameof(WorkspaceNextStepText));
+        OnPropertyChanged(nameof(WorkspaceActionHintText));
+        OnPropertyChanged(nameof(WorkspaceOutputLocationText));
+        // 状态栏也带队列张数与输出目录，任何工作区状态变化都要重算它。
+        OnPropertyChanged(nameof(ShellStatusText));
         OnPropertyChanged(nameof(CanStartWorkspaceTranslation));
         OnPropertyChanged(nameof(CanRetryFailedDrawingTasks));
         OnPropertyChanged(nameof(CanExportWorkspace));

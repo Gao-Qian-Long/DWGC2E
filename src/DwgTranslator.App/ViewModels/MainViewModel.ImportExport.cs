@@ -271,9 +271,13 @@ public partial class MainViewModel
             return;
         }
 
-        var targetFolder = AccountWorkspace.OutputDirectoryFor(_config, App.AppDataDir);
+        // 默认输出目录落在源图纸旁边（<源目录>\<DefaultOutputFolderName>），不再默认写进
+        // AppData/安装目录下的 exports；只有用户在设置里显式选过的目录才会覆盖这个默认值。
+        var targetFolder = AccountWorkspace.OutputDirectoryFor(
+            _config, App.AppDataDir, Path.GetDirectoryName(targets[0]), DefaultOutputFolderName);
         if (string.IsNullOrWhiteSpace(targetFolder) || !Path.IsPathFullyQualified(targetFolder))
         {
+            // 只有算不出源目录时才回到"让用户选一次"，并且选完就固化成本账号的默认目录。
             var folderDialog = new OpenFolderDialog
             {
                 Title = $"首次回写：选择并保存账号默认导出目录（将导出 {targets.Count} 张图纸）",
@@ -285,8 +289,15 @@ public partial class MainViewModel
                 return;
             }
             targetFolder = Path.GetFullPath(folderDialog.FolderName);
-            _config.AccountOutputDirectories ??= new();
-            var accountKey = string.IsNullOrWhiteSpace(_config.ActiveAccountId) ? "guest" : _config.ActiveAccountId;
+        }
+        _config.AccountOutputDirectories ??= new();
+        var accountKey = string.IsNullOrWhiteSpace(_config.ActiveAccountId) ? "guest" : _config.ActiveAccountId;
+        if (!string.Equals(_config.AccountOutputDirectories.TryGetValue(accountKey, out var saved) ? saved : null,
+                targetFolder, StringComparison.OrdinalIgnoreCase))
+        {
+            // 与 ProductDataDirectory 的约定一致：安装/数据区下需要预先存在的源目录才迁移，缺失即跳过。
+            var parent = Path.GetDirectoryName(targetFolder);
+            if (!string.IsNullOrWhiteSpace(parent) && Directory.Exists(parent)) Directory.CreateDirectory(targetFolder);
             _config.AccountOutputDirectories[accountKey] = targetFolder;
             SettingsStore.Update(_settingsPath ?? Path.Combine(App.AppDataDir, "settings.json"), latest =>
             {
@@ -296,6 +307,8 @@ public partial class MainViewModel
             });
         }
         _config.ExportDirectory = targetFolder;
+        OnPropertyChanged(nameof(OutputDirectoryText));
+        OnPropertyChanged(nameof(WorkspaceActionHintText));
         // The mode dialog is always shown. Without a CAD host it still owns a real decision - the
         // per-batch temporary export directory - and it hides the mode radio group itself, so the
         // only option a user sees there is one they can actually act on.

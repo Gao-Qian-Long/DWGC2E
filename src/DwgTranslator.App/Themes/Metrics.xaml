@@ -320,7 +320,7 @@
     <Thickness x:Key="Spacing.32">32</Thickness>
     <Thickness x:Key="Spacing.40">40</Thickness>
     <Thickness x:Key="Spacing.48">48</Thickness>
-<GridLength x:Key="Size.Sidebar">224</GridLength><sys:Double x:Key="Size.PageHeader">86</sys:Double><GridLength x:Key="Size.SettingsNav">168</GridLength>
+<GridLength x:Key="Size.Sidebar">200</GridLength><sys:Double x:Key="Size.PageHeader">86</sys:Double><GridLength x:Key="Size.SettingsNav">168</GridLength>
     <sys:Double x:Key="Size.Drawer">400</sys:Double>
     <sys:Double x:Key="Size.FormMax">800</sys:Double>
     <sys:Double x:Key="Size.WorkspaceMax">1600</sys:Double>

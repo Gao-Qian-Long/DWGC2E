@@ -8,9 +8,10 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
+        <!-- 标题即工作区身份；"下一步该做什么"和步骤顺序都收在工作区上方的操作条里，
+             页头不再叠一行会随状态变化的说明（那是原先"两条互相竞争的横幅"之一）。 -->
         <controls:PageHeader x:Name="WorkspaceHeader"
                              Header="图纸翻译"
                              Description="添加图纸、翻译、校对并导出；每个阶段都有独立状态。">
@@ -28,44 +29,27 @@
             </Button>
         </controls:PageHeader>
 
-        <Border Grid.Row="1" x:Name="AccountStrip"
-                Style="{StaticResource Workspace.InfoStrip}"
-                Visibility="{Binding IsAccountLoggedIn, Converter={StaticResource BoolToVis}}">
-            <DockPanel>
-                <Button DockPanel.Dock="Right" Content="查看套餐" Command="{Binding NavigateToCommand}"
-                        CommandParameter="account" Style="{StaticResource Button.Tertiary}" />
-                <Grid VerticalAlignment="Center">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <TextBlock Text="{Binding OnlinePlanText}" Margin="{DynamicResource Spacing.InlineLoose}"
-                               Foreground="{DynamicResource Brush.TextSecondary}" />
-                    <TextBlock Grid.Column="1" Text="{Binding OnlineQuotaText}"
-                               TextTrimming="CharacterEllipsis" ToolTip="{Binding OnlineQuotaText}"
-                               Foreground="{DynamicResource Brush.TextSecondary}" />
-                </Grid>
-            </DockPanel>
-        </Border>
-
-        <Border Grid.Row="2" x:Name="TranslationSummaryBar"
-                Style="{StaticResource Section.Surface}" Margin="{DynamicResource Spacing.Vertical}" Padding="14,10">
-            <Grid>
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                </Grid.RowDefinitions>
-                <UniformGrid x:Name="TranslationSummaryMetrics" Rows="1" Columns="7">
-                    <StackPanel Margin="{DynamicResource Spacing.InlineWide}">
-                        <TextBlock Text="图纸" Style="{StaticResource InfoLabel}" />
-                        <TextBlock Text="{Binding WorkspaceFileCount}" Style="{StaticResource InfoValueStrong}" />
-                    </StackPanel>
-                    <StackPanel Margin="{DynamicResource Spacing.InlineWide}">
+        <!-- 一条统计带：7 项指标等宽一行，标签在上、数值在下，分隔线用 1px 竖线而不是两张面板。
+             内容行本身只有约 47 DIP（14px 标签 + 4 DIP 间距 + 18px 数值），加 Padding 12 后约 59，
+             够不到 RefinementSmoke.cs:64 要求的下界 64。MinHeight 是这条下界的唯一保障，
+             不是装饰属性——删掉它会立刻让 UI 冒烟变红。 -->
+        <Border Grid.Row="1" x:Name="TranslationSummaryBar"
+                Style="{StaticResource Section.Surface}" Margin="{DynamicResource Spacing.Vertical}"
+                MinHeight="64" Padding="0,10,0,2">
+            <UniformGrid x:Name="TranslationSummaryMetrics" Rows="1" Columns="7">
+                <StackPanel Margin="{DynamicResource Spacing.InlineWide}">
+                    <TextBlock Text="图纸" Style="{StaticResource InfoLabel}" />
+                    <TextBlock Text="{Binding WorkspaceFileCount}" Style="{StaticResource InfoValueStrong}" />
+                </StackPanel>
+                <Border BorderBrush="{DynamicResource Brush.BorderLight}" BorderThickness="1,0,0,0" Padding="{DynamicResource Spacing.InlineWide}">
+                    <StackPanel>
                         <TextBlock Text="运行状态" Style="{StaticResource InfoLabel}" />
                         <TextBlock Text="{Binding WorkspaceRunStateText}" Style="{StaticResource InfoValueStrong}"
-                                   TextTrimming="CharacterEllipsis" />
+                                   TextTrimming="CharacterEllipsis" ToolTip="{Binding WorkspaceRunStateText}" />
                     </StackPanel>
-                    <StackPanel Margin="{DynamicResource Spacing.InlineWide}">
+                </Border>
+                <Border BorderBrush="{DynamicResource Brush.BorderLight}" BorderThickness="1,0,0,0" Padding="{DynamicResource Spacing.InlineWide}">
+                    <StackPanel>
                         <TextBlock Text="整体进度" Style="{StaticResource InfoLabel}" />
                         <Grid>
                             <Grid.ColumnDefinitions>
@@ -81,36 +65,88 @@
                                        Foreground="{DynamicResource Brush.TextSecondary}" />
                         </Grid>
                     </StackPanel>
-                    <StackPanel Margin="{DynamicResource Spacing.InlineWide}">
+                </Border>
+                <Border BorderBrush="{DynamicResource Brush.BorderLight}" BorderThickness="1,0,0,0" Padding="{DynamicResource Spacing.InlineWide}">
+                    <StackPanel>
                         <TextBlock Text="翻译成功" Style="{StaticResource InfoLabel}" />
                         <TextBlock Text="{Binding WorkspaceSuccessfulCount}" Style="{StaticResource InfoValueStrong}" />
                     </StackPanel>
-                    <StackPanel Margin="{DynamicResource Spacing.InlineWide}">
+                </Border>
+                <Border BorderBrush="{DynamicResource Brush.BorderLight}" BorderThickness="1,0,0,0" Padding="{DynamicResource Spacing.InlineWide}">
+                    <StackPanel>
                         <TextBlock Text="失败" Style="{StaticResource InfoLabel}" />
                         <TextBlock Text="{Binding WorkspaceFailedCount}" Style="{StaticResource InfoValueStrong}" />
                     </StackPanel>
-                    <StackPanel Margin="{DynamicResource Spacing.InlineWide}">
+                </Border>
+                <Border BorderBrush="{DynamicResource Brush.BorderLight}" BorderThickness="1,0,0,0" Padding="{DynamicResource Spacing.InlineWide}">
+                    <StackPanel>
                         <TextBlock Text="待校对" Style="{StaticResource InfoLabel}" />
                         <TextBlock Text="{Binding WorkspaceReviewCount}" Style="{StaticResource InfoValueStrong}" />
                     </StackPanel>
+                </Border>
+                <Border BorderBrush="{DynamicResource Brush.BorderLight}" BorderThickness="1,0,0,0" Padding="{DynamicResource Spacing.InlineWide}">
                     <StackPanel>
                         <TextBlock Text="待导出" Style="{StaticResource InfoLabel}" />
                         <TextBlock Text="{Binding WorkspacePendingExportCount}" Style="{StaticResource InfoValueStrong}" />
                     </StackPanel>
-                </UniformGrid>
-                <Grid Grid.Row="1" Margin="{DynamicResource Spacing.BlockTop}">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <TextBlock Text="添加图纸  →  翻译  →  校对  →  导出"
-                               FontWeight="SemiBold" Foreground="{DynamicResource Brush.TextSecondary}"
-                               Margin="{DynamicResource Spacing.InlineLoose}" VerticalAlignment="Center" />
-                    <TextBlock x:Name="WorkspaceNextStepTextBlock" Grid.Column="1"
-                               Text="{Binding WorkspaceNextStepText}" TextTrimming="CharacterEllipsis"
-                               ToolTip="{Binding WorkspaceNextStepText}" VerticalAlignment="Center"
-                               Foreground="{DynamicResource Brush.TextSecondary}" />
-                </Grid>
+                </Border>
+            </UniformGrid>
+        </Border>
+
+        <!-- 操作条从页面底部上移到工作区上方：按钮与它们作用的队列同屏，长页面底部不再留一条空带。
+             行序固定为 页头 / 统计带 / 操作条 / 工作区，统计带与操作条都在队列之前，
+             TranslationActionBar 这个 x:Name 被 UI 冒烟用于测量（ActualHeight ≥ 40）。 -->
+        <Border x:Name="TranslationActionBar" Grid.Row="2" Style="{StaticResource Section.Surface}"
+                Margin="{DynamicResource Spacing.Vertical}" Padding="0,10,0,0">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Orientation="Horizontal">
+                    <Button x:Name="ExportSelectionButton" Content="导出已校对图纸"
+                            Command="{Binding ExportDwgCommand}" IsEnabled="{Binding CanExportWorkspace}"
+                            Style="{StaticResource Button.Secondary}" MinWidth="136" Margin="{DynamicResource Spacing.Inline}" />
+                    <Button x:Name="RetryFailedButton" Content="仅重试失败项"
+                            Command="{Binding RetryFailedCommand}" IsEnabled="{Binding CanRetryFailedDrawingTasks}"
+                            Style="{StaticResource Button.Secondary}" MinWidth="120" Margin="{DynamicResource Spacing.Inline}" />
+                    <Button Content="取消导出" Command="{Binding CancelExportCommand}" Style="{StaticResource Button.Danger}"
+                            MinWidth="104"
+                            Visibility="{Binding IsExporting, Converter={StaticResource BoolToVis}}" />
+                </StackPanel>
+
+                <!-- 常驻文案：步骤顺序 + 「下一步」 + 「张数 · 输出位置」。三块都是常驻元素，
+                     文案永远非空，所以操作条宽度不随状态跳变（此前这一格会自己出现/消失）。
+                     WorkspaceNextStepTextBlock 被 UI 冒烟用几何断言测量（ActualWidth ≥ 80），
+                     重排时保留它，不要改成随状态折叠的元素。 -->
+                <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right"
+                            VerticalAlignment="Center" Margin="12,0" AutomationProperties.Name="导出摘要">
+                    <TextBlock x:Name="WorkspaceSequentialHintTextBlock"
+                               Text="添加图纸 → 翻译 → 校对 → 导出"
+                               Style="{StaticResource CaptionStyle}" VerticalAlignment="Center"
+                               Margin="{DynamicResource Spacing.InlineLoose}" />
+                    <TextBlock x:Name="WorkspaceNextStepTextBlock"
+                               Text="{Binding WorkspaceNextStepText}" Style="{StaticResource CaptionStyle}"
+                               TextTrimming="CharacterEllipsis" MaxWidth="280" VerticalAlignment="Center"
+                               ToolTip="{Binding WorkspaceNextStepText}" />
+                    <TextBlock x:Name="OutputDirectoryTextBlock" Text="{Binding WorkspaceActionHintText}"
+                               TextTrimming="CharacterEllipsis" MaxWidth="300" Margin="{DynamicResource Spacing.InlineLoose}"
+                               VerticalAlignment="Center" Style="{StaticResource CaptionStyle}"
+                               ToolTip="{Binding WorkspaceOutputLocationText}" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="2" Orientation="Horizontal">
+                    <Button Content="开始翻译" Command="{Binding TranslateCommand}"
+                            IsEnabled="{Binding CanStartWorkspaceTranslation}" Style="{StaticResource Button.Primary}"
+                            MinWidth="112"
+                            Visibility="{Binding IsTranslating, Converter={StaticResource BoolToVis}, ConverterParameter=false}" />
+                    <Button Content="正在翻译…" IsEnabled="False" Style="{StaticResource Button.Primary}" MinWidth="112"
+                            Visibility="{Binding IsTranslating, Converter={StaticResource BoolToVis}}" />
+                    <Button Content="取消任务" Command="{Binding CancelTranslateCommand}" Style="{StaticResource Button.Danger}"
+                            MinWidth="104" Margin="{DynamicResource Spacing.LeftGap}"
+                            Visibility="{Binding IsTranslating, Converter={StaticResource BoolToVis}}" />
+                </StackPanel>
             </Grid>
         </Border>
 
@@ -126,7 +162,11 @@
                         <RowDefinition x:Name="QueueAreaRow" Height="*" />
                     </Grid.RowDefinitions>
 
-                    <Border x:Name="EmptyDropZone" MinHeight="180"
+                    <!-- MaxHeight 是产品意图：空队列的拖放入口不该在宽屏上无限拉伸成一块空白。
+                         断言语义不变（Program.cs:281 "empty drop zone capped at 360 DIP"）。
+                         重构后这个 * 行更高了（页头 102 + 统计条 64 + 操作条 60 之后仍有约 382），
+                         没有上限时它会把整行吃掉。 -->
+                    <Border x:Name="EmptyDropZone" MinHeight="180" MaxHeight="360"
                             Background="{DynamicResource Brush.Surface}" BorderBrush="{DynamicResource Brush.Border}"
                             BorderThickness="1"
                             Visibility="{Binding HasDrawingFiles, Converter={StaticResource BoolToVis}, ConverterParameter=false}">
@@ -337,8 +377,10 @@
                                     <RowDefinition Height="Auto" />
                                     <RowDefinition Height="Auto" />
                                 </Grid.RowDefinitions>
-                                <TextBlock Text="{Binding OutputDirectoryText}" TextTrimming="CharacterEllipsis"
-                                           ToolTip="{Binding OutputDirectoryText}" VerticalAlignment="Center" />
+                                <!-- 未导出过时给出明确规则，而不是留一格空白：默认落在源图纸旁边的
+                                     "<图纸名>_translated" 目录，AppData 下不再有任何默认输出。 -->
+                                <TextBlock Text="{Binding WorkspaceOutputLocationText}" TextTrimming="CharacterEllipsis"
+                                           ToolTip="{Binding WorkspaceOutputLocationText}" VerticalAlignment="Center" />
                                 <Grid Grid.Row="1" Margin="{DynamicResource Spacing.BlockTop}">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
@@ -385,47 +427,5 @@
                 </Grid>
             </ScrollViewer>
         </Grid>
-
-        <Border x:Name="TranslationActionBar" Grid.Row="4" Style="{StaticResource Section.Surface}"
-                Margin="{DynamicResource Spacing.BlockTop}" Padding="0,10,0,0">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-                <StackPanel Orientation="Horizontal">
-                    <Button x:Name="ExportSelectionButton" Content="导出已校对图纸"
-                            Command="{Binding ExportDwgCommand}" IsEnabled="{Binding CanExportWorkspace}"
-                            Style="{StaticResource Button.Secondary}" MinWidth="136" Margin="{DynamicResource Spacing.Inline}" />
-                    <Button x:Name="RetryFailedButton" Content="仅重试失败项"
-                            Command="{Binding RetryFailedCommand}" IsEnabled="{Binding CanRetryFailedDrawingTasks}"
-                            Style="{StaticResource Button.Secondary}" MinWidth="120" Margin="{DynamicResource Spacing.Inline}" />
-                    <Button Content="取消导出" Command="{Binding CancelExportCommand}" Style="{StaticResource Button.Danger}"
-                            Visibility="{Binding IsExporting, Converter={StaticResource BoolToVis}}" />
-                </StackPanel>
-                <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right"
-                            VerticalAlignment="Center" Margin="12,0" AutomationProperties.Name="导出摘要">
-                    <TextBlock VerticalAlignment="Center" Style="{StaticResource CaptionStyle}">
-                        <Run Text="共 " /><Run Text="{Binding WorkspaceFileCount, Mode=OneWay}" /><Run Text=" 张图纸" />
-                    </TextBlock>
-                    <TextBlock Text="·" Margin="8,0" VerticalAlignment="Center" Style="{StaticResource CaptionStyle}" />
-                    <TextBlock Text="{Binding OutputDirectoryText}" TextTrimming="CharacterEllipsis"
-                               ToolTip="{Binding OutputDirectoryText}" MaxWidth="380"
-                               VerticalAlignment="Center" Style="{StaticResource CaptionStyle}" />
-                </StackPanel>
-                <StackPanel Grid.Column="2" Orientation="Horizontal">
-                    <Button Content="开始翻译" Command="{Binding TranslateCommand}"
-                            IsEnabled="{Binding CanStartWorkspaceTranslation}" Style="{StaticResource Button.Primary}"
-                            MinWidth="112"
-                            Visibility="{Binding IsTranslating, Converter={StaticResource BoolToVis}, ConverterParameter=false}" />
-                    <Button Content="正在翻译…" IsEnabled="False" Style="{StaticResource Button.Primary}" MinWidth="112"
-                            Visibility="{Binding IsTranslating, Converter={StaticResource BoolToVis}}" />
-                    <Button Content="取消任务" Command="{Binding CancelTranslateCommand}" Style="{StaticResource Button.Danger}"
-                            Margin="{DynamicResource Spacing.LeftGap}"
-                            Visibility="{Binding IsTranslating, Converter={StaticResource BoolToVis}}" />
-                </StackPanel>
-            </Grid>
-        </Border>
     </Grid>
 </UserControl>

@@ -132,7 +132,8 @@ public partial class MainViewModel
     private AppConfig BeginSettingsEdit()
     {
         var c = SettingsStore.Read(_settingsPath ?? Path.Combine(App.AppDataDir, "settings.json"));
-        c.ExportDirectory = AccountWorkspace.OutputDirectoryFor(c, App.AppDataDir);
+        // 输出目录是账号维度的：产品数据目录下的旧默认值视为未设置（见 ResolveExportDirectory）。
+        c.ExportDirectory = AccountWorkspace.OutputDirectoryFor(c, App.AppDataDir, SourceDirectoryHint(), DefaultOutputFolderName);
         c.StartWithWindows = Services.StartupRegistration.IsEnabled();
         _settingsBaseline = JsonSerializer.Deserialize<AppConfig>(JsonSerializer.Serialize(c))!;
         return c;
