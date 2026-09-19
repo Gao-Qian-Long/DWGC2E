@@ -111,7 +111,7 @@ public partial class MainViewModel
             if (context != CloudGlossaryContext) return true;
             RefreshGlossaryDataFromList(entries); RefreshGlossaryConflicts();
             _termBaseline = System.Text.Json.JsonSerializer.Serialize(TermDraft);
-            TermFeedback = "本机已保存"; RefreshTermView(); return true;
+            TermFeedback = "已写入本机术语库"; RefreshTermView(); return true;
         }
         catch (Exception ex)
         {

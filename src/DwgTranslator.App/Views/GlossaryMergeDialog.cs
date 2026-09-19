@@ -18,17 +18,30 @@ public sealed class GlossaryMergeDialog : UserControl
     {
         Background = (Brush)Application.Current.FindResource("Brush.Surface");
         Foreground = (Brush)Application.Current.FindResource("Brush.TextPrimary");
-        var layout = new DockPanel { Margin = new Thickness(20) };
+        // §弹窗排版：摘要 / 正文 / 操作三区改为 Grid。正文区高度按可用空间收敛——
+        // 行数少时按钮紧跟卡片（不再被 Dock.Bottom 顶到底部而留出大片空白），行数多时列表在限高内滚动。
+        var layout = new Grid { Margin = new Thickness(20) };
+        layout.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        layout.RowDefinitions.Add(new RowDefinition());
         var summary = new TextBlock { Text = $"共 {rows.Count} 组 · {rows.Count(x => x.HasConflict)} 组冲突需选择\n云端词库由所有语言方向共用。确认后才保存云端；取消保留当前草稿。", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 16) };
-        DockPanel.SetDock(summary, Dock.Top); layout.Children.Add(summary);
-        var footer = new StackPanel(); DockPanel.SetDock(footer, Dock.Bottom); layout.Children.Add(footer);
+        layout.Children.Add(summary);
+        var body = new Grid { VerticalAlignment = VerticalAlignment.Top };
+        body.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        body.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        Grid.SetRow(body, 1); layout.Children.Add(body);
+        var footer = new StackPanel(); Grid.SetRow(footer, 1); body.Children.Add(footer);
         var error = new TextBlock { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 8) }; footer.Children.Add(error);
         var actions = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Right }; footer.Children.Add(actions);
-        var cancel = new Button { Content = "取消，保留草稿", Margin = new Thickness(8), Padding = new Thickness(12, 6, 12, 6) };
+        var cancel = new Button { Content = "取消，保留草稿", Margin = new Thickness(8) };
+        cancel.SetResourceReference(FrameworkElement.StyleProperty, "DialogCancelButton");
         cancel.Click += (_, _) => Close(); actions.Children.Add(cancel);
-        var confirm = new Button { Content = "确认合并并保存云端", Margin = new Thickness(8), Padding = new Thickness(12, 6, 12, 6) }; actions.Children.Add(confirm);
+        // 主操作必须走 Button.Primary：先前无 Style 落到隐式 Button.Tertiary（无边框无底色），主次颠倒。
+        var confirm = new Button { Content = "确认合并并保存云端", Margin = new Thickness(8) };
+        confirm.SetResourceReference(FrameworkElement.StyleProperty, "DialogSaveButton");
+        actions.Children.Add(confirm);
         var list = new StackPanel();
-        layout.Children.Add(new ScrollViewer { Content = list, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled });
+        var scroll = new ScrollViewer { Content = list, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, MaxHeight = 200 };
+        Grid.SetRow(scroll, 0); body.Children.Add(scroll);
         var selections = new Dictionary<int, GlossaryMergeChoice>();
         for (var i = 0; i < rows.Count; i++)
         {
@@ -53,6 +66,16 @@ public sealed class GlossaryMergeDialog : UserControl
             try { CloudGlossaryMerge.Resolve(rows, selections); Choices = new Dictionary<int, GlossaryMergeChoice>(selections); Close(); }
             catch (InvalidOperationException ex) { error.Text = ex.Message; }
         };
+        // 正文区上限 = 弹窗可用高度 − 摘要行 − 操作区行；随尺寸/反馈文案变化重算，保证操作按钮永不被裁。
+        void FitScrollRegion()
+        {
+            var available = layout.ActualHeight - layout.RowDefinitions[0].ActualHeight - body.RowDefinitions[1].ActualHeight;
+            var cap = Math.Max(80, available - 2);
+            if (Math.Abs(scroll.MaxHeight - cap) > 0.5) scroll.MaxHeight = cap;
+        }
+        layout.SizeChanged += (_, _) => FitScrollRegion();
+        footer.SizeChanged += (_, _) => FitScrollRegion();
+        Loaded += (_, _) => FitScrollRegion();
         Content = layout;
         var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(100) };
         timer.Tick += (_, _) => { if (!active()) Close(); };

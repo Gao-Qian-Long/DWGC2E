@@ -133,7 +133,7 @@ public partial class BillingWindow : Window
   if(no!=null){var o=await _client.ConfirmBillingOrderAsync(no,_life.Token);if(!Valid()||version!=_selection)return;_current=o;await Display(o);}
   Apply(await _client.GetBillingEntitlementsAsync(_life.Token));await LoadOrders(false);
  });}
- private async Task LoadOrders(bool append){var d=await _client.GetBillingOrdersAsync(append?_cursor:null,_life.Token);if(!Valid())return;if(!append)_orders.Clear();_orders.AddRange(d.Orders);_cursor=d.NextCursor;Orders.ItemsSource=null;Orders.ItemsSource=_orders.ToArray();EmptyOrders.Visibility=_orders.Count==0?Visibility.Visible:Visibility.Collapsed;More.IsEnabled=_cursor!=null;}
+ private async Task LoadOrders(bool append){var d=await _client.GetBillingOrdersAsync(append?_cursor:null,_life.Token);if(!Valid())return;if(!append)_orders.Clear();_orders.AddRange(d.Orders);_cursor=d.NextCursor;Orders.ItemsSource=null;Orders.ItemsSource=_orders.ToArray();EmptyOrders.Visibility=_orders.Count==0?Visibility.Visible:Visibility.Collapsed;Orders.Visibility=_orders.Count==0?Visibility.Collapsed:Visibility.Visible;More.IsEnabled=_cursor!=null;}
  private async void More_Click(object sender,RoutedEventArgs e)=>await Run(()=>LoadOrders(true));
  private async void Orders_SelectionChanged(object sender,SelectionChangedEventArgs e){if(_busy||Orders.SelectedItem is not BillingOrder selected)return;++_selection;await Run(async()=>{_current=await _client.GetBillingOrderAsync(selected.OrderNo,_life.Token);if(Valid())await Display(_current);});}
 }

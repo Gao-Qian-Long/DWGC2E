@@ -9,7 +9,10 @@ public sealed class GlossaryCloudWindow : Window
     public static GlossaryCloudChoice? Choose(IReadOnlyList<CloudGlossaryEntry> entries,string account,DateTime checkedAt)
     {
         GlossaryCloudChoice? result=null;
-        var w=new GlossaryCloudWindow {Title="云端术语管理",Width=1050,Height=640,MinWidth=600,MinHeight=360,Owner=Application.Current.MainWindow,WindowStartupLocation=WindowStartupLocation.CenterOwner};
+        // §弹窗排版：高度随内容收敛（此前固定 640，只有一行数据时表格与按钮之间留下约 300 DIP 空白）。
+        // 非客户区（标题栏+边框）≈40、固定 chrome≈166、表头≈34、每行≈40。
+        var height=Math.Clamp(40+166+34+entries.Count*40,300,640);
+        var w=new GlossaryCloudWindow {Title="云端术语管理",Width=1050,Height=height,MinWidth=600,MinHeight=260,Owner=Application.Current.MainWindow,WindowStartupLocation=WindowStartupLocation.CenterOwner};
         Controls.DialogShell.Constrain(w);
         var panel=new DockPanel {Margin=new Thickness(20)}; w.Content=panel;
         var top=new StackPanel(); var toolbar = new Controls.AdaptiveToolbar { Content = top }; DockPanel.SetDock(toolbar,Dock.Top);panel.Children.Add(toolbar);
@@ -27,8 +30,8 @@ public sealed class GlossaryCloudWindow : Window
         void Filter(){grid.UnselectAll();view.Filter=o=>o is CloudGlossaryEntry e && (e.Source+" "+e.Target).Contains(search.Text,StringComparison.OrdinalIgnoreCase) && (category.SelectedIndex==0 || (string.IsNullOrWhiteSpace(e.Category)?"默认分类":e.Category)==category.SelectedItem?.ToString()) && (direction.SelectedIndex==0 || Direction(e)==direction.SelectedItem?.ToString());}
         search.TextChanged+=(_,_)=>Filter();category.SelectionChanged+=(_,_)=>Filter();direction.SelectionChanged+=(_,_)=>Filter();
         var bottom=new WrapPanel {Margin=new Thickness(0,12,0,0)};DockPanel.SetDock(bottom,Dock.Bottom);panel.Children.Add(bottom);
-        var all=new Button {Content="选择当前结果",Margin=new Thickness(0,0,8,0)};all.Click+=(_,_)=>grid.SelectAll();bottom.Children.Add(all);
-        foreach(var delete in new[]{false,true}){var b=new Button {Content=delete?"删除云端所选":"下载所选到本机",IsEnabled=false,Margin=new Thickness(0,0,8,0)};grid.SelectionChanged+=(_,_)=>b.IsEnabled=grid.SelectedItems.Count>0;b.Click+=(_,_)=>{if(grid.SelectedItems.Count==0)return;result=new(delete,grid.SelectedItems.Cast<CloudGlossaryEntry>().ToList());w.DialogResult=true;};bottom.Children.Add(b);}
+        var all=new Button {Content="选择当前结果",Margin=new Thickness(0,0,8,0)};all.SetResourceReference(FrameworkElement.StyleProperty,"Button.Secondary");all.Click+=(_,_)=>grid.SelectAll();bottom.Children.Add(all);
+        foreach(var delete in new[]{false,true}){var b=new Button {Content=delete?"删除云端所选":"下载所选到本机",IsEnabled=false,Margin=new Thickness(0,0,8,0)};b.SetResourceReference(FrameworkElement.StyleProperty,delete?"Button.SecondaryDanger":"Button.Primary");grid.SelectionChanged+=(_,_)=>b.IsEnabled=grid.SelectedItems.Count>0;b.Click+=(_,_)=>{if(grid.SelectedItems.Count==0)return;result=new(delete,grid.SelectedItems.Cast<CloudGlossaryEntry>().ToList());w.DialogResult=true;};bottom.Children.Add(b);}
         panel.Children.Add(grid);w.ShowDialog();return result;
     }
 }

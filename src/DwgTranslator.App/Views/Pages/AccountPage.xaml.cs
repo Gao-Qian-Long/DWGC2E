@@ -62,6 +62,30 @@ public sealed class UsagePercentTextConverter : IValueConverter
 }
 
 /// <summary>
+/// 「本周期额度重置时间」文案。后台没有下发 ResetAt 时返回空串，调用方
+/// （「套餐与订单」卡里那个 TextBlock）据此整行收起，而不是显示占位符。
+/// 只做展示格式化，不改动任何额度数值。
+/// </summary>
+public sealed class QuotaResetTextConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        if (value is not UsageInfo usage || usage.ResetAt is not DateTime resetAt) return string.Empty;
+        var local = resetAt.ToLocalTime();
+        var days = (local.Date - DateTime.Now.Date).Days;
+        var when = days switch
+        {
+            <= 0 => "今天",
+            1 => "明天",
+            _ => local.ToString("M'月'd'日'", culture)
+        };
+        return $"本周期额度将于 {when} 重置";
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => throw new NotSupportedException();
+}
+
+/// <summary>
 /// 额度环形用量图：把 Used / Quota 画成一段从 12 点顺时针的圆弧（底环 + 进度环），
 /// 纯绘制元素，不持有业务状态、不发起任何请求；数字全部来自绑定。
 /// </summary>

@@ -40,7 +40,9 @@
     <Button Grid.Column="2" Content="指定方向" Click="BatchDirection_Click" Style="{StaticResource Button.Compact.Secondary}" Margin="{DynamicResource Spacing.InlineTight}"/>
     <Button Grid.Column="3" Content="启用" Tag="True" Click="BatchEnabled_Click" Style="{StaticResource Button.Compact.Secondary}" Margin="{DynamicResource Spacing.InlineTight}"/>
     <Button Grid.Column="4" Content="停用" Tag="False" Click="BatchEnabled_Click" Style="{StaticResource Button.Compact.Secondary}" Margin="{DynamicResource Spacing.InlineTight}"/>
-    <ComboBox x:Name="BatchCategory" Grid.Column="5" SelectedIndex="0" ItemsSource="{Binding TermCategories}" ToolTip="选择或输入分类" Margin="{DynamicResource Spacing.InlineTight}"/>
+    <!-- 用户反馈批量条里的分类显示成「custom-c…」：分类名允许到 128 字（MainViewModel.GlossaryStorage.cs:29），
+     任何固定宽度都装不下，所以让它优雅降级——选中框按可用宽省略号截断，悬停给出完整名称。 -->
+    <ComboBox x:Name="BatchCategory" Grid.Column="5" SelectedIndex="0" ItemsSource="{Binding TermCategories}" ToolTip="选择或输入分类" Margin="{DynamicResource Spacing.InlineTight}"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding}" TextTrimming="CharacterEllipsis" ToolTip="{Binding}"/></DataTemplate></ComboBox.ItemTemplate></ComboBox>
     <Button Grid.Column="6" Content="修改分类" Click="BatchCategory_Click" Style="{StaticResource Button.Compact.Secondary}" Margin="{DynamicResource Spacing.InlineTight}"/>
     <Button Grid.Column="7" Content="导出" Click="Export_Click" Style="{StaticResource Button.Compact.Secondary}" Margin="{DynamicResource Spacing.InlineTight}"/>
     <!-- §L12 「删除本机」是破坏性操作（移除本机术语），用危险色；「停用」不是 -->
@@ -84,7 +86,13 @@
    </Grid>
   </Grid>
   <Grid Grid.Row="4">
-   <DataGrid x:Name="TermList" ItemsSource="{Binding TermView}" SelectedItem="{Binding SelectedTerm}" AutoGenerateColumns="False" CanUserAddRows="False" CanUserDeleteRows="False" CanUserResizeColumns="True" CanUserSortColumns="True" SelectionMode="Extended" SelectionUnit="FullRow" IsReadOnly="False" HeadersVisibility="Column" BorderThickness="0" RowHeight="{DynamicResource Size.TableRow}" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Auto" ScrollViewer.CanContentScroll="True" EnableRowVirtualization="True" EnableColumnVirtualization="True" VirtualizingPanel.VirtualizationMode="Recycling" LoadingRow="TermRow_Loading" MouseDoubleClick="TermList_DoubleClick" SelectionChanged="Selection_Changed" BeginningEdit="BeginningEdit" CellEditEnding="CellEditEnding">
+   <!-- 表格「自适应视图宽度」的真实症结不是列太宽，而是星号列与纵向滚动条的测量竞态：
+        DataGrid 先按「还没有纵向滚动条」的整宽（1102）把原文/译文算好，滚动条随后出现，
+        列宽不再重算，于是总列宽比视口（1092）多出滚动条那 10 DIP。结果是 1366 下凭空多出
+        一条横向滚动条，并且「操作」列右缘被顶到视口外、行内「⋯」看起来贴着边被裁。
+        纵向滚动条常驻后，视口宽度在第一次测量前就已确定，星号列按真视口分配，不再溢出；
+        横向滚动条仍保留 Auto，只在窗口窄到星号列触底（约 1150 以下）时作为兜底出现。 -->
+   <DataGrid x:Name="TermList" ItemsSource="{Binding TermView}" SelectedItem="{Binding SelectedTerm}" AutoGenerateColumns="False" CanUserAddRows="False" CanUserDeleteRows="False" CanUserResizeColumns="True" CanUserSortColumns="True" SelectionMode="Extended" SelectionUnit="FullRow" IsReadOnly="False" HeadersVisibility="Column" BorderThickness="0" RowHeight="{DynamicResource Size.TableRow}" ScrollViewer.VerticalScrollBarVisibility="Visible" ScrollViewer.HorizontalScrollBarVisibility="Auto" ScrollViewer.CanContentScroll="True" EnableRowVirtualization="True" EnableColumnVirtualization="True" VirtualizingPanel.VirtualizationMode="Recycling" LoadingRow="TermRow_Loading" MouseDoubleClick="TermList_DoubleClick" SelectionChanged="Selection_Changed" BeginningEdit="BeginningEdit" CellEditEnding="CellEditEnding">
     <DataGrid.Style><Style TargetType="DataGrid" BasedOn="{StaticResource {x:Type DataGrid}}"><Style.Triggers><DataTrigger Binding="{Binding IsTermDrawerOpen}" Value="True"><Setter Property="IsEnabled" Value="False"/></DataTrigger><DataTrigger Binding="{Binding IsProcessing}" Value="True"><Setter Property="IsEnabled" Value="False"/></DataTrigger><DataTrigger Binding="{Binding IsGlossaryLoading}" Value="True"><Setter Property="IsEnabled" Value="False"/></DataTrigger><DataTrigger Binding="{Binding IsWorkspaceSaving}" Value="True"><Setter Property="IsEnabled" Value="False"/></DataTrigger><DataTrigger Binding="{Binding IsCloudGlossarySyncing}" Value="True"><Setter Property="IsEnabled" Value="False"/></DataTrigger></Style.Triggers></Style></DataGrid.Style>
     <DataGrid.Columns>
      <DataGridTemplateColumn Width="40" MinWidth="40" MaxWidth="40" IsReadOnly="True">
@@ -100,7 +108,11 @@
        </ComboBox>
       </DataTemplate></DataGridTemplateColumn.CellTemplate>
      </DataGridTemplateColumn>
-     <DataGridTextColumn Header="适用方向" Binding="{Binding DirectionText}" Width="88" MinWidth="84" MaxWidth="120" ElementStyle="{StaticResource TermMetaText}" IsReadOnly="True"/>
+     <!-- 用户反馈「待确认方向」被截断：该值 5 个汉字约 64 px，加上单元格 12+12 内边距，
+          88 只剩 64 可用宽，正好差 1 px 落到省略号。加宽到 96 留出 8 px 余量；
+          分类列 156 被 RefinementSmoke 的编辑器可读宽断言锁死，来源/启用列已无余量
+          （来源 56 减内边距只剩 32，「用户」两字刚好占满），因此宽度由星号列让出。 -->
+     <DataGridTextColumn Header="适用方向" Binding="{Binding DirectionText}" Width="96" MinWidth="92" MaxWidth="128" ElementStyle="{StaticResource TermMetaText}" IsReadOnly="True"/>
      <DataGridTextColumn Header="同步状态" Binding="{Binding SyncStatus}" Width="84" MinWidth="80" Visibility="Collapsed" ElementStyle="{StaticResource TermMetaText}" IsReadOnly="True"/>
      <DataGridTextColumn Header="来源" Binding="{Binding SourceShortText}" Width="56" MinWidth="52" ElementStyle="{StaticResource TermSourceText}" IsReadOnly="True"/>
      <DataGridTemplateColumn Header="启用" Width="56" MinWidth="54" IsReadOnly="True"><DataGridTemplateColumn.CellTemplate><DataTemplate><CheckBox Style="{StaticResource TermToggle}" IsChecked="{Binding Enabled, Mode=OneWay}" Click="Toggle_Click" ToolTip="即时保存到本机 (Space)" AutomationProperties.Name="启用术语"/></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>

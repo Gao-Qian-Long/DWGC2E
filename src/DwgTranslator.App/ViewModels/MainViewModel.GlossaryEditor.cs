@@ -107,7 +107,7 @@ public partial class MainViewModel
     private bool CompleteTermSave(List<GlossaryEntry> entries)
     {
         RefreshGlossaryDataFromList(entries); RefreshGlossaryConflicts();
-        _termBaseline = JsonSerializer.Serialize(TermDraft); if (IsTermDrawerOpen) CloseTermDrawer(); TermFeedback = "本机已保存"; RefreshTermView(); return true;
+        _termBaseline = JsonSerializer.Serialize(TermDraft); if (IsTermDrawerOpen) CloseTermDrawer(); TermFeedback = "已写入本机术语库"; RefreshTermView(); return true;
     }
 
     /// <summary>Failure path for both save flavours: keeps the message and the log in one place.</summary>

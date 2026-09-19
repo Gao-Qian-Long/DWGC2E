@@ -17,7 +17,7 @@ public partial class SettingsPage : UserControl
         AboutSubtitle.Visibility = compactAbout ? Visibility.Collapsed : Visibility.Visible;
         if (AboutUpdateColumn != null && AboutUpdatePanel != null)
         {
-            AboutUpdateColumn.Width = new GridLength(compact ? 0 : 200);
+            AboutUpdateColumn.Width = new GridLength(compact ? 0 : 236);
             Grid.SetColumn(AboutUpdatePanel, compact ? 1 : 2);
             Grid.SetRow(AboutUpdatePanel, compact ? 1 : 0);
             Grid.SetRowSpan(AboutUpdatePanel, compact ? 1 : 2);
@@ -25,6 +25,16 @@ public partial class SettingsPage : UserControl
             AboutStatusPanel.Margin = compact ? new Thickness(0,0,14,0) : new Thickness(0,0,0,10);
             AboutUpdatePanel.Margin = compact ? new Thickness(0,10,20,0) : new Thickness(0);
             AboutUpdatePanel.HorizontalAlignment = compact ? HorizontalAlignment.Left : HorizontalAlignment.Stretch;
+        }
+        if (AboutDetailsCard != null && AboutDetailsColumn != null && AboutDetailsGap != null)
+        {
+            // 快捷入口与版本详情并排铺满横向空间；窄窗落回堆叠，避免两张卡都被挤到不可读。
+            AboutDetailsGap.Width = new GridLength(compact ? 0 : 16);
+            AboutDetailsColumn.Width = new GridLength(compact ? 0 : 380);
+            Grid.SetRow(AboutDetailsCard, compact ? 1 : 0);
+            Grid.SetColumn(AboutDetailsCard, compact ? 0 : 2);
+            Grid.SetColumnSpan(AboutDetailsCard, compact ? 3 : 1);
+            AboutDetailsCard.Margin = compact ? new Thickness(0, 12, 0, 0) : new Thickness(0);
         }
     }
     private void SettingsSection_Changed(object sender, SelectionChangedEventArgs e)

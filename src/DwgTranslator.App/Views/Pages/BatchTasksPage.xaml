@@ -17,6 +17,27 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <!-- 任务详情抽屉是覆盖层而不是布局列：本表最小列宽合计 992 DIP（240+116+260+128+142+106），
+                 1366 下让位 400 后只剩 702，操作列会被裁掉，且本表明确要求不依赖横向滚动。
+                 但统计条与筛选卡片没有任何理由被盖住——抽屉打开时这一格撑到抽屉宽度，
+                 让上面两行主动让位；表格行 Grid 跨两列，宽度不受影响（列 1 宽 0 时布局与原来一致）。 -->
+            <Border Grid.Column="1" Grid.Row="0" Grid.RowSpan="2" IsHitTestVisible="False">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Setter Property="Width" Value="0" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsTaskDetailOpen}" Value="True">
+                                <Setter Property="Width" Value="{DynamicResource Size.Drawer}" />
+                                <Setter Property="Margin" Value="{DynamicResource Spacing.LeftGap}" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+            </Border>
 
             <Border Grid.Row="0" x:Name="BatchSummaryBar" Style="{StaticResource Section.Surface}"
                     Margin="{DynamicResource Spacing.Stack}" Padding="14,10" AutomationProperties.Name="任务阶段摘要">
@@ -160,7 +181,7 @@
                 </Grid>
             </Border>
 
-            <Grid Grid.Row="2">
+            <Grid Grid.Row="2" Grid.ColumnSpan="2">
                 <DataGrid x:Name="TaskTable" ItemsSource="{Binding BatchView}" SelectedItem="{Binding SelectedBatchTask}"
                           SelectionMode="Single" AutoGenerateColumns="False" CanUserAddRows="False"
                           CanUserResizeColumns="False" CanUserReorderColumns="False" CanUserSortColumns="True"
@@ -348,48 +369,72 @@
                 controls:DrawerFocusBehavior.RestoreFocusFallback="{Binding ElementName=TaskTable}"
                 AutomationProperties.Name="任务详情抽屉">
             <DockPanel LastChildFill="True">
-                <DockPanel DockPanel.Dock="Top">
-                    <Button x:Name="TaskDrawerCloseButton" Content="关闭" DockPanel.Dock="Right" Command="{Binding CloseTaskDetailCommand}"
-                            Style="{StaticResource Button.Tertiary}" />
-                    <TextBlock Text="任务详情" Style="{StaticResource SectionTitleStyle}" VerticalAlignment="Center" />
-                </DockPanel>
-
-                <Grid DockPanel.Dock="Bottom" Margin="{DynamicResource Spacing.BlockTopWide}">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                    </Grid.RowDefinitions>
-                    <UniformGrid Grid.Row="0" Columns="2">
-                        <Button Content="进入译文校对" Command="{Binding OpenTaskProofreadingCommand}"
-                                IsEnabled="{Binding SelectedBatchTask.CanOpenProofreading}"
-                                Style="{StaticResource Button.Primary}" Margin="{DynamicResource Spacing.4}" />
-                        <!-- 抽屉内主按钮只保留"进入译文校对"一个，导出降为次级，避免同屏两个 Primary。 -->
-                        <Button Content="导出此图纸" Command="{Binding ExportSelectedDrawingCommand}"
-                                CommandParameter="{Binding SelectedBatchTask}"
-                                Visibility="{Binding SelectedBatchTask.CanExport, Converter={StaticResource BoolToVis}}"
-                                Style="{StaticResource Button.Secondary}" Margin="{DynamicResource Spacing.4}" />
-                        <Button Content="打开输出文件" Command="{Binding OpenDrawingOutputCommand}"
-                                CommandParameter="{Binding SelectedBatchTask}"
-                                Visibility="{Binding SelectedBatchTask.HasOutput, Converter={StaticResource BoolToVis}}"
-                                Style="{StaticResource Button.Secondary}" Margin="{DynamicResource Spacing.4}" />
-                        <Button Content="重试此任务" Command="{Binding RetryDrawingCommand}"
-                                CommandParameter="{Binding SelectedBatchTask}"
-                                Visibility="{Binding SelectedBatchTask.CanRetry, Converter={StaticResource BoolToVis}}"
-                                Style="{StaticResource Button.Secondary}" Margin="{DynamicResource Spacing.4}" />
-                    </UniformGrid>
-                    <Button Grid.Row="1" Content="查看运行日志" Command="{Binding ToggleLogViewerCommand}"
-                            Style="{StaticResource Button.Tertiary}" HorizontalAlignment="Stretch" />
+                <!-- 标题行用 Grid 而不是 DockPanel：关闭按钮永远占 Auto 列，标题再长也只挤 `*` 列并自己截断，
+                     不可能出现文本把关闭按钮顶出可视区的情况（DockPanel 下最后一个子元素是"剩余宽度"，语义相同但
+                     不提供任何宽度约束，一旦标题变长按钮就会被压）。 -->
+                <Grid DockPanel.Dock="Top">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="任务详情" Style="{StaticResource SectionTitleStyle}"
+                               VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip="任务详情"
+                               Margin="{DynamicResource Spacing.Inline}" />
+                    <Button Grid.Column="1" x:Name="TaskDrawerCloseButton" Content="关闭" MinWidth="64"
+                            Command="{Binding CloseTaskDetailCommand}" Style="{StaticResource Button.Tertiary}" />
                 </Grid>
+
+                <!-- 固定底栏：加一条上分隔线，让"可滚动内容到此为止"有明确边界。
+                     抽屉内容 ≈800 DIP、折叠区只有 ≈465 DIP，必然要滚动；没有分隔线时被裁一半的卡片
+                     看起来就是一片空白。 -->
+                <Border DockPanel.Dock="Bottom" Margin="{DynamicResource Spacing.BlockTopWide}"
+                        BorderBrush="{DynamicResource Brush.Border}" BorderThickness="0,1,0,0"
+                        Padding="{DynamicResource Spacing.BlockTopWide}">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <UniformGrid Grid.Row="0" Columns="2">
+                            <Button Content="进入译文校对" Command="{Binding OpenTaskProofreadingCommand}"
+                                    IsEnabled="{Binding SelectedBatchTask.CanOpenProofreading}"
+                                    Style="{StaticResource Button.Primary}" Margin="{DynamicResource Spacing.4}" />
+                            <!-- 抽屉内主按钮只保留"进入译文校对"一个，导出降为次级，避免同屏两个 Primary。 -->
+                            <Button Content="导出此图纸" Command="{Binding ExportSelectedDrawingCommand}"
+                                    CommandParameter="{Binding SelectedBatchTask}"
+                                    Visibility="{Binding SelectedBatchTask.CanExport, Converter={StaticResource BoolToVis}}"
+                                    Style="{StaticResource Button.Secondary}" Margin="{DynamicResource Spacing.4}" />
+                            <Button Content="打开输出文件" Command="{Binding OpenDrawingOutputCommand}"
+                                    CommandParameter="{Binding SelectedBatchTask}"
+                                    Visibility="{Binding SelectedBatchTask.HasOutput, Converter={StaticResource BoolToVis}}"
+                                    Style="{StaticResource Button.Secondary}" Margin="{DynamicResource Spacing.4}" />
+                            <Button Content="重试此任务" Command="{Binding RetryDrawingCommand}"
+                                    CommandParameter="{Binding SelectedBatchTask}"
+                                    Visibility="{Binding SelectedBatchTask.CanRetry, Converter={StaticResource BoolToVis}}"
+                                    Style="{StaticResource Button.Secondary}" Margin="{DynamicResource Spacing.4}" />
+                        </UniformGrid>
+                        <Button Grid.Row="1" Content="查看运行日志" Command="{Binding ToggleLogViewerCommand}"
+                                Style="{StaticResource Button.Tertiary}" HorizontalAlignment="Stretch" />
+                    </Grid>
+                </Border>
 
                 <controls:ToastHost DockPanel.Dock="Bottom" IsScoped="True" MaximumVisible="1" />
 
                 <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                               CanContentScroll="True" controls:ResponsiveLayout.HandoffMouseWheelAtBoundary="True">
                     <StackPanel Margin="{DynamicResource Spacing.BlockTopWide}">
+                        <!-- 标题与路径都收敛成单行并各自截断（与本页表格 :177 的 FileName 用同一套做法）：
+                             一个 90 字符的临时路径换行后要吃掉 3 行 ≈ 66 DIP（1366×768 实测文本行落在
+                             y=167/189/211），直接把下方卡片挤出可视区，而折叠区只有 ≈465 DIP 高。
+                             完整路径仍由 ToolTip 给出。
+                             注意：路径用的是 CaptionStyle，而 CaptionStyle 自带 TextWrapping=Wrap
+                             （Themes/Metrics.xaml:104）——只写 TextTrimming 是无效的，必须显式 NoWrap，
+                             否则文本照样换行，「单行 + 省略号」根本没生效。 -->
                         <TextBlock Text="{Binding SelectedBatchTask.FileName}" FontSize="16" FontWeight="SemiBold"
-                                   TextWrapping="Wrap" ToolTip="{Binding SelectedBatchTask.FullPath}" />
+                                   TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" ToolTip="{Binding SelectedBatchTask.FullPath}" />
                         <TextBlock Text="{Binding SelectedBatchTask.FullPath}" Margin="{DynamicResource Spacing.BlockTopTight}"
-                                   Style="{StaticResource CaptionStyle}" TextWrapping="Wrap" />
+                                   Style="{StaticResource CaptionStyle}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                                   ToolTip="{Binding SelectedBatchTask.FullPath}" />
 
                         <Border Style="{StaticResource Card}" Padding="12,10" Margin="{DynamicResource Spacing.BlockTopWide}">
                             <Grid>
@@ -490,7 +535,7 @@
                             </StackPanel>
                         </Border>
 
-                        <Border Style="{StaticResource Callout.Error}" Margin="{DynamicResource Spacing.BlockTopLoose}"
+                        <Border Style="{StaticResource Callout.Error}" Margin="{DynamicResource Spacing.BlockTopWide}"
                                 Visibility="{Binding SelectedBatchTask.HasError, Converter={StaticResource BoolToVis}}">
                             <StackPanel>
                                 <TextBlock Text="失败原因" FontWeight="SemiBold" Margin="{DynamicResource Spacing.StackTight}" />
@@ -499,7 +544,7 @@
                             </StackPanel>
                         </Border>
 
-                        <Border Style="{StaticResource Card}" Margin="{DynamicResource Spacing.BlockTopLoose}">
+                        <Border Style="{StaticResource Card}" Margin="{DynamicResource Spacing.BlockTopWide}">
                             <StackPanel>
                                 <TextBlock Text="输出文件" Style="{StaticResource SectionTitleStyle}"
                                            Margin="{DynamicResource Spacing.StackTight}" />
@@ -507,6 +552,10 @@
                                            Foreground="{DynamicResource Brush.TextSecondary}" />
                             </StackPanel>
                         </Border>
+
+                        <!-- 滚到底时让最后一张卡与底栏分隔线之间隔出与卡片间距一致的 12 DIP，
+                             否则内容末端紧贴分隔线，看起来像被裁断。 -->
+                        <Border Margin="{DynamicResource Spacing.BlockTopWide}" />
                     </StackPanel>
                 </ScrollViewer>
             </DockPanel>
