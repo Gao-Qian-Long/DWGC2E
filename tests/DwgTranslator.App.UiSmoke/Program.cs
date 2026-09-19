@@ -103,6 +103,42 @@ public sealed partial class SmokeApp : App
         throw new TimeoutException("布局或动画未在超时内稳定：" + description);
     }
 
+    /// <summary>
+    /// 排空队列直到 confirmAction 完成，并把期间弹起的模态确认框（PromptDialog/ConfirmDialog）当作
+    /// "点了确认"处理。§L4 后"取消编辑/放弃更改"等命令会先弹危险确认，这里让它们跑完而不是挂住测试。
+    /// </summary>
+    private static async Task ConfirmModalsAsync(Action confirmAction, string description)
+    {
+        var confirmed = 0;
+        var done = false;
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(50) };
+        timer.Tick += (_, _) =>
+        {
+            foreach (var modal in Application.Current?.Windows.OfType<Window>().Where(w => w.IsVisible && w != Application.Current.MainWindow).ToList() ?? new List<Window>())
+            {
+                if (modal is PromptDialog prompt) { prompt.DialogResult = true; confirmed++; }
+                else if (modal is ConfirmDialog confirm) { confirm.DialogResult = true; confirmed++; }
+            }
+        };
+        timer.Start();
+        try
+        {
+            var pump = Dispatcher.CurrentDispatcher.BeginInvoke(new Action(() =>
+            {
+                try { confirmAction(); }
+                finally { done = true; }
+            }));
+            while (!done)
+            {
+                await Dispatcher.CurrentDispatcher.InvokeAsync(() => { }, DispatcherPriority.Background);
+                await Task.Delay(10);
+            }
+            await pump;
+        }
+        finally { timer.Stop(); }
+        Console.WriteLine($"INFO modal confirmations auto-accepted: {description} = {confirmed}");
+    }
+
     private static T FindVisual<T>(DependencyObject parent) where T : DependencyObject
     {
         if (parent is T match) return match;
@@ -236,7 +272,7 @@ public sealed partial class SmokeApp : App
         vm.Entities.Add(editEntity);
         vm.TrackProofreadingEdit(editEntity); editEntity.TranslatedText = "changed";
         Check(vm.HasUnsavedProofreading, "proofreading dirty state");
-        vm.DiscardProofreadingCommand.Execute(null);
+        await ConfirmModalsAsync(() => vm.DiscardProofreadingCommand.Execute(null), "workspace discard proofreading");
         Check(editEntity.TranslatedText == "original" && !vm.HasUnsavedProofreading, "proofreading discard restores original");
         vm.Entities.Remove(editEntity);
         await VerifyProofreadingPersistenceAsync(vm);
@@ -579,13 +615,14 @@ public sealed partial class SmokeApp : App
             vm.CurrentPage = MainViewModel.PageSettings;
             var original = vm.SettingsDraft.ExportDirectory;
             vm.SettingsDraft.ExportDirectory = "discard-test";
-            vm.DiscardSettingsChangesCommand.Execute(null);
+            // §L4 放弃更改现在先弹危险确认：由 ConfirmModalsAsync 自动点确认。
+            await ConfirmModalsAsync(() => vm.DiscardSettingsChangesCommand.Execute(null), "discard settings");
             Check(vm.SettingsDraft.ExportDirectory == original, "discard settings");
             var failureDraft = Path.Combine(AppDataDir, "must-survive-write-failure");
             vm.SettingsDraft.ExportDirectory = failureDraft;
             using (var locked = new FileStream(Path.Combine(AppDataDir, "settings.json"), FileMode.Open, FileAccess.ReadWrite, FileShare.None))
                 Check(!vm.SaveSettingsPage() && vm.SettingsDraft.ExportDirectory == failureDraft, "write failure preserves draft");
-            vm.DiscardSettingsChangesCommand.Execute(null);
+            await ConfirmModalsAsync(() => vm.DiscardSettingsChangesCommand.Execute(null), "discard settings after write failure");
             await VerifyBilling(window);
             await VerifyBillingPersistence(window);
             await VerifyBillingCatalog(window);

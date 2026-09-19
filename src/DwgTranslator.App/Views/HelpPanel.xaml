@@ -18,13 +18,10 @@
         </Style>
     </UserControl.Resources>
 
-    <Grid Margin="16" MaxWidth="800" HorizontalAlignment="Center">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
-        </Grid.RowDefinitions>
+    <!-- §L19 与其它页面统一走 Spacing.Page 栅格；宽度上限交给宿主窗口(HelpWindow Width=900) -->
+    <Grid Margin="{DynamicResource Spacing.Page}">
 
-        <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
             <StackPanel>
 
                 <!-- ========== 快速入门 ========== -->
@@ -89,7 +86,7 @@
                 <TextBlock Style="{StaticResource BodyText}" Text="AutoCAD 中的两种文字类型。MText 有多行内容和矩形边界框，Text 只有一行。程序会自动处理这两种类型。"/>
 
                 <TextBlock Style="{StaticResource BodyText}" FontWeight="SemiBold" Foreground="{DynamicResource Brush.TextPrimary}" Margin="{DynamicResource Spacing.BlockTop}" Text="API Key（密钥）"/>
-                <TextBlock Style="{StaticResource BodyText}" Text="使用 AI 翻译服务的凭证，可在 DeepSeek 官网注册获取。"/>
+                <TextBlock Style="{StaticResource BodyText}" Text="由平台统一托管，用户无需申请或填写。若在自建部署中需要自带密钥，请由管理员在服务端配置。"/>
 
                 <TextBlock Style="{StaticResource BodyText}" FontWeight="SemiBold" Foreground="{DynamicResource Brush.TextPrimary}" Margin="{DynamicResource Spacing.BlockTop}" Text="碰撞检测"/>
                 <TextBlock Style="{StaticResource BodyText}" Text="翻译后文字通常更长，可能与图形或相邻文字重叠。写回时会自动缩小字号直到不再相交；缩到下限仍放不下时退回原文，避免画出压字/压线的脏图。两种写回模式都支持，并且会跳过原图本来就存在的重叠。"/>
@@ -105,7 +102,5 @@
 
             </StackPanel>
         </ScrollViewer>
-
-
     </Grid>
 </UserControl>

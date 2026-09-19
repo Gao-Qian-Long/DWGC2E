@@ -168,3 +168,29 @@ test('AI provider migration is repeatable and preserves configured rows',t=>{
  x.db.exec(sql);
  assert.equal(x.db.prepare("SELECT model FROM ai_providers WHERE id='migration-provider'").get().model,'model-a');
 });
+
+test('provider shuffle is seeded per drawing so one drawing never mixes models across batches',async t=>{
+ const x=configured(t);
+ delete x.env.DEEPSEEK_API_KEY;
+ // Equal priority, so the weighted shuffle alone decides which provider a batch starts on.
+ seedProvider(x,{id:'alpha',base:'https://alpha.example/v1',secret:'ALPHA_KEY',priority:10,weight:3});
+ seedProvider(x,{id:'beta',base:'https://beta.example/v1',secret:'BETA_KEY',priority:10,weight:3});
+ seedProvider(x,{id:'gamma',base:'https://gamma.example/v1',secret:'GAMMA_KEY',priority:10,weight:2});
+ seedProvider(x,{id:'delta',base:'https://delta.example/v1',secret:'DELTA_KEY',priority:10,weight:1});
+ const calls=[];
+ t.mock.method(globalThis,'fetch',async url=>{calls.push(new URL(String(url)).host);return completion('ok');});
+ const firstHost=async(requestId,payload)=>{await routeCompletion(x.env,requestId,payload);return calls.at(-1);};
+ const drawing='drawing-task-0001';
+ const chosen=await firstHost('batch-request-01',{billing_task_id:drawing,items:[{id:0,text:'x'}]});
+ // Every batch of one drawing must start on the same provider, otherwise a single drawing gets
+ // translated by several models and its wording drifts mid-document.
+ for(const batch of ['batch-request-02','batch-request-03','batch-request-04','batch-request-05'])
+  assert.equal(await firstHost(batch,{billing_task_id:drawing,items:[{id:0,text:'x'}]}),chosen);
+ // The seed is the drawing id alone: passing it as the request id must agree, which also pins the
+ // backward-compatible fallback for clients that still omit billing_task_id.
+ assert.equal(await firstHost(drawing,{items:[{id:0,text:'x'}]}),chosen);
+ const spread=new Set([chosen]);
+ for(const task of ['drawing-task-0002','drawing-task-0003','drawing-task-0004','drawing-task-0005','drawing-task-0006','drawing-task-0007'])
+  spread.add(await firstHost('batch-request-01',{billing_task_id:task,items:[{id:0,text:'x'}]}));
+ assert.ok(spread.size>1,{spread:[...spread]});
+});

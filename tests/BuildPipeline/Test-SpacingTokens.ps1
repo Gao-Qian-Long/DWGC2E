@@ -6,7 +6,8 @@ $root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
 $viewsRoot = Join-Path $root 'src\DwgTranslator.App\Views'
 # 基线：迁移完成时的字面量数量。允许持平或下降，不允许增长。
 # 增长意味着又出现了新的硬编码间距——请改用 Spacing.* 令牌。
-$literalBudget = 85
+# 2026-09-19：收紧到当前实测值 48（原 85 是布局迁移走到一半时的水位）。
+$literalBudget = 48
 $failures = New-Object System.Collections.Generic.List[string]
 if (-not (Test-Path -LiteralPath $viewsRoot)) { throw "找不到视图目录：$viewsRoot" }
 $files = Get-ChildItem -LiteralPath $viewsRoot -Recurse -Filter *.xaml -File

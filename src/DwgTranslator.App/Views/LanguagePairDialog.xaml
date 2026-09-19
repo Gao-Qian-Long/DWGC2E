@@ -11,10 +11,9 @@
         FontSize="{DynamicResource FontSize.Body}">
 
     <Border Padding="22,20,22,18">
-        <!-- The content carries an explicit width: with SizeToContent the panel is measured
-             unconstrained, so a Grid with star columns reports its content width and the dialog
-             clips it instead of shrinking the pickers. -->
-        <StackPanel Width="516">
+        <!-- Width is fixed on the window, which keeps the measure constraint finite for the picker
+             grid; the content therefore sizes itself instead of carrying a magic width. -->
+        <StackPanel>
             <TextBlock Text="翻译语言" FontSize="17" FontWeight="SemiBold"
                        Foreground="{DynamicResource Brush.TextPrimary}" />
             <TextBlock Text="选择图纸上的原文语言，以及要翻译成的目标语言。"
@@ -44,7 +43,8 @@
 
                 <Button Grid.Column="1"
                         x:Name="SwapButton"
-                        Margin="12,22,12,0"
+                        Margin="{DynamicResource Spacing.InlineWide}"
+                        VerticalAlignment="Bottom"
                         Width="40"
                         ToolTip="交换原文语言与目标语言"
                         AutomationProperties.Name="交换语言"
@@ -89,18 +89,17 @@
                           Stretch="Uniform"
                           VerticalAlignment="Center" />
                     <TextBlock x:Name="PreviewText"
-                               Margin="10,0,0,0"
+                               Margin="{DynamicResource Spacing.LeftGap}"
                                VerticalAlignment="Center"
                                FontWeight="SemiBold"
                                Foreground="{DynamicResource Brush.Primary}" />
                 </StackPanel>
             </Border>
 
-            <TextBlock Text="常用组合" Style="{StaticResource InputLabel}" Margin="0,18,0,7" />
-            <!-- An explicit width makes the chips wrap deterministically: under SizeToContent the
-                 measure constraint is infinite, so MaxWidth alone does not wrap them and the row
-                 runs off the dialog. -->
-            <WrapPanel x:Name="PresetPanel" Width="512" HorizontalAlignment="Left" />
+            <TextBlock Text="常用组合" Style="{StaticResource InputLabel}" Margin="{DynamicResource Spacing.BlockTopLoose}" />
+            <!-- The window width is fixed, so the panel gets a real measure constraint and wraps on
+                 its own; an explicit chip width would only fight the available space. -->
+            <WrapPanel x:Name="PresetPanel" Margin="{DynamicResource Spacing.BlockTop}" />
 
             <Border Margin="{DynamicResource Spacing.BlockTopLoose}"
                     Padding="13,11"
@@ -116,7 +115,7 @@
                         IsCancel="True"
                         Style="{StaticResource DialogCancelButton}"
                         Click="Cancel_Click" />
-                <Button x:Name="ApplyButton" Content="应用" MinWidth="92" Margin="10,0,0,0"
+                <Button x:Name="ApplyButton" Content="应用" MinWidth="92" Margin="{DynamicResource Spacing.LeftGap}"
                         IsDefault="True"
                         Style="{StaticResource DialogSaveButton}"
                         Click="Apply_Click" />

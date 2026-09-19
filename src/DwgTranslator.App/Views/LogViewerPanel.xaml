@@ -46,9 +46,15 @@
         <!-- Toolbar -->
         <Border Grid.Row="0" Background="{DynamicResource Brush.BackgroundAlt}" BorderBrush="{DynamicResource Brush.BorderLight}" BorderThickness="0,0,0,1"
                 Padding="8,5">
-            <DockPanel>
+            <!-- §L2 工具栏自适应两行：筛选控件在上一行，统计与操作按钮在下一行，
+                 窄窗口（LogViewerWindow MinWidth=700）下按钮不再被裁掉。 -->
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
                 <!-- Left: Controls -->
-                <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
+                <StackPanel Grid.Row="0" Orientation="Horizontal" HorizontalAlignment="Left">
                     <TextBlock Text="运行日志" Foreground="{DynamicResource Brush.TextSecondary}" FontSize="{DynamicResource FontSize.Secondary}" FontWeight="Bold"
                                VerticalAlignment="Center" Margin="{DynamicResource Spacing.InlineWide}"
                                FontFamily="Cascadia Code, Consolas"/>
@@ -80,7 +86,7 @@
                 </StackPanel>
 
                 <!-- Right: Actions -->
-                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right">
+                <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="{DynamicResource Spacing.BlockTopTight}">
                     <TextBlock Text="{Binding LevelSummary}" Foreground="{DynamicResource Brush.TextSecondary}" FontSize="{DynamicResource FontSize.Secondary}"
                                VerticalAlignment="Center" Margin="{DynamicResource Spacing.InlineWide}"
                                FontFamily="Cascadia Code, Consolas"/>
@@ -116,7 +122,7 @@
                             Background="Transparent" Foreground="{DynamicResource Brush.TextSecondary}" BorderThickness="0"
                             FontSize="{DynamicResource FontSize.Secondary}" Padding="6,2" Cursor="Hand" Content="文件夹"/>
                 </StackPanel>
-            </DockPanel>
+            </Grid>
         </Border>
 
         <!-- Log entries and stable empty/paused state -->
@@ -139,8 +145,10 @@
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="Auto"/>
+                            <!-- §L1 Message 占满剩余宽度（Auto 会被长日志撑爆并把异常列压成 0） -->
                             <ColumnDefinition Width="*"/>
+                            <!-- §L1 异常列改为 Auto，短异常不再被裁掉 -->
+                            <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
 
                         <!-- Timestamp -->
@@ -175,13 +183,15 @@
 
                         <!-- Message + Duration + Exception -->
                         <StackPanel Grid.Column="4" Orientation="Horizontal">
-                            <TextBlock Text="{Binding Message}" Style="{StaticResource LogText}"/>
+                            <TextBlock Text="{Binding Message}" Style="{StaticResource LogText}" ToolTip="{Binding Message}"/>
                             <TextBlock Foreground="{DynamicResource Brush.TextMuted}" FontSize="{DynamicResource FontSize.Secondary}"
                                        FontFamily="Cascadia Code, Consolas" VerticalAlignment="Center"
                                        Margin="{DynamicResource Spacing.LeftGap}">
                                 <TextBlock.Style>
                                     <Style TargetType="TextBlock">
-                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <!-- 默认 Visible：只有 DurationMs 为 null 才折叠。
+                                             原来默认 Collapsed 且没有回正的分支，耗时永远不显示。 -->
+                                        <Setter Property="Visibility" Value="Visible"/>
                                         <Style.Triggers>
                                             <DataTrigger Binding="{Binding DurationMs}" Value="{x:Null}">
                                                 <Setter Property="Visibility" Value="Collapsed"/>
@@ -199,6 +209,8 @@
                         <TextBlock Grid.Column="5" Text="{Binding Exception}" Foreground="{DynamicResource Brush.Danger}" FontSize="{DynamicResource FontSize.Secondary}"
                                    FontFamily="Cascadia Code, Consolas" VerticalAlignment="Center"
                                    Margin="{DynamicResource Spacing.LeftGap}"
+                                   MaxWidth="480" TextTrimming="CharacterEllipsis"
+                                   ToolTip="{Binding Exception}"
                                    Visibility="{Binding Exception, Converter={StaticResource ExVis}}"/>
                     </Grid>
                 </DataTemplate>

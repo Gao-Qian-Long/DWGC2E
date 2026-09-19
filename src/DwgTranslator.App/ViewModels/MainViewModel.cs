@@ -185,23 +185,58 @@ public partial class MainViewModel : ObservableObject, IDisposable
         RefreshLicenseStatus();
     }
 
+    /// <summary>
+    /// 启动初始化。每一步都在各自阶段里降级：单步失败不再吞掉整段初始化（界面照常可用），
+    /// 但失败必须留下用户看得见的痕迹——状态栏 + Toast，而不是只写进日志文件。
+    /// </summary>
     public async Task InitializeAsync()
     {
-        try
-        {
-            await RefreshGlossaryDataAsync();
-            RefreshTranslationProjects();
-            StatusMessage = Strings.Get("StatusReady");
+        // settings.json 读失败发生在 DI 阶段（那时没有 ViewModel），App 把结论攒在静态字段里带过来。
+        var degraded = new List<string>();
+        if (!string.IsNullOrEmpty(App.SettingsReadWarning)) degraded.Add(App.SettingsReadWarning!);
 
-            // 上次运行没跑完的任务：问用户是否继续（选"否"则清掉记录）。
-            await RestoreSavedProofreadingAsync();
-            ResumePendingTasks();
-            _ = RefreshAccountAsync();
-        }
+        await RunStartupStageAsync("术语库", degraded, RefreshGlossaryDataAsync);
+        await RunStartupStageAsync("翻译项目", degraded, () => { RefreshTranslationProjects(); return Task.CompletedTask; });
+        StatusMessage = Strings.Get("StatusReady");
+
+        // 上次运行没跑完的任务：问用户是否继续（选"否"则清掉记录）。
+        await RunStartupStageAsync("上次校对记录", degraded, RestoreSavedProofreadingAsync);
+        await RunStartupStageAsync("未完成任务", degraded, () => { ResumePendingTasks(); return Task.CompletedTask; });
+        await RunStartupStageAsync("上次工作区", degraded, () => { RestoreLastWorkspace(); return Task.CompletedTask; });
+
+        ReportStartupDegradation(degraded);
+
+        // 账户同步不再是 fire-and-forget：这一步失败只影响账户区，但异常必须有出口。
+        await SafeRefreshAccountAsync();
+    }
+
+    /// <summary>
+    /// 启动初始化的一个阶段。失败只降级、不中断后续阶段，并把阶段名交给调用方汇总成一句
+    /// 用户可见的提示——旧实现用整段 try/catch 只写日志，用户看到"就绪"，功能却是空的。
+    /// </summary>
+    private async Task RunStartupStageAsync(string stage, List<string> degraded, Func<Task> action)
+    {
+        try { await action().ConfigureAwait(true); }
         catch (Exception ex)
         {
-            Log.Error(ex, "Async initialization failed");
+            Log.Error(ex, "启动阶段失败：{Stage}", stage);
+            degraded.Add($"{stage}（{ex.GetType().Name}）");
         }
+    }
+
+    /// <summary>
+    /// 启动降级报告：没有失败就什么都不做（不打扰用户）；有失败时状态栏保留一行结论，
+    /// 并用 Toast 提醒一次，诊断细节仍在日志里。
+    /// </summary>
+    private void ReportStartupDegradation(IReadOnlyList<string> degraded)
+    {
+        if (degraded.Count == 0) return;
+        var message = $"启动时有 {degraded.Count} 项未完成：{string.Join("；", degraded.Take(3))}"
+            + (degraded.Count > 3 ? $" 等 {degraded.Count} 项" : string.Empty)
+            + "。其余功能可用，详情见日志。";
+        StatusMessage = message;
+        DwgTranslator.App.Services.ToastService.Warning(message);
+        Log.Warning("启动降级：{Items}", string.Join(" | ", degraded));
     }
 
     private void RefreshLicenseStatus()
@@ -222,6 +257,11 @@ public partial class MainViewModel : ObservableObject, IDisposable
         _projectAutosaveCts?.Cancel();
         _projectAutosaveCts?.Dispose();
         _projectAutosaveCts = null;
+        // 关窗时把最后一次工作区状态落盘：延迟保存可能还停在 1.2s 的防抖里，不能指望它。
+        SaveWorkspaceSession();
+        _workspaceSessionSaveCts?.Cancel();
+        _workspaceSessionSaveCts?.Dispose();
+        _workspaceSessionSaveCts = null;
         _cts?.Cancel();
         _cts?.Dispose();
         _exportCts?.Cancel();

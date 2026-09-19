@@ -296,7 +296,10 @@ public partial class MainViewModel
             });
         }
         _config.ExportDirectory = targetFolder;
-        var modeDialog = new Views.ExportModeDialog(_autoCadInteropService.IsAutoCADAvailable(_config))
+        // The mode dialog is always shown. Without a CAD host it still owns a real decision - the
+        // per-batch temporary export directory - and it hides the mode radio group itself, so the
+        // only option a user sees there is one they can actually act on.
+        var modeDialog = new Views.ExportModeDialog(_autoCadInteropService.IsAutoCADAvailable(_config), isTranslation: true)
         {
             Owner = Application.Current.MainWindow
         };

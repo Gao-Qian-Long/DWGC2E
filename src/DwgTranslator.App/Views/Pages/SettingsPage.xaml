@@ -78,9 +78,10 @@
                             <StackPanel Grid.Row="1" Grid.Column="1">
                                 <TextBlock Text="应用行为" Style="{StaticResource SectionTitleStyle}" Margin="{DynamicResource Spacing.StackTight}"/>
                                 <CheckBox Style="{StaticResource Toggle.Switch}" Content="开机启动" IsChecked="{Binding SettingsDraft.StartWithWindows}" Margin="{DynamicResource Spacing.Vertical}" />
+                                <CheckBox Style="{StaticResource Toggle.Switch}" Content="启动时恢复上次工作区" ToolTip="恢复上次选的语言方向和上次打开的图纸；关掉后每次启动都是空工作区。" IsChecked="{Binding SettingsDraft.RestoreLastWorkspace}" Margin="{DynamicResource Spacing.Vertical}" />
                                 <CheckBox Style="{StaticResource Toggle.Switch}" Content="自动检查更新" IsChecked="{Binding SettingsDraft.AutoCheckUpdate}" Margin="{DynamicResource Spacing.Vertical}" />
                                 <CheckBox Style="{StaticResource Toggle.Switch}" Content="导出后打开输出目录" IsChecked="{Binding SettingsDraft.OpenOutputFolderAfterExport}" Margin="{DynamicResource Spacing.Vertical}" />
-                                <TextBlock Text="开机启动、更新检查和导出行为在保存后立即生效。" TextWrapping="Wrap" Style="{StaticResource CaptionStyle}" Margin="{DynamicResource Spacing.BlockTop}" />
+                                <TextBlock Text="开机启动、更新检查和导出行为在保存后立即生效；会话恢复在下次启动时生效。" TextWrapping="Wrap" Style="{StaticResource CaptionStyle}" Margin="{DynamicResource Spacing.BlockTop}" />
                             </StackPanel>
                         </Grid>
                         <Grid Visibility="{Binding SettingsSection, Converter={StaticResource IndexToVis}, ConverterParameter=1}">
@@ -267,7 +268,7 @@
                     </StackPanel>
                 </Border>
             </ScrollViewer>
-            <DockPanel x:Name="SettingsSaveBar" Grid.Row="2" Grid.Column="1" HorizontalAlignment="Left" Width="{Binding ActualWidth, ElementName=SettingsContent}" MaxWidth="1080" Margin="64,12,0,0" MinHeight="48" Background="{DynamicResource Brush.SurfaceAlt}"><DockPanel.Style><Style TargetType="DockPanel"><Style.Triggers><DataTrigger Binding="{Binding SettingsSection}" Value="5"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></DockPanel.Style>
+            <DockPanel x:Name="SettingsSaveBar" Grid.Row="2" Grid.Column="1" HorizontalAlignment="Left" Width="{Binding ActualWidth, ElementName=SettingsContent}" MaxWidth="1080" Margin="32,12,0,0" MinHeight="48" Background="{DynamicResource Brush.SurfaceAlt}"><DockPanel.Style><Style TargetType="DockPanel"><Style.Triggers><DataTrigger Binding="{Binding SettingsSection}" Value="5"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></DockPanel.Style>
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                     <Button x:Name="RestoreSettingsButton" Content="恢复本节推荐值" Command="{Binding RestoreSettingsSectionDefaultsCommand}" Style="{StaticResource Button.Tertiary}" Margin="{DynamicResource Spacing.Inline}" />
                     <Button x:Name="DiscardSettingsButton" Content="放弃更改" Command="{Binding DiscardSettingsChangesCommand}" IsEnabled="{Binding CanDiscardSettings}" Style="{StaticResource Button.Secondary}" Margin="{DynamicResource Spacing.Inline}" />

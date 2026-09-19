@@ -19,8 +19,10 @@ foreach($name in Get-Content -LiteralPath $manifest -Encoding UTF8){
  if($name -ne 'cad-platform.txt' -and $name -notmatch '\.(dll|json|config|resources)$'){throw "Non-runtime CAD payload entry: $name"}
  $runtime += 'CadPlugin/'+$name
 }
-# These are private build evidence, not installed or shared with end users.
-$private=@('build-info.json','architecture-audit.json','DwgTranslator.pdb','DwgTranslator.Core.pdb')
+# These are private build evidence, not installed or shared with end users. Debug symbols are
+# deliberately absent: publish runs with -p:DebugType=none -p:DebugSymbols=false, so a *.pdb in the
+# candidate is a contract violation rather than a file tolerated here and moved away afterwards.
+$private=@('build-info.json','architecture-audit.json')
 foreach($file in Get-ChildItem -LiteralPath $dir -File -Recurse -Force){
  $relative=$file.FullName.Substring($dir.Length+1).Replace('\','/')
  if($relative -notin $runtime -and $relative -notin $private){throw "Unreviewed file in candidate: $relative"}

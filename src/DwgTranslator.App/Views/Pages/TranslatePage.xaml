@@ -226,7 +226,8 @@
                                         </DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
-                                <DataGridTextColumn Header="文本" Binding="{Binding TextCountText}" Width="68"
+                                <!-- §L8 5 位数（"12,345"）加 Padding 需要 80 DIP，原 68 会溢出 -->
+                                <DataGridTextColumn Header="文本" Binding="{Binding TextCountText}" Width="80"
                                                     IsReadOnly="True" ElementStyle="{StaticResource CenteredCellStyle}" />
                                 <DataGridTemplateColumn Header="进度" Width="118" IsReadOnly="True" SortMemberPath="ProgressPercent">
                                     <DataGridTemplateColumn.CellTemplate>
@@ -247,14 +248,15 @@
                                         </DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
-                                <DataGridTemplateColumn Header="操作" Width="124" IsReadOnly="True">
+                                <DataGridTemplateColumn Header="操作" Width="148" MinWidth="144" IsReadOnly="True">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
                                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                                <Button Content="校对" Style="{StaticResource Button.Compact.Secondary}"
+                                                <!-- §L7 按钮不再锁死 Width，交给内容撑开；列宽已按"两个按钮 + 单元格内边距"重算 -->
+                                                <Button Content="校对" Style="{StaticResource Button.Compact.Secondary}" MinWidth="44"
                                                         Command="{Binding DataContext.OpenDrawingFileItemsCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
                                                         CommandParameter="{Binding}" AutomationProperties.Name="查看该图纸的文本条目" />
-                                                <Button Content="打开" Style="{StaticResource Button.Compact.Secondary}" Margin="{DynamicResource Spacing.LeftGap}"
+                                                <Button Content="打开" Style="{StaticResource Button.Compact.Secondary}" MinWidth="44" Margin="{DynamicResource Spacing.LeftGap}"
                                                         Visibility="{Binding HasOutput, Converter={StaticResource BoolToVis}}"
                                                         Command="{Binding DataContext.OpenDrawingOutputCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
                                                         CommandParameter="{Binding}" />
@@ -355,7 +357,8 @@
                     <Border Grid.Row="2" Style="{StaticResource Section.Surface}" Margin="{DynamicResource Spacing.BlockTop}" Padding="0,14,0,0">
                         <Expander x:Name="WorkspaceLogLauncher" Header="运行日志"
                                   AutomationProperties.Name="打开运行日志">
-                        <Grid Height="160" Background="{DynamicResource Brush.BackgroundAlt}" DataContext="{Binding LogViewModel}">
+                        <!-- §L11 日志区不再锁死 160 DIP：给下限并允许长到 320，右侧栏高时日志能显示更多行 -->
+                        <Grid MinHeight="160" MaxHeight="320" Background="{DynamicResource Brush.BackgroundAlt}" DataContext="{Binding LogViewModel}">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="*" />
@@ -364,8 +367,11 @@
                                 <Button Content="复制" Command="{Binding CopyLogsCommand}" Style="{StaticResource Button.Tertiary}" />
                                 <Button Content="清空" Command="{Binding ClearLogsCommand}" Style="{StaticResource Button.Tertiary}" />
                             </StackPanel>
+                            <!-- §L11 与 LogViewerPanel 一致开启虚拟化，长日志滚动不掉帧 -->
                             <ListBox Grid.Row="1" ItemsSource="{Binding LogEntries}" BorderThickness="0"
                                      Background="Transparent" FontFamily="Consolas, Microsoft YaHei UI" FontSize="12"
+                                     VirtualizingPanel.IsVirtualizing="True"
+                                     VirtualizingPanel.VirtualizationMode="Recycling"
                                      ScrollViewer.HorizontalScrollBarVisibility="Auto">
                                 <ListBox.ItemTemplate>
                                     <DataTemplate>

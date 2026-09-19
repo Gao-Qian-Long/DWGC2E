@@ -173,6 +173,9 @@ public partial class MainViewModel
         UpdateDrawingSelection();
         RaiseWorkspaceSummaryProperties();
         RaiseBatchSummaryProperties();
+
+        // 工作区变了就刷新"上次工作区"记录（延迟合并写盘），下次启动据此恢复。
+        ScheduleWorkspaceSessionSave();
     }
 
     private void AttachDrawingFileObserver(DrawingFileItem item)

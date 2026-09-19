@@ -16,7 +16,7 @@ public partial class MainViewModel
         {
             if (!HasSavedAccountSession) return;
             // Reuse the established expiry path so unsaved proofreading, terms and settings survive.
-            _ = RefreshAccountAsync();
+            _ = SafeRefreshAccountAsync();
         });
     }
 

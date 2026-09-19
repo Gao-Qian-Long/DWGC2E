@@ -49,7 +49,7 @@ public partial class MainViewModel
         OnPropertyChanged(nameof(IsGlossaryPage));
         OnPropertyChanged(nameof(IsAccountPage));
         RefreshPageStatistics();
-        if (CurrentPage == PageAccount) _ = RefreshAccountAsync();
+        if (CurrentPage == PageAccount) _ = SafeRefreshAccountAsync();
         if (CurrentPage == PageGlossary) LoadTermEditor();
     }
 

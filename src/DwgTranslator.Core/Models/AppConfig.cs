@@ -141,5 +141,11 @@ public class AppConfig
     // ── 常规 ──
     public bool StartWithWindows { get; set; } = false;
     public bool OpenOutputFolderAfterExport { get; set; } = true;
+
+    /// <summary>
+    /// 启动时恢复上次的工作区（语言对 + 上次打开的图纸列表）。默认开启；关掉后每次启动都是空工作区。
+    /// 记录本身是便利缓存（<c>workspace-session.json</c>），读不出来只退化成空工作区，不影响其它功能。
+    /// </summary>
+    public bool RestoreLastWorkspace { get; set; } = true;
 }
 

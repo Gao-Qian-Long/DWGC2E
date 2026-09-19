@@ -30,9 +30,9 @@ public class LayoutFootprintCommand
                     bool column=e is MText mm && DwgTranslator.Core.Services.VerticalTextLayout.IsCharacterColumn(mm.Text,mm.Rotation,mm.Width,mm.TextHeight);
                     report.Add("INK="+actual+"|ALLOWED="+Replacement.AvailableTextSpace.Measure(e,actual,tr,column));
                     if(e is MText m) {
-                        report.Add($"MTEXT={m.Contents}|ROT={m.Rotation}|WIDTH={m.Width}|ACTUAL={m.ActualWidth},{m.ActualHeight}|LOCATION={m.Location}|ATTACH={m.Attachment}");
+                        report.Add($"MTEXT={Diagnostics.LogTextRedaction.Describe(m.Contents)}|ROT={m.Rotation}|WIDTH={m.Width}|ACTUAL={m.ActualWidth},{m.ActualHeight}|LOCATION={m.Location}|ATTACH={m.Attachment}");
                         var pieces=new DBObjectCollection();m.Explode(pieces);
-                        foreach(DBObject p in pieces) {using(p) if(p is Entity part)report.Add("PIECE="+part.GetType().Name+"|BOX="+part.GeometricExtents+(part is DBText t ? "|TEXT="+t.TextString : ""));}
+                        foreach(DBObject p in pieces) {using(p) if(p is Entity part)report.Add("PIECE="+part.GetType().Name+"|BOX="+part.GeometricExtents+(part is DBText t ? "|TEXT="+Diagnostics.LogTextRedaction.Describe(t.TextString) : ""));}
                     }
                 }
             }

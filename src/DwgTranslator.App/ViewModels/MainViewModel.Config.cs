@@ -115,8 +115,14 @@ public partial class MainViewModel
         {
             Log.Error(ex, "Config load error");
             StatusMessage = Strings.Get("StatusConfigLoadFailed");
+            // 配置读失败时 _config 退回默认值（语言方向、输出目录、并发全是默认）：
+            // 会话恢复据此知道"可以用上次记录里的语言方向兜底"，而不是把这个默认方向当成用户选择。
+            _configLoadFailed = true;
         }
     }
+
+    /// <summary>settings.json 是否未能读出（见 LoadConfig 的 catch）。</summary>
+    private bool _configLoadFailed;
 
     private string _appliedLanguagePair = string.Empty;
     private bool _applyingLanguagePair;
@@ -125,13 +131,16 @@ public partial class MainViewModel
     /// Pushes the configured language pair into the bindable state. Codes the catalog does not know
     /// are kept verbatim, so a hand-edited settings.json still selects that exact language.
     /// </summary>
-    private void ApplyLanguagePair()
+    private void ApplyLanguagePair() => ApplyLanguagePair(_config.SourceLanguage, _config.TargetLanguage);
+
+    /// <summary>把指定的一对语言推到界面状态；供配置加载与"上次工作区"兜底共用。</summary>
+    private void ApplyLanguagePair(string sourceLanguage, string targetLanguage)
     {
         _applyingLanguagePair = true;
         try
         {
-            CurrentSourceLang = TranslationLanguages.Normalize(_config.SourceLanguage);
-            CurrentTargetLang = TranslationLanguages.Normalize(_config.TargetLanguage);
+            CurrentSourceLang = TranslationLanguages.Normalize(sourceLanguage);
+            CurrentTargetLang = TranslationLanguages.Normalize(targetLanguage);
             if (string.Equals(CurrentSourceLang, CurrentTargetLang, StringComparison.OrdinalIgnoreCase))
                 CurrentTargetLang = CurrentSourceLang == "EN" ? "ZH" : "EN";
             _appliedLanguagePair = PairKey(CurrentSourceLang, CurrentTargetLang);
@@ -219,6 +228,9 @@ public partial class MainViewModel
             var path = _settingsPath ?? Path.Combine(App.AppDataDir, "settings.json");
             SettingsStore.Update(path, config => { config.SourceLanguage = CurrentSourceLang; config.TargetLanguage = CurrentTargetLang; });
             _settingsPath = path;
+            // 会话记录里的语言方向要跟着走，否则下次启动记的是旧方向（记录里那一对只在
+            // settings.json 读不出来时用作兜底，但也不该是错的）。
+            ScheduleWorkspaceSessionSave();
             Log.Information("Language pair saved to settings: {Source} -> {Target}", CurrentSourceLang, CurrentTargetLang);
         }
         catch (Exception ex)

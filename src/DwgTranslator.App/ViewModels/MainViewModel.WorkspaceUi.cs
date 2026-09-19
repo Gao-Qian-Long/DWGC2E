@@ -245,6 +245,21 @@ public partial class MainViewModel
     [RelayCommand]
     private void DiscardProofreading()
     {
+        // §L4 丢弃全部未保存校对没有撤销入口，必须先二次确认（与 ClearAll / 批量替换一致）。
+        if (HasUnsavedProofreading
+            && !Views.ConfirmDialog.Ask(
+                Application.Current?.MainWindow,
+                "取消编辑",
+                $"将丢弃 {_proofreadingOriginals.Count} 处未保存的校对更改，且无法撤销。确定取消编辑吗？",
+                confirmText: "取消编辑",
+                danger: true))
+            return;
+
+        DiscardProofreadingCore();
+    }
+
+    private void DiscardProofreadingCore()
+    {
         foreach (var pair in _proofreadingOriginals) { pair.Key.TranslatedText = pair.Value.Text ?? ""; pair.Key.Status = pair.Value.Status; }
         _proofreadingOriginals.Clear();
         OnPropertyChanged(nameof(HasUnsavedProofreading));
@@ -257,7 +272,7 @@ public partial class MainViewModel
         var answer = Views.PromptDialog.Show("校对更改尚未保存。是否保存到当前任务后继续？输出图纸仍需显式导出。", "未保存的校对", MessageBoxButton.YesNoCancel);
         if (answer == MessageBoxResult.Cancel) return false;
         if (answer == MessageBoxResult.Yes) return TrySaveProofreading();
-        DiscardProofreading();
+        DiscardProofreadingCore();
         return true;
     }
     [RelayCommand]

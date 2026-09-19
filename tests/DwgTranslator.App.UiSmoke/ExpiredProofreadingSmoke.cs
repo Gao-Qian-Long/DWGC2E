@@ -49,7 +49,7 @@ public sealed partial class SmokeApp
                 await WaitUntil(() => string.IsNullOrEmpty(SettingsStore.Read(path).AuthTokenEncrypted), "locked credential automatically cleared after release");
                 Check(SettingsStore.Read(path).ActiveAccountId == owner && vm.HasUnsavedProofreading, "retry only clears credential, not owner or dirty edit");
             }
-            vm.DiscardProofreadingCommand.Execute(null);
+            await ConfirmModalsAsync(() => vm.DiscardProofreadingCommand.Execute(null), "expiry discard proofreading");
             vm.Entities.Remove(entity);
             await vm.LogoutAccountCommand.ExecuteAsync(null);
             await vm.SubmitLoginAsync("fixture-not-real-password");
@@ -83,7 +83,7 @@ public sealed partial class SmokeApp
             else
                 await WaitUntil(() => string.IsNullOrEmpty(SettingsStore.Read(path).AuthTokenEncrypted), "draft expiry retry clears token");
             vm.DiscardTermsCommand.Execute(null);
-            vm.DiscardSettingsChangesCommand.Execute(null);
+            await ConfirmModalsAsync(() => vm.DiscardSettingsChangesCommand.Execute(null), "expiry discard settings " + kind);
             await vm.LogoutAccountCommand.ExecuteAsync(null);
             await vm.SubmitLoginAsync("fixture-not-real-password");
             Check(vm.IsAccountLoggedIn, "login recovers after draft expiry: " + kind);

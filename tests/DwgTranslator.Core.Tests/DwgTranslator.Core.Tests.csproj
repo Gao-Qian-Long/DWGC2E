@@ -28,4 +28,6 @@
   </ItemGroup>
 
   <ItemGroup><Compile Include="../../src/DwgTranslator.Cad/Replacement/MTextFitFormatting.cs" Link="Cad/MTextFitFormatting.cs" /></ItemGroup>
+  <!-- 日志脱敏工具不依赖 CAD API，按同样方式链进测试程序集，让"原文不进日志"这条能被直接测到。 -->
+  <ItemGroup><Compile Include="../../src/DwgTranslator.Cad/Diagnostics/LogTextRedaction.cs" Link="Cad/LogTextRedaction.cs" /></ItemGroup>
 </Project>

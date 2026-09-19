@@ -122,6 +122,21 @@ public partial class MainViewModel
     public string OnlineQuotaText => OnlineUsage == null ? "额度待同步" : $"剩余 {OnlineUsage.Remaining:N0} / {OnlineUsage.MonthlyQuota:N0}";
     public string DeviceCountText => !_devicesSynced ? "设备待同步" : $"已绑定 {OnlineDevices.Count} 台设备";
 
+    /// <summary>
+    /// <see cref="RefreshAccountAsync"/> 的受保护入口：账户区刷新是 fire-and-forget 调用点最多的
+    /// 异步操作，异常必须有人观察——否则失败只会变成"界面停在旧状态，没有任何提示"。
+    /// </summary>
+    private async Task SafeRefreshAccountAsync()
+    {
+        try { await RefreshAccountAsync().ConfigureAwait(true); }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "账户刷新失败");
+            AccountFeedback = "账户信息刷新失败，请检查网络后重试。";
+            ToastService.Warning(AccountFeedback);
+        }
+    }
+
     [RelayCommand]
     private async Task RefreshAccountAsync()
     {

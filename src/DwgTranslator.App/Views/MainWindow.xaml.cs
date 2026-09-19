@@ -20,6 +20,10 @@ public partial class MainWindow : Window
     private readonly MainViewModel _viewModel;
     private readonly Dictionary<string, FrameworkElement> _pageCache = new(StringComparer.Ordinal);
     private bool? _isCompactLayout;
+    /// <summary>§L5 断点：进入 compact 的客户区宽度上限，必须等于 MinWidth 才可达。</summary>
+    private const double CompactEnterWidth = 1120;
+    /// <summary>§L5 迟滞上限：已进入 compact 后放宽到 1136，避免侧栏在边界上反复收放。</summary>
+    private const double CompactLeaveWidth = 1136;
 
     // The viewport is measured in DIP. No fixed minimum canvas and no global scale transform.
     private void PageViewport_SizeChanged(object sender, SizeChangedEventArgs e)
@@ -32,21 +36,32 @@ public partial class MainWindow : Window
     private void UpdateResponsiveLayout()
     {
         if (PageHost == null) return;
-        var viewportWidth = ActualWidth;
-        var compact = _isCompactLayout switch
+        // 用客户区宽度而不是 Window.ActualWidth：无边框窗口的 ActualWidth 会包含
+        // WindowChrome 的不可见调整边框，导致 MinWidth=1120 时读到 1120+边框宽，
+        // 阈值判定永远差几 DIP。
+        var viewportWidth = Content is FrameworkElement shell && shell.ActualWidth > 0 ? shell.ActualWidth : ActualWidth;
+        // §L5 窗口下限已改为 1120×640：阈值必须与下限对齐，否则 compact 分支永不可达
+        // （原 null 分支 <1100 在 MinWidth=1280 下是死代码）。
+        // 两个陷阱：① 判定必须读旧状态、写回在后面，否则读到的是自己刚写进去的值；
+        // ② 窗口宽度经 DPI 换算带浮点尾差（1120 读到 1120.0000000000002），
+        //    先吸附到整 DIP 再比较，否则窗口正好停在边界时永远判不中。
+        viewportWidth = Math.Round(viewportWidth);
+        var wasCompact = _isCompactLayout;
+        var compact = wasCompact switch
         {
-            null => viewportWidth < 1100,
-            false => viewportWidth < 1080,
-            true => viewportWidth <= 1120
+            null => viewportWidth <= CompactEnterWidth,
+            false => viewportWidth <= CompactEnterWidth,
+            true => viewportWidth <= CompactLeaveWidth
         };
         _isCompactLayout = compact;
         PageHost.MaxWidth = ActualWidth >= 1900 ? 1600 : double.PositiveInfinity;
         Controls.ResponsiveLayout.SetIsCompact(this, compact);
-        Controls.ResponsiveLayout.SetIsShort(this, ActualHeight < 540);
+        // IsShort 与宽度无关，只按高度判定（同样先吸附整 DIP，避开 DPI 尾差）。
+        Controls.ResponsiveLayout.SetIsShort(this, Math.Round(ActualHeight) < 640);
         SidebarColumn.Width = new GridLength(compact ? 64 : 224);
         Resources["Spacing.Page"] = compact ? new Thickness(20) : new Thickness(32,24,32,24);
-        ShellStatusLabel.MaxWidth = compact ? 180 : 520;
-        ShellProgressLabel.MaxWidth = compact ? 100 : 460;
+        ShellStatusLabel.MaxWidth = compact ? 180 : 420;
+        ShellProgressLabel.MaxWidth = compact ? 100 : 260;
         ShellVersionLabel.MaxWidth = compact ? 100 : 120;
         BrandLabel.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
         SidebarBrand.Margin = new Thickness(16, compact ? 12 : 24, 0, compact ? 12 : 24);
@@ -69,8 +84,12 @@ public partial class MainWindow : Window
         SizeChanged += (_, _) => UpdateResponsiveLayout();
         Loaded += (_, _) => UpdateResponsiveLayout();
         var area = SystemParameters.WorkArea;
-        Width = Math.Min(Width, area.Width);
-        Height = Math.Min(Height, area.Height);
+        // §L5 窗口下限不能大于屏幕工作区：125% 缩放的 1366×768（约 1093×530 DIP）上
+        // 否则会得到"必然大于屏幕、且拖不小"的窗口。仍保留 800×560 的可用下界。
+        MinWidth = Math.Min(MinWidth, Math.Max(800, area.Width - 20));
+        MinHeight = Math.Min(MinHeight, Math.Max(560, area.Height - 20));
+        Width = Math.Min(Math.Max(Width, MinWidth), area.Width);
+        Height = Math.Min(Math.Max(Height, MinHeight), area.Height);
 
         // Resolve ViewModel from DI container (falls back to parameterless ctor if DI not ready)
         // 依赖全部由 DI 装配（MainViewModel 只有这一个构造函数）：容器没起来就是致命错误，

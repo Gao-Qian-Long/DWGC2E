@@ -144,7 +144,9 @@ try {
     } else { Write-Host 'TESTS_SKIPPED: explicitly requested; build and package checks still run.' }
     $revision = (& git rev-parse --short HEAD).Trim()
     $version = "2.1.1+ui.$stamp.$revision"
-    & dotnet publish (Join-Path $root 'src/DwgTranslator.App/DwgTranslator.App.csproj') -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true "-p:InformationalVersion=$version" -p:IncludeSourceRevisionInInformationalVersion=false -o $stage
+    # Symbols are suppressed at the source (-p:DebugType=none -p:DebugSymbols=false) so the candidate
+    # never receives a *.pdb in the first place; the block after the architecture audit only asserts it.
+    & dotnet publish (Join-Path $root 'src/DwgTranslator.App/DwgTranslator.App.csproj') -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -p:DebugType=none -p:DebugSymbols=false "-p:InformationalVersion=$version" -p:IncludeSourceRevisionInInformationalVersion=false -o $stage
     if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed: $LASTEXITCODE" }
     foreach ($folder in @('glossaries')) { New-Item -ItemType Directory -Path (Join-Path $stage $folder) -Force | Out-Null }
     Copy-Item -LiteralPath (Join-Path $root 'settings.json.example') -Destination (Join-Path $stage 'settings.json') -Force
@@ -168,13 +170,19 @@ try {
     & dotnet run --project (Join-Path $root 'tests/ArchitectureAudit/ArchitectureAudit.csproj') -c Release -- $root $auditReport $stage
     if ($LASTEXITCODE -ne 0) { throw 'Candidate architecture/resource audit failed; installed release preserved' }
     Write-Host 'CANDIDATE_ARCHITECTURE_AUDIT=PASS'
-    # Symbols are private diagnostics, never part of runtime or public payload.
+    # Symbols are private diagnostics, never part of runtime or public payload. This block is now a
+    # defensive assertion rather than the cleanup step: publish runs with DebugType=none, so a clean
+    # candidate has no *.pdb at all and the check passes silently. A symbol that still appears means
+    # the publish properties stopped applying (a project forcing its own DebugType, a new copy step),
+    # so it is moved out for inspection and the delivery stops instead of continuing unnoticed.
     $symbols = @(Get-ChildItem -LiteralPath $stage -Filter '*.pdb' -File)
     if ($symbols.Count) {
         $symbolDir = Join-Path $deliveryDir 'symbols'
         New-Item -ItemType Directory -Path $symbolDir | Out-Null
         foreach ($symbol in $symbols) { Move-Item -LiteralPath (Assert-WorkspacePath $symbol.FullName) -Destination (Assert-WorkspacePath (Join-Path $symbolDir $symbol.Name)) }
+        throw "Publish produced debug symbols although DebugType=none/DebugSymbols=false were passed: $($symbols.Name -join ', '). Symbols were moved to $symbolDir; nothing was packaged and the installed release is unchanged. Fix the publish properties before delivering."
     }
+    Write-Host 'PUBLISH_SYMBOLS=NONE'
     & (Join-Path $PSScriptRoot 'Get-DesktopPayload.ps1') -PublishDir $stage | Out-Null
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root 'tests/BuildPipeline/Test-DesktopPayload.ps1') -PublishDir $stage -ResultDir (Join-Path $deliveryDir 'payload-regression')
     if ($LASTEXITCODE -ne 0) { throw 'Public payload privacy regression failed' }

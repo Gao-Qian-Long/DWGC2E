@@ -55,6 +55,8 @@
     <Thickness x:Key="Spacing.RowInset">0,16,0,8</Thickness>
     <Thickness x:Key="Spacing.Toolbar">0,4,0,8</Thickness>
     <Thickness x:Key="Spacing.LeftGap">8,0,0,0</Thickness>
+    <!-- 选项说明文字的左缩进：对齐到单选框/复选框的文字起点，而不是圆点。 -->
+    <Thickness x:Key="Spacing.LeftIndent">20,0,0,0</Thickness>
     <Thickness x:Key="Spacing.Vertical">0,8,0,8</Thickness>
     <!-- ── 控件尺寸（同一工具栏不再出现多种高度）── -->
     <sys:Double x:Key="Size.Control">36</sys:Double>
@@ -323,4 +325,7 @@
     <sys:Double x:Key="Size.FormMax">800</sys:Double>
     <sys:Double x:Key="Size.WorkspaceMax">1600</sys:Double>
     <sys:Double x:Key="Size.IconButton">32</sys:Double>
+    <!-- §L18 状态栏文本上限：1120 宽 + 224 侧栏时仍给进度条留下保底宽度 -->
+    <sys:Double x:Key="Size.StatusTextMax">420</sys:Double>
+    <sys:Double x:Key="Size.ProgressTextMax">260</sys:Double>
 </ResourceDictionary>

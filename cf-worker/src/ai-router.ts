@@ -150,7 +150,16 @@ async function configuredProviders(env: AiEnv) {
   return (result.results || []).filter(row => !row.cooldown_until || Date.parse(String(row.cooldown_until)) <= current);
 }
 
-export function stableProviderOrder(providers: Row[], requestId: string) {
+// One drawing is translated in many batches, so seeding the weighted shuffle with the per-request
+// id let every batch pick a different provider and mixed several models inside a single drawing.
+// Callers pass a per-drawing seed instead; a missing one still falls back to the request id.
+function routingSeed(userPayload: unknown) {
+  if (!userPayload || typeof userPayload !== "object") return null;
+  const taskId = (userPayload as { billing_task_id?: unknown }).billing_task_id;
+  return typeof taskId === "string" && taskId.trim() ? taskId : null;
+}
+
+export function stableProviderOrder(providers: Row[], seedText: string) {
   const byPriority = new Map<number, Row[]>();
   for (const provider of providers) {
     const priority = Number(provider.priority || 100);
@@ -161,7 +170,7 @@ export function stableProviderOrder(providers: Row[], requestId: string) {
   for (const priority of [...byPriority.keys()].sort((a, b) => a - b)) {
     const group = byPriority.get(priority)!;
     let seed = 2166136261;
-    for (const character of requestId + ":" + priority) seed = Math.imul(seed ^ character.charCodeAt(0), 16777619) >>> 0;
+    for (const character of seedText + ":" + priority) seed = Math.imul(seed ^ character.charCodeAt(0), 16777619) >>> 0;
     const pool = [...group];
     while (pool.length) {
       const total = pool.reduce((sum, provider) => sum + Math.max(1, Number(provider.weight || 1)), 0);
@@ -333,7 +342,8 @@ export async function probeProvider(env: AiEnv, providerId: string): Promise<AiP
 export async function routeCompletion(env: AiEnv, requestId: string, userPayload: unknown): Promise<AiRouteResult> {
   const policy = await context(env);
   const configured = await configuredProviders(env);
-  let providers: Row[] = configured.length ? stableProviderOrder(configured, requestId) : [];
+  // Shuffle on the per-drawing task id so every batch of one drawing prefers the same provider.
+  let providers: Row[] = configured.length ? stableProviderOrder(configured, routingSeed(userPayload) ?? requestId) : [];
   if (!providers.length) {
     if (!env.DEEPSEEK_API_KEY) throw new Error("no_ai_provider");
     // Falling back to the built-in provider is a visible configuration state, never a silent one:

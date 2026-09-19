@@ -41,15 +41,5 @@ public partial class BatchTasksPage : UserControl
         // Rebuilding the filtered collection during CellEditEnding interrupts DataGrid commit.
         Dispatcher.InvokeAsync(() => { if (vm.HasUnsavedProofreading) vm.StatusMessage = "校对更改尚未保存。请保存更改或取消编辑。"; }, DispatcherPriority.Background);
     }
-    /// <summary>行内 "···" 按钮：左键也能展开任务操作菜单（§24）。</summary>
-    private void RowMenu_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is not Button button || button.ContextMenu is null) return;
-
-        button.ContextMenu.PlacementTarget = button;
-        button.ContextMenu.Placement = PlacementMode.Bottom;
-        button.ContextMenu.HorizontalOffset = -120;
-        button.ContextMenu.IsOpen = true;
-    }
 }
 

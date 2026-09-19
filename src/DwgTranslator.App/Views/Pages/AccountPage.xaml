@@ -61,20 +61,22 @@
                         </StackPanel>
                     </Grid>
                 </Border>
+                <!-- AdaptiveCardGrid owns row/column placement and inter-card margins for its
+                     children, so the cards declare neither Grid.Column nor Margin here. -->
                 <controls:AdaptiveCardGrid x:Name="MembershipMetrics" Margin="{DynamicResource Spacing.StackLoose}">
 
-                    <Border Style="{StaticResource Account.Card}" Margin="{DynamicResource Spacing.InlineWide}"><StackPanel>
+                    <Border Style="{StaticResource Account.Card}"><StackPanel>
                         <TextBlock Text="当前套餐" Style="{StaticResource InfoLabel}"/>
                         <StackPanel Orientation="Horizontal" Margin="0,10,0,8"><TextBlock Text="{Binding OnlinePlanText}" FontSize="24" FontWeight="SemiBold" Foreground="{DynamicResource Brush.TextPrimary}"/></StackPanel>
                         <TextBlock Text="以当前账号同步权益为准" Style="{StaticResource CaptionStyle}" TextWrapping="Wrap"/>
                     </StackPanel></Border>
-                    <Border Grid.Column="1" Style="{StaticResource Account.Card}" Margin="{DynamicResource Spacing.InlineWide}"><StackPanel>
+                    <Border Style="{StaticResource Account.Card}"><StackPanel>
                         <TextBlock Text="字符额度" Style="{StaticResource InfoLabel}"/>
                         <TextBlock Text="{Binding OnlineQuotaText}" FontSize="17" FontWeight="SemiBold" Foreground="{DynamicResource Brush.Primary}" TextWrapping="Wrap" Margin="{DynamicResource Spacing.BlockTop}"/>
                         <ProgressBar x:Name="QuotaProgress" Minimum="0" Maximum="{Binding OnlineUsage.MonthlyQuota}" Value="{Binding OnlineUsage.Remaining, Mode=OneWay}" Height="5" Margin="0,12,0,10"><ProgressBar.Style><Style TargetType="ProgressBar" BasedOn="{StaticResource {x:Type ProgressBar}}"><Style.Triggers><DataTrigger Binding="{Binding OnlineUsage}" Value="{x:Null}"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger><DataTrigger Binding="{Binding OnlineUsage.MonthlyQuota}" Value="0"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></ProgressBar.Style></ProgressBar>
                         <TextBlock Text="离线翻译按原文字符的 30% 计量" Style="{StaticResource CaptionStyle}" TextWrapping="Wrap"/>
                     </StackPanel></Border>
-                    <Border Grid.Column="2" Style="{StaticResource Account.Card}"><StackPanel><TextBlock Text="会员有效期" Style="{StaticResource InfoLabel}"/><TextBlock Text="{Binding OnlineMembershipExpiryText}" FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap" Margin="{DynamicResource Spacing.Vertical}"/><TextBlock Text="购买后刷新，可同步最新权益" Style="{StaticResource CaptionStyle}" TextWrapping="Wrap"/></StackPanel></Border>
+                    <Border Style="{StaticResource Account.Card}"><StackPanel><TextBlock Text="会员有效期" Style="{StaticResource InfoLabel}"/><TextBlock Text="{Binding OnlineMembershipExpiryText}" FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap" Margin="{DynamicResource Spacing.Vertical}"/><TextBlock Text="购买后刷新，可同步最新权益" Style="{StaticResource CaptionStyle}" TextWrapping="Wrap"/></StackPanel></Border>
                 </controls:AdaptiveCardGrid>
                 <Grid x:Name="MembershipDetails" SizeChanged="MembershipDetails_SizeChanged">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>

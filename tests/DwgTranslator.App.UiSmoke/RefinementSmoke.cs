@@ -18,6 +18,26 @@ public sealed partial class SmokeApp
         var root = (FrameworkElement)window.Content;
         var host = (FrameworkElement)window.FindName("PageHost");
         Check((double)Resources["FontSize.Body"] == 14 && (double)Resources["FontSize.Table"] == 14, "refinement body and table tokens 14 DIP");
+        // §L5 1120×640 是最小支持尺寸，该尺寸下 compact 分支必须真正生效，随后恢复为非 compact。
+        window.Width = 1120; window.Height = 640;
+        await WaitForStableAsync(() => window.ActualWidth, "window width 1120x640");
+        await WaitForStableAsync(() => host.ActualWidth, "page canvas 1120x640");
+        var sidebarProbe = (System.Windows.Controls.ColumnDefinition)window.FindName("SidebarColumn");
+        Console.WriteLine($"INFO compact probe: actual={window.ActualWidth:F1}x{window.ActualHeight:F1} content={((FrameworkElement)window.Content).ActualWidth:F1} sidebar={sidebarProbe.Width.Value:F1} host={host.ActualWidth:F1} pageMargin={window.Resources["Spacing.Page"]}");
+        Check(ResponsiveLayout.GetIsCompact(window) && (window.MinWidth <= 1120 && window.MinHeight <= 640),
+            $"compact layout engages at the supported minimum window size (min={window.MinWidth}x{window.MinHeight}, actual={window.ActualWidth:F1}x{window.ActualHeight:F1}, content={((FrameworkElement)window.Content).ActualWidth:F1}, host={host.ActualWidth:F1}, sidebar={sidebarProbe.Width.Value:F1}, compact={ResponsiveLayout.GetIsCompact(window)})");
+        Check(Math.Abs(((System.Windows.Controls.ColumnDefinition)window.FindName("SidebarColumn")).Width.Value - 64) < 0.1,
+            "compact sidebar collapses to the 64 DIP icon rail");
+        vm.CurrentPage = MainViewModel.PageSettings;
+        await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+        var compactSettings = FindVisual<SettingsPage>(window);
+        Check(((FrameworkElement)compactSettings.FindName("CompactSections")).IsVisible,
+            "compact window exposes the section picker instead of the hidden nav column");
+        vm.CurrentPage = "translate";
+        await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+        window.Width = 1280; window.Height = 720;
+        await WaitForStableAsync(() => window.ActualWidth, "window width 1280x720");
+        Check(!ResponsiveLayout.GetIsCompact(window), "leaving the minimum restores the full sidebar");
         foreach (var size in new[] { new Size(1280,720), new Size(1366,768), new Size(1440,900), new Size(1920,1080) })
         {
             window.Width = size.Width; window.Height = size.Height;
@@ -375,7 +395,8 @@ public sealed partial class SmokeApp
             }
         }
         await VerifyPrecisionWheelHandoffAsync();
-        Check(window.MinWidth >= 1280 && window.MinHeight >= 720, "desktop shell enforces a usable normal-workspace minimum");
+        Check(window.MinWidth <= 1120 && window.MinHeight <= 640 && window.MinWidth >= 800 && window.MinHeight >= 560,
+            $"desktop shell minimum stays usable and never exceeds the compact breakpoint (min={window.MinWidth}x{window.MinHeight})");
         window.Width = 1366; window.Height = 768;
         await Dispatcher.InvokeAsync(() => {}, DispatcherPriority.ApplicationIdle);
         vm.CurrentPage = previous;

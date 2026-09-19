@@ -92,7 +92,7 @@ public sealed partial class SmokeApp
         }
         finally
         {
-            vm.DiscardProofreadingCommand.Execute(null);
+            await ConfirmModalsAsync(() => vm.DiscardProofreadingCommand.Execute(null), "proofreading persistence cleanup");
             store.Clear();
             await Switch(originalToken, originalOwner);
         }

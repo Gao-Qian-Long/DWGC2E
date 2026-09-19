@@ -26,6 +26,24 @@ public partial class App : Application
     public static CadLogReaderService? CadLogReader { get; private set; }
 
     /// <summary>
+    /// settings.json 读取失败的可见记录（null = 本次启动没有遇到）。这条信息必须能走到界面上：
+    /// 失败发生在 DI 容器装配期间（ViewModel 还不存在），而且日志里只有一行 Warning，
+    /// 用户看到的是"界面照常、设置悄悄变成默认值"。先在这里攒下来，等
+    /// <c>MainViewModel.InitializeAsync</c> 起来后再随启动降级报告一起告诉用户。
+    /// </summary>
+    public static string? SettingsReadWarning { get; private set; }
+
+    /// <summary>
+    /// 同一会话内未处理 UI 异常的次数。
+    /// 阈值取 3 的理由：1~2 次通常是"一次性"故障（一个已释放的对象穿帮、一次绑定、一段动画），
+    /// 为此直接重启会丢掉用户正在做的校对；连续 3 次说明界面状态已经不可信——每次异常都跳过了
+    /// 那一小段工作，异常还会继续冒出来——此时才提示重启，并让用户自己决定何时重启。
+    /// </summary>
+    private const int RepeatedFailureRestartThreshold = 3;
+    private int _unhandledUiExceptionCount;
+    private bool _restartPromptIssued;
+
+    /// <summary>
     /// Files passed on the command line, imported by <c>MainWindow</c> once it is loaded.
     /// Cleared after the first import so a second window (if one is ever opened) does not
     /// import them again.
@@ -52,7 +70,12 @@ public partial class App : Application
 
     private void OnDispatcherUnhandledException(object sender, System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e)
     {
-        Log.Fatal(e.Exception, "Unhandled UI exception");
+        // 完整异常链（含堆栈）必须落到日志里：这是排查"莫名其妙的小 bug"的唯一线索。
+        // 级别用 Error 而不是 Fatal——进程并没有结束，把一次已恢复的异常记成致命错误会让日志面板
+        // 每次都为同一类瞬态故障报红，反而把真正致命的记录淹掉。
+        var count = ++_unhandledUiExceptionCount;
+        Log.Error(e.Exception, "Unhandled UI exception #{Count}; windowLoaded={Loaded}", count, MainWindow is { IsLoaded: true });
+
         // A startup XAML failure has no main window to close; do not leave a hidden process locking the release.
         var recovering = MainWindow is { IsLoaded: true };
         // Graceful degradation only applies when there is a window left to degrade into. MsgUnhandledError
@@ -63,9 +86,18 @@ public partial class App : Application
         {
             if (recovering)
             {
-                MessageBox.Show(
-                    Strings.Get("MsgUnhandledError", e.Exception.GetType().Name),
-                    Strings.Get("MsgTitleWarning"), MessageBoxButton.OK, MessageBoxImage.Warning);
+                // 反复出错时只提示一次：每次异常都弹一次模态框会把界面堵死，用户反而没法保存手上的工作。
+                if (count >= RepeatedFailureRestartThreshold && !_restartPromptIssued)
+                {
+                    _restartPromptIssued = true;
+                    PromptRestartAfterRepeatedFailures(count, e.Exception);
+                }
+                else if (count < RepeatedFailureRestartThreshold)
+                {
+                    MessageBox.Show(
+                        Strings.Get("MsgUnhandledError", e.Exception.GetType().Name),
+                        Strings.Get("MsgTitleWarning"), MessageBoxButton.OK, MessageBoxImage.Warning);
+                }
             }
             else
             {
@@ -79,6 +111,47 @@ public partial class App : Application
         if (!recovering) Shutdown(1);
     }
 
+    /// <summary>
+    /// 反复出错后的重启入口：解释"为什么会看到这个提示"，并把是否重启交给用户。
+    /// 不自动重启——用户可能正在校对，重启会丢掉未保存的修改。
+    /// </summary>
+    private void PromptRestartAfterRepeatedFailures(int count, Exception failure)
+    {
+        var answer = MessageBox.Show(
+            $"应用本次运行已遇到 {count} 次未处理错误，界面状态可能已经不可靠。\n\n"
+            + $"错误: {failure.GetType().Name}\n\n"
+            + "建议立即重启应用。重启会中断正在执行的任务（任务记录已保存，可继续），"
+            + "未保存的校对修改会丢失。\n\n是否现在重启？",
+            Strings.Get("MsgTitleWarning"), MessageBoxButton.YesNo, MessageBoxImage.Warning);
+        if (answer == MessageBoxResult.Yes) RestartApplication();
+    }
+
+    /// <summary>重新拉起本进程（单文件发布下 <c>Environment.ProcessPath</c> 就是原始 exe），然后退出当前进程。</summary>
+    private static void RestartApplication()
+    {
+        try
+        {
+            var executable = Environment.ProcessPath;
+            if (string.IsNullOrWhiteSpace(executable))
+            {
+                Log.Warning("无法确定可执行文件路径，跳过自动重启，请手动重新打开应用");
+            }
+            else
+            {
+                var startInfo = new System.Diagnostics.ProcessStartInfo(executable) { UseShellExecute = true };
+                // 带上原始命令行参数，避免重启后丢掉"打开方式"传进来的图纸。
+                foreach (var argument in Environment.GetCommandLineArgs().Skip(1)) startInfo.ArgumentList.Add(argument);
+                System.Diagnostics.Process.Start(startInfo);
+                Log.Information("应用已按用户要求重启：{Executable}", executable);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "自动重启失败，请手动重新打开应用");
+        }
+        Current.Shutdown(2);
+    }
+
     private void OnUnhandledException(object sender, UnhandledExceptionEventArgs e)
     {
         var ex = e.ExceptionObject as Exception;
@@ -87,11 +160,30 @@ public partial class App : Application
         {
             try
             {
+                // 槽位语义与 MsgFatalError 模板一致：{0} = 错误描述（异常类型 + 原始消息），
+                // {1} = 日志位置。原先把消息当路径做了 '\' -> '/' 归一化，等于把消息里的路径
+                // 改成了斜杠，既没用又读起来像路径。
+                var description = ex == null ? "Unknown" : $"{ex.GetType().Name}: {ex.Message}";
                 MessageBox.Show(
-                    Strings.Get("MsgFatalError", (ex?.Message ?? "Unknown").Replace('\\', '/'), Path.Combine(AppDataDir, "logs").Replace('\\', '/')),
+                    Strings.Get("MsgFatalError", description, Path.Combine(AppDataDir, "logs").Replace('\\', '/')),
                     Strings.Get("MsgTitleFatalError"), MessageBoxButton.OK, MessageBoxImage.Error);
             }
             catch { /* ignore */ }
+            return;
+        }
+
+        // CLR 还活着，但没有任何用户可见的出口：后台线程上的故障会被记进日志文件而已，
+        // 用户看到的是"程序有时候就是不对"。这里补一次可见提示（回调在工作线程上，必须切到 UI 线程）。
+        if (ex == null) return;
+        try
+        {
+            Dispatcher.Invoke(() => MessageBox.Show(
+                Strings.Get("MsgUnhandledError", ex.GetType().Name),
+                Strings.Get("MsgTitleWarning"), MessageBoxButton.OK, MessageBoxImage.Warning));
+        }
+        catch (Exception notifyFailure)
+        {
+            Log.Debug(notifyFailure, "非终止异常的用户提示无法显示（可能正在退出）");
         }
     }
 
@@ -131,7 +223,7 @@ public partial class App : Application
         var logPath = Path.Combine(AppDataDir, "logs", "dwgtranslator-.log");
 
         // Read minimum log level from settings (default: Debug)
-        var configuredLogLevel = ReadConfiguredLogLevel();
+        var configuredLogLevel = ReadConfiguredLogLevel(out var logLevelWarning);
 
         LogLevelSwitch.MinimumLevel = configuredLogLevel;
         Log.Logger = new LoggerConfiguration()
@@ -150,6 +242,10 @@ public partial class App : Application
             .CreateLogger();
 
         Log.Information("Application started. App data: {Dir}", AppDataDir);
+
+        // Logger 已经就绪，这时候报"日志级别没读到"才有人看得见（日志文件 + 界面日志面板）。
+        if (logLevelWarning != null)
+            Log.Warning("日志级别配置读取失败，已回退到 Debug：{Detail}", logLevelWarning);
 
         // Start reading CAD plugin log files so they appear in the App's log viewer
         var cadLogDir = Path.Combine(AppDataDir, "logs");
@@ -196,9 +292,15 @@ public partial class App : Application
     /// <summary>
     /// Reads the MinimumLogLevel from the settings file and maps it to a Serilog LogEventLevel.
     /// Falls back to Debug if the file doesn't exist or the value is invalid.
+    /// <para>
+    /// 读取失败的原因通过 <paramref name="warning"/> 带出去，而不是在这里写日志：本方法在
+    /// <c>Log.Logger</c> 建立之前运行，此刻写日志会落到静默 logger 上，文件与日志面板都看不到
+    /// （旧实现就是一个空的 catch，用户只会发现"我设的日志级别没生效"）。
+    /// </para>
     /// </summary>
-    private static LogEventLevel ReadConfiguredLogLevel()
+    private static LogEventLevel ReadConfiguredLogLevel(out string? warning)
     {
+        warning = null;
         try
         {
             var settingsPath = Path.Combine(AppDataDir, "settings.json");
@@ -226,9 +328,10 @@ public partial class App : Application
                 }
             }
         }
-        catch
+        catch (Exception ex)
         {
-            // Fall back to Debug on any error
+            // 读到一半失败（文件被占用、内容损坏）= 无法确定用户想要的级别，退回 Debug 并把原因带出去。
+            warning = $"{ex.GetType().Name}: {ex.Message}";
         }
         return LogEventLevel.Debug;
     }
@@ -267,7 +370,10 @@ public partial class App : Application
             }
             catch (Exception ex)
             {
+                // 只写日志的话，用户看到的是"界面照常、设置悄悄回到默认值"（输出目录、并发、语言全变）。
+                // 这里把结论留给界面：DI 阶段还没有 ViewModel，InitializeAsync 起来后会把它报出来。
                 Log.Warning(ex, "读取 settings.json 失败，改用默认配置");
+                SettingsReadWarning ??= $"settings.json 读取失败（{ex.GetType().Name}），本次启动使用默认设置";
                 return new DwgTranslator.Core.Models.AppConfig();
             }
         }
@@ -290,7 +396,11 @@ public partial class App : Application
                         persistedLanguage = config.Language;
                 }
             }
-            catch { /* use default language */ }
+            catch (Exception ex)
+            {
+                // 静默 catch 的代价是"界面语言莫名其妙变回默认"，至少留下一条可搜索的记录。
+                Log.Debug(ex, "读取界面语言失败，使用默认语言");
+            }
             return new LocalizationService(persistedLanguage);
         });
 

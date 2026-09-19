@@ -105,7 +105,7 @@ public partial class MainViewModel
     private bool _settingsRestartRequired;
     private AppConfig? _settingsBaseline;
     public AppConfig SettingsDraft => _settingsDraft ??= BeginSettingsEdit();
-    private static readonly string[] EditableSettings = ["Language", "StartWithWindows", "AutoCheckUpdate", "OpenOutputFolderAfterExport", "ProtectDimensions", "ProtectTolerances", "ProtectModels", "GlossaryFirst", "MaxTranslationConcurrency", "LocalWorkerCount", "AiConcurrency", "MemoryOptimization", "MaxRetryCount", "ExportDirectory", "OutputNamingPattern", "DuplicatePolicy", "BackupSourceBeforeWrite", "AutoCadInstallPath", "CadPluginPath", "MinimumLogLevel"];
+    private static readonly string[] EditableSettings = ["Language", "StartWithWindows", "RestoreLastWorkspace", "AutoCheckUpdate", "OpenOutputFolderAfterExport", "ProtectDimensions", "ProtectTolerances", "ProtectModels", "GlossaryFirst", "MaxTranslationConcurrency", "LocalWorkerCount", "AiConcurrency", "MemoryOptimization", "MaxRetryCount", "ExportDirectory", "OutputNamingPattern", "DuplicatePolicy", "BackupSourceBeforeWrite", "AutoCadInstallPath", "CadPluginPath", "MinimumLogLevel"];
 
     public bool HasSettingsValidationErrors => !_settingsInputsValid;
     public bool HasPendingSettingsApplication => _settingsPendingApply;
@@ -229,7 +229,7 @@ public partial class MainViewModel
             var result = Views.PromptDialog.Show("设置尚未保存。是否保存后继续？", "未保存的设置", System.Windows.MessageBoxButton.YesNoCancel);
             if (result == System.Windows.MessageBoxResult.Cancel) return false;
             if (result == System.Windows.MessageBoxResult.Yes && !SaveSettingsPage()) return false;
-            if (result == System.Windows.MessageBoxResult.No) DiscardSettingsChanges();
+            if (result == System.Windows.MessageBoxResult.No) DiscardSettingsChangesCore();
         }
         return ConfirmLeaveGlossary();
     }
@@ -238,6 +238,21 @@ public partial class MainViewModel
 
     [RelayCommand]
     private void DiscardSettingsChanges()
+    {
+        // §L4 放弃未保存的设置没有撤销入口，需二次确认；无未保存内容时静默返回，不弹窗。
+        if (!HasUnsavedSettings && _settingsInputsValid) return;
+        if (!Views.ConfirmDialog.Ask(
+                Application.Current?.MainWindow,
+                "放弃更改",
+                "将丢弃尚未保存的设置更改，已应用的配置不受影响。确定放弃吗？",
+                confirmText: "放弃更改",
+                danger: true))
+            return;
+
+        DiscardSettingsChangesCore();
+    }
+
+    private void DiscardSettingsChangesCore()
     {
         _settingsDraft = null;
         _settingsInputsValid = true;

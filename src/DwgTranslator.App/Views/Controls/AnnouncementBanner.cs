@@ -27,10 +27,12 @@ public sealed class AnnouncementBanner : Border
 
     public AnnouncementBanner()
     {
-        Height = 32; Width = 220; Background = Brushes.Transparent;
-        _button = new Button { Width = double.NaN, Height = 32, Padding = new Thickness(6,0,6,0), HorizontalContentAlignment = HorizontalAlignment.Stretch, ToolTip = "查看公告" };
+        // §L20 顶栏列宽 1120 起可收缩：公告条由固定 220 改为 160..320 弹性宽度
+        Height = 32; MinWidth = 160; MaxWidth = 320; Background = Brushes.Transparent;
+        _button = new Button { Width = double.NaN, Height = 32, Padding = new Thickness(6,0,6,0), HorizontalContentAlignment = HorizontalAlignment.Stretch, HorizontalAlignment = HorizontalAlignment.Stretch, ToolTip = "查看公告" };
         _button.SetResourceReference(StyleProperty, "Button.Icon");
-        var row = new Grid { Width = 200 }; row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(24) }); row.ColumnDefinitions.Add(new ColumnDefinition());
+        var row = new Grid { MinWidth = 140, HorizontalAlignment = HorizontalAlignment.Stretch };
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(24) }); row.ColumnDefinitions.Add(new ColumnDefinition());
         var icon = new Grid { Width = 20, Height = 22 };
         var bell = new System.Windows.Shapes.Path { Width = 16, Height = 16, Stretch = Stretch.Uniform, StrokeThickness = 1.5,
             Data = Geometry.Parse("M 3,13 L 3,7 C 3,0 15,0 15,7 L 15,13 L 17,15 L 1,15 Z M 7,18 Q 9,20 11,18") };
@@ -40,8 +42,8 @@ public sealed class AnnouncementBanner : Border
         _ticker.SetResourceReference(TextBlock.ForegroundProperty, "Brush.TextSecondary");
         _ticker.RenderTransform = _offset;
         // Canvas gives the text its natural width; the parent clips it to the fixed region.
-        var canvas = new Canvas { Height = 20, VerticalAlignment = VerticalAlignment.Center }; canvas.Children.Add(_ticker);
-        _viewport = new Border { ClipToBounds = true, Child = canvas, Margin = new Thickness(6,0,0,0) };
+        var canvas = new Canvas { Height = 20, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left }; canvas.Children.Add(_ticker);
+        _viewport = new Border { ClipToBounds = true, HorizontalAlignment = HorizontalAlignment.Stretch, Child = canvas, Margin = new Thickness(6,0,0,0) };
         Grid.SetColumn(_viewport, 1); row.Children.Add(_viewport); _button.Content = row; Child = _button;
         _button.Click += (_, _) => OpenAnnouncement();
         _button.MouseEnter += (_, _) => _offset.BeginAnimation(TranslateTransform.XProperty, null);

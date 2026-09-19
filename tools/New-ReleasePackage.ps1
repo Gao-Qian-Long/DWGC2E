@@ -97,16 +97,18 @@ function Convert-File([string]$path, [System.Text.Encoding]$target) {
     [IO.File]::WriteAllText($path, $text, $target)
 }
 
-Copy-Item -LiteralPath (Join-Path $installer 'Install.ps1') -Destination (Join-Path $stage 'Install.ps1') -Force
-Write-Step "复制 Install.ps1"
-Copy-Item -LiteralPath (Join-Path $installer 'InstallTransaction.ps1') -Destination (Join-Path $stage 'InstallTransaction.ps1') -Force
-Copy-Item -LiteralPath (Join-Path $installer 'Uninstall.ps1') -Destination (Join-Path $stage 'Uninstall.ps1') -Force
-
-Copy-Item -LiteralPath (Join-Path $installer '安装.cmd') -Destination (Join-Path $stage '安装.cmd') -Force
+# The bootstrap files are the only content added on top of the verified runtime payload. They are
+# declared once here so section 3 can assert the exact stage inventory against one allowlist instead
+# of trusting the copy calls; a new file in this list must be reviewed before it can ship.
+$bootstrapFiles = @('Install.ps1', 'InstallTransaction.ps1', 'Uninstall.ps1', '安装.cmd', '使用说明.txt')
+foreach ($name in $bootstrapFiles) {
+    $src = Join-Path $installer $name
+    if (-not (Test-Path -LiteralPath $src -PathType Leaf)) { throw "缺少安装引导文件：$name" }
+    Copy-Item -LiteralPath $src -Destination (Join-Path $stage $name) -Force
+    Write-Step "复制 $name"
+}
 Convert-File (Join-Path $stage '安装.cmd') $cmdUtf8
 Write-Step "写入 安装.cmd"
-
-Copy-Item -LiteralPath (Join-Path $installer '使用说明.txt') -Destination (Join-Path $stage '使用说明.txt') -Force
 Convert-File (Join-Path $stage '使用说明.txt') $utf8Bom
 Write-Step "写入 使用说明.txt"
 
@@ -114,6 +116,30 @@ Write-Step "写入 使用说明.txt"
 $files = Get-ChildItem -LiteralPath $stage -Recurse -File
 $sizeMb = [Math]::Round((($files | Measure-Object Length -Sum).Sum / 1MB), 1)
 Write-Step ("打包内容：{0} 个文件，{1} MB" -f $files.Count, $sizeMb)
+
+# The stage must be exactly the verified candidate plus the bootstrap allowlist. Comparing two exact
+# inventories (instead of a deny list) is what keeps an unreviewed file from riding into the ZIP.
+$candidateFiles = @(Get-ChildItem -LiteralPath $publish -Recurse -File -Force | ForEach-Object { $_.FullName.Substring($publish.Length + 1).Replace('\','/') })
+$expectedFiles = @($candidateFiles + $bootstrapFiles)
+$stageFiles = @(Get-ChildItem -LiteralPath $stage -Recurse -File -Force | ForEach-Object { $_.FullName.Substring($stage.Length + 1).Replace('\','/') })
+$unexpected = @($stageFiles | Where-Object { $expectedFiles -notcontains $_ })
+if ($unexpected.Count -gt 0) { throw "打包结果含未审查文件：$($unexpected -join ', ')" }
+$missingFiles = @($expectedFiles | Where-Object { $stageFiles -notcontains $_ })
+if ($missingFiles.Count -gt 0) { throw "打包结果缺少已校验文件：$($missingFiles -join ', ')" }
+Write-Step ("包内清单：{0} 个文件（候选 {1} + 安装引导 {2}）" -f $stageFiles.Count, $candidateFiles.Count, $bootstrapFiles.Count)
+
+# The bootstrap files are plain, user-readable text inside the ZIP, so a server-side credential name
+# or endpoint pasted in by mistake would be published verbatim. Only names that must never appear in
+# a client-side bootstrap file are listed; ordinary installation paths stay allowed.
+$bootstrapForbidden = @('DEEPSEEK_API_KEY', 'AI_CONFIG_ENCRYPTION_KEY', 'EZFPY_KEY', 'api.deepseek.com')
+foreach ($name in $bootstrapFiles) {
+    $text = Get-Content -LiteralPath (Join-Path $stage $name) -Raw -Encoding UTF8
+    foreach ($forbidden in $bootstrapForbidden) {
+        if ($text -match [regex]::Escape($forbidden)) { throw "安装引导文件 $name 暴露服务端凭据引用：$forbidden" }
+    }
+}
+Write-Step "安装引导内容检查：PASS"
+
 $plugin = Join-Path $stage 'CadPlugin\DwgTranslator.Cad.dll'
 if (-not (Test-Path -LiteralPath $plugin)) { throw "打包结果缺少 CAD 插件：$plugin" }
 Write-Step ("CAD 插件：{0} （{1} B）" -f (Split-Path $plugin -Leaf), (Get-Item -LiteralPath $plugin).Length)

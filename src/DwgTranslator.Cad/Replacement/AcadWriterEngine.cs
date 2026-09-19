@@ -219,10 +219,12 @@ public class AcadWriterEngine
 
             if (layoutRejected.Count > 0)
             {
-                // Log the source text next to each handle: a bare handle list is not
-                // actionable for the user, who needs to know which labels stayed Chinese.
+                // Identify which labels stayed Chinese by handle plus a content fingerprint. The
+                // source text itself is never written: this detail string travels into the log file,
+                // the done-signal file and the App's dialog, and users forward all three to support.
+                // 字符数 + 内容指纹保留了"能不能认出是同一张标签"的排查能力，但不泄露原文。
                 var rejectedDetail = string.Join("; ", layoutRejected.Take(30).Select(h =>
-                    entityMap.TryGetValue(h, out var rejectedEntity) ? $"{h}={rejectedEntity.PlainText}" : h));
+                    entityMap.TryGetValue(h, out var rejectedEntity) ? $"{h}={DescribeTextForLog(rejectedEntity.PlainText)}" : h));
                 var detail = $"Original text preserved after layout rejection ({layoutRejected.Count}): {rejectedDetail}";
                 result.Errors.Add(detail);
                 Log.Warning("{Detail}", detail);
@@ -276,7 +278,7 @@ public class AcadWriterEngine
                     if (!envelopeFitSucceeded)
                     {
                         Log.Warning("Layout fit rejected {Handle}: {Text}; height={Height}; width={Width}", handleStr,
-                            textEntity.PlainText, entity is DBText d ? d.Height : entity is MText m ? m.TextHeight : 0,
+                            DescribeTextForLog(textEntity.PlainText), entity is DBText d ? d.Height : entity is MText m ? m.TextHeight : 0,
                             entity is DBText d2 ? d2.WidthFactor : entity is MText m2 ? m2.Width : 0);
                         layoutRejected.Add(handleStr);
                         unprocessed.Remove(handleStr);
@@ -311,7 +313,7 @@ public class AcadWriterEngine
                         entity.RecordGraphicsModified(true);
                         originalSnapshot.Dispose();
                     }
-                    Log.Warning("Replacement failed for {Handle}: {Text}; original text kept", handleStr, textEntity.PlainText);
+                    Log.Warning("Replacement failed for {Handle}: {Text}; original text kept", handleStr, DescribeTextForLog(textEntity.PlainText));
                     layoutRejected.Add(handleStr);
                     unprocessed.Remove(handleStr);
                 }
@@ -1093,5 +1095,11 @@ public class AcadWriterEngine
     {
         return TextEnvelopeGeometry.NormalizeHalfTurn(rotation);
     }
+
+    /// <summary>
+    /// 日志脱敏入口（实现见 <see cref="DwgTranslator.Cad.Diagnostics.LogTextRedaction"/>）：
+    /// 图纸原文绝不进日志，只留「字符数 + 内容指纹」，Handle 负责定位。
+    /// </summary>
+    internal static string DescribeTextForLog(string? text) => Diagnostics.LogTextRedaction.Describe(text);
 
 }

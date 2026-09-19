@@ -200,7 +200,16 @@
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
-                        <DataGridTextColumn Header="结果" Binding="{Binding BatchResultText}" Width="168" />
+                        <!-- §L3 "已译 1,234/5,678 · 失败 12" 实测约 226px，原 168 会把失败段静默裁掉 -->
+                        <DataGridTextColumn Header="结果" Binding="{Binding BatchResultText}" Width="260">
+                            <DataGridTextColumn.ElementStyle>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="VerticalAlignment" Value="Center" />
+                                    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+                                    <Setter Property="ToolTip" Value="{Binding BatchResultText}" />
+                                </Style>
+                            </DataGridTextColumn.ElementStyle>
+                        </DataGridTextColumn>
                         <DataGridTemplateColumn Header="进度" Width="128" SortMemberPath="ProgressPercent">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
@@ -280,9 +289,11 @@
                     <Button Grid.Column="0" Content="返回任务列表" Command="{Binding BackToTaskListCommand}" Style="{StaticResource Button.Secondary}" Margin="{DynamicResource Spacing.InlineWide}" />
                     <TextBlock Grid.Column="1" Text="{Binding SelectedDrawingFile.FileName}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="{DynamicResource Spacing.InlineWide}" ToolTip="{Binding SelectedDrawingFile.FileName}" />
                     <Button Grid.Column="2" Content="全部标为已校对" Command="{Binding MarkAllReviewedCommand}" Style="{StaticResource Button.Secondary}" Margin="{DynamicResource Spacing.Inline}" />
-                    <Button Grid.Column="3" Content="保存更改" Command="{Binding SaveProofreadingCommand}" IsEnabled="{Binding HasUnsavedProofreading}" Style="{StaticResource Button.Primary}" Margin="{DynamicResource Spacing.Inline}" />
+                    <Button Grid.Column="3" Content="保存更改" Command="{Binding SaveProofreadingCommand}" IsEnabled="{Binding HasUnsavedProofreading}" Style="{StaticResource Button.Secondary}" Margin="{DynamicResource Spacing.Inline}" />
                     <Button Grid.Column="4" Content="取消编辑" Command="{Binding DiscardProofreadingCommand}" IsEnabled="{Binding HasUnsavedProofreading}" Style="{StaticResource Button.Secondary}" Margin="{DynamicResource Spacing.Inline}" />
-                    <Button Grid.Column="5" Content="导出已校对图纸" Command="{Binding ExportDwgCommand}" Style="{StaticResource Button.Primary}" />
+                    <!-- §L13 与 TranslatePage 的同名按钮保持一致的 Primary/MinWidth/可用性；本页仅此一个 Primary -->
+                    <Button Grid.Column="5" Content="导出已校对图纸" Command="{Binding ExportDwgCommand}" Style="{StaticResource Button.Primary}"
+                            MinWidth="136" IsEnabled="{Binding CanExportWorkspace}" />
                 </Grid>
                 <TextBlock Grid.Row="1" Text="Enter 确认单元格，Esc 取消；完成后保存更改。" Style="{StaticResource CaptionStyle}" Margin="{DynamicResource Spacing.BlockTop}" />
             </Grid>
