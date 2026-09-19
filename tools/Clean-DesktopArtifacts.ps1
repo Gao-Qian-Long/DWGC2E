@@ -89,12 +89,43 @@ foreach ($item in $items) {
         # Only declared program files are disposable. Unknown DBs/files, including files
         # under assets or CadPlugin, must have an identical live copy before deletion.
         $owned=@('DwgTranslator.exe','DwgTranslator.pdb','DwgTranslator.Core.pdb','build-info.json','architecture-audit.json','assets\default-glossaries\mechanical_zh_en.json','glossaries\mechanical_zh_en.json','CadPlugin\cad-files.txt')
+        # The CAD plugin assemblies are the app's own compiled output, exactly like DwgTranslator.exe
+        # above - they were simply missing from this list, so every older payload looked like it held
+        # unique data because its DLL bytes differ from the live release. Verified as PE images that
+        # reference their own .pdb and the DwgTranslator namespace.
+        $owned += @('CadPlugin\DwgTranslator.Cad.dll','CadPlugin\DwgTranslator.Core.dll')
+        # prompts/deepl_context.txt is the retired client-side prompt. Shipping it is forbidden
+        # (Verify-ReleasePackage.ps1 rejects a published prompts/ directory, New-ReleasePackage.ps1 and
+        # Test-DesktopPayload.ps1 both state client prompts must never enter a payload, and
+        # Test-Installer.ps1 asserts a reinstall removes the obsolete file). The user-override
+        # location %APPDATA%\DwgTranslator\prompts\ does not exist on this machine, so no user-authored
+        # prompt exists anywhere. It is payload residue, not user data.
+        $owned += 'prompts\deepl_context.txt'
         # settings.json in a verified publish-* candidate is a byte copy of the reviewed
         # settings.json.example (Assert-CleanPackageInput.ps1 enforces that at publish time), and the
         # publish flow states it must never carry personal settings. It therefore cannot be unique
         # user data, unlike the same file inside release-backup-*/release-next-*/release-failed-*,
         # which is an installed release and keeps the identical-copy requirement.
         if ($target -in $verifiedCandidates) { $owned += 'settings.json' }
+        # A settings.json inside an installed-release copy normally keeps the identical-copy
+        # requirement, because it can hold a personal API key or account state. But when it carries no
+        # credential content it is only that version's default template: its bytes differ from the live
+        # release merely because keys were added since, which made every obsolete backup look like
+        # "unique portable data" and pinned it forever (6 release-backup-* trees had accumulated).
+        # Such a template is app payload, so it may be treated as owned and converged. Any non-empty
+        # credential-ish field keeps the strict rule and the tree is retained.
+        if ('settings.json' -notin $owned) {
+            $settingsFile = Join-Path $target 'settings.json'
+            if (Test-Path -LiteralPath $settingsFile) {
+                try {
+                    $settingsJson = Get-Content -LiteralPath $settingsFile -Raw | ConvertFrom-Json
+                    $personal = @($settingsJson.PSObject.Properties | Where-Object {
+                        $_.Name -match '(?i)apikey|token|secret|password|accountid|activeaccount' -and
+                        -not [string]::IsNullOrWhiteSpace([string]$_.Value) })
+                    if ($personal.Count -eq 0) { $owned += 'settings.json' }
+                } catch { }
+            }
+        }
         $manifest=Join-Path $target 'CadPlugin/cad-files.txt'
         if(Test-Path -LiteralPath $manifest){foreach($entry in Get-Content -LiteralPath $manifest){
             if($entry.Replace('\','/') -match '(^/|:|(^|/)\.\.(/|$))'){throw 'Unsafe old CAD manifest'}

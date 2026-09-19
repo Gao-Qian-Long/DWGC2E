@@ -148,36 +148,12 @@ public static class ResponsiveLayout
     }
 }
 
-/// <summary>Cards flow at content-width breakpoints, with stable reading order.</summary>
-public sealed class AdaptiveCardGrid : Grid
-{
-    private int _columns;
-
-    public AdaptiveCardGrid()
-    {
-        SizeChanged += (_, _) => Reflow();
-        Loaded += (_, _) => Reflow();
-    }
-
-    private void Reflow()
-    {
-        var columns = ActualWidth < 600 ? 1 : ActualWidth < 900 ? 2 : 3;
-        if (_columns == columns) return;
-        _columns = columns;
-        ColumnDefinitions.Clear();
-        RowDefinitions.Clear();
-        for (var i = 0; i < columns; i++) ColumnDefinitions.Add(new ColumnDefinition());
-        for (var i = 0; i < (Children.Count + columns - 1) / columns; i++)
-            RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        for (var i = 0; i < Children.Count; i++)
-        {
-            SetRow(Children[i], i / columns);
-            SetColumn(Children[i], i % columns);
-            if (Children[i] is FrameworkElement child)
-                child.Margin = new Thickness(0, 0, i % columns == columns - 1 ? 0 : 16, 16);
-        }
-    }
-}
+// AdaptiveCardGrid used to live here: a Grid that decided its own column count from its content
+// width and, in doing so, overwrote each child's Margin and Grid.Column. Its last two call sites
+// are gone - AccountPage and (in the about section) SettingsPage now declare explicit Grids, because
+// the 600/900 width breakpoints did not match the layouts they were dropped into. SettingsPage asked
+// for a 2x2 block of shortcut cards and got 3 columns above 900 DIP, stranding the fourth card on its
+// own row. An explicit grid is both simpler and correct there. Removed rather than kept as dead code.
 
 /// <summary>
 /// A bounded toolbar for legacy dialogs. It only becomes scrollable when the host

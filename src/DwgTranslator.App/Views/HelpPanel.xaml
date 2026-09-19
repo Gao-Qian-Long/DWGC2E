@@ -21,7 +21,12 @@
     <!-- §L19 与其它页面统一走 Spacing.Page 栅格；宽度上限交给宿主窗口(HelpWindow Width=900) -->
     <Grid Margin="{DynamicResource Spacing.Page}">
 
-        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <!-- §L22 CanContentScroll 让 StackPanel 以自己的 IScrollInfo 按「子元素」为单位滚动。
+             默认的像素滚动下，段落行高 24 与视口高度不整除，滚到任意位置都会有一行被视口下沿
+             切掉半行（用户报「末行被切」）。按子元素对齐后每段要么完整可见、要么完整在视口外。
+             前提：没有任何单个子元素高于视口 —— HelpWindow 900x720(MinHeight 480)、视口最窄
+             约 358 DIP，最长的入门段落实测约 96 DIP，余量充足。 -->
+        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" CanContentScroll="True">
             <StackPanel>
 
                 <!-- ========== 快速入门 ========== -->

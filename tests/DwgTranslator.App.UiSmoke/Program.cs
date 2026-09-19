@@ -373,9 +373,12 @@ public sealed partial class SmokeApp : App
         Check(!((System.Windows.Controls.RadioButton)w.FindName("WechatPay")).IsEnabled,"unconnected WeChat payment cannot be selected");
         Check(((System.Windows.Controls.TextBlock)w.FindName("QrStatus")).Text.Contains("请使用支付宝扫码"),"QR identifies actual Alipay order channel");
         Check(((System.Windows.Controls.Image)w.FindName("Qr")).Source!=null,"native billing QR bitmap generated");Capture(w,"billing-native-qr");
-        // Verify row actions fit and share the header center at minimum and normal window widths.
+        // Verify row actions fit and share the header center at the real minimum and the default
+        // window width. These were 620/860 until BillingWindow MinWidth went to 900: both were then
+        // clamped up to 900, so the two iterations silently tested the same geometry and the
+        // narrower coverage was lost without any assertion failing. 900 = MinWidth floor.
         var ordersGrid=(System.Windows.Controls.DataGrid)w.FindName("Orders");
-        foreach(var width in new[]{620d,860d})
+        foreach(var width in new[]{900d,1020d})
         {
             w.Width=width; ordersGrid.BringIntoView();
             await Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ApplicationIdle); w.UpdateLayout();
