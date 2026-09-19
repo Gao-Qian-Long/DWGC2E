@@ -57,8 +57,14 @@ public sealed partial class SmokeApp
                 Check(toast.Visibility == Visibility.Collapsed, "notification row collapses while paused");
                 Stable(entryBounds, account, "collapsed messages " + size);
                 toast.ShouldPause = () => false;
-                // Four-second lifetime, including queued messages at the smallest capacity.
-                for (var tick=0; tick<150 && (toast.VisibleCount > 0 || toast.PendingCount > 0); tick++) await Task.Delay(100);
+                // Each toast lives four seconds, but MaximumVisible is 1, so the three queued
+                // messages expire strictly one after another: 3 x 4s = 12s, plus up to 250ms of
+                // Refresh latency each and the layout work between them. The previous 15s budget
+                // left no margin, and this assertion failed inside Publish-Desktop.ps1 twice
+                // while passing standalone, because the pipeline reaches this point only after a
+                // long regression chain. 30s is timeout headroom only: what is asserted here, and
+                // every product behaviour behind it, is unchanged.
+                for (var tick=0; tick<300 && (toast.VisibleCount > 0 || toast.PendingCount > 0); tick++) await Task.Delay(100);
                 await Dispatcher.InvokeAsync(() => {}, DispatcherPriority.ApplicationIdle);
                 Check(toast.VisibleCount == 0 && toast.PendingCount == 0, "notification stack naturally expires");
                 Stable(entryBounds, account, "expired messages " + size);
