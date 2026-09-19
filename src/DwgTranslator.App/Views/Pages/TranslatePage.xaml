@@ -37,20 +37,23 @@
                 Style="{StaticResource Section.Surface}" Margin="{DynamicResource Spacing.Vertical}"
                 MinHeight="64" Padding="0,10,0,2">
             <UniformGrid x:Name="TranslationSummaryMetrics" Rows="1" Columns="7">
-                <StackPanel Margin="{DynamicResource Spacing.InlineWide}">
-                    <TextBlock Text="图纸" Style="{StaticResource InfoLabel}" />
-                    <TextBlock Text="{Binding WorkspaceFileCount}" Style="{StaticResource InfoValueStrong}" />
+                <!-- 每格内容居中：用户标了「都没居中」。七格由 UniformGrid 等分，
+                     格内的外边距/内边距只会把文字推离格心；分隔线仍画在格边界上，
+                     所以 Border 保留、只把它的 Padding 归零。 -->
+                <StackPanel HorizontalAlignment="Center">
+                    <TextBlock Text="图纸" Style="{StaticResource InfoLabel}" HorizontalAlignment="Center" />
+                    <TextBlock Text="{Binding WorkspaceFileCount}" Style="{StaticResource InfoValueStrong}" HorizontalAlignment="Center" />
                 </StackPanel>
-                <Border BorderBrush="{DynamicResource Brush.BorderLight}" BorderThickness="1,0,0,0" Padding="{DynamicResource Spacing.InlineWide}">
-                    <StackPanel>
-                        <TextBlock Text="运行状态" Style="{StaticResource InfoLabel}" />
+                <Border BorderBrush="{DynamicResource Brush.BorderLight}" BorderThickness="1,0,0,0" Padding="0">
+                    <StackPanel HorizontalAlignment="Center">
+                        <TextBlock Text="运行状态" Style="{StaticResource InfoLabel}" HorizontalAlignment="Center" />
                         <TextBlock Text="{Binding WorkspaceRunStateText}" Style="{StaticResource InfoValueStrong}"
-                                   TextTrimming="CharacterEllipsis" ToolTip="{Binding WorkspaceRunStateText}" />
+                                   TextTrimming="CharacterEllipsis" ToolTip="{Binding WorkspaceRunStateText}" HorizontalAlignment="Center" />
                     </StackPanel>
                 </Border>
-                <Border BorderBrush="{DynamicResource Brush.BorderLight}" BorderThickness="1,0,0,0" Padding="{DynamicResource Spacing.InlineWide}">
+                <Border BorderBrush="{DynamicResource Brush.BorderLight}" BorderThickness="1,0,0,0" Padding="0">
                     <StackPanel>
-                        <TextBlock Text="整体进度" Style="{StaticResource InfoLabel}" />
+                        <TextBlock Text="整体进度" Style="{StaticResource InfoLabel}" HorizontalAlignment="Center" />
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
@@ -66,28 +69,28 @@
                         </Grid>
                     </StackPanel>
                 </Border>
-                <Border BorderBrush="{DynamicResource Brush.BorderLight}" BorderThickness="1,0,0,0" Padding="{DynamicResource Spacing.InlineWide}">
-                    <StackPanel>
-                        <TextBlock Text="翻译成功" Style="{StaticResource InfoLabel}" />
-                        <TextBlock Text="{Binding WorkspaceSuccessfulCount}" Style="{StaticResource InfoValueStrong}" />
+                <Border BorderBrush="{DynamicResource Brush.BorderLight}" BorderThickness="1,0,0,0" Padding="0">
+                    <StackPanel HorizontalAlignment="Center">
+                        <TextBlock Text="翻译成功" Style="{StaticResource InfoLabel}" HorizontalAlignment="Center" />
+                        <TextBlock Text="{Binding WorkspaceSuccessfulCount}" Style="{StaticResource InfoValueStrong}" HorizontalAlignment="Center" />
                     </StackPanel>
                 </Border>
-                <Border BorderBrush="{DynamicResource Brush.BorderLight}" BorderThickness="1,0,0,0" Padding="{DynamicResource Spacing.InlineWide}">
-                    <StackPanel>
-                        <TextBlock Text="失败" Style="{StaticResource InfoLabel}" />
-                        <TextBlock Text="{Binding WorkspaceFailedCount}" Style="{StaticResource InfoValueStrong}" />
+                <Border BorderBrush="{DynamicResource Brush.BorderLight}" BorderThickness="1,0,0,0" Padding="0">
+                    <StackPanel HorizontalAlignment="Center">
+                        <TextBlock Text="失败" Style="{StaticResource InfoLabel}" HorizontalAlignment="Center" />
+                        <TextBlock Text="{Binding WorkspaceFailedCount}" Style="{StaticResource InfoValueStrong}" HorizontalAlignment="Center" />
                     </StackPanel>
                 </Border>
-                <Border BorderBrush="{DynamicResource Brush.BorderLight}" BorderThickness="1,0,0,0" Padding="{DynamicResource Spacing.InlineWide}">
-                    <StackPanel>
-                        <TextBlock Text="待校对" Style="{StaticResource InfoLabel}" />
-                        <TextBlock Text="{Binding WorkspaceReviewCount}" Style="{StaticResource InfoValueStrong}" />
+                <Border BorderBrush="{DynamicResource Brush.BorderLight}" BorderThickness="1,0,0,0" Padding="0">
+                    <StackPanel HorizontalAlignment="Center">
+                        <TextBlock Text="待校对" Style="{StaticResource InfoLabel}" HorizontalAlignment="Center" />
+                        <TextBlock Text="{Binding WorkspaceReviewCount}" Style="{StaticResource InfoValueStrong}" HorizontalAlignment="Center" />
                     </StackPanel>
                 </Border>
-                <Border BorderBrush="{DynamicResource Brush.BorderLight}" BorderThickness="1,0,0,0" Padding="{DynamicResource Spacing.InlineWide}">
-                    <StackPanel>
-                        <TextBlock Text="待导出" Style="{StaticResource InfoLabel}" />
-                        <TextBlock Text="{Binding WorkspacePendingExportCount}" Style="{StaticResource InfoValueStrong}" />
+                <Border BorderBrush="{DynamicResource Brush.BorderLight}" BorderThickness="1,0,0,0" Padding="0">
+                    <StackPanel HorizontalAlignment="Center">
+                        <TextBlock Text="待导出" Style="{StaticResource InfoLabel}" HorizontalAlignment="Center" />
+                        <TextBlock Text="{Binding WorkspacePendingExportCount}" Style="{StaticResource InfoValueStrong}" HorizontalAlignment="Center" />
                     </StackPanel>
                 </Border>
             </UniformGrid>
@@ -151,6 +154,9 @@
         </Border>
 
         <Grid x:Name="TranslationWorkspace" Grid.Row="3" MinHeight="300">
+            <!-- 两列的最小宽度和必须 <= 最小窗口下的内容宽：1120 - 200(侧栏) - 40(页边距) = 880。
+                 520 + 360 = 880 刚好卡住；这里不能再插入任何占宽的列，否则最小窗口会横向溢出。
+                 分区感靠右栏补上与左栏相同的外边距（见下方 ScrollViewer 的 Margin）来实现。 -->
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" MinWidth="520" />
                 <ColumnDefinition Width="400" MinWidth="360" MaxWidth="460" />
@@ -310,7 +316,12 @@
                 </Grid>
             </Border>
 
-            <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+            <!-- 用户标注「左右侧分区不明显啊」：两栏原来只靠单侧留白分隔——左栏有 Margin，右栏是裸
+                 ScrollViewer 没有——间隔只有一侧的 16px，底色又相同，于是看上去连成一片。
+                 给右栏补上同样的外边距让间隔翻倍；这比插入一条占宽的竖线更好，因为不占用列宽，
+                 最小窗口下不会横向溢出。 -->
+            <ScrollViewer Grid.Column="1" Margin="{DynamicResource Spacing.InlineWide}"
+                          VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                           CanContentScroll="True" Padding="0,0,2,0"
                           controls:ResponsiveLayout.HandoffMouseWheelAtBoundary="True">
                 <Grid x:Name="TranslationSettingsColumn">

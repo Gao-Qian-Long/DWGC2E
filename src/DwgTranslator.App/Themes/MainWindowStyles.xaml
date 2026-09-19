@@ -60,6 +60,11 @@
     <conv:IndexToVisibilityConverter x:Key="IndexToVis" />
     <conv:StatusToBrushConverter x:Key="StatusBrush" />
     <DropShadowEffect x:Key="CardShadow" BlurRadius="10" ShadowDepth="2" Opacity="0.10" Color="#0F1F3A" />
+    <!-- 网站的立体感来自硬边偏移阴影（css/theme.css 的 box-shadow:3px 3px 0），而不是模糊柔影。
+         卡片与控件用沙色，主按钮用墨色，与 .btn / .btn-primary 对应。
+         CardShadow 以上那一个留给浮层（ToolTip / ContextMenu / Toast）——那里柔影才是对的。 -->
+    <DropShadowEffect x:Key="Shadow.Hard" BlurRadius="0" ShadowDepth="3" Direction="315" Color="#DED2BC" Opacity="1" />
+    <DropShadowEffect x:Key="Shadow.HardPrimary" BlurRadius="0" ShadowDepth="4" Direction="315" Color="#262521" Opacity="1" />
     <!-- ───────────────────────── 按钮 ───────────────────────── -->
     <Style x:Key="Button.Base" TargetType="Button">
         <Setter Property="Height" Value="{DynamicResource Size.Button}" />
@@ -78,8 +83,17 @@
                         <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" RecognizesAccessKey="True" />
                     </Border>
                     <ControlTemplate.Triggers>
+                        <!-- 悬停位移：对应网站 .btn:hover{transform:translateY(-2px)} 与 :active{translate(2px,2px)}。
+                             用 RenderTransform 而非 Margin —— 前者不参与布局，按钮抬起时不会把相邻元素推走。
+                             注意：位移必须作为 Bd 的 RenderTransform 属性设置，不能给 TranslateTransform 起名再用
+                             TargetName 引用——XAML 编译器不把 RenderTransform 里的 Freezable 当作可寻址的模板元素（MC4111）。 -->
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter TargetName="Bd" Property="Opacity" Value="0.92" />
+                            <Setter TargetName="Bd" Property="RenderTransform">
+                                <Setter.Value>
+                                    <TranslateTransform Y="-2" />
+                                </Setter.Value>
+                            </Setter>
                         </Trigger>
                         <Trigger Property="IsKeyboardFocused" Value="True">
                             <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource Brush.Primary}" />
@@ -87,6 +101,11 @@
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
                             <Setter TargetName="Bd" Property="Opacity" Value="0.84" />
+                            <Setter TargetName="Bd" Property="RenderTransform">
+                                <Setter.Value>
+                                    <TranslateTransform X="2" Y="2" />
+                                </Setter.Value>
+                            </Setter>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Brush.BackgroundAlt}" />
@@ -221,7 +240,8 @@
     <Style x:Key="IconButton" TargetType="Button" BasedOn="{StaticResource Button.Icon}" />
     <Style x:Key="RibbonDivider" TargetType="Border" BasedOn="{StaticResource Divider.Vertical}" />
     <!-- ───────────────────────── 卡片 ───────────────────────── -->
-    <!-- 标准卡片：白底 + 1px 浅边框（不用阴影） -->
+    <!-- 标准卡片：白底 + 1px 浅边框 + 硬边偏移阴影（对齐网站的印刷卡片观感）。
+         阴影不参与布局，但会向右下溢出 3 DIP，容器要给卡片留出这点余量否则会被裁掉。 -->
     <Style x:Key="Card" TargetType="Border">
         <Setter Property="Background" Value="{DynamicResource Brush.Surface}" />
         <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border}" />
@@ -229,6 +249,7 @@
         <Setter Property="CornerRadius" Value="{DynamicResource CornerRadius.Medium}" />
         <Setter Property="Padding" Value="{DynamicResource Spacing.Card}" />
         <Setter Property="SnapsToDevicePixels" Value="True" />
+        <Setter Property="Effect" Value="{StaticResource Shadow.Hard}" />
     </Style>
     <!-- 承载表格的卡片：内边距为 0，由表格自己控制 -->
     <Style x:Key="CardNoPad" TargetType="Border" BasedOn="{StaticResource Card}">
@@ -669,11 +690,18 @@
             </Trigger>
         </Style.Triggers>
     </Style>
+    <!-- 页面区块容器。旧写法是「透明底 + 只有一条顶线」，那是分区而不是卡片，
+         也是用户说「没有框架、很乱」的直接来源。现在与 Card 同为印刷卡片。
+         Padding 用 16 而不是 Spacing.Card(20)：这 11 处容器里有些高度受断言约束，
+         先在可控范围内拿到卡片观感。 -->
     <Style x:Key="Section.Surface" TargetType="Border">
-        <Setter Property="Background" Value="Transparent" />
-        <Setter Property="BorderBrush" Value="{DynamicResource Brush.BorderLight}" />
-        <Setter Property="BorderThickness" Value="0,1,0,0" />
-        <Setter Property="Padding" Value="0,12,0,0" />
+        <Setter Property="Background" Value="{DynamicResource Brush.Surface}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="{DynamicResource CornerRadius.Medium}" />
+        <Setter Property="Padding" Value="16" />
+        <Setter Property="SnapsToDevicePixels" Value="True" />
+        <Setter Property="Effect" Value="{StaticResource Shadow.Hard}" />
     </Style>
     <Style x:Key="Drawer.Surface" TargetType="Border">
         <Setter Property="Background" Value="{DynamicResource Brush.Surface}" />

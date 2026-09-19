@@ -20,34 +20,36 @@
 
             <Border Grid.Row="0" x:Name="BatchSummaryBar" Style="{StaticResource Section.Surface}"
                     Margin="{DynamicResource Spacing.Stack}" Padding="14,10" AutomationProperties.Name="任务阶段摘要">
+                <!-- 每格内容居中：用户标了「都没居中」「没对齐」。UniformGrid 已经把七格等分，
+                     再给每格挂右外边距只会让文字整体偏左，看上去就像没对齐。 -->
                 <UniformGrid x:Name="BatchSummaryMetrics" Rows="1" Columns="7">
-                    <StackPanel Margin="{DynamicResource Spacing.Inline}">
-                        <TextBlock Text="全部" Style="{StaticResource InfoLabel}" />
-                        <TextBlock Text="{Binding BatchTotalCount}" Style="{StaticResource InfoValueStrong}" />
+                    <StackPanel HorizontalAlignment="Center">
+                        <TextBlock Text="全部" Style="{StaticResource InfoLabel}" HorizontalAlignment="Center" />
+                        <TextBlock Text="{Binding BatchTotalCount}" Style="{StaticResource InfoValueStrong}" HorizontalAlignment="Center" />
                     </StackPanel>
-                    <StackPanel Margin="{DynamicResource Spacing.Inline}">
-                        <TextBlock Text="运行中" Style="{StaticResource InfoLabel}" />
-                        <TextBlock Text="{Binding BatchActiveCount}" Style="{StaticResource InfoValueStrong}" />
+                    <StackPanel HorizontalAlignment="Center">
+                        <TextBlock Text="运行中" Style="{StaticResource InfoLabel}" HorizontalAlignment="Center" />
+                        <TextBlock Text="{Binding BatchActiveCount}" Style="{StaticResource InfoValueStrong}" HorizontalAlignment="Center" />
                     </StackPanel>
-                    <StackPanel Margin="{DynamicResource Spacing.Inline}">
-                        <TextBlock Text="待处理" Style="{StaticResource InfoLabel}" />
-                        <TextBlock Text="{Binding BatchPendingCount}" Style="{StaticResource InfoValueStrong}" />
+                    <StackPanel HorizontalAlignment="Center">
+                        <TextBlock Text="待处理" Style="{StaticResource InfoLabel}" HorizontalAlignment="Center" />
+                        <TextBlock Text="{Binding BatchPendingCount}" Style="{StaticResource InfoValueStrong}" HorizontalAlignment="Center" />
                     </StackPanel>
-                    <StackPanel Margin="{DynamicResource Spacing.Inline}">
-                        <TextBlock Text="待校对" Style="{StaticResource InfoLabel}" />
-                        <TextBlock Text="{Binding BatchReviewCount}" Style="{StaticResource InfoValueStrong}" />
+                    <StackPanel HorizontalAlignment="Center">
+                        <TextBlock Text="待校对" Style="{StaticResource InfoLabel}" HorizontalAlignment="Center" />
+                        <TextBlock Text="{Binding BatchReviewCount}" Style="{StaticResource InfoValueStrong}" HorizontalAlignment="Center" />
                     </StackPanel>
-                    <StackPanel Margin="{DynamicResource Spacing.Inline}">
-                        <TextBlock Text="待导出" Style="{StaticResource InfoLabel}" />
-                        <TextBlock Text="{Binding BatchPendingExportCount}" Style="{StaticResource InfoValueStrong}" />
+                    <StackPanel HorizontalAlignment="Center">
+                        <TextBlock Text="待导出" Style="{StaticResource InfoLabel}" HorizontalAlignment="Center" />
+                        <TextBlock Text="{Binding BatchPendingExportCount}" Style="{StaticResource InfoValueStrong}" HorizontalAlignment="Center" />
                     </StackPanel>
-                    <StackPanel Margin="{DynamicResource Spacing.Inline}">
-                        <TextBlock Text="已导出" Style="{StaticResource InfoLabel}" />
-                        <TextBlock Text="{Binding BatchExportedCount}" Style="{StaticResource InfoValueStrong}" />
+                    <StackPanel HorizontalAlignment="Center">
+                        <TextBlock Text="已导出" Style="{StaticResource InfoLabel}" HorizontalAlignment="Center" />
+                        <TextBlock Text="{Binding BatchExportedCount}" Style="{StaticResource InfoValueStrong}" HorizontalAlignment="Center" />
                     </StackPanel>
-                    <StackPanel>
-                        <TextBlock Text="失败" Style="{StaticResource InfoLabel}" />
-                        <TextBlock Text="{Binding BatchFailedCount}" Style="{StaticResource InfoValueStrong}" />
+                    <StackPanel HorizontalAlignment="Center">
+                        <TextBlock Text="失败" Style="{StaticResource InfoLabel}" HorizontalAlignment="Center" />
+                        <TextBlock Text="{Binding BatchFailedCount}" Style="{StaticResource InfoValueStrong}" HorizontalAlignment="Center" />
                     </StackPanel>
                 </UniformGrid>
             </Border>
@@ -389,7 +391,7 @@
                         <TextBlock Text="{Binding SelectedBatchTask.FullPath}" Margin="{DynamicResource Spacing.BlockTopTight}"
                                    Style="{StaticResource CaptionStyle}" TextWrapping="Wrap" />
 
-                        <Border Background="{DynamicResource Brush.SurfaceSubtle}" CornerRadius="6" Padding="12,10" Margin="{DynamicResource Spacing.BlockTopWide}">
+                        <Border Style="{StaticResource Card}" Padding="12,10" Margin="{DynamicResource Spacing.BlockTopWide}">
                             <Grid>
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="Auto" />
@@ -410,55 +412,83 @@
                             </Grid>
                         </Border>
 
-                        <TextBlock Text="任务概况" Style="{StaticResource SectionTitleStyle}" Margin="{DynamicResource Spacing.RowInset}" />
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="112" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                            </Grid.RowDefinitions>
-                            <TextBlock Grid.Row="0" Text="文本结果" Style="{StaticResource CaptionStyle}" Margin="{DynamicResource Spacing.Stack}" />
-                            <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding SelectedBatchTask.BatchResultText}" Margin="{DynamicResource Spacing.Stack}" />
-                            <TextBlock Grid.Row="1" Text="耗时" Style="{StaticResource CaptionStyle}" Margin="{DynamicResource Spacing.Stack}" />
-                            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SelectedBatchTask.ElapsedDisplayText}" Margin="{DynamicResource Spacing.Stack}" />
-                            <TextBlock Grid.Row="2" Text="优先级" Style="{StaticResource CaptionStyle}" Margin="{DynamicResource Spacing.Stack}" />
-                            <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding SelectedBatchTask.PriorityText}" Margin="{DynamicResource Spacing.Stack}" />
-                            <TextBlock Grid.Row="3" Text="重试次数" Style="{StaticResource CaptionStyle}" Margin="{DynamicResource Spacing.Stack}" />
-                            <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding SelectedBatchTask.RetryCountText}" Margin="{DynamicResource Spacing.Stack}" />
-                            <TextBlock Grid.Row="4" Text="最近更新" Style="{StaticResource CaptionStyle}" />
-                            <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding SelectedBatchTask.LastUpdatedText}" />
-                        </Grid>
+                        <!-- 用户标注「这个卡片布局太丑了，优化」：这两个区块原先只是裸标题 + 左标签右值的长列表，
+                             一列排五行又空又散。改成真卡片，键值对压成两列。 -->
+                        <Border Style="{StaticResource Card}" Margin="{DynamicResource Spacing.BlockTopWide}">
+                            <StackPanel>
+                                <TextBlock Text="任务概况" Style="{StaticResource SectionTitleStyle}"
+                                           Margin="{DynamicResource Spacing.StackTight}" />
+                                <UniformGrid Columns="2">
+                                    <StackPanel Margin="{DynamicResource Spacing.Stack}">
+                                        <TextBlock Text="文本结果" Style="{StaticResource CaptionStyle}" />
+                                        <TextBlock Text="{Binding SelectedBatchTask.BatchResultText}"
+                                                   Margin="{DynamicResource Spacing.StackTight}" />
+                                    </StackPanel>
+                                    <StackPanel Margin="{DynamicResource Spacing.Stack}">
+                                        <TextBlock Text="耗时" Style="{StaticResource CaptionStyle}" />
+                                        <TextBlock Text="{Binding SelectedBatchTask.ElapsedDisplayText}"
+                                                   Margin="{DynamicResource Spacing.StackTight}" />
+                                    </StackPanel>
+                                    <StackPanel Margin="{DynamicResource Spacing.Stack}">
+                                        <TextBlock Text="优先级" Style="{StaticResource CaptionStyle}" />
+                                        <TextBlock Text="{Binding SelectedBatchTask.PriorityText}"
+                                                   Margin="{DynamicResource Spacing.StackTight}" />
+                                    </StackPanel>
+                                    <StackPanel Margin="{DynamicResource Spacing.Stack}">
+                                        <TextBlock Text="重试次数" Style="{StaticResource CaptionStyle}" />
+                                        <TextBlock Text="{Binding SelectedBatchTask.RetryCountText}"
+                                                   Margin="{DynamicResource Spacing.StackTight}" />
+                                    </StackPanel>
+                                    <StackPanel Margin="{DynamicResource Spacing.Stack}">
+                                        <TextBlock Text="最近更新" Style="{StaticResource CaptionStyle}" />
+                                        <TextBlock Text="{Binding SelectedBatchTask.LastUpdatedText}"
+                                                   Margin="{DynamicResource Spacing.StackTight}" />
+                                    </StackPanel>
+                                </UniformGrid>
+                            </StackPanel>
+                        </Border>
 
-                        <TextBlock Text="阶段时间线" Style="{StaticResource SectionTitleStyle}" Margin="{DynamicResource Spacing.RowInset}" />
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="112" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                            </Grid.RowDefinitions>
-                            <TextBlock Grid.Row="0" Text="创建任务" Style="{StaticResource CaptionStyle}" Margin="{DynamicResource Spacing.Stack}" />
-                            <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding SelectedBatchTask.CreatedAtText}" Margin="{DynamicResource Spacing.Stack}" />
-                            <TextBlock Grid.Row="1" Text="开始翻译" Style="{StaticResource CaptionStyle}" Margin="{DynamicResource Spacing.Stack}" />
-                            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SelectedBatchTask.StartedAtText}" Margin="{DynamicResource Spacing.Stack}" />
-                            <TextBlock Grid.Row="2" Text="翻译完成" Style="{StaticResource CaptionStyle}" Margin="{DynamicResource Spacing.Stack}" />
-                            <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding SelectedBatchTask.TranslationCompletedAtText}" Margin="{DynamicResource Spacing.Stack}" />
-                            <TextBlock Grid.Row="3" Text="校对完成" Style="{StaticResource CaptionStyle}" Margin="{DynamicResource Spacing.Stack}" />
-                            <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding SelectedBatchTask.ReviewCompletedAtText}" Margin="{DynamicResource Spacing.Stack}" />
-                            <TextBlock Grid.Row="4" Text="最近导出" Style="{StaticResource CaptionStyle}" />
-                            <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding SelectedBatchTask.LastExportedAtText}" />
-                        </Grid>
+                        <!-- 时间线：每行加一个圆点，构成一条纵向轴，空值行也能看出这是"进度轴"而不是普通列表。 -->
+                        <Border Style="{StaticResource Card}" Margin="{DynamicResource Spacing.BlockTopWide}">
+                            <StackPanel>
+                                <TextBlock Text="阶段时间线" Style="{StaticResource SectionTitleStyle}"
+                                           Margin="{DynamicResource Spacing.StackTight}" />
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="84" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+                                    <Ellipse Grid.Row="0" Width="6" Height="6" VerticalAlignment="Center"
+                                             Fill="{DynamicResource Brush.BorderStrong}" Margin="{DynamicResource Spacing.Stack}" />
+                                    <TextBlock Grid.Row="0" Grid.Column="1" Text="创建任务" Style="{StaticResource CaptionStyle}" Margin="{DynamicResource Spacing.Stack}" />
+                                    <TextBlock Grid.Row="0" Grid.Column="2" Text="{Binding SelectedBatchTask.CreatedAtText}" Margin="{DynamicResource Spacing.Stack}" />
+                                    <Ellipse Grid.Row="1" Width="6" Height="6" VerticalAlignment="Center"
+                                             Fill="{DynamicResource Brush.BorderStrong}" Margin="{DynamicResource Spacing.Stack}" />
+                                    <TextBlock Grid.Row="1" Grid.Column="1" Text="开始翻译" Style="{StaticResource CaptionStyle}" Margin="{DynamicResource Spacing.Stack}" />
+                                    <TextBlock Grid.Row="1" Grid.Column="2" Text="{Binding SelectedBatchTask.StartedAtText}" Margin="{DynamicResource Spacing.Stack}" />
+                                    <Ellipse Grid.Row="2" Width="6" Height="6" VerticalAlignment="Center"
+                                             Fill="{DynamicResource Brush.BorderStrong}" Margin="{DynamicResource Spacing.Stack}" />
+                                    <TextBlock Grid.Row="2" Grid.Column="1" Text="翻译完成" Style="{StaticResource CaptionStyle}" Margin="{DynamicResource Spacing.Stack}" />
+                                    <TextBlock Grid.Row="2" Grid.Column="2" Text="{Binding SelectedBatchTask.TranslationCompletedAtText}" Margin="{DynamicResource Spacing.Stack}" />
+                                    <Ellipse Grid.Row="3" Width="6" Height="6" VerticalAlignment="Center"
+                                             Fill="{DynamicResource Brush.BorderStrong}" Margin="{DynamicResource Spacing.Stack}" />
+                                    <TextBlock Grid.Row="3" Grid.Column="1" Text="校对完成" Style="{StaticResource CaptionStyle}" Margin="{DynamicResource Spacing.Stack}" />
+                                    <TextBlock Grid.Row="3" Grid.Column="2" Text="{Binding SelectedBatchTask.ReviewCompletedAtText}" Margin="{DynamicResource Spacing.Stack}" />
+                                    <Ellipse Grid.Row="4" Width="6" Height="6" VerticalAlignment="Center"
+                                             Fill="{DynamicResource Brush.BorderStrong}" Margin="{DynamicResource Spacing.Stack}" />
+                                    <TextBlock Grid.Row="4" Grid.Column="1" Text="最近导出" Style="{StaticResource CaptionStyle}" Margin="{DynamicResource Spacing.Stack}" />
+                                    <TextBlock Grid.Row="4" Grid.Column="2" Text="{Binding SelectedBatchTask.LastExportedAtText}" Margin="{DynamicResource Spacing.Stack}" />
+                                </Grid>
+                            </StackPanel>
+                        </Border>
 
                         <Border Style="{StaticResource Callout.Error}" Margin="{DynamicResource Spacing.BlockTopLoose}"
                                 Visibility="{Binding SelectedBatchTask.HasError, Converter={StaticResource BoolToVis}}">
@@ -469,11 +499,14 @@
                             </StackPanel>
                         </Border>
 
-                        <StackPanel Margin="{DynamicResource Spacing.BlockTopLoose}">
-                            <TextBlock Text="输出文件" Style="{StaticResource SectionTitleStyle}" Margin="{DynamicResource Spacing.StackTight}" />
-                            <TextBlock Text="{Binding SelectedBatchTask.OutputPathText}" TextWrapping="Wrap"
-                                       Foreground="{DynamicResource Brush.TextSecondary}" />
-                        </StackPanel>
+                        <Border Style="{StaticResource Card}" Margin="{DynamicResource Spacing.BlockTopLoose}">
+                            <StackPanel>
+                                <TextBlock Text="输出文件" Style="{StaticResource SectionTitleStyle}"
+                                           Margin="{DynamicResource Spacing.StackTight}" />
+                                <TextBlock Text="{Binding SelectedBatchTask.OutputPathText}" TextWrapping="Wrap"
+                                           Foreground="{DynamicResource Brush.TextSecondary}" />
+                            </StackPanel>
+                        </Border>
                     </StackPanel>
                 </ScrollViewer>
             </DockPanel>

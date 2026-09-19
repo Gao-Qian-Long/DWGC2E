@@ -30,8 +30,25 @@
 
   <!-- Fixed grid rows replace business-level WrapPanels. Normal desktop widths keep every control visible. -->
   <Grid Grid.Row="1" Grid.RowSpan="3" Margin="{DynamicResource Spacing.BlockTopTight}">
-   <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-   <Grid Grid.Row="0" Margin="{DynamicResource Spacing.BlockTop}">
+   <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+   <!-- 用户反馈「移到上面去啊」：批量操作条常驻工具区首行（原先排在常规工具条之下），
+        整条不再插入/移除；无选中项或忙时仍由 SelectionToolbarState 统一置灰。 -->
+   <Grid x:Name="SelectionToolbar" Grid.Row="0" Margin="{DynamicResource Spacing.BlockTopTight}" Style="{StaticResource SelectionToolbarState}">
+    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="120"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+    <TextBlock x:Name="SelectionCount" Grid.Column="0" VerticalAlignment="Center" Margin="{DynamicResource Spacing.InlineWide}"/>
+    <Button Grid.Column="1" Content="上传所选" Click="UploadSelected_Click" Style="{StaticResource Button.Compact.Secondary}" Margin="{DynamicResource Spacing.InlineTight}"/>
+    <Button Grid.Column="2" Content="指定方向" Click="BatchDirection_Click" Style="{StaticResource Button.Compact.Secondary}" Margin="{DynamicResource Spacing.InlineTight}"/>
+    <Button Grid.Column="3" Content="启用" Tag="True" Click="BatchEnabled_Click" Style="{StaticResource Button.Compact.Secondary}" Margin="{DynamicResource Spacing.InlineTight}"/>
+    <Button Grid.Column="4" Content="停用" Tag="False" Click="BatchEnabled_Click" Style="{StaticResource Button.Compact.Secondary}" Margin="{DynamicResource Spacing.InlineTight}"/>
+    <ComboBox x:Name="BatchCategory" Grid.Column="5" SelectedIndex="0" ItemsSource="{Binding TermCategories}" ToolTip="选择或输入分类" Margin="{DynamicResource Spacing.InlineTight}"/>
+    <Button Grid.Column="6" Content="修改分类" Click="BatchCategory_Click" Style="{StaticResource Button.Compact.Secondary}" Margin="{DynamicResource Spacing.InlineTight}"/>
+    <Button Grid.Column="7" Content="导出" Click="Export_Click" Style="{StaticResource Button.Compact.Secondary}" Margin="{DynamicResource Spacing.InlineTight}"/>
+    <!-- §L12 「删除本机」是破坏性操作（移除本机术语），用危险色；「停用」不是 -->
+    <Button Grid.Column="8" x:Name="DeleteSelectionButton" Content="删除本机" Click="Delete_Click" Style="{StaticResource Button.SecondaryDanger}" Margin="{DynamicResource Spacing.InlineTight}"/>
+    <Button Grid.Column="9" Content="取消选择" Click="ClearSelection_Click" Style="{StaticResource Button.Compact.Secondary}" HorizontalAlignment="Left" Margin="{DynamicResource Spacing.InlineTight}"/>
+   </Grid>
+
+   <Grid Grid.Row="1" Margin="{DynamicResource Spacing.BlockTop}">
     <!-- 用户反馈「右上控件被裁」：筛选行只留筛选。搜索框独占弹性列并向下限 200 收缩，
          其余三个下拉按能完整显示「全部来源 / 全部分类 / 全部状态」的自然宽度取值；
          「详细列」是视图选项而非筛选条件，已移到下一行工具区，右端依赖因此缩短约 72 DIP。 -->
@@ -44,38 +61,21 @@
     <ComboBox Grid.Column="3" SelectedValuePath="Tag" SelectedValue="{Binding TermStatusFilter}" AutomationProperties.Name="状态" Margin="{DynamicResource Spacing.Inline}"><ComboBoxItem Content="全部状态" Tag="All"/><ComboBoxItem Content="已启用" Tag="Enabled"/><ComboBoxItem Content="已停用" Tag="Disabled"/><ComboBoxItem Content="有冲突" Tag="Conflict"/></ComboBox>
    </Grid>
 
-   <!-- 用户反馈「勾选后才出现，希望常显、不可操作时置灰」：批量操作条改为常驻第二行，
-        整块不再插入/移除（表格位置因此固定），无选中项或忙时由 SelectionToolbarState 统一置灰。 -->
-   <Grid Grid.Row="1" Margin="{DynamicResource Spacing.BlockTop}">
-    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-    <Grid x:Name="NormalToolbar" Grid.Row="0" Style="{StaticResource WorkspaceToolbarState}">
-     <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-     <Button Grid.Column="0" Content="导入" Command="{Binding ImportGlossaryCommand}" Style="{StaticResource Button.Secondary}" Margin="{DynamicResource Spacing.Inline}"/>
-     <Button Grid.Column="1" Content="导出" Click="Export_Click" Style="{StaticResource Button.Secondary}" Margin="{DynamicResource Spacing.Inline}"/>
-     <!-- §L12 工具栏按钮补显式样式，避免落到隐式兜底 Button.Tertiary -->
-     <Button Grid.Column="2" Content="分类管理" Click="Categories_Click" Style="{StaticResource Button.Secondary}" Margin="{DynamicResource Spacing.Inline}"/>
-     <!-- 用户反馈「右上控件被裁」：视图选项（列显示）从筛选行移入工具区，筛选行只留筛选条件。 -->
-     <CheckBox x:Name="DetailColumns" Grid.Column="3" Content="详细列" VerticalAlignment="Center" Checked="DetailColumns_Changed" Unchecked="DetailColumns_Changed"/>
-     <Button Grid.Column="5" x:Name="CloudSyncMenu" Content="云端管理" Command="{Binding DownloadTermsCommand}" Style="{StaticResource Button.Secondary}"/>
-    </Grid>
-
-    <Grid x:Name="SelectionToolbar" Grid.Row="1" Margin="{DynamicResource Spacing.BlockTopTight}" Style="{StaticResource SelectionToolbarState}">
-     <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="120"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-     <TextBlock x:Name="SelectionCount" Grid.Column="0" VerticalAlignment="Center" Margin="{DynamicResource Spacing.InlineWide}"/>
-     <Button Grid.Column="1" Content="上传所选" Click="UploadSelected_Click" Style="{StaticResource Button.Compact.Secondary}" Margin="{DynamicResource Spacing.InlineTight}"/>
-     <Button Grid.Column="2" Content="指定方向" Click="BatchDirection_Click" Style="{StaticResource Button.Compact.Secondary}" Margin="{DynamicResource Spacing.InlineTight}"/>
-     <Button Grid.Column="3" Content="启用" Tag="True" Click="BatchEnabled_Click" Style="{StaticResource Button.Compact.Secondary}" Margin="{DynamicResource Spacing.InlineTight}"/>
-     <Button Grid.Column="4" Content="停用" Tag="False" Click="BatchEnabled_Click" Style="{StaticResource Button.Compact.Secondary}" Margin="{DynamicResource Spacing.InlineTight}"/>
-     <ComboBox x:Name="BatchCategory" Grid.Column="5" SelectedIndex="0" ItemsSource="{Binding TermCategories}" ToolTip="选择或输入分类" Margin="{DynamicResource Spacing.InlineTight}"/>
-     <Button Grid.Column="6" Content="修改分类" Click="BatchCategory_Click" Style="{StaticResource Button.Compact.Secondary}" Margin="{DynamicResource Spacing.InlineTight}"/>
-     <Button Grid.Column="7" Content="导出" Click="Export_Click" Style="{StaticResource Button.Compact.Secondary}" Margin="{DynamicResource Spacing.InlineTight}"/>
-     <!-- §L12 「删除本机」是破坏性操作（移除本机术语），用危险色；「停用」不是 -->
-     <Button Grid.Column="8" x:Name="DeleteSelectionButton" Content="删除本机" Click="Delete_Click" Style="{StaticResource Button.SecondaryDanger}" Margin="{DynamicResource Spacing.InlineTight}"/>
-     <Button Grid.Column="9" Content="取消选择" Click="ClearSelection_Click" Style="{StaticResource Button.Compact.Secondary}" HorizontalAlignment="Left" Margin="{DynamicResource Spacing.InlineTight}"/>
-    </Grid>
+   <!-- 用户反馈「勾选后才出现，希望常显、不可操作时置灰」（2026-09-19 截图）：
+        批量操作条常驻且不再插入/移除（表格位置因此固定）；本次又按「移到上面去啊」
+        把它提到工具区首行，常规工具条顺次下移一行。两条工具条的置灰都由各自 Style 决定。 -->
+   <Grid x:Name="NormalToolbar" Grid.Row="2" Margin="{DynamicResource Spacing.BlockTop}" Style="{StaticResource WorkspaceToolbarState}">
+    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+    <Button Grid.Column="0" Content="导入" Command="{Binding ImportGlossaryCommand}" Style="{StaticResource Button.Secondary}" Margin="{DynamicResource Spacing.Inline}"/>
+    <Button Grid.Column="1" Content="导出" Click="Export_Click" Style="{StaticResource Button.Secondary}" Margin="{DynamicResource Spacing.Inline}"/>
+    <!-- §L12 工具栏按钮补显式样式，避免落到隐式兜底 Button.Tertiary -->
+    <Button Grid.Column="2" Content="分类管理" Click="Categories_Click" Style="{StaticResource Button.Secondary}" Margin="{DynamicResource Spacing.Inline}"/>
+    <!-- 用户反馈「右上控件被裁」：视图选项（列显示）从筛选行移入工具区，筛选行只留筛选条件。 -->
+    <CheckBox x:Name="DetailColumns" Grid.Column="3" Content="详细列" VerticalAlignment="Center" Checked="DetailColumns_Changed" Unchecked="DetailColumns_Changed"/>
+    <Button Grid.Column="5" x:Name="CloudSyncMenu" Content="云端管理" Command="{Binding DownloadTermsCommand}" Style="{StaticResource Button.Secondary}"/>
    </Grid>
 
-   <Grid Grid.Row="2" Margin="{DynamicResource Spacing.BlockTop}">
+   <Grid Grid.Row="3" Margin="{DynamicResource Spacing.BlockTop}">
     <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
     <Button Grid.Column="0" Content="{Binding AllTermsLabel}" Tag="All" Click="Status_Click" Margin="{DynamicResource Spacing.InlineTight}"><Button.Style><Style TargetType="Button" BasedOn="{StaticResource Button.Secondary}"><Style.Triggers><DataTrigger Binding="{Binding TermStatusFilter}" Value="All"><Setter Property="Background" Value="{DynamicResource Brush.PrimarySoft}"/><Setter Property="Foreground" Value="{DynamicResource Brush.Primary}"/><Setter Property="BorderBrush" Value="{DynamicResource Brush.Primary}"/></DataTrigger></Style.Triggers></Style></Button.Style></Button>
     <Button Grid.Column="1" Content="{Binding EnabledTermsLabel}" Tag="Enabled" Click="Status_Click" Margin="{DynamicResource Spacing.InlineTight}"><Button.Style><Style TargetType="Button" BasedOn="{StaticResource Button.Secondary}"><Style.Triggers><DataTrigger Binding="{Binding TermStatusFilter}" Value="Enabled"><Setter Property="Background" Value="{DynamicResource Brush.PrimarySoft}"/><Setter Property="Foreground" Value="{DynamicResource Brush.Primary}"/><Setter Property="BorderBrush" Value="{DynamicResource Brush.Primary}"/></DataTrigger></Style.Triggers></Style></Button.Style></Button>
@@ -104,7 +104,14 @@
      <DataGridTextColumn Header="同步状态" Binding="{Binding SyncStatus}" Width="84" MinWidth="80" Visibility="Collapsed" ElementStyle="{StaticResource TermMetaText}" IsReadOnly="True"/>
      <DataGridTextColumn Header="来源" Binding="{Binding SourceShortText}" Width="56" MinWidth="52" ElementStyle="{StaticResource TermSourceText}" IsReadOnly="True"/>
      <DataGridTemplateColumn Header="启用" Width="56" MinWidth="54" IsReadOnly="True"><DataGridTemplateColumn.CellTemplate><DataTemplate><CheckBox Style="{StaticResource TermToggle}" IsChecked="{Binding Enabled, Mode=OneWay}" Click="Toggle_Click" ToolTip="即时保存到本机 (Space)" AutomationProperties.Name="启用术语"/></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+     <!-- 用户反馈「按钮下部分边框没显示出来」：行高 40 − 水平网格线 1 − 单元格上下 padding(4+4) = 31，
+          装不下 32 高的 Secondary 按钮，底边框被压掉。该列垂直 padding 归零，把内容高度还给行内按钮。 -->
      <DataGridTemplateColumn Header="操作" Width="166" MinWidth="160" IsReadOnly="True">
+      <DataGridTemplateColumn.CellStyle>
+       <Style TargetType="DataGridCell" BasedOn="{StaticResource DataGridCellStyle}">
+        <Setter Property="Padding" Value="12,0"/>
+       </Style>
+      </DataGridTemplateColumn.CellStyle>
       <DataGridTemplateColumn.CellTemplate><DataTemplate>
        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
         <!-- §L7 行内按钮不再锁死 Width（DPI 缩放/字体回退时会裁字），只给 MinWidth 让内容撑开 -->
