@@ -1,4 +1,4 @@
-export interface MailEnv {
+﻿export interface MailEnv {
   DB?: D1Database;
   BREVO_API_KEY?: string; RESEND_API_KEY?: string; MAIL_FROM?: string;
   MAIL_PROVIDER?: string; MAIL_FALLBACK_ENABLED?: string;
@@ -53,8 +53,19 @@ export async function deliverMail(env: MailEnv, message: MailMessage,
       });
       // No recipient, verification code, keys or vendor response bodies in logs.
       console.info(JSON.stringify({ event: "verification_mail", primary: providers[0], attempt: attempt + 1, provider, status: response.status, request_id: message.id }));
+      if (response.ok) {
+        // Acceptance is not delivery. Keep a provider correlation ID for Gmail bounce/
+        // suppression investigation without logging a recipient, OTP, or raw payload.
+        let providerId: string | undefined;
+        try {
+          const receipt:any = await response.json();
+          const value = provider === "brevo" ? receipt?.messageId : receipt?.id;
+          if (typeof value === "string" && value.length <= 256 && !/[\r\n]/.test(value)) providerId = value;
+        } catch { /* An empty/malformed receipt must not resend an accepted message. */ }
+        console.info(JSON.stringify({event:"verification_mail_accepted",provider,request_id:message.id,provider_message_id:providerId,recipient_domain:message.to.split("@").pop()?.toLowerCase(),delivery_confirmed:false}));
+        return { ok: true };
+      }
       if (response.body) await response.body.cancel().catch(() => {});
-      if (response.ok) return { ok: true };
       // A server error can still follow acceptance; preserve the code if all attempts fail.
       if (response.status >= 500) uncertain = true;
       // Only retry provider-specific authentication, quota or service failures.

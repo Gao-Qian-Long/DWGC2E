@@ -43,5 +43,15 @@ public static class TranslationQualityValidator
     private static string NormalizeMeaningfulText(string text) =>
         new(text.Where(char.IsLetterOrDigit).Select(char.ToLowerInvariant).ToArray());
 
+    /// <summary>Validate visible CAD text after restoration, not font names such as 宋体 in control codes.</summary>
+    public static bool IsAcceptableCadText(string source, string formattedTranslation, string sourceLanguage, string targetLanguage, IReadOnlyList<GlossaryEntry>? glossary = null)
+    {
+        if (string.IsNullOrWhiteSpace(formattedTranslation) ||
+            formattedTranslation.Contains("__FMT_", StringComparison.Ordinal) ||
+            formattedTranslation.Contains("__GLOSSARY_", StringComparison.Ordinal)) return false;
+        var visible = new DwgTranslator.Core.Translation.FormatCodeParser().StripFormatCodes(formattedTranslation);
+        return glossary == null ? IsAcceptable(source, visible, sourceLanguage, targetLanguage)
+            : EffectiveGlossary.IsAcceptableTranslation(source, visible, sourceLanguage, targetLanguage, glossary);
+    }
     public static bool ContainsCjk(string text) => TranslationLanguages.ContainsHan(text);
 }

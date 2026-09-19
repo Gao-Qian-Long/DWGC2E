@@ -40,11 +40,13 @@ public sealed class SettingsStoreTests : IDisposable
     }
     [Fact] public void MigrationBacksUpAndPreservesOrdinarySettings()
     {
-        SettingsStore.Update(FilePath, c => { c.ApiMode = "direct"; c.ApiBaseUrl = ""; c.ExportDirectory = "custom-output"; c.AuthTokenEncrypted = "opaque-session"; });
+        Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
+        File.WriteAllText(FilePath, "{\"configurationVersion\":0,\"apiMode\":\"direct\",\"apiBaseUrl\":\"\",\"exportDirectory\":\"custom-output\",\"authTokenEncrypted\":\"opaque-session\"}");
         var original = File.ReadAllText(FilePath);
         SettingsStore.Migrate(FilePath);
         var result = SettingsStore.Read(FilePath);
-        Assert.Equal("worker", result.ApiMode);
+        using var migratedDocument = System.Text.Json.JsonDocument.Parse(File.ReadAllText(FilePath));
+        Assert.DoesNotContain(migratedDocument.RootElement.EnumerateObject(), property => property.Name.Equals("apiMode", StringComparison.OrdinalIgnoreCase));
         Assert.Equal(new AppConfig().ApiBaseUrl, result.ApiBaseUrl);
         Assert.Equal("custom-output", result.ExportDirectory);
         Assert.Equal("opaque-session", result.AuthTokenEncrypted);
@@ -97,6 +99,44 @@ public sealed class SettingsStoreTests : IDisposable
         File.WriteAllText(FilePath, "{broken");
         Assert.Throws<System.Text.Json.JsonException>(() => SettingsStore.Migrate(FilePath));
         Assert.Equal("{broken", File.ReadAllText(FilePath));
+    }
+    [Fact]
+    public void NullDocumentFailsInsteadOfRewritingDefaultsOverUserSettings()
+    {
+        // 字面量 null 是合法 JSON：旧实现反序列化成 null 后静默用默认值继续，紧接着 Update
+        // 把默认值整份写回——令牌、账号 ID、输出目录全部被清空，用户毫不知情。
+        File.WriteAllText(FilePath, "null");
+        var original = File.ReadAllBytes(FilePath);
+
+        Assert.Throws<System.IO.InvalidDataException>(() => SettingsStore.Read(FilePath));
+        Assert.Throws<System.IO.InvalidDataException>(() => SettingsStore.Update(FilePath, c => c.AuthTokenEncrypted = "new"));
+        Assert.Throws<System.IO.InvalidDataException>(() => SettingsStore.Migrate(FilePath));
+
+        Assert.Equal(original, File.ReadAllBytes(FilePath)); // 磁盘文件一个字节都没变
+        Assert.Empty(Directory.GetFiles(directory, "*.tmp"));
+    }
+    [Theory]
+    [InlineData("0")]
+    [InlineData("\"text\"")]
+    public void NonObjectDocumentIsNotTreatedAsAnEmptyConfiguration(string document)
+    {
+        File.WriteAllText(FilePath, document);
+        var original = File.ReadAllBytes(FilePath);
+
+        // 类型不匹配与"解析成 null"是不同的失败路径，但都必须明确失败且不动磁盘上的文件。
+        var failure = Record.Exception(() => SettingsStore.Read(FilePath));
+        Assert.True(failure is System.Text.Json.JsonException or System.IO.InvalidDataException,
+            "unexpected: " + (failure?.GetType().FullName ?? "no exception"));
+
+        Assert.Equal(original, File.ReadAllBytes(FilePath));
+        Assert.Empty(Directory.GetFiles(directory, "*.tmp"));
+    }
+    [Fact]
+    public void MissingFileIsStillAFreshInstallAndUsesDefaults()
+    {
+        Assert.NotNull(SettingsStore.Read(Path.Combine(directory, "not-there.json")));
+        SettingsStore.Update(FilePath, c => c.ExportDirectory = "custom");
+        Assert.Equal("custom", SettingsStore.Read(FilePath).ExportDirectory);
     }
     [Fact] public void GlossaryClonePreservesMetadata()
     {

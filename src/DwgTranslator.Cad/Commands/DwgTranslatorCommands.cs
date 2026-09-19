@@ -16,6 +16,7 @@ using Autodesk.AutoCAD.Runtime;
 using DwgTranslator.Cad.Extraction;
 using DwgTranslator.Cad.Replacement;
 using DwgTranslator.Core.Models;
+using DwgTranslator.Core.Api;
 using DwgTranslator.Core.Services;
 using DwgTranslator.Cad;
 using DwgTranslator.Core.Translation;
@@ -126,15 +127,19 @@ public class DwgTranslatorCommands
                 StringComparison.OrdinalIgnoreCase) ? config.GlossaryPath : string.Empty;
             glossaryService.LoadGlossaryAsync(glossaryPath).GetAwaiter().GetResult();
 
-            var formatCodeParser = new FormatCodeParser();
-            var systemPrompt = LoadSystemPrompt();
-            using var httpClient = new HttpClient { BaseAddress = new Uri(config.DeepSeekBaseUrl) };
-            httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {config.DeepSeekApiKey}");
-            var deepSeekClient = new DeepSeekClient(httpClient, config.DeepSeekModel);
+            var dataDirectory = ProductDataDirectory.Initialize(AppDomain.CurrentDomain.BaseDirectory);
+            var encryptedToken = config.AuthTokenEncrypted;
+            if (string.IsNullOrWhiteSpace(AppConfig.DecryptApiKey(encryptedToken)))
+                throw new InvalidOperationException("请先在 DWGC2E 桌面端登录，再从 CAD 中执行翻译。");
 
-            var translationService = new TranslationService(
-                glossaryService, formatCodeParser, deepSeekClient, systemPrompt,
-                config.BatchSize, config.MaxRetryCount);
+            var deviceId = GetOrCreateDeviceId(dataDirectory);
+            using var httpClient = new HttpClient();
+            var apiClient = new WorkerApiClient(
+                httpClient, config.ApiBaseUrl, config.UpdateManifestUrl,
+                () => AppConfig.DecryptApiKey(encryptedToken), deviceId, Environment.MachineName);
+            var restorer = new FormatCodeRestorer(new FormatCodeParser());
+            var translationService = new WorkerTranslationService(
+                apiClient, config, restorer.Restore, () => glossaryService.GetAllEntries());
 
             // Filter out XREF entities
             var entitiesToTranslate = extractedEntities
@@ -240,10 +245,8 @@ public class DwgTranslatorCommands
     {
         if (_config != null) return;
 
-        // Prefer AppData settings (same as WPF app) so API key/glossary match UI config.
-        var appDataPath = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "DwgTranslator", "settings.json");
+        var appDataDir = ProductDataDirectory.Initialize(AppDomain.CurrentDomain.BaseDirectory);
+        var appDataPath = Path.Combine(appDataDir, "settings.json");
         var basePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "settings.json");
         var configPath = File.Exists(appDataPath) ? appDataPath : basePath;
 
@@ -259,13 +262,7 @@ public class DwgTranslatorCommands
             Log.Warning("CAD plugin settings.json not found; using defaults");
         }
 
-        // Decrypt API key if stored with DPAPI protection
-        _config.DeepSeekApiKey = AppConfig.DecryptApiKey(_config.DeepSeekApiKey);
-
         // Resolve relative glossary/export paths against AppData when needed
-        var appDataDir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "DwgTranslator");
         if (!string.IsNullOrEmpty(_config.GlossaryPath) && !Path.IsPathRooted(_config.GlossaryPath))
         {
             var appDataGlossary = Path.Combine(appDataDir, _config.GlossaryPath);
@@ -276,12 +273,25 @@ public class DwgTranslatorCommands
             _config.ExportDirectory = Path.Combine(appDataDir, _config.ExportDirectory);
     }
 
-    private static string LoadSystemPrompt()
+    private static string GetOrCreateDeviceId(string dataDirectory)
     {
-        var promptPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "prompts", "deepl_context.txt");
-        if (File.Exists(promptPath))
-            return File.ReadAllText(promptPath);
-        return "You are a professional mechanical engineering translator. Translate the text accurately, preserving any placeholders and formatting codes.";
+        var path = Path.Combine(dataDirectory, "device-id.txt");
+        if (File.Exists(path))
+        {
+            var existing = File.ReadAllText(path).Trim();
+            if (existing.Length >= 16) return existing;
+        }
+
+        var created = Guid.NewGuid().ToString("N");
+        Directory.CreateDirectory(dataDirectory);
+        try { File.WriteAllText(path, created); }
+        catch (IOException) when (File.Exists(path))
+        {
+            var raced = File.ReadAllText(path).Trim();
+            if (raced.Length >= 16) return raced;
+            throw;
+        }
+        return created;
     }
 
     private static AppConfig GetConfig()

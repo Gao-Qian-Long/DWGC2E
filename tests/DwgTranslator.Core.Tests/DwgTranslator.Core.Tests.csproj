@@ -27,4 +27,5 @@
     <ProjectReference Include="..\..\src\DwgTranslator.Core\DwgTranslator.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup><Compile Include="../../src/DwgTranslator.Cad/Replacement/MTextFitFormatting.cs" Link="Cad/MTextFitFormatting.cs" /></ItemGroup>
 </Project>

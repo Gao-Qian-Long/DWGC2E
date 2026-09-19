@@ -22,6 +22,7 @@ cache.AddToCache("轴承","Bearing","ZH>EN");
 var enHit=cache.TryGetMatch("轴承","ZH>EN",out var enValue);
 var deHit=cache.TryGetMatch("轴承","ZH>DE",out _);
 
+var serializedConfig=JsonSerializer.Serialize(new AppConfig(),AppConfigJson.WriteOptions);
 var cases=new Dictionary<string,bool>
 {
     ["narrow CJK column"]=VerticalTextLayout.IsCharacterColumn("报警灯",0,10.46,9.24),
@@ -45,7 +46,9 @@ var cases=new Dictionary<string,bool>
     ,["cache direction isolation"]=enHit && enValue=="Bearing" && !deHit
     ,["punctuated echo rejected"]=!TranslationQualityValidator.IsAcceptable("Motor stop","Motor stop!","EN","DE")
     ,["pair-specific glossary name"]=TranslationLanguages.GlossaryFileName("ZH","DE")=="mechanical_zh_de.json"
-    ,["config writes camelCase"]=JsonSerializer.Serialize(new AppConfig(),AppConfigJson.WriteOptions).Contains("\"deepSeekApiKey\"")
+    ,["config writes camelCase without provider secrets"]=serializedConfig.Contains("\"apiBaseUrl\"")
+        && !serializedConfig.Contains("deepSeek",StringComparison.OrdinalIgnoreCase)
+        && !serializedConfig.Contains("\"apiMode\"",StringComparison.OrdinalIgnoreCase)
     ,["cell border clearance scales with text height"]=Math.Abs(WritebackConstants.GeometryClearance(10)-.4)<1e-9
     ,["cell border clearance has absolute floor"]=Math.Abs(WritebackConstants.GeometryClearance(.1)-.02)<1e-9
 };

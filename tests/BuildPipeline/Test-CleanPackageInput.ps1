@@ -10,8 +10,8 @@ $fixture=Join-Path $evidence 'workspace'
 $candidate=Join-Path $fixture 'artifacts/publish-20260916-000000'
 New-Item -ItemType Directory -Path $candidate -Force|Out-Null
 Get-ChildItem -LiteralPath $PublishDir|Copy-Item -Destination $candidate -Recurse
-New-Item -ItemType Directory -Path (Join-Path $fixture 'assets/glossaries'),(Join-Path $fixture 'assets/prompts') -Force|Out-Null
-foreach($relative in @('settings.json.example','assets/glossaries/mechanical_zh_en.json','assets/prompts/deepl_context.txt')){
+New-Item -ItemType Directory -Path (Join-Path $fixture 'assets/glossaries') -Force|Out-Null
+foreach($relative in @('settings.json.example','assets/glossaries/mechanical_zh_en.json')){
  Copy-Item -LiteralPath (Join-Path $root $relative) -Destination (Join-Path $fixture $relative)
 }
 $results=New-Object Collections.Generic.List[object]
@@ -30,7 +30,7 @@ try{
  $bad.sha256=$info.sha256;$bad.version='not-the-executable-version';$bad|ConvertTo-Json|Set-Content $metadata
  Reject 'version mismatch rejected' {& $tool -PublishDir $candidate -WorkspaceRoot $fixture} 'version does not match'
 }finally{[IO.File]::WriteAllBytes($metadata,$original)}
-foreach($relative in @('settings.json','glossaries/mechanical_zh_en.json','assets/default-glossaries/mechanical_zh_en.json','prompts/deepl_context.txt')){
+foreach($relative in @('settings.json','glossaries/mechanical_zh_en.json','assets/default-glossaries/mechanical_zh_en.json')){
  $path=Join-Path $candidate $relative;$bytes=[IO.File]::ReadAllBytes($path)
  try{[IO.File]::AppendAllText($path,' user-data');Reject "modified $relative rejected" {& $tool -PublishDir $candidate -WorkspaceRoot $fixture} 'differs from reviewed source'}finally{[IO.File]::WriteAllBytes($path,$bytes)}
 }
@@ -61,7 +61,7 @@ $validOutput=Join-Path $evidence 'valid-package'
 $stage=Join-Path $validOutput "DwgTranslator-$version-win-x64"
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 $archive=[IO.Compression.ZipFile]::OpenRead((Join-Path $validOutput "DwgTranslator-$version-win-x64.zip"))
-try { Check ($archive.Entries.Count -eq 15 -and @($archive.Entries | Where-Object FullName -eq 'build-info.json').Count -eq 1) 'zip contains 15 expected payload files including provenance' } finally { $archive.Dispose() }
+try { Check ($archive.Entries.Count -eq 14 -and @($archive.Entries | Where-Object FullName -eq 'build-info.json').Count -eq 1) 'zip contains 14 expected payload files including provenance' } finally { $archive.Dispose() }
 Check ((Get-FileHash (Join-Path $stage 'DwgTranslator.exe')).Hash -eq $info.sha256) 'packaged executable matches manifest'
 Check ((Get-FileHash (Join-Path $stage 'build-info.json')).Hash -eq (Get-FileHash (Join-Path $PublishDir 'build-info.json')).Hash) 'package retains build provenance'
 Reject 'existing stage rejected' {& $packager -PublishDir $PublishDir -OutputDir $validOutput} 'output already exists'
@@ -69,11 +69,11 @@ Reject 'existing stage rejected' {& $packager -PublishDir $PublishDir -OutputDir
 $literalOutput=Join-Path $evidence '[review]'
 & $packager -PublishDir $PublishDir -OutputDir $literalOutput
 $literalStage=Join-Path $literalOutput "DwgTranslator-$version-win-x64"
-Check ((Get-ChildItem -LiteralPath $literalStage -Recurse -File).Count -eq 15) 'bracket directory retains all payload files'
+Check ((Get-ChildItem -LiteralPath $literalStage -Recurse -File).Count -eq 14) 'bracket directory retains all 14 payload files'
 $literalZip=Join-Path $literalOutput "DwgTranslator-$version-win-x64.zip"
 $literalArchive=[IO.Compression.ZipFile]::OpenRead($literalZip)
 try {
- Check ($literalArchive.Entries.Count -eq 15 -and @($literalArchive.Entries | Where-Object { $_.FullName.Replace('\','/') -eq 'CadPlugin/DwgTranslator.Cad.dll' }).Count -eq 1) 'bracket directory zip has expected root and CAD payload'
+ Check ($literalArchive.Entries.Count -eq 14 -and @($literalArchive.Entries | Where-Object { $_.FullName.Replace('\','/') -eq 'CadPlugin/DwgTranslator.Cad.dll' }).Count -eq 1) 'bracket directory zip has expected root and CAD payload'
 } finally { $literalArchive.Dispose() }
 Check ((Get-FileHash -LiteralPath (Join-Path $literalStage 'DwgTranslator.exe')).Hash -eq $info.sha256) 'bracket directory executable matches candidate'
 $results|ConvertTo-Json -Depth 4|Set-Content -LiteralPath (Join-Path $evidence 'results.json') -Encoding UTF8

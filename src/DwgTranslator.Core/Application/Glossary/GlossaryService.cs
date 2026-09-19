@@ -17,27 +17,24 @@ public class GlossaryService : IGlossaryService
     /// <inheritdoc/>
     public async Task LoadGlossaryAsync(string filePath)
     {
-        _lock.EnterWriteLock();
-        try { _entries.Clear(); }
-        finally { _lock.ExitWriteLock(); }
-
         if (!File.Exists(filePath))
         {
+            _lock.EnterWriteLock();
+            try { _entries.Clear(); }
+            finally { _lock.ExitWriteLock(); }
             Log.Warning("Glossary file not found: {Path}", filePath);
             return;
         }
 
         var json = await File.ReadAllTextAsync(filePath).ConfigureAwait(false);
-        var entries = JsonSerializer.Deserialize<List<GlossaryEntry>>(json, new JsonSerializerOptions
-        {
-            PropertyNameCaseInsensitive = true
-        });
+        var entries = json.TrimStart().StartsWith("{") ? DwgTranslator.Core.Infrastructure.Glossary.GlossaryWorkspaceStore.Load(filePath).Entries : JsonSerializer.Deserialize<List<GlossaryEntry>>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
         if (entries != null)
         {
             _lock.EnterWriteLock();
             try
             {
+                _entries.Clear();
                 _entries.AddRange(entries.OrderByDescending(e => e.Source.Length)); // Longest match first
             }
             finally
@@ -64,7 +61,7 @@ public class GlossaryService : IGlossaryService
             var occupied = new bool[text.Length]; // Track which positions are already matched
             var matchIndex = 0;
 
-            foreach (var entry in _entries)
+            foreach (var entry in _entries.Where(e => e.Enabled && !e.DirectionPending && !string.IsNullOrWhiteSpace(e.Source)))
             {
                 int searchStart = 0;
                 int pos;

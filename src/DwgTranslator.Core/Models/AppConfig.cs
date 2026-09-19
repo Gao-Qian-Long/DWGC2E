@@ -19,9 +19,15 @@ public class AppConfig
     /// </summary>
     public bool LicensingEnabled { get => false; set { /* Legacy setting: cloud accounts are authoritative. */ } }
 
-    public string DeepSeekApiKey { get; set; } = string.Empty;
-    public string DeepSeekBaseUrl { get; set; } = "https://api.deepseek.com";
-    public string DeepSeekModel { get; set; } = "deepseek-chat";
+#if DEBUG
+    // Debug-only compatibility shims for migration regression tests. Production clients are Worker-only.
+    [System.Text.Json.Serialization.JsonIgnore, Obsolete("AI provider credentials are managed by the Worker.")]
+    public string DeepSeekApiKey { get => string.Empty; set { } }
+    [System.Text.Json.Serialization.JsonIgnore, Obsolete("AI provider endpoints are managed by the Worker.")]
+    public string DeepSeekBaseUrl { get => string.Empty; set { } }
+    [System.Text.Json.Serialization.JsonIgnore, Obsolete("AI model selection is managed by the Worker.")]
+    public string DeepSeekModel { get => string.Empty; set { } }
+#endif
     public string SourceLanguage { get; set; } = "ZH";
     public string TargetLanguage { get; set; } = "EN";
     public string GlossaryPath { get; set; } = "glossaries/mechanical_zh_en.json";
@@ -34,7 +40,8 @@ public class AppConfig
     public int MaxRetryCount { get; set; } = 3;
     public double AutoScaleThreshold { get; set; } = 1.5;
     public double AutoScaleFactor { get; set; } = 0.95;
-    public string ExportDirectory { get; set; } = "exports";
+    public string ExportDirectory { get; set; } = string.Empty;
+    public Dictionary<string, string> AccountOutputDirectories { get; set; } = new();
     public string LogDirectory { get; set; } = "logs";
 
     /// <summary>
@@ -99,7 +106,10 @@ public class AppConfig
     /// <summary>
     /// Returns the decrypted API key from this config instance.
     /// </summary>
-    public string GetDecryptedApiKey() => DecryptApiKey(DeepSeekApiKey);
+#if DEBUG
+    [Obsolete("AI provider credentials are managed by the Worker.")]
+    public string GetDecryptedApiKey() => string.Empty;
+#endif
 
     // ── 任务层与并发（本地并发与 AI 并发分开限流）──
     public int LocalWorkerCount { get; set; } = 2;
@@ -107,7 +117,10 @@ public class AppConfig
     public bool MemoryOptimization { get; set; } = true;
 
     // ── 后端对接（客户端只认 IApiClient）──
-    public string ApiMode { get; set; } = "worker";
+#if DEBUG
+    [System.Text.Json.Serialization.JsonIgnore, Obsolete("The production client always uses the Worker.")]
+    public string ApiMode { get => "worker"; set { } }
+#endif
     public string ApiBaseUrl { get; set; } = DwgTranslator.Core.Api.ProductApiEndpoint.Default;
     public string AuthTokenEncrypted { get; set; } = string.Empty;
     public string ActiveAccountId { get; set; } = string.Empty;
@@ -116,9 +129,8 @@ public class AppConfig
 
     // ── 文件安全（默认不覆盖原文件）──
     public string OutputNamingPattern { get; set; } = "{name}_{lang}";
-    public string DuplicatePolicy { get; set; } = "skip";
+    public string DuplicatePolicy { get; set; } = "rename";
     public bool BackupSourceBeforeWrite { get; set; } = false;
-    public bool AllowOverwriteSource { get; set; } = false;
 
     // ── 工程保护规则开关（直接作用于过滤与校验）──
     public bool ProtectDimensions { get; set; } = true;

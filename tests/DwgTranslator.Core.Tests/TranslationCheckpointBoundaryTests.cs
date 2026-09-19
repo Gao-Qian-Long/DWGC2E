@@ -8,7 +8,7 @@ namespace DwgTranslator.Core.Tests;
 public sealed class TranslationCheckpointBoundaryTests
 {
     [Fact]
-    public async Task CompletedTranslationsAreOnDiskBeforeWriterStarts()
+    public async Task CompletedTranslationsArePersistedWithoutStartingWriter()
     {
         var root = Path.Combine(Path.GetTempPath(), "checkpoint-boundary-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
@@ -18,15 +18,14 @@ public sealed class TranslationCheckpointBoundaryTests
             File.WriteAllText(source, "isolated drawing fixture");
             var storePath = Path.Combine(root, "tasks.json");
             var writer = new InspectingWriter(storePath);
-            var config = new AppConfig { ExportDirectory = root, OutputNamingPattern = "{name}_translated", DuplicatePolicy = "rename", BackupSourceBeforeWrite = false, AllowOverwriteSource = false };
+            var config = new AppConfig { ExportDirectory = root, OutputNamingPattern = "{name}_translated", DuplicatePolicy = "rename", BackupSourceBeforeWrite = false };
             using var manager = new TaskManager(new Reader(), null, new Translator(), writer, null,
                 new JsonTaskStore(storePath), new TaskManagerOptions { LocalWorkerCount = 1, AiConcurrency = 1, MaxRetryCount = 0, MemoryOptimization = false }, config);
-            manager.ConfigureRun("ZH", "EN", root, TaskWritebackMode.Offline);
+            manager.ConfigureRun("ZH", "EN");
             var task = manager.Enqueue(source);
             await manager.RunAsync(CancellationToken.None);
-            Assert.True(writer.Called);
-            // Read the captured bytes, never a mutable reference to the task or final file.
-            var persisted = JsonSerializer.Deserialize<List<TranslationTask>>(writer.AtEntry!)!;
+            Assert.False(writer.Called);
+            var persisted = JsonSerializer.Deserialize<List<TranslationTask>>(File.ReadAllText(storePath))!;
             var checkpoint = Assert.Single(persisted);
             Assert.Equal(task.Id, checkpoint.Id);
             Assert.Equal(2, checkpoint.SuccessfulTranslations.Count);
@@ -37,7 +36,8 @@ public sealed class TranslationCheckpointBoundaryTests
             });
             Assert.Equal(2, checkpoint.SuccessfulTranslations.Select(p => p.Handle).Distinct().Count());
             Assert.False(string.IsNullOrEmpty(checkpoint.CheckpointSignature));
-            Assert.Equal(TranslationTaskStatus.Completed, task.Status);
+            Assert.Equal(TranslationTaskStatus.ReadyForReview, task.Status);
+            Assert.Null(task.OutputPath);
         }
         finally { Directory.Delete(root, true); }
     }

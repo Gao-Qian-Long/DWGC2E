@@ -8,12 +8,12 @@ $fixture=Join-Path $ResultDir ('fixture-'+[guid]::NewGuid().ToString('N'))
 $package=Join-Path $fixture 'package'
 function Put($base,$rel,$text){$p=Join-Path $base $rel;[IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($p))|Out-Null;[IO.File]::WriteAllText($p,$text,[Text.UTF8Encoding]::new($true))}
 foreach($name in @('Install.ps1','InstallTransaction.ps1','Uninstall.ps1')){Put $package $name ([IO.File]::ReadAllText((Join-Path $root ('installer/'+$name))))}
-$payload=@{'DwgTranslator.exe'='v1';'settings.json'='{}';'CadPlugin/DwgTranslator.Cad.dll'='cad-v1';'CadPlugin/DwgTranslator.Core.dll'='core-v1';'CadPlugin/cad-platform.txt'='GstarCAD';'assets/default-glossaries/mechanical_zh_en.json'='{}';'prompts/deepl_context.txt'='default';'glossaries/mechanical_zh_en.json'='{}'}
+$payload=@{'DwgTranslator.exe'='v1';'settings.json'='{}';'CadPlugin/DwgTranslator.Cad.dll'='cad-v1';'CadPlugin/DwgTranslator.Core.dll'='core-v1';'CadPlugin/cad-platform.txt'='GstarCAD';'assets/default-glossaries/mechanical_zh_en.json'='{}';'glossaries/mechanical_zh_en.json'='{}'}
 foreach($name in $payload.Keys){Put $package $name $payload[$name]}
 $original=[IO.File]::ReadAllText((Join-Path $package 'Install.ps1'))
 function Snapshot($target){$map=@{};if(Test-Path -LiteralPath $target){Get-ChildItem -LiteralPath $target -Recurse -File -Force|ForEach-Object {$map[$_.FullName.Substring($target.Length+1)]=(Get-FileHash -LiteralPath $_.FullName).Hash}};return $map}
 function RunInstall($target,$log){$saved=$ErrorActionPreference;$ErrorActionPreference='Continue'; & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $package 'Install.ps1') -SourceDir $package -TargetDir $target -NoLaunch -NoPrompt -NoShortcuts *> $log;$code=$LASTEXITCODE;$ErrorActionPreference=$saved;return $code}
-$points=@('foreach ($sub in @(''CadPlugin'',''prompts'',''glossaries'',''assets'')) {','# Retain previous ownership when reinstalling without creating shortcuts.','# Record program ownership only after successful copy; never claim personal data.','Write-Step "写入 卸载.cmd"')
+$points=@('foreach ($sub in @(''CadPlugin'',''glossaries'',''assets'')) {','# Retain previous ownership when reinstalling without creating shortcuts.','# Record program ownership only after successful copy; never claim personal data.','Write-Step "写入 卸载.cmd"')
 $checks=0
 foreach($upgrade in @($false,$true)){
     for($i=0;$i -lt $points.Count;$i++){

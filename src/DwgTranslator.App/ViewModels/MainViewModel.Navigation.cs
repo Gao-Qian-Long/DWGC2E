@@ -1,3 +1,4 @@
+using DwgTranslator.App.Services;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using DwgTranslator.Core.Models;
@@ -56,6 +57,7 @@ public partial class MainViewModel
     private void NavigateTo(string? page)
     {
         if (string.IsNullOrWhiteSpace(page)) return;
+        if (page == "output-settings") { CurrentPage = PageSettings; SettingsSection = 2; return; }
         CurrentPage = page;
     }
 
@@ -122,10 +124,19 @@ public partial class MainViewModel
     {
         try
         {
+            if (string.IsNullOrWhiteSpace(_config.ExportDirectory))
+            {
+                ToastService.Warning("尚未设置输出目录，请先在“文件与输出”中选择路径。");
+                return;
+            }
             Directory.CreateDirectory(_config.ExportDirectory);
-            OpenFolder(_config.ExportDirectory);
+            if (OpenFolder(_config.ExportDirectory)) ToastService.Info("输出目录已打开。");
         }
-        catch (Exception ex) { Log.Warning(ex, "Opening the output folder failed"); }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Opening the output folder failed");
+            ToastService.Warning("无法打开输出目录，请检查路径和访问权限后重试。");
+        }
     }
 
     /// <summary>Recomputes the dashboard from the workspace and the newest CAD plugin log.</summary>
@@ -163,7 +174,9 @@ public partial class MainViewModel
             if (newest == null) { AutoScaledLabelCount = 0; InterferenceResolvedCount = 0; return; }
 
             int scaled = 0, interference = 0;
-            foreach (var line in File.ReadLines(newest.FullName))
+            using var stream = new FileStream(newest.FullName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            using var reader = new StreamReader(stream);
+            while (reader.ReadLine() is { } line)
             {
                 if (line.Contains("uniform scale to", StringComparison.Ordinal)) scaled++;
                 else if (line.Contains("resolved by shrinking", StringComparison.Ordinal)) interference++;

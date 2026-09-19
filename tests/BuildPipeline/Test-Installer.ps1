@@ -20,7 +20,6 @@ Put 'settings.json' '{"sample":true}'
 Put 'CadPlugin/DwgTranslator.Cad.dll' 'fake-plugin-v1'
 Put 'CadPlugin/DwgTranslator.Core.dll' 'fake-core-v1'
 Put 'CadPlugin/cad-platform.txt' 'GstarCAD'
-Put 'prompts/deepl_context.txt' 'default-prompt'
 Put 'glossaries/mechanical_zh_en.json' '{}'
 Put 'assets/default-glossaries/mechanical_zh_en.json' '{}'
 $installer = Join-Path $root 'installer/Install.ps1'
@@ -47,14 +46,15 @@ Check (Test-Path -LiteralPath (Join-Path $target 'assets/default-glossaries/mech
 Check (Test-Path -LiteralPath (Join-Path $target 'CadPlugin/DwgTranslator.Core.dll')) 'fresh install has plugin dependency'
 Check ((Get-Content -LiteralPath (Join-Path $target 'settings.json') -Raw) -eq '{"sample":true}') 'fresh install seeds settings'
 [IO.File]::WriteAllText((Join-Path $target 'settings.json'),'{"personal":"preserve"}')
-[IO.File]::WriteAllText((Join-Path $target 'prompts/deepl_context.txt'),'personal-prompt')
+New-Item -ItemType Directory -Force -Path (Join-Path $target 'prompts') | Out-Null
+[IO.File]::WriteAllText((Join-Path $target 'prompts/deepl_context.txt'),'legacy-client-prompt')
 [IO.File]::WriteAllText((Join-Path $target 'glossaries/mechanical_zh_en.json'),'{"personal":"term"}')
 Put 'DwgTranslator.exe' 'fake-executable-v2-never-launched'
 Put 'CadPlugin/DwgTranslator.Cad.dll' 'fake-plugin-v2'
 Put 'glossaries/new-default.json' '{}'
 Install $target $true
 Check ((Get-Content -LiteralPath (Join-Path $target 'settings.json') -Raw) -eq '{"personal":"preserve"}') 'reinstall preserves settings'
-Check ((Get-Content -LiteralPath (Join-Path $target 'prompts/deepl_context.txt') -Raw) -eq 'personal-prompt') 'reinstall preserves prompt'
+Check (-not(Test-Path -LiteralPath (Join-Path $target 'prompts/deepl_context.txt'))) 'reinstall removes obsolete client-side prompt'
 Check ((Get-Content -LiteralPath (Join-Path $target 'glossaries/mechanical_zh_en.json') -Raw) -eq '{"personal":"term"}') 'reinstall preserves glossary'
 Check ((Get-Content -LiteralPath (Join-Path $target 'CadPlugin/DwgTranslator.Cad.dll') -Raw) -eq 'fake-plugin-v2') 'reinstall updates plugin'
 Check (Test-Path -LiteralPath (Join-Path $target 'glossaries/new-default.json')) 'reinstall adds missing default'
@@ -70,7 +70,7 @@ Rename-Item -LiteralPath (Join-Path $package 'assets/default-glossaries/missing.
 Put 'settings.json' 'invalid-json'
 Install $target $false
 $after = Snapshot
-Check (-not @($before.Keys | Where-Object { $before[$_] -ne $after[$_] }).Count) 'invalid configuration leaves installation unchanged'
+Check (($before.Count -eq $after.Count) -and -not @($before.Keys | Where-Object { $before[$_] -ne $after[$_] }).Count) 'invalid configuration leaves installation unchanged'
 Put 'settings.json' '{}'
 Install $package $false
 Check ((Get-Content -LiteralPath (Join-Path $package 'DwgTranslator.exe') -Raw) -eq 'fake-executable-v2-never-launched') 'overlapping source and target rejected'
@@ -94,7 +94,7 @@ Put 'DwgTranslator.exe' 'fake-executable-v2-never-launched'
 $uninstallText = Get-Content -LiteralPath (Join-Path $target '卸载.cmd') -Raw
 Check ($uninstallText -notmatch '(?im)^\s*(taskkill|rmdir|rd|del|erase)\b') 'uninstall bootstrap performs no automatic destructive actions'
 $inno = Get-Content -LiteralPath (Join-Path $root 'installer/DwgTranslator.iss') -Raw
-foreach ($resource in @('settings.json','prompts','glossaries')) {
+foreach ($resource in @('settings.json','glossaries')) {
     $line = @($inno -split "`n" | Where-Object { $_ -like 'Source:*' -and $_.Contains("\$resource") -and $_.Contains('DestDir: "{app}') })
     Check ($line.Count -eq 1 -and $line[0].Contains('onlyifdoesntexist') -and $line[0].Contains('uninsneveruninstall')) "Inno preserves portable $resource"
 }
@@ -203,7 +203,7 @@ $lock=[IO.File]::Open($locked,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.File
 try{Uninstall $false}finally{$lock.Dispose()}
 Check ((Get-FileHash -LiteralPath $exe).Hash -eq $exeHash) 'all-file lock preflight prevents partial uninstall'
 $personal=@{}
-foreach($relative in @('settings.json','prompts/deepl_context.txt','glossaries/mechanical_zh_en.json','exports/user.dwg','logs/user.log','unknown.txt','assets/unknown.txt','CadPlugin/user-note.txt')){
+foreach($relative in @('settings.json','prompts/user-note.txt','glossaries/mechanical_zh_en.json','exports/user.dwg','logs/user.log','unknown.txt','assets/unknown.txt','CadPlugin/user-note.txt')){
     $path=Join-Path $target $relative
     New-Item -ItemType Directory -Force -Path ([IO.Path]::GetDirectoryName($path)) | Out-Null
     [IO.File]::WriteAllText($path,'personal-data')

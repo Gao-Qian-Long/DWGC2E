@@ -97,6 +97,10 @@ public partial class MainViewModel : ObservableObject, IDisposable
     /// stale hard-coded number, with the SDK's source-revision suffix ("1.2.3+abcdef") trimmed off.
     /// </summary>
     public string AppVersionText { get; } = BuildVersionText();
+    public string AppReleaseVersionText => $"版本 {TrimBuildSuffix(AppVersionText)}";
+    public string AppBuildText => BuildIdentity(AppVersionText);
+    public string AppBuildDateText => BuildDate(AppVersionText);
+    public string AppRuntimeText => $"Windows · .NET {Environment.Version.Major}";
 
     private static string BuildVersionText()
     {
@@ -106,6 +110,34 @@ public partial class MainViewModel : ObservableObject, IDisposable
                       ?? "1.0.0";
         // Keep the build identity visible so release verification is unambiguous.
         return $"v{version}";
+    }
+
+    private static string TrimBuildSuffix(string version)
+    {
+        var value = version.TrimStart('v');
+        var separator = value.IndexOf('+');
+        return separator >= 0 ? value[..separator] : value;
+    }
+
+    private static string BuildIdentity(string version)
+    {
+        var value = version.TrimStart('v');
+        var separator = value.IndexOf('+');
+        if (separator < 0) return "正式构建";
+        var identity = value[(separator + 1)..];
+        if (identity.Length > 12 && identity.All(Uri.IsHexDigit)) return $"源代码 {identity[..8]}";
+        return identity.Replace('.', '·');
+    }
+
+    private static string BuildDate(string version)
+    {
+        var value = version.TrimStart('v');
+        var marker = value.IndexOf("ui.", StringComparison.OrdinalIgnoreCase);
+        if (marker >= 0 && marker + 18 <= value.Length &&
+            DateTime.TryParseExact(value.Substring(marker + 3, 15), "yyyyMMdd-HHmmss", null,
+                System.Globalization.DateTimeStyles.None, out var date))
+            return date.ToString("yyyy-MM-dd HH:mm");
+        return "未提供";
     }
 
     /// <summary>
@@ -142,7 +174,14 @@ public partial class MainViewModel : ObservableObject, IDisposable
         // 任务层是主链路的执行者：界面只订阅它的事件，不再自己跑解析 / 翻译 / 写回。
         SubscribeTaskEvents();
 
+        // DrawingFiles is the shared workspace source for both the translation page and the batch page.
+        // Subscribe before any restore/import can populate it so selection, summaries and row state never
+        // depend on whether the user happened to open the batch page first.
+        DrawingFiles.CollectionChanged += DrawingFiles_CollectionChanged;
+
         LoadConfig();
+        if (_apiClient is IAuthenticationFailureNotifier authenticationNotifier)
+            authenticationNotifier.AuthenticationRejected += OnAuthenticationRejected;
         RefreshLicenseStatus();
     }
 
@@ -151,6 +190,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         try
         {
             await RefreshGlossaryDataAsync();
+            RefreshTranslationProjects();
             StatusMessage = Strings.Get("StatusReady");
 
             // 上次运行没跑完的任务：问用户是否继续（选"否"则清掉记录）。
@@ -174,8 +214,14 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     public void Dispose()
     {
+        if (_apiClient is IAuthenticationFailureNotifier authenticationNotifier)
+            authenticationNotifier.AuthenticationRejected -= OnAuthenticationRejected;
         StopUpdateChecks();
         StopRejectedCredentialCleanup();
+        StopTermSearchTimer();
+        _projectAutosaveCts?.Cancel();
+        _projectAutosaveCts?.Dispose();
+        _projectAutosaveCts = null;
         _cts?.Cancel();
         _cts?.Dispose();
         _exportCts?.Cancel();
@@ -187,7 +233,12 @@ public partial class MainViewModel : ObservableObject, IDisposable
         try { _taskManager.CancelCurrentRun(); }
         catch (Exception ex) { Log.Debug(ex, "取消任务队列时忽略异常"); }
 
+        // The task manager outlives this ViewModel, so detach before dropping the references.
+        try { UnsubscribeTaskEvents(); }
+        catch (Exception ex) { Log.Warning(ex, "退订任务层事件失败"); }
+
         DrawingFiles.CollectionChanged -= DrawingFiles_CollectionChanged;
+        DetachDrawingFileObservers();
         _cts = null;
         _exportCts = null;
         GC.SuppressFinalize(this);

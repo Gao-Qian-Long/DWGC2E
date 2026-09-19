@@ -24,7 +24,7 @@ public sealed class GlossaryMergeRow
 public static class CloudGlossaryMerge
 {
     public static bool Equal(CloudGlossaryEntry? a, CloudGlossaryEntry? b) =>
-        a == null || b == null ? a == b : a.Source == b.Source && a.Target == b.Target &&
+        a == null || b == null ? a == b : a.SourceLang == b.SourceLang && a.TargetLang == b.TargetLang && a.DirectionPending == b.DirectionPending && a.Source == b.Source && a.Target == b.Target &&
         (a.Note ?? "") == (b.Note ?? "") && (a.Category ?? "") == (b.Category ?? "") &&
         (a.Folder ?? "") == (b.Folder ?? "") && a.Enabled == b.Enabled;
 
@@ -33,7 +33,7 @@ public static class CloudGlossaryMerge
 
     private static CloudGlossaryEntry Copy(CloudGlossaryEntry entry) => new()
     {
-        Id = entry.Id, Source = entry.Source, Target = entry.Target, Note = entry.Note,
+        SourceLang = entry.SourceLang, TargetLang = entry.TargetLang, DirectionPending = entry.DirectionPending, Id = entry.Id, Source = entry.Source, Target = entry.Target, Note = entry.Note,
         Category = entry.Category, Folder = entry.Folder, Enabled = entry.Enabled
     };
 

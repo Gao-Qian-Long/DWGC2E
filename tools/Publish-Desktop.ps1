@@ -1,7 +1,9 @@
 ﻿# Purpose: test, publish and safely install the desktop release.
 # Input: local source + CAD SDK; output: release and bounded artifacts.
 # Usage: .\tools\Publish-Desktop.ps1 (normal delivery includes regression tests).
-param([switch]$BuildOnly, [switch]$SkipTests, [switch]$Clean)
+# -Compiler: optional ISCC.exe path; normal delivery otherwise probes the per-user and machine-wide
+# Inno Setup 6 locations in that order.
+param([switch]$BuildOnly, [switch]$SkipTests, [switch]$Clean, [string]$Compiler)
 $ErrorActionPreference = 'Stop'
 # Canonical delivery must always pass regression/UI gates. BuildOnly is an explicit
 # isolated diagnostic mode, never a substitute for a verified release update.
@@ -28,6 +30,34 @@ function Assert-WorkspacePath([string]$Path) {
 $publishLock = $null
 try {
     $publishLock = & (Join-Path $PSScriptRoot 'Enter-DesktopPublishLock.ps1') -WorkspaceRoot $root
+    # A hard kill (or power loss) between the two renames of a release swap leaves no release at all.
+    # The swap leaves artifacts/release-switch.json on disk until it completes, so the next run can
+    # restore the recorded backup instead of silently starting from a missing release. Recovery only
+    # acts on a recorded direct artifacts/release-backup-* directory and never guesses.
+    $switchPointer = Join-Path $root 'artifacts/release-switch.json'
+    if (Test-Path -LiteralPath $switchPointer) {
+        $switchPlan = $null
+        try { $switchPlan = Get-Content -LiteralPath $switchPointer -Raw | ConvertFrom-Json } catch { $switchPlan = $null }
+        if (Test-Path -LiteralPath $release) {
+            Remove-Item -LiteralPath $switchPointer -Force -ErrorAction SilentlyContinue
+        }
+        elseif ($switchPlan -and $switchPlan.backup) {
+            $recorded = [IO.Path]::GetFullPath([string]$switchPlan.backup)
+            $recordedName = [IO.Path]::GetFileName($recorded)
+            if ([IO.Path]::GetDirectoryName($recorded) -ne (Join-Path $root 'artifacts') -or
+                $recordedName -notmatch '^release-backup-\d{8}-\d{6}$' -or
+                -not (Test-Path -LiteralPath $recorded -PathType Container)) {
+                throw "An interrupted release swap left no release and cannot be recovered automatically. Inspect $switchPointer and artifacts/ by hand, then re-run delivery. No build started."
+            }
+            Move-Item -LiteralPath (Assert-WorkspacePath $recorded) -Destination (Assert-WorkspacePath $release)
+            Remove-Item -LiteralPath $switchPointer -Force -ErrorAction SilentlyContinue
+            Write-Host "RELEASE_RECOVERED=$release"
+            Write-Host "RELEASE_RECOVERED_FROM=$recorded"
+        }
+        else {
+            throw "An interrupted release swap left no release and cannot be recovered automatically. Inspect $switchPointer and artifacts/ by hand, then re-run delivery. No build started."
+        }
+    }
     if (-not $BuildOnly) {
         $running = Get-Process DwgTranslator -ErrorAction SilentlyContinue | Where-Object { $_.Path -and [IO.Path]::GetFullPath($_.Path) -eq (Join-Path $release 'DwgTranslator.exe') }
         if ($running) { throw 'Close the release application before publishing. No processes were stopped.' }
@@ -51,12 +81,29 @@ try {
     $sourceBefore = @(& (Join-Path $PSScriptRoot 'Get-DesktopSourceSnapshot.ps1'))
     $sourceBefore | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $deliveryDir 'source-snapshot.json') -Encoding UTF8
     if (-not $BuildOnly) {
-        $compiler = Join-Path $env:LOCALAPPDATA 'Programs/Inno Setup 6/ISCC.exe'
-        if (-not (Test-Path -LiteralPath $compiler -PathType Leaf)) { throw 'Inno Setup compiler missing; normal delivery requires a verified Setup.exe. Installed release unchanged.' }
+        # Inno Setup installs per-user by default, but build machines often install it machine-wide;
+        # probe both unless the caller names the compiler explicitly.
+        if (-not $Compiler) {
+            $compilerProbes = @()
+            if ($env:LOCALAPPDATA) { $compilerProbes += Join-Path $env:LOCALAPPDATA 'Programs/Inno Setup 6/ISCC.exe' }
+            if (${env:ProgramFiles(x86)}) { $compilerProbes += Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6/ISCC.exe' }
+            if ($env:ProgramFiles) { $compilerProbes += Join-Path $env:ProgramFiles 'Inno Setup 6/ISCC.exe' }
+            $Compiler = $compilerProbes | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
+        }
+        $compiler = $Compiler
+        if (-not $compiler -or -not (Test-Path -LiteralPath $compiler -PathType Leaf)) { throw 'Inno Setup compiler missing; normal delivery requires a verified Setup.exe. Pass -Compiler <path to ISCC.exe> for a non-default installation. Installed release unchanged.' }
+        Write-Host "BUILD_COMPILER=$compiler"
     }
     if (-not $SkipTests) {
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root 'tests/BuildPipeline/Test-InstallerBrand.ps1')
     if ($LASTEXITCODE -ne 0) { throw 'Brand configuration regression failed' }
+    # Pure static scans of the WPF sources (no build output, no -PublishDir): run them first so a
+    # mistyped Command binding, a missing theme resource or a new hard-coded Margin fails fast,
+    # before any clean/build/publish work starts.
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root 'tests/BuildPipeline/Test-UiBindingIntegrity.ps1')
+    if ($LASTEXITCODE -ne 0) { throw 'UI command/resource binding integrity regression failed' }
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root 'tests/BuildPipeline/Test-SpacingTokens.ps1')
+    if ($LASTEXITCODE -ne 0) { throw 'Spacing token regression failed' }
     }
     if ($Clean) {
         # All stages share the same publish lock; a clean APP build is never delivered alone.
@@ -99,10 +146,9 @@ try {
     $version = "2.1.1+ui.$stamp.$revision"
     & dotnet publish (Join-Path $root 'src/DwgTranslator.App/DwgTranslator.App.csproj') -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true "-p:InformationalVersion=$version" -p:IncludeSourceRevisionInInformationalVersion=false -o $stage
     if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed: $LASTEXITCODE" }
-    foreach ($folder in @('glossaries','prompts')) { New-Item -ItemType Directory -Path (Join-Path $stage $folder) -Force | Out-Null }
+    foreach ($folder in @('glossaries')) { New-Item -ItemType Directory -Path (Join-Path $stage $folder) -Force | Out-Null }
     Copy-Item -LiteralPath (Join-Path $root 'settings.json.example') -Destination (Join-Path $stage 'settings.json') -Force
     Copy-Item -LiteralPath (Join-Path $root 'assets/glossaries/mechanical_zh_en.json') -Destination (Join-Path $stage 'glossaries/mechanical_zh_en.json') -Force
-    Copy-Item -LiteralPath (Join-Path $root 'assets/prompts/deepl_context.txt') -Destination (Join-Path $stage 'prompts/deepl_context.txt') -Force
     & (Join-Path $root 'tools/Verify-ReleasePackage.ps1') -PublishDir $stage
     if (-not $?) { throw 'Release dependency verification failed' }
     $exe = Join-Path $stage 'DwgTranslator.exe'
@@ -132,9 +178,18 @@ try {
     & (Join-Path $PSScriptRoot 'Get-DesktopPayload.ps1') -PublishDir $stage | Out-Null
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root 'tests/BuildPipeline/Test-DesktopPayload.ps1') -PublishDir $stage -ResultDir (Join-Path $deliveryDir 'payload-regression')
     if ($LASTEXITCODE -ne 0) { throw 'Public payload privacy regression failed' }
+    # Literal/relative path handling plus the negative release-package cases (legacy AI field,
+    # unsupported CAD platform) were never part of any gate; run them against the real candidate.
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root 'tests/BuildPipeline/Test-ReleaseVerifierPaths.ps1') -PublishDir $stage -EvidenceDir (Join-Path $deliveryDir 'release-verifier')
+    if ($LASTEXITCODE -ne 0) { throw 'Release verifier path/negative-case regression failed' }
     $platform = (Get-Content -LiteralPath (Join-Path $stage 'CadPlugin/cad-platform.txt') -Raw).Trim()
-    $zip = Join-Path $root "artifacts/DwgTranslator-win-x64-$platform-$stamp.zip"
-    Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $zip -CompressionLevel Optimal
+    # -BuildOnly is an explicitly requested isolated diagnostic: it must not add a distributable ZIP
+    # or otherwise change the shared candidate/package retention set used by normal delivery.
+    $zip = $null
+    if (-not $BuildOnly) {
+        $zip = Join-Path $root "artifacts/DwgTranslator-win-x64-$platform-$stamp.zip"
+        Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $zip -CompressionLevel Optimal
+    }
     if (-not $BuildOnly) {
         $installerArgs = @{ PublishDir=$stage; OutputDir=(Join-Path $deliveryDir 'installer'); Compiler=$compiler; PublishLock=$publishLock }
         if (Test-Path -LiteralPath (Join-Path $release 'build-info.json')) {
@@ -155,8 +210,14 @@ try {
         Get-ChildItem -LiteralPath $stage | Copy-Item -Destination $next -Recurse -Force
         # Preserve portable config and all unknown user files, not just a short list.
         & (Join-Path $PSScriptRoot 'Copy-DesktopUserData.ps1') -OldRelease $release -NewRelease $next -WorkspaceRoot $root
+        # Replacing an existing directory cannot be one atomic rename on Windows, so the swap is two
+        # renames with a recovery pointer on disk. The pointer is written before the first rename and
+        # removed only once release exists again, so a hard kill in between is repaired by the next
+        # run instead of leaving a machine with no release at all.
+        $switchPointer = Join-Path $root 'artifacts/release-switch.json'
         $moved = $false
         try {
+            @{ schemaVersion=1; stamp=$stamp; release=$release; backup=$backup; next=$next; preparedAt=(Get-Date -Format o) } | ConvertTo-Json | Set-Content -LiteralPath $switchPointer -Encoding UTF8
             if (Test-Path -LiteralPath $release) { Move-Item -LiteralPath (Assert-WorkspacePath $release) -Destination (Assert-WorkspacePath $backup); $moved = $true }
             Move-Item -LiteralPath (Assert-WorkspacePath $next) -Destination (Assert-WorkspacePath $release)
             $installedHash = (Get-FileHash -LiteralPath (Join-Path $release 'DwgTranslator.exe') -Algorithm SHA256).Hash
@@ -176,12 +237,39 @@ try {
             }
             throw
         }
+        finally {
+            # Keep the pointer only when release is still missing (a failed in-process recovery);
+            # then the next run restores the recorded backup. A stale pointer with a present release
+            # is harmless and is dropped by the recovery step of the next run.
+            if ((Test-Path -LiteralPath $release) -and (Test-Path -LiteralPath $switchPointer)) { Remove-Item -LiteralPath $switchPointer -Force -ErrorAction SilentlyContinue }
+        }
     }
     if (-not $BuildOnly) {
         # The replacement retains the same path; invalidate the Shell's old icon entry.
         # A desktop notification failure must not roll back a verified, usable release.
         try { & (Join-Path $root 'tools/Refresh-DesktopShellIcon.ps1') -ExecutablePath (Join-Path $release 'DwgTranslator.exe') | Out-Host }
         catch { Write-Warning "Installed release is valid; Shell icon refresh failed: $($_.Exception.Message)" }
+    }
+    # Retain only the latest verified candidate, installed package, and one rollback copy. Cleanup
+    # runs before the ownership inventory so its outcome becomes recorded delivery evidence: the
+    # previous warning-only catch let obsolete artifacts accumulate with no visible signal. A cleanup
+    # failure does not block delivery, but it is now stated instead of hidden.
+    if (-not $BuildOnly) {
+        $cleanupStatus = 'ok'
+        try {
+            $cleanup = & (Join-Path $root 'tools/Clean-DesktopArtifacts.ps1')
+            $cleanupSummary = @($cleanup | Where-Object { $_ }) | Select-Object -Last 1
+            $cleanupRemoved = if ($cleanupSummary) { $cleanupSummary.Removed } else { 0 }
+            $cleanupBytes = if ($cleanupSummary) { $cleanupSummary.BytesFreed } else { 0 }
+            $cleanupLine = "ARTIFACT_CLEANUP=OK;Removed=$cleanupRemoved;FreedBytes=$cleanupBytes"
+        }
+        catch {
+            $cleanupStatus = 'failed'
+            $cleanupLine = "ARTIFACT_CLEANUP=FAILED;$($_.Exception.Message)"
+            Write-Warning "Obsolete artifact cleanup did not run to completion; review artifacts/ with tools/Clean-DesktopArtifacts.ps1 -WhatIf. $($_.Exception.Message)"
+        }
+        @{ schemaVersion=1; status=$cleanupStatus; summary=$cleanupLine; recordedAt=(Get-Date -Format o) } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $deliveryDir 'artifact-cleanup.json') -Encoding UTF8
+        Write-Host $cleanupLine
     }
     if (-not $BuildOnly) {
         # Explicit ownership inventory enables bounded deletion without swallowing later user files.
@@ -190,15 +278,16 @@ try {
         })
         @{schemaVersion=1;files=$ownedFiles} | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $deliveryDir 'delivery-files.json') -Encoding UTF8
     }
-    # Retain only the latest verified candidate, installed package, and one rollback copy.
-    try { & (Join-Path $root 'tools/Clean-DesktopArtifacts.ps1') | Out-Host }
-    catch { Write-Warning "Build succeeded; obsolete artifact cleanup skipped: $($_.Exception.Message)" }
     Write-Host "SUCCESS: $version"
     Write-Host "Build: $exe"
     Write-Host "SHA256: $hash"
-    Write-Host "Internal portable ZIP (not the primary download): $zip"
-    if (-not $BuildOnly) { Write-Host "UPLOAD_THIS_SETUP: $($installer.installerPath)"; Write-Host "CURRENT_RELEASE: $currentPath" }
-    if (-not $BuildOnly) { Write-Host "Installed: $release/DwgTranslator.exe"; Write-Host "Previous release preserved: $backup" }
+    if (-not $BuildOnly) {
+        Write-Host "Internal portable ZIP (not the primary download): $zip"
+        Write-Host "UPLOAD_THIS_SETUP: $($installer.installerPath)"
+        Write-Host "CURRENT_RELEASE: $currentPath"
+        Write-Host "Installed: $release/DwgTranslator.exe"
+        Write-Host "Previous release preserved: $backup"
+    }
     exit 0
 }
 catch { Write-Error "Publish failed. No old executable will be launched. $($_.Exception.Message)"; exit 1 }

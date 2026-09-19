@@ -125,6 +125,12 @@ public partial class EnvironmentCheckPanel : System.Windows.Controls.UserControl
         UninstallButton.IsEnabled = false;
         try
         {
+            if (new[] { "acad", "acadlt", "gcad" }.Any(name => System.Diagnostics.Process.GetProcessesByName(name).Length > 0))
+            {
+                AppendLog("检测到 CAD 正在运行：为避免插件文件被占用，未执行修复。请保存图纸并关闭 CAD 后重试。");
+                PromptDialog.Show("修复插件前请保存图纸并关闭 CAD。程序不会强制关闭 CAD。", "请先关闭 CAD", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
             var cadPath = _viewModel.ResolveCadInstallPath();
             var pluginSource = _viewModel.CadPluginDirectory;
             AppendLog($"插件来源：{pluginSource}");

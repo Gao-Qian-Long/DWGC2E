@@ -34,10 +34,11 @@ $listItemCondition = New-Object System.Windows.Automation.PropertyCondition(
     [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
     [System.Windows.Automation.ControlType]::ListItem)
 
+$failed = @()
 foreach ($page in $Pages) {
     $items = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants, $listItemCondition)
     $target = $items | Where-Object { $_.Current.Name -eq $page } | Select-Object -First 1
-    if (-not $target) { Write-Output "MISSING_NAV: $page"; continue }
+    if (-not $target) { Write-Output "MISSING_NAV: $page"; $failed += "MISSING_NAV:$page"; continue }
 
     try {
         $target.GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
@@ -48,6 +49,17 @@ foreach ($page in $Pages) {
 
     $safe = $page -replace '[^\w\u4e00-\u9fff]', ''
     $out = & powershell -NoProfile -ExecutionPolicy Bypass -File "$PSScriptRoot\Capture-AppWindow.ps1" -Tag "$Tag-$safe" 2>&1
+    $captureExit = $LASTEXITCODE
     $saved = $out | Where-Object { $_ -like 'captured:*' } | Select-Object -First 1
-    Write-Output "PAGE=$page  $saved"
+    # A missing PNG or a failed capture process must never be reported as a successfully visited page:
+    # this tool exists to prove that every page was rendered and captured.
+    if ($captureExit -ne 0 -or -not $saved) {
+        $failed += "CAPTURE_FAILED:$page(exit=$captureExit)"
+        Write-Output "CAPTURE_FAILED: $page  exit=$captureExit"
+    } else {
+        Write-Output "PAGE=$page  $saved"
+    }
 }
+if ($failed.Count) { Write-Output ("CAPTURE_ERRORS=" + ($failed -join ',')); exit 1 }
+Write-Output "CAPTURE_OK=$($Pages.Count)"
+exit 0

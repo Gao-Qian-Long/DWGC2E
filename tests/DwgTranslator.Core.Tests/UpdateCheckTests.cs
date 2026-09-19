@@ -49,7 +49,7 @@ public sealed class UpdateCheckTests
             Assert.Null(r.Headers.Authorization); // Version metadata is public, even after session rejection.
             return Task.FromResult(Json(Manifest));
         }));
-        var client = new WorkerApiClient(http, "https://api.example.test/private-api", () => "fixture-token", "d", "h");
+        var client = new WorkerApiClient(http, "https://api.example.test/private-api", "https://api.example.test/private-api/update/latest.json", () => "fixture-token", "d", "h");
         Assert.Equal("2.1.2", (await client.CheckVersionAsync("2.1.1+local build"))!.LatestVersion);
         Assert.Equal(2, calls);
     }
@@ -74,6 +74,22 @@ public sealed class UpdateCheckTests
         using var http = new HttpClient(new Handler((_, _) => throw new InvalidOperationException("Must not send")));
         var client = new WorkerApiClient(http, "", () => "fixture-token", "d", "h");
         Assert.Null(await client.CheckVersionAsync("2.1.1"));
+    }
+
+    [Fact]
+    public async Task UnconfiguredManifestGoesStraightToVersionWithoutGuessingAWorkerPath()
+    {
+        var paths = new List<string>();
+        using var http = new HttpClient(new Handler((r, _) => {
+            paths.Add(r.RequestUri!.AbsolutePath);
+            Assert.Null(r.Headers.Authorization);
+            return Task.FromResult(Json(Manifest));
+        }));
+        var client = new WorkerApiClient(http, "https://api.example.test", () => "fixture-token", "d", "h");
+        Assert.Equal("2.1.2", (await client.CheckVersionAsync("2.1.1"))!.LatestVersion);
+        // A guessed {baseUrl}/update/latest.json lands on the authenticated API surface and answers 401,
+        // which reports "session expired" for what is really a missing static manifest.
+        Assert.Equal(new[] { "/v1/version" }, paths);
     }
 
     [Fact]

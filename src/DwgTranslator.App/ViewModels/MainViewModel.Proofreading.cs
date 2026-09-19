@@ -16,25 +16,100 @@ public partial class MainViewModel
         if (!HasUnsavedProofreading) return true;
         if (IsProcessing || IsExporting || _taskManager.IsRunning)
         { StatusMessage = "请等待当前任务结束后保存校对。"; return false; }
+
+        var edited = _proofreadingOriginals.Keys.ToArray();
+        var statusesBeforeCommit = edited.ToDictionary(entity => entity, entity => entity.Status);
+        var affectedSources = edited
+            .Select(entity => NormalizeSourcePath(entity.SourceFilePath))
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
         try
         {
-            // Commit first. A failed save must retain both original values and the dirty marker.
-            ProofreadingStore.Save(Entities.ToArray(), _proofreadingOriginals.Keys.ToArray());
-            foreach (var entity in _proofreadingOriginals.Keys) MarkTranslationEdited(entity);
+            // The durable record must contain the post-review status. Keep a short-lived snapshot so
+            // a locked file, project conflict or disk error restores exactly what the user was editing.
+            foreach (var entity in edited)
+            {
+                entity.Status = string.IsNullOrWhiteSpace(entity.TranslatedText)
+                    ? TranslationStatus.Pending
+                    : TranslationStatus.Reviewed;
+            }
+
+            if (ActiveTranslationProject != null)
+            {
+                if (!SaveActiveProject())
+                {
+                    RestoreProofreadingCommitStatuses(statusesBeforeCommit);
+                    return false;
+                }
+            }
+            else
+            {
+                ProofreadingStore.Save(Entities.ToArray(), edited);
+            }
+
             _proofreadingWorkspaceVersion++;
             _proofreadingOriginals.Clear();
             OnPropertyChanged(nameof(HasUnsavedProofreading));
-            StatusMessage = "校对更改已保存到当前账号，下次启动可恢复；请显式导出以生成输出图纸。";
+            UpdateStatistics();
+            ApplyFilter();
+
+            var completedTasks = MarkReviewedTasksCompleted(affectedSources);
+            StatusMessage = completedTasks > 0
+                ? $"校对更改已保存，{completedTasks} 张图纸已进入待导出；请显式导出以生成输出图纸。"
+                : "校对更改已保存到当前账号；仍有未校对、空译文或失败条目时，任务会继续保留在待校对。";
+            RaiseWorkspaceSummaryProperties();
             return true;
         }
         catch (Exception ex)
         {
+            RestoreProofreadingCommitStatuses(statusesBeforeCommit);
             Log.Warning(ex, "校对记录保存失败；保留当前编辑");
             StatusMessage = "校对保存失败，更改仍保留且未离开当前工作区。请检查图纸、磁盘空间和目录权限后重试。";
             return false;
         }
     }
 
+    private static void RestoreProofreadingCommitStatuses(
+        IReadOnlyDictionary<TextEntity, TranslationStatus> statusesBeforeCommit)
+    {
+        foreach (var pair in statusesBeforeCommit)
+            pair.Key.Status = pair.Value;
+    }
+
+    private int MarkReviewedTasksCompleted(IEnumerable<string> affectedSources)
+    {
+        var completed = 0;
+        foreach (var source in affectedSources)
+        {
+            var sourceEntities = Entities.Where(entity => string.Equals(
+                NormalizeSourcePath(entity.SourceFilePath), source, StringComparison.OrdinalIgnoreCase)).ToArray();
+            if (sourceEntities.Length == 0 || sourceEntities.Any(entity => entity.Status is
+                TranslationStatus.Pending or TranslationStatus.Translated or TranslationStatus.GlossaryMatched
+                or TranslationStatus.TranslationFailed or TranslationStatus.WritebackFailed))
+                continue;
+
+            var row = DrawingFiles.FirstOrDefault(item => string.Equals(
+                NormalizeSourcePath(item.FullPath), source, StringComparison.OrdinalIgnoreCase));
+            var task = row?.Task;
+            if (task?.Status != DwgTranslator.Core.Tasks.TranslationTaskStatus.ReadyForReview)
+                continue;
+
+            try
+            {
+                _taskManager.MarkReviewCompleted(task.Id);
+                completed++;
+            }
+            catch (Exception ex)
+            {
+                // The proofreading data is already durable. Do not pretend the save failed; retain the
+                // task in ReadyForReview and make the discrepancy visible in diagnostics for recovery.
+                Log.Warning(ex, "校对已保存，但任务状态推进失败 {TaskId}", task.Id);
+            }
+        }
+        return completed;
+    }
     private bool TryClearSavedProofreading()
     {
         try { ProofreadingStore.Clear(); _proofreadingWorkspaceVersion++; return true; }
@@ -63,6 +138,7 @@ public partial class MainViewModel
             if (version != _sessionVersion || workspaceVersion != _proofreadingWorkspaceVersion || Entities.Count != 0 || HasUnsavedProofreading || IsProcessing || IsExporting || _taskManager.IsRunning) return;
             foreach (var entity in restored.Entities) Entities.Add(entity);
             InvalidateEntityIndex();
+            MigrateLegacyProofreading(restored.Entities);
             if (restored.Sources.Count > 0)
             {
                 var sources = DrawingFiles.Select(r => r.FullPath).Concat(restored.Sources).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();

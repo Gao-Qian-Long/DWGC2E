@@ -7,13 +7,13 @@
     <!-- 危险 / 需要用户明确同意的操作才用它（§29）；普通结果提示走 Toast。 -->
     <StackPanel Margin="20">
         <TextBlock x:Name="TitleText" Text="确认操作" Style="{StaticResource CardTitleStyle}"
-                   FontSize="15" Margin="0,0,0,10"/>
-        <TextBlock x:Name="MessageText" Text="" FontSize="13" TextWrapping="Wrap"
+                   FontSize="15" Margin="{DynamicResource Spacing.Stack}"/>
+        <TextBlock x:Name="MessageText" Text="" FontSize="{DynamicResource FontSize.Body}" TextWrapping="Wrap"
                    Foreground="{DynamicResource Brush.TextSecondary}"/>
 
-        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,20,0,0">
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="{DynamicResource Spacing.BlockTopSection}">
             <Button x:Name="CancelButton" Style="{StaticResource Button.Secondary}" MinWidth="88"
-                    Content="取消" Margin="0,0,8,0" Click="Cancel_Click" IsCancel="True"/>
+                    Content="取消" Margin="{DynamicResource Spacing.Inline}" Click="Cancel_Click" IsCancel="True"/>
             <Button x:Name="ConfirmButton" Style="{StaticResource Button.Danger}" MinWidth="88"
                     Content="确定" Click="Confirm_Click" IsDefault="True"/>
         </StackPanel>

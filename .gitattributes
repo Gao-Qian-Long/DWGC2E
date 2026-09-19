@@ -1,0 +1,80 @@
+# 行尾规范（阶段 0.5）
+#
+# 背景：本仓库此前没有 .gitattributes，而 core.autocrlf=true，导致工作区混用行尾
+# （src/**.cs 是 LF、src/**.xaml 与 docs/**.md 是 CRLF），每次 git add 都会把上百个
+# 文件整体改写行尾，让功能改动的 diff 失去可审查性。
+#
+# 规则：
+#   · 文本文件统一由 Git 归一化为 LF 存入仓库（text=auto）
+#   · Windows 专属的构建/脚本/标记类文件在检出时保持 CRLF，避免工具差异
+#   · 图片与压缩包等二进制文件禁止行尾转换
+#
+# 修改本文件后请勿执行 git add --renormalize：本机存在大量未提交改动，
+# 重写索引会掩盖真实改动。新文件按此规则写入即可逐步收敛。
+
+# 默认：自动判定文本，仓库内统一 LF
+* text=auto
+
+# ── 源代码：仓库内 LF，Windows 检出用 CRLF（与现有工作区一致）──
+*.cs          text eol=crlf
+*.csproj      text eol=crlf
+*.props       text eol=crlf
+*.targets     text eol=crlf
+*.sln         text eol=crlf
+*.xaml        text eol=crlf
+*.resx        text eol=crlf
+*.manifest    text eol=crlf
+*.iss         text eol=crlf
+*.ps1         text eol=crlf
+*.psm1        text eol=crlf
+*.psd1        text eol=crlf
+*.cmd         text eol=crlf
+*.bat         text eol=crlf
+*.fsx         text eol=crlf
+
+# ── 跨平台与部署资产：强制 LF ──
+*.sh          text eol=lf
+*.js          text eol=lf
+*.cjs         text eol=lf
+*.mjs         text eol=lf
+*.ts          text eol=lf
+*.sql         text eol=lf
+*.json        text eol=lf
+*.jsonl       text eol=lf
+*.yml         text eol=lf
+*.yaml        text eol=lf
+*.toml        text eol=lf
+*.html        text eol=lf
+*.css         text eol=lf
+*.svg         text eol=lf
+*.xml         text eol=lf
+*.md          text eol=lf
+
+# ── 二进制：禁止任何转换 ──
+*.png         binary
+*.jpg         binary
+*.jpeg        binary
+*.gif         binary
+*.ico         binary
+*.webp        binary
+*.pdf         binary
+*.zip         binary
+*.gz          binary
+*.7z          binary
+*.rar         binary
+*.exe         binary
+*.dll         binary
+*.pdb         binary
+*.so          binary
+*.dylib       binary
+*.db          binary
+*.sqlite      binary
+*.sqlite3     binary
+*.dwg         binary
+*.dxf         binary
+*.bak         binary
+*.xlsx        binary
+*.ttf         binary
+*.otf         binary
+*.woff        binary
+*.woff2       binary

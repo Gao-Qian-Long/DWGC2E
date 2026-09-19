@@ -36,18 +36,20 @@ public sealed class CoreRegressionTests : IDisposable
     }
 
     [Fact]
-    public void ConfigContract_ReadsAndWritesCamelCase()
+    public void ConfigContract_UsesCamelCaseAndDoesNotRepublishLegacyProviderSettings()
     {
         var config = JsonSerializer.Deserialize<AppConfig>(
             "{\"deepSeekModel\":\"custom\",\"targetLanguage\":\"DE\"}", AppConfigJson.ReadOptions);
-        Assert.Equal("custom", config!.DeepSeekModel);
+        Assert.NotNull(config);
         Assert.Equal("DE", config.TargetLanguage);
 
+        SettingsStore.RemoveRemovedSettings(config);
         var json = JsonSerializer.Serialize(config, AppConfigJson.WriteOptions);
-        Assert.Contains("\"deepSeekModel\"", json);
-        Assert.DoesNotContain("\"DeepSeekModel\"", json);
+        using var document = JsonDocument.Parse(json);
+        Assert.Equal("DE", document.RootElement.GetProperty("targetLanguage").GetString());
+        Assert.DoesNotContain("deepSeekModel", json, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("\"TargetLanguage\"", json);
     }
-
     [Fact]
     public async Task MissingGlossary_ClearsPreviouslyLoadedEntries()
     {

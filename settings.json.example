@@ -1,8 +1,6 @@
 {
+  "configurationVersion": 2,
   "licensingEnabled": false,
-  "deepSeekApiKey": "",
-  "deepSeekBaseUrl": "https://api.deepseek.com",
-  "deepSeekModel": "deepseek-chat",
   "sourceLanguage": "ZH",
   "targetLanguage": "EN",
   "glossaryPath": "glossaries/mechanical_zh_en.json",
@@ -13,12 +11,10 @@
   "autoScaleFactor": 0.95,
   "exportDirectory": "exports",
   "logDirectory": "logs",
-  "minimumLogLevel": "Debug",
+  "minimumLogLevel": "Information",
   "autoCadInstallPath": "",
   "cadPluginPath": "",
   "language": "zh-CN",
-  "apiMode": "worker",
   "apiBaseUrl": "https://api.cad.pocketter.dpdns.org",
-  "updateManifestUrl": "https://cad.pocketter.dpdns.org/update/latest.json"
+  "updateManifestUrl": ""
 }
-

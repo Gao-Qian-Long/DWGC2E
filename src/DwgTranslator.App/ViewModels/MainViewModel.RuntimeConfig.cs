@@ -141,7 +141,6 @@ public partial class MainViewModel
                 if (!property.CanRead || !property.CanWrite) continue;
                 property.SetValue(toWrite, property.GetValue(_config));
             }
-            toWrite.DeepSeekApiKey = DwgTranslator.Core.Models.AppConfig.EncryptApiKey(_config.DeepSeekApiKey);
             toWrite.AuthTokenEncrypted = _config.AuthTokenEncrypted; // Session is already DPAPI-encrypted.
 
             DwgTranslator.Core.Services.SettingsStore.Update(_settingsPath, latest => {

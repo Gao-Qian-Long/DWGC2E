@@ -29,7 +29,7 @@ namespace DwgTranslator.Core.Api;
 /// Math.Clamp / Index-Range / string.Contains(char) 等），一律走
 /// HttpRequestMessage + SendAsync + JsonSerializer，保证在 net48 上同样能编译。
 /// </summary>
-public sealed partial class WorkerApiClient : IApiClient, IAccountSessionClient
+public sealed partial class WorkerApiClient : IApiClient, IAccountSessionClient, ITranslationContextClient, IAuthenticationFailureNotifier
 {
     /// <summary>翻译请求可能要服务端排队调模型，给足 120 秒。</summary>
     private const int TranslateTimeoutSeconds = 120;
@@ -65,6 +65,9 @@ public sealed partial class WorkerApiClient : IApiClient, IAccountSessionClient
     private readonly Func<string?> _tokenProvider;
     private readonly string _deviceId;
     private readonly string _deviceName;
+    private string _translationContextVersion = "worker-context-unresolved-v1";
+
+    public string CachedTranslationContextVersion => _translationContextVersion;
 
     /// <summary>
     /// 正式形态的构造：由 DI 注入已配置好 BaseAddress/超时的 HttpClient。
@@ -246,6 +249,25 @@ public sealed partial class WorkerApiClient : IApiClient, IAccountSessionClient
         };
     }
 
+    /// <summary>Fetches the active server-owned prompt/router context without exposing prompt or provider details.</summary>
+    public async Task<string?> RefreshTranslationContextVersionAsync(CancellationToken cancellationToken = default)
+    {
+        if (!IsConfigured) return null;
+        var outcome = await SendAsync(HttpMethod.Get, Url("/v1/translation-context"), null, DefaultTimeout, cancellationToken)
+            .ConfigureAwait(false);
+        if (!outcome.IsSuccess)
+        {
+            ThrowIfAuthenticationFailure(outcome);
+            LogNonSuccess("GET /v1/translation-context", outcome);
+            return null;
+        }
+
+        var wire = Deserialize<WireTranslationContext>(outcome.Body);
+        if (wire == null || string.IsNullOrWhiteSpace(wire.ContextVersion)) return null;
+        _translationContextVersion = wire.ContextVersion.Trim();
+        return _translationContextVersion;
+    }
+
     /// <inheritdoc />
     public async Task<TranslationBatchResult> TranslateAsync(TranslationBatchRequest request, CancellationToken cancellationToken = default)
     {
@@ -259,6 +281,7 @@ public sealed partial class WorkerApiClient : IApiClient, IAccountSessionClient
         var payload = new WireTranslationRequest
         {
             // 归一化语言码，避免旧的 "zh-cn"/"cn" 写法直接下发（TranslationLanguages 是唯一权威）。
+            BillingMode = request.BillingMode, BillingTaskId = request.BillingTaskId,
             SourceLang = TranslationLanguages.Normalize(request.SourceLang),
             TargetLang = TranslationLanguages.Normalize(request.TargetLang),
             Protection = new WireProtection
@@ -275,7 +298,7 @@ public sealed partial class WorkerApiClient : IApiClient, IAccountSessionClient
         foreach (var hint in glossary)
         {
             if (hint == null || string.IsNullOrEmpty(hint.Source)) continue;
-            payload.Glossary.Add(new WireGlossaryHint { Source = hint.Source, Target = hint.Target ?? string.Empty });
+            payload.Glossary.Add(new WireGlossaryHint { Source = hint.Source, Target = hint.Target ?? string.Empty, Priority = hint.Priority });
         }
 
         for (int i = 0; i < items.Count; i++)
@@ -309,11 +332,13 @@ public sealed partial class WorkerApiClient : IApiClient, IAccountSessionClient
         {
             var (code, message) = ReadError(outcome);
             Log.Warning("翻译请求失败：HTTP {Status} {ErrorCode}", outcome.StatusCode, code);
-            return BatchFailure(code, message);
+            return BatchFailure(code, message, ParseRetryAfterHeader(outcome.RetryAfterHeader));
         }
 
         var response = Deserialize<WireTranslationResponse>(outcome.Body);
         if (response == null) return BatchFailure("upstream_unavailable", BadResponseMessage);
+        if (!string.IsNullOrWhiteSpace(response.ContextVersion))
+            _translationContextVersion = response.ContextVersion.Trim();
 
         var result = new TranslationBatchResult
         {
@@ -323,7 +348,10 @@ public sealed partial class WorkerApiClient : IApiClient, IAccountSessionClient
             CachedCount = response.CachedCount ?? 0,
             Items = new List<TranslationItemResult>(response.Items != null ? response.Items.Count : 0),
             ErrorCode = response.ErrorCode,
-            Message = response.ErrorCode == null ? response.Message : ApiErrorMessages.Describe(response.ErrorCode, response.Message)
+            Message = response.ErrorCode == null ? response.Message : ApiErrorMessages.Describe(response.ErrorCode, response.Message),
+            RetryAfterSeconds = response.RetryAfter is > 0
+                ? response.RetryAfter
+                : ParseRetryAfterHeader(outcome.RetryAfterHeader)
         };
 
         var answeredIds = new HashSet<int>();
@@ -502,6 +530,7 @@ public sealed partial class WorkerApiClient : IApiClient, IAccountSessionClient
         public int StatusCode { get; set; }
         public string? Body { get; set; }
         public string? CharactersUsedHeader { get; set; }
+        public string? RetryAfterHeader { get; set; }
 
         public bool IsSuccess => !TransportFailed && StatusCode >= 200 && StatusCode < 300;
     }
@@ -564,6 +593,24 @@ public sealed partial class WorkerApiClient : IApiClient, IAccountSessionClient
             ErrorCode = errorCode,
             Message = ApiErrorMessages.Describe(errorCode, message)
         };
+
+    private static TranslationBatchResult BatchFailure(string errorCode, string? message, int? retryAfterSeconds)
+    {
+        var result = BatchFailure(errorCode, message);
+        result.RetryAfterSeconds = retryAfterSeconds;
+        return result;
+    }
+
+    /// <summary>
+    /// 解析 <c>Retry-After</c>。HTTP 允许秒数或 HTTP-date 两种形式，这里只取秒数形式；
+    /// 日期形式在限流场景里很少出现，退避仍由调用方的本地节奏兜底。
+    /// </summary>
+    private static int? ParseRetryAfterHeader(string? headerValue)
+    {
+        if (!int.TryParse(headerValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out var seconds) || seconds <= 0)
+            return null;
+        return seconds > 600 ? 600 : seconds;
+    }
 
     // ────────────────────────────────────────────────────────────────────────
     // 序列化辅助
@@ -643,7 +690,7 @@ public sealed partial class WorkerApiClient : IApiClient, IAccountSessionClient
     /// <summary>拼相对路径；<c>_baseUrl</c> 已在构造时去掉尾部斜杠，避免出现双斜杠。</summary>
     private string Url(string path) => _baseUrl + path;
 
-    /// <summary>解析更新清单地址：配置成绝对地址直接用，配置成相对路径则拼到 baseUrl 上，两边都不必改配置。</summary>
+    /// <summary>解析更新清单地址：配置成绝对地址直接用，配置成相对路径则拼到 baseUrl 上。未配置时不猜地址——清单不在 Worker 上，按 baseUrl 拼出的 /update/latest.json 会打到需要鉴权的端点并返回 401，把“清单没部署”误报成“登录已失效”；此时返回 null，由调用方走 GET /v1/version。</summary>
     private string? ResolveManifestUri()
     {
         var configured = (_updateManifestUrl ?? string.Empty).Trim();
@@ -658,7 +705,7 @@ public sealed partial class WorkerApiClient : IApiClient, IAccountSessionClient
             return _baseUrl + (configured.StartsWith("/", StringComparison.Ordinal) ? configured : "/" + configured);
         }
 
-        return IsConfigured ? _baseUrl + "/update/latest.json" : null;
+        return null;
     }
 
     private static VersionInfo MapVersion(WireVersionInfo wire) => new VersionInfo
@@ -667,7 +714,12 @@ public sealed partial class WorkerApiClient : IApiClient, IAccountSessionClient
         DownloadUrl = wire.DownloadUrl,
         BackupDownloadUrl = wire.BackupDownloadUrl,
         ReleaseNotes = wire.ReleaseNotes,
-        Mandatory = wire.Mandatory ?? false
+        Mandatory = wire.Mandatory ?? false,
+        PackageSize = wire.PackageSize,
+        PackageSha256 = wire.PackageSha256,
+        PackageSignature = wire.PackageSignature,
+        PackageType = wire.PackageType,
+        SigningKeyId = wire.SigningKeyId
     };
 
     // ────────────────────────────────────────────────────────────────────────
@@ -686,6 +738,7 @@ public sealed partial class WorkerApiClient : IApiClient, IAccountSessionClient
 
     private sealed class WireGlossaryHint
     {
+        [JsonPropertyName("priority")] public int Priority { get; set; }
         [JsonPropertyName("source")] public string Source { get; set; } = string.Empty;
         [JsonPropertyName("target")] public string Target { get; set; } = string.Empty;
     }
@@ -706,6 +759,8 @@ public sealed partial class WorkerApiClient : IApiClient, IAccountSessionClient
 
     private sealed class WireTranslationRequest
     {
+        [JsonPropertyName("billing_mode"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? BillingMode { get; set; }
+        [JsonPropertyName("billing_task_id"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? BillingTaskId { get; set; }
         [JsonPropertyName("source_lang")] public string SourceLang { get; set; } = string.Empty;
         [JsonPropertyName("target_lang")] public string TargetLang { get; set; } = string.Empty;
         [JsonPropertyName("protection")] public WireProtection Protection { get; set; } = new WireProtection();
@@ -721,14 +776,21 @@ public sealed partial class WorkerApiClient : IApiClient, IAccountSessionClient
         [JsonPropertyName("error_code")] public string? ErrorCode { get; set; }
     }
 
+    private sealed class WireTranslationContext
+    {
+        [JsonPropertyName("context_version")] public string? ContextVersion { get; set; }
+    }
+
     private sealed class WireTranslationResponse
     {
         [JsonPropertyName("success")] public bool? Success { get; set; }
+        [JsonPropertyName("context_version")] public string? ContextVersion { get; set; }
         [JsonPropertyName("characters_used")] public int? CharactersUsed { get; set; }
         [JsonPropertyName("cached_count")] public int? CachedCount { get; set; }
         [JsonPropertyName("items")] public List<WireTranslationItemResult>? Items { get; set; }
         [JsonPropertyName("error_code")] public string? ErrorCode { get; set; }
         [JsonPropertyName("message")] public string? Message { get; set; }
+        [JsonPropertyName("retry_after")] public int? RetryAfter { get; set; }
     }
 
     private sealed class WireLoginRequest
@@ -809,6 +871,11 @@ public sealed partial class WorkerApiClient : IApiClient, IAccountSessionClient
         [JsonPropertyName("backup_download_url")] public string? BackupDownloadUrl { get; set; }
         [JsonPropertyName("release_notes")] public string? ReleaseNotes { get; set; }
         [JsonPropertyName("mandatory")] public bool? Mandatory { get; set; }
+        [JsonPropertyName("package_size")] public long? PackageSize { get; set; }
+        [JsonPropertyName("package_sha256")] public string? PackageSha256 { get; set; }
+        [JsonPropertyName("package_signature")] public string? PackageSignature { get; set; }
+        [JsonPropertyName("package_type")] public string? PackageType { get; set; }
+        [JsonPropertyName("signing_key_id")] public string? SigningKeyId { get; set; }
     }
 
     private sealed class WireErrorBody

@@ -22,6 +22,7 @@ public interface IAutoCadInteropService
         List<TextEntity> entities,
         bool targetIsCjk,
         AppConfig config,
+        string? plannedBackupPath = null,
         IProgress<string>? progress = null,
         CancellationToken cancellationToken = default);
 }

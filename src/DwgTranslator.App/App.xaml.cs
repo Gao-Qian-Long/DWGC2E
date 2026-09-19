@@ -17,9 +17,7 @@ namespace DwgTranslator.App;
 /// </summary>
 public partial class App : Application
 {
-    public static string AppDataDir { get; } = Path.GetFullPath(
-        Environment.GetEnvironmentVariable("DWGC2E_DATA_DIR") ?? Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "DwgTranslator"));
+    public static string AppDataDir { get; } = ProductDataDirectory.Initialize(AppDomain.CurrentDomain.BaseDirectory);
 
     public static ILicenseService LicenseService { get; private set; } = null!;
     public static IServiceProvider Services { get; private set; } = null!;
@@ -55,18 +53,30 @@ public partial class App : Application
     private void OnDispatcherUnhandledException(object sender, System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e)
     {
         Log.Fatal(e.Exception, "Unhandled UI exception");
-        // Graceful degradation: show non-blocking warning instead of crashing.
-        // Do NOT expose exception details to the user — they are in the log file.
+        // A startup XAML failure has no main window to close; do not leave a hidden process locking the release.
+        var recovering = MainWindow is { IsLoaded: true };
+        // Graceful degradation only applies when there is a window left to degrade into. MsgUnhandledError
+        // promises "自动恢复" and owns a single {0} that is labelled 错误:, so it gets the exception type
+        // (never the message or the log path: the privacy rule keeps stack details out of dialogs).
+        // MsgFatalError is the one with a 日志位置 slot, so the about-to-exit branch uses it.
         try
         {
-            MessageBox.Show(
-                Strings.Get("MsgUnhandledError", Path.Combine(AppDataDir, "logs").Replace('\\', '/')),
-                Strings.Get("MsgTitleWarning"), MessageBoxButton.OK, MessageBoxImage.Warning);
+            if (recovering)
+            {
+                MessageBox.Show(
+                    Strings.Get("MsgUnhandledError", e.Exception.GetType().Name),
+                    Strings.Get("MsgTitleWarning"), MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+            else
+            {
+                MessageBox.Show(
+                    Strings.Get("MsgFatalError", e.Exception.GetType().Name, Path.Combine(AppDataDir, "logs").Replace('\\', '/')),
+                    Strings.Get("MsgTitleFatalError"), MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
         catch { /* last resort: ignore if even MessageBox fails */ }
         e.Handled = true;
-        // A startup XAML failure has no main window to close; do not leave a hidden process locking the release.
-        if (MainWindow == null || !MainWindow.IsLoaded) Shutdown(1);
+        if (!recovering) Shutdown(1);
     }
 
     private void OnUnhandledException(object sender, UnhandledExceptionEventArgs e)
@@ -298,6 +308,7 @@ public partial class App : Application
 
         // Translation helpers (stateless, safe to share)
         services.AddSingleton<IFormatCodeParser, FormatCodeParser>();
+        services.AddSingleton<IFormatCodeRestorer, FormatCodeRestorer>();
 
         // ── 基础设施：AI 出口与翻译缓存（UI 不再拥有 HttpClient / API Key）────────────
         // 提示词与一致性缓存都收在 Core：任务层与界面共用同一份缓存，否则界面统计的"缓存命中"
@@ -306,30 +317,7 @@ public partial class App : Application
             new DwgTranslator.Core.Translation.TranslationConsistencyService(
                 Path.Combine(AccountWorkspace.DirectoryFor(AppDataDir, ReadAppConfig().ActiveAccountId), "translation_cache.json")));
 
-        // 配置感知的 DeepSeek 客户端：每次调用前重读 settings.json，
-        // 用户"先启动程序、再填 Key"的常规流程因此不需要重启。
-        services.AddSingleton<DwgTranslator.Core.Services.IDeepSeekClient>(sp =>
-            new DwgTranslator.Core.Services.SettingsBackedDeepSeekClient(
-                Path.Combine(AppDataDir, "settings.json")));
-
-        // 翻译管线（术语 / 格式码 / 质检 / 重试 / 一致性缓存）。
-        // 注册它的直接动机：DirectApiClient 需要它，而 ActivatorUtilities 在缺少该注册时
-        // 会抛异常 → IApiClient 静默退化成"未配置的 WorkerApiClient"，界面显示的模式与
-        // 实际能力全是错的。任务层不使用这个实例（它按 TaskManagerOptions.AiConcurrency 自建）。
-        services.AddSingleton<DwgTranslator.Core.Services.ITranslationService>(sp =>
-        {
-            var config = ReadAppConfig();
-            return new DwgTranslator.Core.Services.TranslationService(
-                sp.GetRequiredService<IGlossaryService>(),
-                sp.GetRequiredService<IFormatCodeParser>(),
-                sp.GetRequiredService<DwgTranslator.Core.Services.IDeepSeekClient>(),
-                DwgTranslator.Core.Services.TranslationPrompt.LoadSystemPrompt(
-                    AppDataDir, AppDomain.CurrentDomain.BaseDirectory),
-                config.BatchSize,
-                config.MaxRetryCount,
-                sp.GetService<DwgTranslator.Core.Translation.ITranslationConsistencyService>(),
-                maxConcurrency: Math.Min(20, Math.Max(1, config.AiConcurrency)));
-        });
+        // 模型凭据、模型名与系统提示词仅存在于 Worker；桌面端不注册任何直连模型客户端。
 
 
         /// <summary>
@@ -380,54 +368,28 @@ public partial class App : Application
         {
             try
             {
-                var settingsPath = Path.Combine(AppDataDir, "settings.json");
-                var config = File.Exists(settingsPath)
-                    ? System.Text.Json.JsonSerializer.Deserialize<DwgTranslator.Core.Models.AppConfig>(
-                          File.ReadAllText(settingsPath), DwgTranslator.Core.Models.AppConfigJson.ReadOptions)
-                      ?? new DwgTranslator.Core.Models.AppConfig()
-                    : new DwgTranslator.Core.Models.AppConfig();
-
-                // 系统提示词从 Core 统一加载（界面与任务层共用一份，避免"单文件翻译"与"批量任务"质量不一致）
-                var systemPrompt = DwgTranslator.Core.Services.TranslationPrompt.LoadSystemPrompt(
-                    AppDataDir, AppDomain.CurrentDomain.BaseDirectory);
-
+                var config = ReadAppConfig();
                 var api = sp.GetRequiredService<DwgTranslator.Core.Api.IApiClient>();
-                if (string.Equals(api.ModeName, "worker", StringComparison.OrdinalIgnoreCase))
-                {
-                    // Reuse only the existing formatter; Worker translation never calls its model client.
-                    var formatter = (DwgTranslator.Core.Services.TranslationService)
-                        sp.GetRequiredService<DwgTranslator.Core.Services.ITranslationService>();
-                    var glossary = sp.GetRequiredService<DwgTranslator.Core.Services.IGlossaryService>();
-                    var workerTranslation = new DwgTranslator.Core.Services.WorkerTranslationService(
-                        api, config, formatter.RestoreFormatCodes, () => glossary.GetAllEntries());
-                    return new DwgTranslator.Core.Tasks.TaskManager(
-                        sp.GetRequiredService<DwgTranslator.Core.Services.IDwgReaderService>(),
-                        sp.GetService<DwgTranslator.Core.Services.IDxfReaderService>(),
-                        workerTranslation,
-                        sp.GetRequiredService<DwgTranslator.Core.Services.IDwgWriterService>(),
-                        sp.GetService<DwgTranslator.Core.Services.IDxfWriterService>(),
-                        sp.GetRequiredService<DwgTranslator.Core.Tasks.ITaskStore>(),
-                        sp.GetRequiredService<DwgTranslator.Core.Tasks.TaskManagerOptions>(),
-                        config, sp.GetService<DwgTranslator.Core.Services.IAutoCadInteropService>());
-                }
+                if (!string.Equals(api.ModeName, "worker", StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidOperationException("Production task engine requires the Worker API client.");
+
+                var glossary = sp.GetRequiredService<DwgTranslator.Core.Services.IGlossaryService>();
+                var restorer = sp.GetRequiredService<DwgTranslator.Core.Translation.IFormatCodeRestorer>();
+                var workerTranslation = new DwgTranslator.Core.Services.WorkerTranslationService(
+                    api, config, restorer.Restore, () => glossary.GetAllEntries());
                 return new DwgTranslator.Core.Tasks.TaskManager(
                     sp.GetRequiredService<DwgTranslator.Core.Services.IDwgReaderService>(),
                     sp.GetService<DwgTranslator.Core.Services.IDxfReaderService>(),
-                    sp.GetRequiredService<DwgTranslator.Core.Services.IGlossaryService>(),
-                    sp.GetRequiredService<DwgTranslator.Core.Translation.IFormatCodeParser>(),
-                    sp.GetRequiredService<DwgTranslator.Core.Services.IDeepSeekClient>(),
+                    workerTranslation,
                     sp.GetRequiredService<DwgTranslator.Core.Services.IDwgWriterService>(),
                     sp.GetService<DwgTranslator.Core.Services.IDxfWriterService>(),
                     sp.GetRequiredService<DwgTranslator.Core.Tasks.ITaskStore>(),
                     sp.GetRequiredService<DwgTranslator.Core.Tasks.TaskManagerOptions>(),
-                    config,
-                    systemPrompt,
-                    sp.GetService<DwgTranslator.Core.Services.IAutoCadInteropService>(),
-                    sp.GetService<DwgTranslator.Core.Translation.ITranslationConsistencyService>());
+                    config, sp.GetService<DwgTranslator.Core.Services.IAutoCadInteropService>());
             }
             catch (Exception ex)
             {
-                Log.Error(ex, "Task engine could not be constructed; the legacy single-file flow stays in use");
+                Log.Error(ex, "Worker task engine could not be constructed");
                 throw;
             }
         });
@@ -442,8 +404,7 @@ public partial class App : Application
             return DwgTranslator.Core.Api.ApiClientFactory.Create(
                 config, new System.Net.Http.HttpClient(),
                 () => DwgTranslator.Core.Models.AppConfig.DecryptApiKey(ReadAppConfig().AuthTokenEncrypted),
-                deviceId, deviceName,
-                () => ActivatorUtilities.CreateInstance<DwgTranslator.Core.Api.DirectApiClient>(sp));
+                deviceId, deviceName);
         });
 
         // ViewModel

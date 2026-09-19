@@ -10,6 +10,7 @@ using System.Windows.Data;
 using System.Windows;
 using System.IO;
 using System.Text.Json;
+using Serilog;
 namespace DwgTranslator.App.ViewModels;
 public partial class MainViewModel
 {
@@ -47,10 +48,11 @@ public partial class MainViewModel
     }
     public void RefreshTermView()
     {
+        RefreshSyncStatuses();
         // WPF cannot filter during an active DataGrid edit. Preserve the editor and apply after it ends.
         if (TermView is IEditableCollectionView editing && (editing.IsEditingItem || editing.IsAddingNew)) { QueueTermSearch(); return; }
-        var conflicts = TermDraft.Where(t => t.Enabled).GroupBy(t => t.Source, StringComparer.OrdinalIgnoreCase).Where(g => g.Select(t => t.Target).Distinct(StringComparer.OrdinalIgnoreCase).Count() > 1).Select(g => g.Key).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        TermView.Filter = o => o is GlossaryEntry t && MatchesWorkspaceFilters(t) && (TermScope == 0 || TermScope == 1 && t.LastHitAt.HasValue && t.LastHitAt.Value >= DateTime.UtcNow.AddDays(-30) || TermScope == 2 && t.SourceKind == GlossarySource.User) && (!TermConflictsOnly || conflicts.Contains(t.Source)) && (TermStatusFilter == "All" || TermStatusFilter == "Conflict" || (TermStatusFilter == "Enabled" && t.Enabled) || (TermStatusFilter == "Disabled" && !t.Enabled)) && (string.IsNullOrWhiteSpace(TermSearch) || string.Join(" ", t.Source, t.Target, t.Category, t.Folder).Contains(TermSearch, StringComparison.OrdinalIgnoreCase));
+        var conflicts = DwgTranslator.Core.Services.EffectiveGlossary.Conflicts(TermDraft).Select(t => t.LocalId).ToHashSet();
+        TermView.Filter = o => o is GlossaryEntry t && MatchesWorkspaceFilters(t) && (TermScope == 0 || TermScope == 1 && t.LastHitAt.HasValue && t.LastHitAt.Value >= DateTime.UtcNow.AddDays(-30) || TermScope == 2 && t.SourceKind == GlossarySource.User) && (!TermConflictsOnly || conflicts.Contains(t.LocalId)) && (TermStatusFilter == "All" || TermStatusFilter == "Conflict" || (TermStatusFilter == "Enabled" && t.Enabled) || (TermStatusFilter == "Disabled" && !t.Enabled)) && (string.IsNullOrWhiteSpace(TermSearch) || string.Join(" ", t.Source, t.Target, t.Category, t.Folder).Contains(TermSearch, StringComparison.OrdinalIgnoreCase));
         TermView.Refresh(); NotifyTermDraftEdited(); RefreshWorkspaceCounts();
     }
     public void LoadTermEditor()
@@ -59,34 +61,98 @@ public partial class MainViewModel
         _drawerSnapshot = null; IsTermDrawerOpen = false; TermDraft.Clear(); foreach (var e in GlossaryEntries) TermDraft.Add(e.Clone());
         _termsLoaded = true; _termBaseline = JsonSerializer.Serialize(TermDraft); SelectedTerm = null; RefreshTermView();
     }
-    [RelayCommand] private void AddTerm() { if (IsTermDrawerOpen || !CanEditWorkspace) return; BeginDrawerSnapshot(); var entry = new GlossaryEntry { SourceKind = GlossarySource.User }; TermDraft.Add(entry); TermScope = 0; TermConflictsOnly = false; TermSearch = ""; SelectedTerm = entry; IsTermDrawerOpen = true; TermFeedback = "正在新增用户术语，请填写后保存到本机。"; RefreshTermView(); }
-    [RelayCommand] private void FinishTermEdit() { if (SaveTermEditor()) CloseTermDrawer(); }
+    [RelayCommand]
+    private void AddTerm()
+    {
+        if (IsTermDrawerOpen)
+        {
+            TermFeedback = "请先完成当前术语编辑。";
+            DwgTranslator.App.Services.ToastService.Info(TermFeedback);
+            return;
+        }
+        if (!CanEditWorkspace)
+        {
+            TermFeedback = "正在执行任务、保存或同步，请稍候再添加术语。";
+            DwgTranslator.App.Services.ToastService.Info(TermFeedback);
+            return;
+        }
+        BeginDrawerSnapshot();
+        var entry = new GlossaryEntry { SourceKind = GlossarySource.User, SourceLang = CurrentSourceLang, TargetLang = CurrentTargetLang };
+        TermDraft.Add(entry); TermScope = 0; TermConflictsOnly = false; TermSearch = ""; SelectedTerm = entry; IsTermDrawerOpen = true;
+        TermFeedback = "正在新增用户术语，请填写后保存到本机。";
+        RefreshTermView();
+    }
+    [RelayCommand] private async Task FinishTermEditAsync() { if (await SaveTermEditorAsync()) CloseTermDrawer(); }
     [RelayCommand] private void DeleteTerm()
     {
         if (SelectedTerm == null || SelectedTerm.SourceKind != GlossarySource.User) return;
-        if (Views.PromptDialog.Show("确定删除选中的术语？保存后生效。", "删除术语", MessageBoxButton.YesNo) != MessageBoxResult.Yes) return;
+        if (Views.PromptDialog.Show("仅删除本机术语，云端副本保留。确定删除？", "删除术语", MessageBoxButton.YesNo) != MessageBoxResult.Yes) return;
         var term = SelectedTerm; if (CommitWorkspaceChange(() => TermDraft.Remove(term))) CloseTermDrawer();
     }
-    public bool SaveTermEditor()
+    /// <summary>Guards + validation shared by the synchronous and asynchronous save paths.</summary>
+    private bool TryPrepareTermSave(out List<GlossaryEntry> entries, out string path)
     {
+        entries = new List<GlossaryEntry>();
+        path = string.Empty;
         if (IsCloudGlossarySyncing) { TermFeedback = "正在同步云端，请稍候。"; return false; }
         if (IsGlossaryLoading) { TermFeedback = "正在加载术语，请稍候再保存。"; return false; }
         if (IsProcessing) { TermFeedback = "任务执行中，请完成或停止任务后再保存术语。"; return false; }
-        if (TermDraft.Count > 1000 || TermDraft.Any(t => string.IsNullOrWhiteSpace(t.Source) || string.IsNullOrWhiteSpace(t.Target))) { TermFeedback = "原文和译文不能为空，术语不能超过 1000 条。"; return false; }
+        if (TermDraft.Any(t => !EffectiveGlossary.Valid(t))) { TermFeedback = "原文/译文需1–500字，分类/目录最多128字，备注最多1000字。"; return false; }
+        entries = TermDraft.Select(t => { var c = t.Clone(); c.Source = c.Source.Trim(); c.Target = c.Target.Trim(); return c; }).ToList();
+        path = WorkspacePath;
+        foreach (var e in TermDraft) EffectiveGlossary.Normalize(e);
+        return true;
+    }
+
+    private bool CompleteTermSave(List<GlossaryEntry> entries)
+    {
+        RefreshGlossaryDataFromList(entries); RefreshGlossaryConflicts();
+        _termBaseline = JsonSerializer.Serialize(TermDraft); if (IsTermDrawerOpen) CloseTermDrawer(); TermFeedback = "本机已保存 · 云端需手动同步"; RefreshTermView(); return true;
+    }
+
+    /// <summary>Failure path for both save flavours: keeps the message and the log in one place.</summary>
+    private bool FailTermSave(bool committed, Exception ex)
+    {
+        Log.Warning(ex, "保存本机术语失败");
+        if (committed) _termBaseline = JsonSerializer.Serialize(TermDraft);
+        TermFeedback = committed ? "本机文件已保存，但词库加载失败，请重新加载后再翻译。" : "保存失败，请检查术语目录权限。未保存的编辑仍保留。";
+        return committed;
+    }
+
+    public async Task<bool> SaveTermEditorAsync()
+    {
+        if (!TryPrepareTermSave(out var entries, out var path)) return false;
+        var committed = false;
         try
         {
-            var entries = TermDraft.Select(t => { var c = t.Clone(); c.Source = c.Source.Trim(); c.Target = c.Target.Trim(); return c; }).ToList();
-            var conflicts = entries.Where(t => t.Enabled).GroupBy(t => (t.Source.ToUpperInvariant(), t.PriorityWeight)).Any(g => g.Select(t => t.Target).Distinct(StringComparer.OrdinalIgnoreCase).Count() > 1);
-            if (conflicts) { TermFeedback = "存在同优先级的不同译法。请筛选冲突，修改译文或停用其中一条后保存。"; TermConflictsOnly = true; return false; }
-            var path = Path.Combine(AccountDataDirectory, "glossaries", TranslationLanguages.GlossaryFileName(CurrentSourceLang, CurrentTargetLang));
-            DwgTranslator.Core.Infrastructure.Glossary.GlossaryFileStore.Save(path, entries);
-            _glossaryService.LoadGlossaryAsync(path).GetAwaiter().GetResult();
-            RefreshGlossaryDataFromList(entries); RefreshGlossaryConflicts();
-            _termBaseline = JsonSerializer.Serialize(TermDraft); if (IsTermDrawerOpen) CloseTermDrawer(); TermFeedback = "本机已保存 · 云端需手动同步"; RefreshTermView(); return true;
+            PersistWorkspace(entries);
+            committed = true;
+            // The glossary service must see the new file before anyone translates with these terms.
+            await _glossaryService.LoadGlossaryAsync(path);
+            return CompleteTermSave(entries);
         }
-        catch { TermFeedback = "保存失败，请检查术语目录权限。未保存的编辑仍保留。"; return false; }
+        catch (Exception ex) { return FailTermSave(committed, ex); }
     }
-    [RelayCommand] private void SaveTerms() => SaveTermEditor();
+
+    /// <summary>
+    /// Synchronous twin, kept only for callers that structurally cannot await — the window-closing
+    /// prompt and the atomic <see cref="CommitWorkspaceChange"/> helpers. It blocks the UI thread on
+    /// the glossary reload, so every caller that can await must use <see cref="SaveTermEditorAsync"/>.
+    /// </summary>
+    public bool SaveTermEditor()
+    {
+        if (!TryPrepareTermSave(out var entries, out var path)) return false;
+        var committed = false;
+        try
+        {
+            PersistWorkspace(entries);
+            committed = true;
+            _glossaryService.LoadGlossaryAsync(path).GetAwaiter().GetResult();
+            return CompleteTermSave(entries);
+        }
+        catch (Exception ex) { return FailTermSave(committed, ex); }
+    }
+    [RelayCommand] private Task SaveTermsAsync() => SaveTermEditorAsync();
     [RelayCommand] private void DiscardTerms() { _termsLoaded = false; LoadTermEditor(); TermFeedback = "已放弃未保存的术语修改。"; }
     public bool ConfirmLeaveGlossary()
     {
@@ -102,65 +168,8 @@ public partial class MainViewModel
     {
         var d = new Microsoft.Win32.SaveFileDialog { Filter = "JSON 术语库|*.json", FileName = "glossary.json" };
         if (d.ShowDialog() != true) return;
-        try { File.WriteAllText(d.FileName, JsonSerializer.Serialize(TermDraft, AppConfigJson.WriteOptions)); TermFeedback = "已导出当前术语。"; } catch { TermFeedback = "导出失败，请检查文件权限。"; }
+        try { File.WriteAllText(d.FileName, JsonSerializer.Serialize(TermDraft.Select(t => new { t.Source, t.Target, t.Category, t.SourceLang, t.TargetLang, t.Folder, t.CloudNote, t.Enabled }), AppConfigJson.WriteOptions)); TermFeedback = "已导出当前术语。"; } catch { TermFeedback = "导出失败，请检查文件权限。"; }
     }
-    [RelayCommand] private async Task UploadTermsAsync()
-    {
-        if (IsCloudGlossarySyncing || IsGlossaryLoading || IsProcessing || !RequireAccount()) return;
-        if (_apiClient is not ICloudGlossaryClient cloud) { TermFeedback = "当前连接不支持安全云端同步。"; return; }
-        if (!SaveTermEditor()) return;
-        var context = CloudGlossaryContext;
-        var draft = JsonSerializer.Serialize(TermDraft);
-        IsCloudGlossarySyncing = true;
-        TermFeedback = "正在核对云端版本……";
-        try
-        {
-            if (_cloudGlossaryContext != context) { _cloudGlossaryBasis = null; _cloudGlossaryContext = context; }
-            if (_cloudGlossaryBasis == null)
-            {
-                _cloudGlossaryBasis = await cloud.ReadCloudGlossaryAsync();
-                if (context != CloudGlossaryContext) return;
-                if (_cloudGlossaryBasis.Entries.Count > 1000) { TermFeedback = "云端超过1000条，已停止整库覆盖，请先在网页整理。"; return; }
-            }
-            if (context != CloudGlossaryContext || draft != JsonSerializer.Serialize(TermDraft)) return;
-            if (Views.PromptDialog.Show($"将以本机 {TermDraft.Count} 条术语替换当前账号云端的 {_cloudGlossaryBasis.Entries.Count} 条术语。云端词库由所有语言方向共用，不会自动合并。\n如需保留云端词条，请取消并先下载核对。确定上传？", "确认云端保存", MessageBoxButton.YesNo) != MessageBoxResult.Yes)
-            { TermFeedback = "已取消上传，本机内容不变。"; return; }
-            var entries = TermDraft.Select(t => new CloudGlossaryEntry { Id=t.CloudId, Note=t.CloudNote, Source=t.Source.Trim(), Target=t.Target.Trim(), Category=t.Category, Folder=t.Folder, Enabled=t.Enabled }).ToList();
-            var saved = await cloud.SaveCloudGlossaryAsync(_cloudGlossaryBasis, entries);
-            if (context != CloudGlossaryContext) return;
-            _cloudGlossaryBasis = saved;
-            if (draft != JsonSerializer.Serialize(TermDraft)) { TermFeedback = "提交内容已保存到云端；当前编辑有变化，仍需另行保存。"; return; }
-            // Preserve returned IDs/notes even after renaming source text on this device.
-            for (var i = 0; i < TermDraft.Count; i++)
-            { TermDraft[i].CloudId = saved.Entries[i].Id; TermDraft[i].CloudNote = saved.Entries[i].Note; }
-            IsCloudGlossarySyncing = false;
-            TermFeedback = SaveTermEditor() ? "已保存到云端，并更新本机最新词库。" : "云端已保存，但本机保存失败；请重试本机保存。";
-        }
-        catch (CloudGlossaryException ex) { if (context == CloudGlossaryContext) TermFeedback = ex.Message; }
-        catch { if (context == CloudGlossaryContext) TermFeedback = "未能确认云端保存，请检查登录状态与网络。本机内容仍保留。"; }
-        finally { IsCloudGlossarySyncing = false; }
-    }
-    [RelayCommand] private async Task DownloadTermsAsync()
-    {
-        if (IsCloudGlossarySyncing || IsGlossaryLoading || IsProcessing || !RequireAccount() || !ConfirmLeaveGlossary()) return;
-        if (_apiClient is not ICloudGlossaryClient cloud) { TermFeedback = "当前连接不支持安全云端同步。"; return; }
-        if (Views.PromptDialog.Show("下载会替换当前术语草稿，保存到本机后生效。请先导出需要保留的本机词条。继续？", "下载最新云端术语", MessageBoxButton.YesNo) != MessageBoxResult.Yes) return;
-        var context = CloudGlossaryContext;
-        var draft = JsonSerializer.Serialize(TermDraft);
-        IsCloudGlossarySyncing = true;
-        TermFeedback = "正在读取最新云端词库……";
-        try
-        {
-            var latest = await cloud.ReadCloudGlossaryAsync();
-            if (context != CloudGlossaryContext || draft != JsonSerializer.Serialize(TermDraft)) return;
-            if (latest.Entries.Count > 1000) { TermFeedback = "云端超过1000条，未截断或替换本机内容。"; return; }
-            _cloudGlossaryBasis = latest; _cloudGlossaryContext = context;
-            TermDraft.Clear();
-            foreach (var t in latest.Entries) TermDraft.Add(new GlossaryEntry { CloudId=t.Id, CloudNote=t.Note, Source=t.Source, Target=t.Target, Category=t.Category, Folder=t.Folder, Enabled=t.Enabled, SourceKind=GlossarySource.User });
-            SelectedTerm = null; RefreshTermView(); TermFeedback = "已读取最新云端词库到草稿，请检查并保存到本机。";
-        }
-        catch (CloudGlossaryException ex) { if (context == CloudGlossaryContext) TermFeedback = ex.Message; }
-        catch { if (context == CloudGlossaryContext) TermFeedback = "无法读取云端，请检查登录状态与网络。本机内容未替换。"; }
-        finally { IsCloudGlossarySyncing = false; }
-    }
+    [RelayCommand] private Task UploadTermsAsync() => UploadSelectedTermsAsync(TermDraft.ToList());
+    [RelayCommand] private async Task DownloadTermsAsync() => await OpenCloudWorkspaceAsync();
 }

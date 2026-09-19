@@ -1,5 +1,8 @@
 # Purpose: verify literal/relative release paths and negative package checks in isolated PS5 processes.
 # Input: clean PublishDir, fresh EvidenceDir. Output: fixtures/logs/results; never builds or installs APP.
+# Gated by tools/Publish-Desktop.ps1 for every normal delivery; runnable standalone as a hotfix check.
+# Note: the marker strings below are matched against real verifier messages, so they must stay in
+# sync with tools/Verify-ReleasePackage.ps1 (a marker mismatch makes the case fail forever).
 param([Parameter(Mandatory=$true)][string]$PublishDir,[Parameter(Mandatory=$true)][string]$EvidenceDir)
 $ErrorActionPreference='Stop'
 $root=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
@@ -26,8 +29,11 @@ CheckRun 'relative-brackets' $true $true 'RELEASE_PACKAGE=OK'
 $config=Join-Path $fixture 'settings.json';$original=[IO.File]::ReadAllBytes($config)
 try {
  $data=Get-Content -LiteralPath $config -Raw|ConvertFrom-Json
- $data.deepSeekApiKey='fake-test-value';$data|ConvertTo-Json -Depth 30|Set-Content -LiteralPath $config -Encoding UTF8
- CheckRun 'secret-rejected' $true $false 'must not contain an API key'
+ # Add-Member instead of $data.x=: the packaged config no longer carries this legacy field,
+ # so a plain property assignment throws instead of injecting the fixture.
+ $data|Add-Member -NotePropertyName deepSeekApiKey -NotePropertyValue 'fake-test-value' -Force
+ $data|ConvertTo-Json -Depth 30|Set-Content -LiteralPath $config -Encoding UTF8
+ CheckRun 'secret-rejected' $true $false 'must not expose legacy AI field'
 } finally {[IO.File]::WriteAllBytes($config,$original)}
 $platform=Join-Path $fixture 'CadPlugin/cad-platform.txt';$original=[IO.File]::ReadAllBytes($platform)
 try {

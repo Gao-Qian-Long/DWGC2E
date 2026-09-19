@@ -1,3 +1,4 @@
+#if DEBUG
 using System;
 using System.IO;
 using System.Net.Http;
@@ -53,17 +54,17 @@ public class DeepSeekClientPlumbingTests : IDisposable
     }
 
     [Fact]
-    public async Task SettingsBacked_ReadsKeyFromFileAtCallTime()
+    public async Task SettingsBacked_IgnoresLegacyProviderKeyFromFile()
     {
-        // Key 是写进文件的（等价于"启动后才在设置页填 Key"）：这里用一个必然连不上的回环端口，
-        // 只要抛的是网络异常而不是"未配置 Key"，就说明调用时确实读了配置。
+        // Provider credentials are Worker-owned. Even debug compatibility code must not
+        // revive a legacy client-side key found in settings.json.
         var path = WriteSettings(apiKey: "sk-test-not-a-real-key");
         using var client = new SettingsBackedDeepSeekClient(path);
 
-        await Assert.ThrowsAnyAsync<HttpRequestException>(
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
             () => client.ChatCompletionAsync("system", "user"));
+        Assert.Contains("API Key", ex.Message);
     }
-
     [Fact]
     public async Task SettingsBacked_MissingFile_ThrowsReadableError()
     {
@@ -117,3 +118,4 @@ public class DeepSeekClientPlumbingTests : IDisposable
         Assert.Equal(TranslationPrompt.Fallback, TranslationPrompt.LoadSystemPrompt(null, null));
     }
 }
+#endif

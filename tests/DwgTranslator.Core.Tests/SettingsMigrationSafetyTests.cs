@@ -13,8 +13,9 @@ public sealed class SettingsMigrationSafetyTests : IDisposable
     [Fact]
     public void CopiedFirstLaunchDefaultsMigrateWithoutChangingBundledConfiguration()
     {
-        var defaults = new AppConfig { ApiBaseUrl = "https://custom.example.test/api", ApiMode = "direct", ConfigurationVersion = 0 };
-        var before = JsonSerializer.Serialize(defaults);
+        var defaults = new AppConfig { ApiBaseUrl = "https://custom.example.test/api", ConfigurationVersion = 0 };
+        var defaultsBefore = JsonSerializer.Serialize(defaults);
+        var before = defaultsBefore.TrimEnd('}') + ",\"apiMode\":\"direct\"}";
         var bundle = Path.Combine(root, "bundle", "settings.json");
         Directory.CreateDirectory(Path.GetDirectoryName(bundle)!);
         Directory.CreateDirectory(Path.GetDirectoryName(Settings)!);
@@ -23,9 +24,8 @@ public sealed class SettingsMigrationSafetyTests : IDisposable
         SettingsStore.Migrate(Settings, defaults);
         var saved = SettingsStore.Read(Settings);
         Assert.Equal(defaults.ApiBaseUrl, saved.ApiBaseUrl);
-        Assert.Equal("worker", saved.ApiMode);
-        Assert.Equal(1, saved.ConfigurationVersion);
-        Assert.Equal(before, JsonSerializer.Serialize(defaults));
+        Assert.Equal(2, saved.ConfigurationVersion);
+        Assert.Equal(defaultsBefore, JsonSerializer.Serialize(defaults));
         Assert.Equal(before, File.ReadAllText(bundle));
         Assert.Equal(before, File.ReadAllText(Settings + ".pre-ui-v1.bak"));
         Assert.Equal(3, Directory.GetFiles(root, "*", SearchOption.AllDirectories).Length);
@@ -41,7 +41,7 @@ public sealed class SettingsMigrationSafetyTests : IDisposable
         SettingsStore.Migrate(Settings);
         Assert.Equal(before, File.ReadAllBytes(backup));
         Assert.Equal("chosen-output", SettingsStore.Read(Settings).ExportDirectory);
-        Assert.Equal(1, SettingsStore.Read(Settings).ConfigurationVersion);
+        Assert.Equal(2, SettingsStore.Read(Settings).ConfigurationVersion);
     }
 
     [Fact]
@@ -114,7 +114,7 @@ public sealed class SettingsMigrationSafetyTests : IDisposable
         File.WriteAllText(Settings, input);
         SettingsStore.Migrate(Settings);
         using var saved = JsonDocument.Parse(File.ReadAllText(Settings));
-        Assert.Equal(Math.Max(1, version), saved.RootElement.GetProperty("configurationVersion").GetInt32());
+        Assert.Equal(Math.Max(2, version), saved.RootElement.GetProperty("configurationVersion").GetInt32());
         Assert.Equal(DwgTranslator.Core.Api.ProductApiEndpoint.Default, saved.RootElement.GetProperty("apiBaseUrl").GetString());
         AssertFutureFields(saved.RootElement);
         Assert.False(saved.RootElement.TryGetProperty("additionalSettings", out _));
@@ -135,6 +135,69 @@ public sealed class SettingsMigrationSafetyTests : IDisposable
         AssertFutureFields(saved.RootElement);
         Assert.Equal("chosen-output", saved.RootElement.GetProperty("exportDirectory").GetString());
         Assert.Equal("", saved.RootElement.GetProperty("authTokenEncrypted").GetString());
+    }
+
+    [Theory]
+    [InlineData("deepSeekApiKey")]
+    [InlineData("DeepSeekBaseUrl")]
+    [InlineData("deepseekmodel")]
+    [InlineData("APIMODE")]
+    public void SchemaTwoLegacyProviderFieldsArePhysicallyRemoved(string legacyName)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(Settings)!);
+        var input = "{\"configurationVersion\":2,\"apiBaseUrl\":\"" +
+            DwgTranslator.Core.Api.ProductApiEndpoint.Default +
+            "\",\"authTokenEncrypted\":\"preserve-session\",\"" + legacyName +
+            "\":\"must-not-remain\",\"FutureField\":{\"enabled\":true,\"items\":[1,null,\"text\"]},\"futureNull\":null,\"futureNumber\":1234567890123456789}";
+        File.WriteAllText(Settings, input);
+
+        SettingsStore.Migrate(Settings);
+
+        var savedText = File.ReadAllText(Settings);
+        using var saved = JsonDocument.Parse(savedText);
+        Assert.DoesNotContain(legacyName, savedText, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("preserve-session", saved.RootElement.GetProperty("authTokenEncrypted").GetString());
+        Assert.Equal(2, saved.RootElement.GetProperty("configurationVersion").GetInt32());
+        AssertFutureFields(saved.RootElement);
+        Assert.Empty(Directory.GetFiles(root, "*.tmp", SearchOption.AllDirectories));
+    }
+    [Theory]
+    [InlineData("allowOverwriteSource")]
+    [InlineData("AllowOverwriteSource")]
+    [InlineData("ALLOWOVERWRITESOURCE")]
+    public void RetiredOverwriteSwitchIsPhysicallyRemovedOnNextSave(string legacyName)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(Settings)!);
+        File.WriteAllText(Settings,
+            "{\"configurationVersion\":2,\"apiBaseUrl\":\"" + DwgTranslator.Core.Api.ProductApiEndpoint.Default +
+            "\",\"authTokenEncrypted\":\"preserve-session\",\"" + legacyName +
+            "\":true,\"FutureField\":{\"enabled\":true,\"items\":[1,null,\"text\"]},\"futureNull\":null,\"futureNumber\":1234567890123456789}");
+
+        // No Migrate here: an ordinary settings write must already sweep the retired switch,
+        // otherwise an upgraded install can keep carrying it indefinitely.
+        SettingsStore.Update(Settings, _ => { });
+
+        var savedText = File.ReadAllText(Settings);
+        using var saved = JsonDocument.Parse(savedText);
+        Assert.DoesNotContain(legacyName, savedText, StringComparison.OrdinalIgnoreCase);
+        Assert.False(saved.RootElement.TryGetProperty("additionalSettings", out _));
+        Assert.Equal("preserve-session", saved.RootElement.GetProperty("authTokenEncrypted").GetString());
+        AssertFutureFields(saved.RootElement);
+    }
+
+    [Fact]
+    public void UnrelatedUnknownFieldsSurviveEvenWhenARemovedKeyIsSwept()
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(Settings)!);
+        File.WriteAllText(Settings,
+            "{\"configurationVersion\":2,\"allowOverwriteSource\":true,\"x-future\":\"keep-me\"}");
+
+        SettingsStore.Update(Settings, c => c.ExportDirectory = "chosen-output");
+
+        using var saved = JsonDocument.Parse(File.ReadAllText(Settings));
+        Assert.Equal("keep-me", saved.RootElement.GetProperty("x-future").GetString());
+        Assert.Equal("chosen-output", saved.RootElement.GetProperty("exportDirectory").GetString());
+        Assert.False(saved.RootElement.TryGetProperty("allowOverwriteSource", out _));
     }
 
     private static void AssertFutureFields(JsonElement root)

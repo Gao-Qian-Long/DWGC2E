@@ -1,5 +1,11 @@
+using System.ComponentModel;
 using System.IO;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Input;
+using System.Windows.Media;
+using System.Windows.Media.Media3D;
 using DwgTranslator.App.ViewModels;
 using DwgTranslator.Core.Resources;
 using Microsoft.Extensions.DependencyInjection;
@@ -12,26 +18,56 @@ namespace DwgTranslator.App.Views;
 public partial class MainWindow : Window
 {
     private readonly MainViewModel _viewModel;
+    private readonly Dictionary<string, FrameworkElement> _pageCache = new(StringComparer.Ordinal);
+    private bool? _isCompactLayout;
 
-    // Avoid a circular dependency between the scroll viewport and page measurement.
+    // The viewport is measured in DIP. No fixed minimum canvas and no global scale transform.
     private void PageViewport_SizeChanged(object sender, SizeChangedEventArgs e)
     {
+        // WPF stretch/grid layout owns the content viewport. Imperative Width/Height assignments
+        // caused feedback loops when drawers or scrollbars changed the available size.
+        UpdateResponsiveLayout();
+    }
+
+    private void UpdateResponsiveLayout()
+    {
         if (PageHost == null) return;
-        var width = Math.Max(0, e.NewSize.Width - 2);
-        var height = Math.Max(0, e.NewSize.Height - 2);
-        var horizontal = width < 700;
-        var vertical = height < 640;
-        if (vertical && width - SystemParameters.VerticalScrollBarWidth < 700) horizontal = true;
-        if (horizontal && height - SystemParameters.HorizontalScrollBarHeight < 640) vertical = true;
-        PageViewport.HorizontalScrollBarVisibility = horizontal ? System.Windows.Controls.ScrollBarVisibility.Auto : System.Windows.Controls.ScrollBarVisibility.Disabled;
-        PageViewport.VerticalScrollBarVisibility = vertical ? System.Windows.Controls.ScrollBarVisibility.Auto : System.Windows.Controls.ScrollBarVisibility.Disabled;
-        PageHost.Width = Math.Max(700, width - (vertical ? SystemParameters.VerticalScrollBarWidth : 0));
-        PageHost.Height = Math.Max(640, height - (horizontal ? SystemParameters.HorizontalScrollBarHeight : 0));
+        var viewportWidth = ActualWidth;
+        var compact = _isCompactLayout switch
+        {
+            null => viewportWidth < 1100,
+            false => viewportWidth < 1080,
+            true => viewportWidth <= 1120
+        };
+        _isCompactLayout = compact;
+        PageHost.MaxWidth = ActualWidth >= 1900 ? 1600 : double.PositiveInfinity;
+        Controls.ResponsiveLayout.SetIsCompact(this, compact);
+        Controls.ResponsiveLayout.SetIsShort(this, ActualHeight < 540);
+        SidebarColumn.Width = new GridLength(compact ? 64 : 224);
+        Resources["Spacing.Page"] = compact ? new Thickness(20) : new Thickness(32,24,32,24);
+        ShellStatusLabel.MaxWidth = compact ? 180 : 520;
+        ShellProgressLabel.MaxWidth = compact ? 100 : 460;
+        ShellVersionLabel.MaxWidth = compact ? 100 : 120;
+        BrandLabel.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
+        SidebarBrand.Margin = new Thickness(16, compact ? 12 : 24, 0, compact ? 12 : 24);
+        AccountEntryLabels.Visibility = AccountChevron.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
+        AccountEntryBorder.Margin = compact ? new Thickness(4,0,4,4) : new Thickness(16,0,16,12);
+        AccountEntryContent.ColumnDefinitions[2].Width = new GridLength(compact ? 0 : 14);
+        foreach (System.Windows.Controls.ListBoxItem item in NavList.Items)
+        {
+            item.Padding = new Thickness(compact ? 14 : 12,0,0,0);
+            item.Margin = new Thickness(compact ? 0 : 8,2,compact ? 0 : 8,2);
+            if (item.Content is System.Windows.Controls.StackPanel panel)
+                foreach (var child in panel.Children)
+                    if (child is System.Windows.Controls.TextBlock text) { text.Visibility = compact ? Visibility.Collapsed : Visibility.Visible; item.ToolTip = text.Text; }
+        }
     }
 
     public MainWindow()
     {
         InitializeComponent();
+        SizeChanged += (_, _) => UpdateResponsiveLayout();
+        Loaded += (_, _) => UpdateResponsiveLayout();
         var area = SystemParameters.WorkArea;
         Width = Math.Min(Width, area.Width);
         Height = Math.Min(Height, area.Height);
@@ -42,13 +78,99 @@ public partial class MainWindow : Window
         _viewModel = App.Services?.GetService<MainViewModel>()
             ?? throw new InvalidOperationException("服务容器未初始化，无法创建主视图模型。");
         DataContext = _viewModel;
+        _viewModel.PropertyChanged += ViewModel_PropertyChanged;
+        ShowActivePage();
 
         // BUG FIX: 异步初始化术语库加载，避免 UI 线程同步阻塞
         // 操作结果统一走 Toast（§29）
         Services.ToastService.Attach(Toasts);
+        Toasts.ShouldPause = () => _viewModel.IsTermDrawerOpen || _viewModel.IsTaskDetailOpen;
 
         Loaded += OnLoaded;
-        Closing += (s, e) => { if (!_viewModel.ConfirmLeavePage()) { e.Cancel = true; return; } _viewModel.Dispose(); };
+        Closing += (s, e) => { if (!_viewModel.ConfirmLeavePage()) { e.Cancel = true; return; } _viewModel.PropertyChanged -= ViewModel_PropertyChanged; _viewModel.Dispose(); };
+    }
+
+
+    private void ViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(MainViewModel.CurrentPage)) ShowActivePage();
+    }
+
+    private void ShowActivePage()
+    {
+        if (PageHost == null) return;
+        var key = _viewModel.CurrentPage;
+        if (!_pageCache.TryGetValue(key, out var page))
+        {
+            page = key switch
+            {
+                MainViewModel.PageBatch => new Pages.BatchTasksPage(),
+                MainViewModel.PageGlossary => new Pages.GlossaryPage(),
+                MainViewModel.PageSettings => new Pages.SettingsPage(),
+                MainViewModel.PageAccount => new Pages.AccountPage(),
+                _ => new Pages.TranslatePage()
+            };
+            _pageCache[key] = page;
+        }
+        if (!ReferenceEquals(PageHost.Content, page)) PageHost.Content = page;
+    }
+    private async void OnPreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        var control = (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control;
+        if (control && e.Key == Key.S)
+        {
+            CommitFocusedEditor();
+            e.Handled = true;
+            await _viewModel.HandleSaveShortcutAsync();
+            return;
+        }
+
+        if (control && e.Key == Key.O)
+        {
+            e.Handled = true;
+            if (IsEditingInput())
+            {
+                Services.ToastService.Info("正在编辑内容，请先完成编辑再导入图纸。");
+                return;
+            }
+            await _viewModel.HandleImportShortcutAsync();
+            return;
+        }
+
+        if (e.Key == Key.F5 && Keyboard.Modifiers == ModifierKeys.None)
+        {
+            e.Handled = true;
+            if (IsEditingInput())
+            {
+                Services.ToastService.Info("正在编辑内容，F5 不会启动翻译。");
+                return;
+            }
+            await _viewModel.HandleRunShortcutAsync();
+        }
+    }
+
+    private static bool IsEditingInput() => Keyboard.FocusedElement is TextBoxBase or PasswordBox
+        || FindAncestor<DataGridCell>(Keyboard.FocusedElement as DependencyObject) != null;
+
+    private static void CommitFocusedEditor()
+    {
+        if (Keyboard.FocusedElement is TextBox textBox)
+            textBox.GetBindingExpression(TextBox.TextProperty)?.UpdateSource();
+
+        var grid = FindAncestor<DataGrid>(Keyboard.FocusedElement as DependencyObject);
+        if (grid == null) return;
+        grid.CommitEdit(DataGridEditingUnit.Cell, true);
+        grid.CommitEdit(DataGridEditingUnit.Row, true);
+    }
+
+    private static T? FindAncestor<T>(DependencyObject? current) where T : DependencyObject
+    {
+        while (current != null)
+        {
+            if (current is T match) return match;
+            current = current is Visual or Visual3D ? VisualTreeHelper.GetParent(current) : null;
+        }
+        return null;
     }
 
     /// <summary>右上角用户入口：用主题化 ContextMenu 承载账号/置顶/设置等入口（§9）。</summary>

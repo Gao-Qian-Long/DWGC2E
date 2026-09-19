@@ -86,10 +86,7 @@ public static class BatchExportPlanner
     {
         var plan = new ExportPlan();
         foreach (var pair in new OutputPathResolver(config).ResolveBatch(sourcePaths, targetLangCode))
-        {
-            if (pair.Value.ShouldSkip) plan.Skipped.Add(pair.Value);
-            else plan.Destinations[pair.Key] = pair.Value.OutputPath;
-        }
+            plan.Add(pair.Value);
         return plan;
     }
     private static string Normalize(string? path)
@@ -102,9 +99,17 @@ public static class BatchExportPlanner
 /// <summary>一次批量导出的路径规划结果。</summary>
 public sealed class ExportPlan
 {
-    /// <summary>源文件绝对路径 → 输出文件绝对路径（按重名策略跳过的文件不在此表中）。</summary>
-    public Dictionary<string, string> Destinations { get; } = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>兼容视图：源文件路径 → 输出文件路径，派生自 Results，不会与其分歧。</summary>
+    public IReadOnlyDictionary<string, string> Destinations => Results.Where(result => !result.ShouldSkip).ToDictionary(result => result.SourcePath, result => result.OutputPath, StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>被跳过的文件及原因（界面据此提示"已跳过 N 个已存在的输出文件"）。</summary>
-    public List<OutputPathResult> Skipped { get; } = new();
+    /// <summary>被跳过的文件及原因（界面提示“已跳过 N 个已存在的输出文件”），同样派生自 Results。</summary>
+    public IReadOnlyList<OutputPathResult> Skipped => Results.Where(result => result.ShouldSkip).ToList();
+    public List<OutputPathResult> Results { get; } = new();
+
+    /// <summary>Adds the single authoritative result for one source file.</summary>
+    internal void Add(OutputPathResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        Results.Add(result);
+    }
 }

@@ -102,15 +102,20 @@ public partial class MainViewModel
             else if (dialog.FileName.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase))
                 entries = await Task.Run(() => ReadGlossaryExcel(dialog.FileName));
             else throw new InvalidDataException();
-            if (entries.Count > 1000 || entries.Any(t => t == null || string.IsNullOrWhiteSpace(t.Source) || string.IsNullOrWhiteSpace(t.Target))) throw new InvalidDataException();
+            if (entries.Count > 1000) throw new InvalidDataException();
+            var errors=entries.Count(t => t == null || !DwgTranslator.Core.Services.EffectiveGlossary.Valid(t));
+            entries=entries.Where(t => t != null && DwgTranslator.Core.Services.EffectiveGlossary.Valid(t)).ToList();
             CurrentPage = PageGlossary;
             if (CurrentPage != PageGlossary) return;
             LoadTermEditor();
-            TermDraft.Clear();
-            foreach (var entry in entries) TermDraft.Add(entry);
+            foreach(var entry in entries) { entry.LocalId=Guid.NewGuid().ToString("D");entry.CloudId=null;entry.SourceKind=GlossarySource.User; DwgTranslator.Core.Services.EffectiveGlossary.Normalize(entry); }
+            var known=TermDraft.Select(t=>(t.SourceLang,t.TargetLang,Source:t.Source.Trim().ToUpperInvariant(),Target:t.Target.Trim())).ToHashSet();
+            var added=entries.Where(t=>known.Add((t.SourceLang,t.TargetLang,t.Source.ToUpperInvariant(),t.Target))).ToList();
+            if(Views.PromptDialog.Show($"新增 {added.Count}，重复 {entries.Count-added.Count}，错误 {errors}，待确认方向 {added.Count(t=>t.DirectionPending)}。\n有效条目将合并到本机；错误行不导入，不替换已有词条。","导入预览",System.Windows.MessageBoxButton.YesNo)!=System.Windows.MessageBoxResult.Yes)return;
+            if (!await CommitWorkspaceChangeAsync(()=>{foreach(var entry in added)TermDraft.Add(entry);})) return;
             SelectedTerm = null;
             RefreshTermView();
-            TermFeedback = "已导入到草稿，请检查冲突并保存。原术语文件尚未更改。";
+            TermFeedback = "导入合并结束，请检查保存结果及方向待确认项。";
         }
         catch
         {
@@ -139,8 +144,14 @@ public partial class MainViewModel
             {
                 continue;
             }
-            if (string.IsNullOrWhiteSpace(source) || string.IsNullOrWhiteSpace(target)) continue;
-            entries.Add(new GlossaryEntry { Source = source, Target = target, Category = category });
+            if (worksheet.Row(row).CellsUsed().All(c=>string.IsNullOrWhiteSpace(c.GetString()))) continue;
+            // Exchange columns: source, target, category, source language, target language, note, enabled.
+            var enabledText=worksheet.Cell(row,7).GetString().Trim();
+            var entry = new GlossaryEntry { Source=source, Target=target, Category=category,
+                SourceLang=worksheet.Cell(row,4).GetString().Trim(), TargetLang=worksheet.Cell(row,5).GetString().Trim(),
+                CloudNote=worksheet.Cell(row,6).GetString(), Enabled=enabledText is not ("false" or "False" or "0" or "停用") };
+            if (enabledText.Length>0 && enabledText is not ("true" or "True" or "1" or "启用" or "false" or "False" or "0" or "停用")) entry.Source="";
+            entries.Add(entry);
         }
 
         return entries;
@@ -151,17 +162,15 @@ public partial class MainViewModel
     #region Settings & Help
 
     [RelayCommand]
-    private void ToggleLogViewer()
-    {
-        LogViewModel.ToggleVisibilityCommand.Execute(null);
-    }
+    private void ToggleLogViewer() => ToggleLogWindow();
+
 
     // 保留命令符号以兼容旧绑定，但不再打开本地高级设置窗口。
     [RelayCommand]
     private void Settings() => CurrentPage = PageSettings;
 
     [RelayCommand]
-    private void ShowHelp() { SettingsSection = 4; CurrentPage = PageSettings; }
+    private void ShowHelp() => OpenHelp();
 
     #endregion
 
@@ -213,8 +222,3 @@ public partial class MainViewModel
 
     #endregion
 }
-
-
-
-
-

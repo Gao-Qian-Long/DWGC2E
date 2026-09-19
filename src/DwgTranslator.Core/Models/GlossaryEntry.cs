@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 
 namespace DwgTranslator.Core.Models;
 
@@ -22,11 +23,17 @@ public enum GlossarySource
 /// </summary>
 public class GlossaryEntry
 {
+    public string LocalId { get; set; } = Guid.NewGuid().ToString("D");
+    public string SourceLang { get; set; } = "";
+    public string TargetLang { get; set; } = "";
+    public bool DirectionPending => !TranslationLanguages.All.Any(x => x.Code == SourceLang) || !TranslationLanguages.All.Any(x => x.Code == TargetLang) || SourceLang == TargetLang;
+    public string DirectionText => DirectionPending ? "待确认方向" : $"{SourceLang} → {TargetLang}";
+    [System.Text.Json.Serialization.JsonIgnore] public string SyncStatus { get; set; } = "仅本机";
     public string? CloudId { get; set; }
     public string? CloudNote { get; set; }
     public string Source { get; set; } = string.Empty;
     public string Target { get; set; } = string.Empty;
-    public string Category { get; set; } = string.Empty;
+    public string Category { get; set; } = "默认分类";
 
     /// <summary>本地术语文件夹；为空表示未分类。</summary>
     public string Folder { get; set; } = string.Empty;
@@ -56,6 +63,15 @@ public class GlossaryEntry
         _ => "系统术语"
     };
 
+    /// <summary>表格紧凑列使用的来源简称；完整来源仍由 <see cref="SourceText"/> 和工具提示展示。</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string SourceShortText => SourceKind switch
+    {
+        GlossarySource.User => "用户",
+        GlossarySource.Enterprise => "企业",
+        _ => "系统"
+    };
+
     /// <summary>状态中文名。</summary>
     public string StatusText => Enabled ? "启用" : "停用";
 
@@ -64,6 +80,7 @@ public class GlossaryEntry
 
     public GlossaryEntry Clone() => new()
     {
+        LocalId = LocalId, SourceLang = SourceLang, TargetLang = TargetLang, SyncStatus = SyncStatus,
         CloudId = CloudId,
         CloudNote = CloudNote,
         Source = Source,

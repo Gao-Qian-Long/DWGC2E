@@ -26,14 +26,13 @@ public class OutputPathResolverTests : IDisposable
         try { Directory.Delete(_root, recursive: true); } catch { /* 测试清理失败不影响结论 */ }
     }
 
-    private AppConfig Config(string policy = "skip", bool backup = false, bool allowOverwriteSource = false)
+    private AppConfig Config(string policy = "skip", bool backup = false)
         => new()
         {
             ExportDirectory = "exports",
             OutputNamingPattern = "{name}_{lang}",
             DuplicatePolicy = policy,
-            BackupSourceBeforeWrite = backup,
-            AllowOverwriteSource = allowOverwriteSource
+            BackupSourceBeforeWrite = backup
         };
 
     private string CreateFile(string name, string content = "x")
@@ -123,7 +122,7 @@ public class OutputPathResolverTests : IDisposable
 
         Assert.False(result.ShouldSkip);
         Assert.Equal(DuplicateResolution.Renamed, result.Resolution);
-        Assert.Equal("valve_zh_2.dwg", Path.GetFileName(result.OutputPath));
+        Assert.Equal("valve_zh (2).dwg", Path.GetFileName(result.OutputPath));
     }
 
     [Fact]
@@ -191,14 +190,12 @@ public class OutputPathResolverTests : IDisposable
         Assert.NotEqual(Path.GetFullPath(source), Path.GetFullPath(result.OutputPath));
     }
 
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void OverwriteCannotTargetAnotherBatchSource(bool allowOwnSource)
+    [Fact]
+    public void OverwriteCannotTargetAnotherBatchSource()
     {
         var a = CreateFile("A.dwg", "source-a");
         var b = CreateFile("A_zh.dwg", "source-b");
-        var config = Config("overwrite", allowOverwriteSource: allowOwnSource);
+        var config = Config("overwrite");
         config.ExportDirectory = ".";
         var result = new OutputPathResolver(config).ResolveBatch(new[] { a, b }, "zh")[a];
         Assert.True(result.ShouldSkip);
@@ -223,7 +220,7 @@ public class OutputPathResolverTests : IDisposable
         var source = CreateFile("full.dwg"); var config = Config("rename");
         config.ExportDirectory = ".";
         CreateFile("full_zh.dwg", "original-output");
-        for (var i = 2; i < 1000; i++) CreateFile($"full_zh_{i}.dwg");
+        for (var i = 2; i < 1000; i++) CreateFile($"full_zh ({i}).dwg");
         var result = new OutputPathResolver(config).Resolve(source, "zh");
         Assert.True(result.ShouldSkip);
         Assert.Equal(DuplicateResolution.Error, result.Resolution);
@@ -233,29 +230,51 @@ public class OutputPathResolverTests : IDisposable
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void BackupExhaustionFailsClosedIncludingExplicitSourceOverwrite(bool overwriteSource)
+    public void BackupPathStaysTheSameNameAcrossRepeatedFailures(bool overwriteSource)
     {
         var source = CreateFile("backup.dwg");
-        var config = Config("overwrite", backup: true, allowOverwriteSource: overwriteSource);
+        var config = Config("overwrite", backup: true);
         if (overwriteSource) { config.ExportDirectory = "."; config.OutputNamingPattern = "{name}"; }
         CreateFile("backup.dwg.bak", "original-backup");
-        for (var i = 2; i < 1000; i++) CreateFile($"backup.dwg.{i}.bak");
-        var result = new OutputPathResolver(config).Resolve(source, "zh");
-        Assert.True(result.ShouldSkip);
-        Assert.Equal(DuplicateResolution.Error, result.Resolution);
-        Assert.Null(result.BackupPath);
-        Assert.Equal("original-backup", File.ReadAllText(source + ".bak"));
+        var resolver = new OutputPathResolver(config);
+
+        // 不因"已有同名备份"就换名字：连续三次失败/重试仍然落在同一个回滚点上。
+        var first = resolver.Resolve(source, "zh");
+        var second = resolver.Resolve(source, "zh");
+        var third = resolver.Resolve(source, "zh");
+
+        Assert.False(first.ShouldSkip);
+        Assert.Equal(source + ".bak", first.BackupPath);
+        Assert.Equal(first.BackupPath, second.BackupPath);
+        Assert.Equal(first.BackupPath, third.BackupPath);
+        Assert.Equal("original-backup", File.ReadAllText(source + ".bak")); // 规划不写盘
+        Assert.False(File.Exists(source + ".2.bak"));
     }
 
     [Fact]
-    public void ExplicitOwnSourceOverwriteStillWorksWithAvailableBackup()
+    public void BackupPathCollisionWithPlannedOutputFailsClosed()
+    {
+        var a = CreateFile("a.dwg");
+        var b = CreateFile("a.dwg.bak"); // 另一个待翻译的图纸恰好占用了备份名字
+        var config = Config("overwrite", backup: true);
+        var results = new OutputPathResolver(config).ResolveBatch(new[] { a, b }, "zh");
+
+        Assert.True(results[a].ShouldSkip);
+        Assert.Equal(DuplicateResolution.Error, results[a].Resolution);
+        Assert.Null(results[a].BackupPath);
+        Assert.Equal("x", File.ReadAllText(b)); // 规划不写盘，占位文件保持原样
+    }
+
+    [Fact]
+    public void ExplicitOwnSourceOverwriteIsAlwaysRenamedEvenWhenBackupEnabled()
     {
         var source = CreateFile("own.dwg");
-        var config = Config("overwrite", backup: true, allowOverwriteSource: true);
+        var config = Config("overwrite", backup: true);
         config.ExportDirectory = "."; config.OutputNamingPattern = "{name}";
         var result = new OutputPathResolver(config).Resolve(source, "zh");
         Assert.False(result.ShouldSkip);
-        Assert.Equal(source, result.OutputPath);
+        Assert.NotEqual(source, result.OutputPath);
+        Assert.Equal(Path.Combine(_root, "own_translated.dwg"), result.OutputPath);
         Assert.Equal(source + ".bak", result.BackupPath);
     }
 }

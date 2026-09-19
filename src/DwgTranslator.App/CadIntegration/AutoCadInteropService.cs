@@ -80,6 +80,7 @@ public class AutoCadInteropService : IAutoCadInteropService, IDisposable
         List<TextEntity> entities,
         bool targetIsCjk,
         AppConfig config,
+        string? plannedBackupPath = null,
         IProgress<string>? progress = null,
         CancellationToken cancellationToken = default)
     {
@@ -114,8 +115,6 @@ public class AutoCadInteropService : IAutoCadInteropService, IDisposable
             using (var lease = new FileStream(candidateLease, FileMode.CreateNew, FileAccess.Write, FileShare.None))
                 System.Text.Json.JsonSerializer.Serialize(lease, new PendingCadSession { SessionId = sessionId, DonePath = doneSignalPath });
             leasePath = candidateLease;
-            if (config.BackupSourceBeforeWrite && !File.Exists(sourceFilePath + ".bak"))
-                File.Copy(sourceFilePath, sourceFilePath + ".bak", false);
             var configJson = SerializeConfig(
                 sourceFilePath, outputFilePath, entities, targetIsCjk, sessionId, doneSignalPath, config.DuplicatePolicy == "overwrite");
 
@@ -148,9 +147,19 @@ public class AutoCadInteropService : IAutoCadInteropService, IDisposable
             if (acad is null)
             {
                 Log.Information("CAD COM server is unavailable; using batch NETLOAD fallback");
+                // Resolve the executable before the backup and before the dispatch: a backup taken
+                // for a writeback that never reaches CAD leaves a full copy of the source behind.
+                var cadExePath = ResolveCadExecutable(config.AutoCadInstallPath);
+                if (cadExePath == null)
+                {
+                    result.Errors.Add($"CAD executable not found under: {config.AutoCadInstallPath}");
+                    return result;
+                }
+                if (config.BackupSourceBeforeWrite)
+                    EnsureSourceBackup(sourceFilePath, plannedBackupPath);
                 dispatched = true;
                 await RunCadBatchWritebackAsync(
-                    config.AutoCadInstallPath, cadDllPath, configPath, sessionWorkDir,
+                    cadExePath, cadDllPath, configPath, sessionWorkDir,
                     doneSignalPath, sessionId, entities.Count, result, outputFilePath,
                     progress, cancellationToken);
                 return result;
@@ -172,6 +181,10 @@ public class AutoCadInteropService : IAutoCadInteropService, IDisposable
             progress?.Report(Strings.Get("ProgressAutoCadSendingCommand"));
             var lispLspPath = lspPath.Replace("\\", "\\\\");
             var outputBaseline = TryGetLastWriteTimeUtc(outputFilePath);
+            // The backup is taken here, not before the connect: every earlier return means the
+            // drawing is never written, and a full copy of the source would be left behind.
+            if (config.BackupSourceBeforeWrite)
+                EnsureSourceBackup(sourceFilePath, plannedBackupPath);
             dispatched = true;
             doc.SendCommand($"(load \"{lispLspPath}\") ");
 
@@ -356,7 +369,7 @@ DwgTranslator: done."")
     }
 
     private static async Task RunCadBatchWritebackAsync(
-        string installPath,
+        string cadExePath,
         string cadDllPath,
         string configPath,
         string sessionWorkDir,
@@ -368,13 +381,6 @@ DwgTranslator: done."")
         IProgress<string>? progress,
         CancellationToken cancellationToken)
     {
-        var exePath = ResolveCadExecutable(installPath);
-        if (exePath == null)
-        {
-            result.Errors.Add($"CAD executable not found under: {installPath}");
-            return;
-        }
-
         var scriptPath = Path.Combine(sessionWorkDir, "dwgtranslate_batch.scr");
         File.WriteAllLines(scriptPath,
         [
@@ -388,7 +394,7 @@ DwgTranslator: done."")
 
         var startInfo = new ProcessStartInfo
         {
-            FileName = exePath,
+            FileName = cadExePath,
             UseShellExecute = false,
             CreateNoWindow = true,
             WindowStyle = ProcessWindowStyle.Hidden
@@ -446,6 +452,27 @@ DwgTranslator: done."")
                 try { process.Kill(entireProcessTree: true); } catch { }
             }
         }
+    }
+
+    /// <summary>
+    /// Copies the source drawing out of harm's way before CAD may write it. Called only once the
+    /// writeback path is dispatchable: taking it earlier leaves a full copy of the drawing behind
+    /// for every attempt that never reached CAD (missing plugin, incompatible install, no
+    /// automation server, no active document). The planned path is collision-free by construction,
+    /// so CreateNew fails closed instead of overwriting an earlier backup of the same session.
+    /// </summary>
+    private static void EnsureSourceBackup(string sourceFilePath, string? plannedBackupPath)
+    {
+        if (string.IsNullOrWhiteSpace(plannedBackupPath))
+            throw new IOException("A planned backup path is required when source backup is enabled.");
+        var backupPath = Path.GetFullPath(plannedBackupPath);
+        if (string.Equals(Path.GetFullPath(sourceFilePath), backupPath, StringComparison.OrdinalIgnoreCase))
+            throw new IOException("Backup path must not be the source drawing.");
+        Directory.CreateDirectory(Path.GetDirectoryName(backupPath)!);
+        using var source = new FileStream(sourceFilePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        using var backup = new FileStream(backupPath, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+        source.CopyTo(backup);
+        backup.Flush(true);
     }
 
     private static string? ResolveCadExecutable(string installPath)
@@ -539,14 +566,26 @@ DwgTranslator: done."")
         }
     }
 
+    /// <summary>
+    /// A signal is only trusted for the session that asked for it. Accepted shapes are the counted
+    /// form (status|sessionId|successCount|failCount|timestamp), the legacy count-less success form
+    /// (success|sessionId|timestamp), and failed|sessionId|message|timestamp. Count-less partial
+    /// signals and counted success signals whose counts cannot be read are rejected rather than
+    /// guessed at.
+    /// </summary>
     private static bool IsConfirmedSignal(string path, string sessionId)
     {
         try
         {
             var parts = File.ReadAllText(path).Trim().Split('|');
-            return parts.Length >= 3 && parts[1] == sessionId &&
-                (parts[0] == "failed" || ((parts[0] == "success" || parts[0] == "partial") && parts.Length >= 5)) &&
-                DateTime.TryParse(parts.Length >= 5 ? parts[4] : parts[parts.Length - 1], out _);
+            if (parts.Length < 3 || !string.Equals(parts[1], sessionId, StringComparison.OrdinalIgnoreCase))
+                return false;
+            if (parts[0] == "failed") return DateTime.TryParse(parts[parts.Length - 1], out _);
+            if (parts[0] == "success")
+                return parts.Length >= 5
+                    ? DateTime.TryParse(parts[4], out _)
+                    : parts.Length == 3 && DateTime.TryParse(parts[2], out _);
+            return parts[0] == "partial" && parts.Length >= 5 && DateTime.TryParse(parts[4], out _);
         }
         catch { return false; }
     }
@@ -561,7 +600,7 @@ DwgTranslator: done."")
     /// Parses writeback_done.txt. Expected formats:
     ///   success|sessionId|successCount|failCount|timestamp|detail
     ///   partial|sessionId|successCount|failCount|timestamp|detail
-    ///   success|sessionId|timestamp              (legacy)
+    ///   success|sessionId|timestamp              (legacy: session confirmed, no counts reported)
     ///   failed|sessionId|message|timestamp
     /// </summary>
     private static DoneSignalOutcome ProcessDoneSignal(string doneSignalPath, string sessionId, int entityCount, CadWriteResult result)
@@ -613,6 +652,17 @@ DwgTranslator: done."")
                             : $"{failCount} entities kept their original text";
                         result.Errors.Add(detail);
                     }
+                }
+                else if (parts.Length == 3)
+                {
+                    // Legacy success|sessionId|timestamp: that plugin confirmed the session but had
+                    // no counts to report, so treating a missing count field as unreadable used to
+                    // record a finished writeback as "0 written, every entity failed". Only the
+                    // documented count-less success shape reaches this branch; a count-less partial
+                    // signal stays rejected because its outcome cannot be attributed at all.
+                    result.SuccessCount = entityCount;
+                    result.FailCount = 0;
+                    Log.Warning("Legacy 3-field CAD completion signal accepted for session {Session}; per-entity counts unavailable", sessionId);
                 }
                 else
                 {

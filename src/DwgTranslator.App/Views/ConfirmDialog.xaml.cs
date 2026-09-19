@@ -1,4 +1,4 @@
-﻿using System.Windows;
+using System.Windows;
 using System.Windows.Controls;
 
 namespace DwgTranslator.App.Views;
@@ -26,7 +26,13 @@ public partial class ConfirmDialog : Window
     public static bool Ask(Window? owner, string title, string message,
         string confirmText = "确定", bool danger = true, string cancelText = "取消")
     {
-        return PromptDialog.Show(message, title, MessageBoxButton.YesNo) == MessageBoxResult.Yes;
+        // This is the dialog the type was written for: it owns the danger/primary button choice and
+        // needs an explicit owner for its CenterOwner placement. Without one, WPF would fall back to
+        // the default location, so centre on screen instead of guessing.
+        var dialog = new ConfirmDialog(title, message, confirmText, danger, cancelText);
+        if (owner != null) dialog.Owner = owner;
+        else dialog.WindowStartupLocation = WindowStartupLocation.CenterScreen;
+        return dialog.ShowDialog() == true;
     }
 
     private void Confirm_Click(object sender, RoutedEventArgs e) => DialogResult = true;

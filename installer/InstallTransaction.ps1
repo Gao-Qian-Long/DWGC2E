@@ -1,5 +1,19 @@
 ﻿# Purpose: rollback portable install failures and recover on the next invocation; no recursive deletion.
 # Input: validated target and exact destination paths. Recovery evidence is retained if restoration fails.
+function Get-InstallFileSha256([string]$LiteralPath) {
+    # Do not depend on Microsoft.PowerShell.Utility module autoloading. The bootstrap
+    # must work on locked-down/offline Windows PowerShell hosts as well as normal shells.
+    $stream=$null
+    $sha=$null
+    try {
+        $stream=[IO.File]::Open($LiteralPath,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::Read)
+        $sha=[Security.Cryptography.SHA256]::Create()
+        return [BitConverter]::ToString($sha.ComputeHash($stream)).Replace('-','')
+    } finally {
+        if($sha){$sha.Dispose()}
+        if($stream){$stream.Dispose()}
+    }
+}
 function Start-InstallTransaction([string]$Target) {
     $parent=[IO.Path]::GetDirectoryName($Target)
     $backup=Join-Path $parent ('.dwgc2e-install-recovery-'+[guid]::NewGuid().ToString('N'))
@@ -35,10 +49,10 @@ function Register-InstallWrite($Transaction,[string]$Destination,[string]$Expect
         $item=Get-Item -LiteralPath $path -Force
         $entry.Attributes=[int]$item.Attributes
         $entry.LastWriteUtc=$item.LastWriteTimeUtc.ToString('o')
-        $entry.Hash=(Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash
+        $entry.Hash=(Get-InstallFileSha256 $path)
         $copy=Join-Path $Transaction.Backup $entry.BackupName
         Copy-Item -LiteralPath $path -Destination $copy
-        if((Get-FileHash -LiteralPath $copy -Algorithm SHA256).Hash -ne $entry.Hash){throw 'Transaction backup verification failed'}
+        if((Get-InstallFileSha256 $copy) -ne $entry.Hash){throw 'Transaction backup verification failed'}
     }
     $parent=[IO.Path]::GetDirectoryName($path)
     while($parent -and -not(Test-Path -LiteralPath $parent)) {
@@ -66,21 +80,21 @@ function Undo-InstallTransaction($Transaction) {
     # Validate ALL snapshots and destinations before the first restore.
     foreach($entry in $Transaction.Entries) {
         Assert-TransactionPath $entry.Path
-        if(-not $entry.Existed -and $entry.Path -match '\\(?:settings\.json|prompts\\|glossaries\\)' -and (Test-Path -LiteralPath $entry.Path -PathType Leaf)) {
-            if(-not $entry.NewHash -or (Get-FileHash -LiteralPath $entry.Path -Algorithm SHA256).Hash -ne $entry.NewHash){throw 'Seeded personal file changed after interruption; recovery retained for review'}
+        if(-not $entry.Existed -and $entry.Path -match '\\(?:settings\.json|glossaries\\)' -and (Test-Path -LiteralPath $entry.Path -PathType Leaf)) {
+            if(-not $entry.NewHash -or (Get-InstallFileSha256 $entry.Path) -ne $entry.NewHash){throw 'Seeded personal file changed after interruption; recovery retained for review'}
         }
         if($entry.Existed) {
             $copy=Join-Path $Transaction.Backup $entry.BackupName
             Assert-TransactionPath $copy
-            if((Get-FileHash -LiteralPath $copy -Algorithm SHA256).Hash -ne $entry.Hash){throw 'Recovery backup was modified; retained for inspection'}
+            if((Get-InstallFileSha256 $copy) -ne $entry.Hash){throw 'Recovery backup was modified; retained for inspection'}
         }
     }
     for($i=$Transaction.Entries.Count-1;$i -ge 0;$i--) {
         $entry=$Transaction.Entries[$i]
         if($entry.Existed) {
-            if((Test-Path -LiteralPath $entry.Path -PathType Leaf) -and ((Get-FileHash -LiteralPath $entry.Path -Algorithm SHA256).Hash -eq $entry.Hash)){continue}
+            if((Test-Path -LiteralPath $entry.Path -PathType Leaf) -and ((Get-InstallFileSha256 $entry.Path) -eq $entry.Hash)){continue}
             Copy-Item -LiteralPath (Join-Path $Transaction.Backup $entry.BackupName) -Destination $entry.Path -Force
-            if((Get-FileHash -LiteralPath $entry.Path -Algorithm SHA256).Hash -ne $entry.Hash){throw 'Restored file hash mismatch'}
+            if((Get-InstallFileSha256 $entry.Path) -ne $entry.Hash){throw 'Restored file hash mismatch'}
             [IO.File]::SetLastWriteTimeUtc($entry.Path,[DateTime]::Parse($entry.LastWriteUtc).ToUniversalTime())
             [IO.File]::SetAttributes($entry.Path,[IO.FileAttributes]$entry.Attributes)
         } elseif(Test-Path -LiteralPath $entry.Path) {
@@ -113,8 +127,8 @@ function Import-InstallTransaction([string]$Backup,[string]$Root) {
         if($path -ne $entry.Path -or $transaction.Seen.ContainsKey($path) -or $entry.BackupName -cne ($index.ToString()+'.bin') -or $entry.Existed -isnot [bool]){throw 'Invalid recovery entry'}
         if($path.StartsWith($Root+'\',[StringComparison]::OrdinalIgnoreCase)) {
             $relative=$path.Substring($Root.Length+1)
-            if($relative -notmatch '^(DwgTranslator\.exe|settings\.json|使用说明\.txt|Uninstall\.ps1|installation-manifest\.json|卸载\.cmd|(?:CadPlugin|assets|prompts|glossaries)\\[^:]+)$' -or $relative -match '(^|[\\/])\.\.?([\\/]|$)'){throw 'Recovery path not in installer write set'}
-            if($entry.Existed -and $relative -match '^(settings\.json|prompts\\|glossaries\\)'){throw 'Recovery must not overwrite personal data'}
+            if($relative -notmatch '^(DwgTranslator\.exe|settings\.json|使用说明\.txt|Uninstall\.ps1|installation-manifest\.json|卸载\.cmd|(?:CadPlugin|assets|glossaries)\\[^:]+|prompts\\deepl_context\.txt)$' -or $relative -match '(^|[\\/])\.\.?([\\/]|$)'){throw 'Recovery path not in installer write set'}
+            if($entry.Existed -and $relative -match '^(settings\.json|glossaries\\)'){throw 'Recovery must not overwrite personal data'}
         } elseif($path -ne $menu -and $path -ne $desktop){throw 'Recovery path outside installation'}
         Assert-TransactionPath $path
         if($entry.Existed) {
@@ -123,7 +137,7 @@ function Import-InstallTransaction([string]$Backup,[string]$Root) {
             $copy=Join-Path $Backup $entry.BackupName
             Assert-TransactionPath $copy
             if($record.State -eq 'Active' -or (Test-Path -LiteralPath $copy)){
-                if((Get-FileHash -LiteralPath $copy -Algorithm SHA256).Hash -ne $entry.Hash){throw 'Recovery backup hash mismatch'}
+                if((Get-InstallFileSha256 $copy) -ne $entry.Hash){throw 'Recovery backup hash mismatch'}
             }
         }
         $transaction.Entries.Add($entry);$transaction.Seen[$path]=$true;$index++

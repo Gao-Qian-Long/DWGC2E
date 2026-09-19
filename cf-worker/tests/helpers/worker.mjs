@@ -1,11 +1,11 @@
 import {DatabaseSync} from 'node:sqlite';
 import {readFileSync} from 'node:fs';
 import {pbkdf2Sync} from 'node:crypto';
-import worker from '../../src/index.ts';
+const {default:worker} = await import(process.env.WORKER_CANDIDATE || '../../src/index.ts');
 export function setup(t) {
  const db=new DatabaseSync(':memory:'); db.exec(readFileSync(new URL('../../schema.sql',import.meta.url),'utf8'));t.after(()=>db.close());
  const DB={prepare(sql){return {sql,values:[],bind(...v){this.values=v;return this;},async first(){return db.prepare(sql).get(...this.values)||null;},async all(){return {results:db.prepare(sql).all(...this.values)};},async run(){return {success:true,meta:{changes:Number(db.prepare(sql).run(...this.values).changes)}};}};},async batch(statements){db.exec('BEGIN');try{const results=statements.map(s=>({success:true,meta:{changes:Number(db.prepare(s.sql).run(...s.values).changes)}}));db.exec('COMMIT');return results;}catch(e){db.exec('ROLLBACK');throw e;}}};
- const env={DB,PASSWORD_PEPPER:'test-only',SESSION_TTL_DAYS:'30'};
+ const env={DB,PASSWORD_PEPPER:'test-only',SESSION_TTL_DAYS:'30',DEEPSEEK_API_KEY:'test-only'};
  const password='ExamplePassword1!',salt='test-salt';
  const hash='v2:'+salt+':'+pbkdf2Sync(password+'\\0'+env.PASSWORD_PEPPER,salt,100000,32,'sha256').toString('hex');
  for(const id of ['alice','bob'])db.prepare('INSERT INTO users(id,account,email,password_hash,created_at) VALUES(?,?,?,?,?)').run(id,id,id+'@example.com',hash,new Date().toISOString());

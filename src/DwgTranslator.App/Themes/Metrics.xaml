@@ -7,50 +7,80 @@
            字号 → FontSize.*    间距 → Spacing.*    尺寸 → Size.*    圆角 → CornerRadius.*
          ═══════════════════════════════════════════════════════════════════════ -->
     <!-- ── 字号层级（页面标题最重 → 说明文字最浅）── -->
-    <sys:Double x:Key="FontSize.PageTitle">22</sys:Double>
-    <sys:Double x:Key="FontSize.PageSubtitle">13</sys:Double>
-    <sys:Double x:Key="FontSize.SectionTitle">16</sys:Double>
+    <sys:Double x:Key="FontSize.PageTitle">24</sys:Double>
+    <sys:Double x:Key="FontSize.PageSubtitle">14</sys:Double>
+    <sys:Double x:Key="FontSize.SectionTitle">18</sys:Double>
     <sys:Double x:Key="FontSize.CardTitle">14</sys:Double>
     <sys:Double x:Key="FontSize.Body">14</sys:Double>
-    <sys:Double x:Key="FontSize.Secondary">12</sys:Double>
-    <sys:Double x:Key="FontSize.Table">13</sys:Double>
-    <sys:Double x:Key="FontSize.TableHeader">12</sys:Double>
+    <sys:Double x:Key="FontSize.Secondary">13</sys:Double>
+    <sys:Double x:Key="FontSize.Table">14</sys:Double>
+    <sys:Double x:Key="FontSize.TableHeader">13</sys:Double>
     <sys:Double x:Key="FontSize.Kpi">26</sys:Double>
-    <sys:Double x:Key="FontSize.KpiLabel">12</sys:Double>
+    <sys:Double x:Key="FontSize.KpiLabel">13</sys:Double>
     <!-- ── 8pt 间距系统 ── -->
-    <Thickness x:Key="Spacing.Page">28</Thickness>
+    <Thickness x:Key="Spacing.Page">32,24</Thickness>
     <Thickness x:Key="Spacing.PageTop">0,12,0,10</Thickness>
-    <Thickness x:Key="Spacing.Card">14</Thickness>
-    <Thickness x:Key="Spacing.CardHeader">14,10</Thickness>
-    <Thickness x:Key="Spacing.CardGap">0,0,0,10</Thickness>
+    <Thickness x:Key="Spacing.Card">20</Thickness>
+    <Thickness x:Key="Spacing.CardHeader">20,16</Thickness>
+    <Thickness x:Key="Spacing.CardGap">0,0,0,16</Thickness>
     <Thickness x:Key="Spacing.SectionGap">0,0,0,24</Thickness>
     <Thickness x:Key="Spacing.RowGap">0,0,0,8</Thickness>
     <Thickness x:Key="Spacing.Inline">0,0,8,0</Thickness>
+
+    <!-- ══ 方向性间距（统一节奏）══
+         档位只有 4 / 8 / 12 / 16 / 20；方向由名字决定，禁止页面各写各的字面量。
+         Inline*   = 元素之后的水平间隔（右外边距）
+         Stack*    = 竖直堆叠元素之间的间隔（下外边距）
+         BlockTop* = 区块起始的竖直间隔（上外边距）
+    -->
+    <Thickness x:Key="Spacing.InlineTight">0,0,4,0</Thickness>
+    <Thickness x:Key="Spacing.InlineWide">0,0,12,0</Thickness>
+    <Thickness x:Key="Spacing.InlineLoose">0,0,16,0</Thickness>
+    <Thickness x:Key="Spacing.InlineLeading">0,0,20,0</Thickness>
+
+    <Thickness x:Key="Spacing.StackTight">0,0,0,4</Thickness>
+    <Thickness x:Key="Spacing.Stack">0,0,0,8</Thickness>
+    <Thickness x:Key="Spacing.StackWide">0,0,0,12</Thickness>
+    <Thickness x:Key="Spacing.StackLoose">0,0,0,16</Thickness>
+    <Thickness x:Key="Spacing.StackSection">0,0,0,20</Thickness>
+
+    <Thickness x:Key="Spacing.BlockTopTight">0,4,0,0</Thickness>
+    <Thickness x:Key="Spacing.BlockTop">0,8,0,0</Thickness>
+    <Thickness x:Key="Spacing.BlockTopWide">0,12,0,0</Thickness>
+    <Thickness x:Key="Spacing.BlockTopLoose">0,16,0,0</Thickness>
+    <Thickness x:Key="Spacing.BlockTopSection">0,20,0,0</Thickness>
+
+    <Thickness x:Key="Spacing.Lead">0,6,0,0</Thickness>
+    <Thickness x:Key="Spacing.CardInset">0,12,0,6</Thickness>
+    <Thickness x:Key="Spacing.RowInset">0,16,0,8</Thickness>
+    <Thickness x:Key="Spacing.Toolbar">0,4,0,8</Thickness>
+    <Thickness x:Key="Spacing.LeftGap">8,0,0,0</Thickness>
+    <Thickness x:Key="Spacing.Vertical">0,8,0,8</Thickness>
     <!-- ── 控件尺寸（同一工具栏不再出现多种高度）── -->
     <sys:Double x:Key="Size.Control">36</sys:Double>
     <sys:Double x:Key="Size.Button">36</sys:Double>
-    <sys:Double x:Key="Size.ButtonCompact">30</sys:Double>
+    <sys:Double x:Key="Size.ButtonCompact">32</sys:Double>
     <sys:Double x:Key="Size.Toolbar">44</sys:Double>
     <sys:Double x:Key="Size.Header">44</sys:Double>
-    <sys:Double x:Key="Size.TableRow">38</sys:Double>
-    <sys:Double x:Key="Size.TableHeader">32</sys:Double>
-    <sys:Double x:Key="Size.NavItem">36</sys:Double>
+    <sys:Double x:Key="Size.TableRow">40</sys:Double>
+    <sys:Double x:Key="Size.TableHeader">40</sys:Double>
+    <sys:Double x:Key="Size.NavItem">42</sys:Double>
     <sys:Double x:Key="Size.Icon">18</sys:Double>
     <sys:Double x:Key="Size.IconInline">16</sys:Double>
     <sys:Double x:Key="Size.Stroke">1.5</sys:Double>
     <!-- ── 文本层级样式 ── -->
-    <Style x:Key="PageTitleStyle" TargetType="TextBlock">
+    <Style x:Key="PageTitleStyle" TargetType="TextBlock"><Setter Property="LineHeight" Value="32"/>
         <Setter Property="FontSize" Value="{DynamicResource FontSize.PageTitle}" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}" />
     </Style>
-    <Style x:Key="PageSubtitleStyle" TargetType="TextBlock">
+    <Style x:Key="PageSubtitleStyle" TargetType="TextBlock"><Setter Property="LineHeight" Value="22"/>
         <Setter Property="FontSize" Value="{DynamicResource FontSize.PageSubtitle}" />
         <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}" />
         <Setter Property="TextWrapping" Value="Wrap" />
         <Setter Property="Margin" Value="0,8,0,0" />
     </Style>
-    <Style x:Key="SectionTitleStyle" TargetType="TextBlock">
+    <Style x:Key="SectionTitleStyle" TargetType="TextBlock"><Setter Property="LineHeight" Value="24"/>
         <Setter Property="FontSize" Value="{DynamicResource FontSize.SectionTitle}" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}" />
@@ -61,12 +91,12 @@
         <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}" />
         <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
-    <Style x:Key="BodyStyle" TargetType="TextBlock">
+    <Style x:Key="BodyStyle" TargetType="TextBlock"><Setter Property="LineHeight" Value="22"/>
         <Setter Property="FontSize" Value="{DynamicResource FontSize.Body}" />
         <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}" />
         <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
-    <Style x:Key="CaptionStyle" TargetType="TextBlock">
+    <Style x:Key="CaptionStyle" TargetType="TextBlock"><Setter Property="LineHeight" Value="22"/>
         <Setter Property="FontSize" Value="{DynamicResource FontSize.Secondary}" />
         <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}" />
         <Setter Property="TextWrapping" Value="Wrap" />
@@ -236,12 +266,12 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="CheckBox">
-                    <StackPanel Orientation="Horizontal" Background="Transparent">
-                        <Border x:Name="Track" Width="40" Height="22" CornerRadius="11" Background="{DynamicResource Brush.BorderStrong}" SnapsToDevicePixels="True">
+                    <Grid Background="Transparent"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <Border Grid.Column="1" x:Name="Track" Width="40" Height="22" CornerRadius="11" Background="{DynamicResource Brush.BorderStrong}" SnapsToDevicePixels="True">
                             <Border x:Name="Thumb" Width="18" Height="18" CornerRadius="9" Margin="2,0,0,0" HorizontalAlignment="Left" Background="White" SnapsToDevicePixels="True" />
                         </Border>
-                        <ContentPresenter Margin="10,0,0,0" VerticalAlignment="Center" RecognizesAccessKey="True" />
-                    </StackPanel>
+                        <ContentPresenter Margin="0,0,16,0" VerticalAlignment="Center" RecognizesAccessKey="True" />
+                    </Grid>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsChecked" Value="True">
                             <Setter TargetName="Track" Property="Background" Value="{DynamicResource Brush.Primary}" />
@@ -288,4 +318,9 @@
     <Thickness x:Key="Spacing.32">32</Thickness>
     <Thickness x:Key="Spacing.40">40</Thickness>
     <Thickness x:Key="Spacing.48">48</Thickness>
-<GridLength x:Key="Size.Sidebar">224</GridLength><sys:Double x:Key="Size.PageHeader">86</sys:Double><GridLength x:Key="Size.SettingsNav">168</GridLength></ResourceDictionary>
+<GridLength x:Key="Size.Sidebar">224</GridLength><sys:Double x:Key="Size.PageHeader">86</sys:Double><GridLength x:Key="Size.SettingsNav">168</GridLength>
+    <sys:Double x:Key="Size.Drawer">400</sys:Double>
+    <sys:Double x:Key="Size.FormMax">800</sys:Double>
+    <sys:Double x:Key="Size.WorkspaceMax">1600</sys:Double>
+    <sys:Double x:Key="Size.IconButton">32</sys:Double>
+</ResourceDictionary>

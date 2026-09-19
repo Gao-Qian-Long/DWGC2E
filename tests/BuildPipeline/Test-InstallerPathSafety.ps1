@@ -24,7 +24,7 @@ function Run([string]$script,[string[]]$extra,[string]$name){
  finally{$ErrorActionPreference=$previous}
 }
 $installer=Join-Path $root 'installer/Install.ps1';$package=Join-Path $ResultDir 'package';$app=Join-Path $ResultDir 'app'
-foreach($name in @('DwgTranslator.exe','CadPlugin/DwgTranslator.Cad.dll','CadPlugin/DwgTranslator.Core.dll','CadPlugin/cad-platform.txt','prompts/deepl_context.txt')){Put (Join-Path $package $name) 'synthetic never execute'}
+foreach($name in @('DwgTranslator.exe','CadPlugin/DwgTranslator.Cad.dll','CadPlugin/DwgTranslator.Core.dll','CadPlugin/cad-platform.txt')){Put (Join-Path $package $name) 'synthetic never execute'}
 foreach($name in @('settings.json','glossaries/mechanical_zh_en.json','assets/default-glossaries/mechanical_zh_en.json')){Put (Join-Path $package $name) '{}'}
 $installArgs=@('-SourceDir',$package,'-TargetDir',$app,'-NoLaunch','-NoPrompt','-NoShortcuts')
 Check ((Run $installer $installArgs 'initial') -eq 0) 'synthetic baseline installed'

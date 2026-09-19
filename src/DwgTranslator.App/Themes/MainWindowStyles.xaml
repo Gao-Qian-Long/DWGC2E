@@ -10,22 +10,24 @@
          ═══════════════════════════════════════════════════════════════════════ -->
     <!-- One compact header across all five workspaces. The action slot keeps page commands out of filters. -->
     <Style TargetType="controls:PageHeader">
-        <Setter Property="Height" Value="{DynamicResource Size.PageHeader}" />
+        <Setter Property="MinHeight" Value="72" />
         <Setter Property="Margin" Value="0,0,0,16" />
         <Setter Property="Focusable" Value="False" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="controls:PageHeader">
-                    <Border BorderBrush="{DynamicResource Brush.BorderLight}" BorderThickness="0,0,0,1" Padding="0,0,0,16">
+                    <Border x:Name="HeaderBorder" BorderBrush="{DynamicResource Brush.BorderLight}" BorderThickness="0,0,0,1" Padding="0,0,0,16">
                         <Grid>
+                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                             <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
                             <StackPanel VerticalAlignment="Center" Margin="0,0,16,0">
                                 <TextBlock Text="{TemplateBinding Header}" Style="{StaticResource PageTitleStyle}" />
-                                <TextBlock Text="{TemplateBinding Description}" Style="{StaticResource PageSubtitleStyle}" TextTrimming="CharacterEllipsis" ToolTip="{TemplateBinding Description}" />
+                                <TextBlock x:Name="HeaderDescription" Text="{TemplateBinding Description}" Style="{StaticResource PageSubtitleStyle}" TextTrimming="CharacterEllipsis" ToolTip="{TemplateBinding Description}" />
                             </StackPanel>
-                            <ContentPresenter Grid.Column="1" VerticalAlignment="Center" ContentSource="Content" />
+                            <ContentPresenter x:Name="HeaderActions" Grid.Column="1" VerticalAlignment="Center" ContentSource="Content" />
                         </Grid>
                     </Border>
+                    <ControlTemplate.Triggers><DataTrigger Binding="{Binding Path=IsStacked, RelativeSource={RelativeSource Self}}" Value="True"><Setter TargetName="HeaderActions" Property="Grid.Row" Value="1"/><Setter TargetName="HeaderActions" Property="Grid.Column" Value="0"/><Setter TargetName="HeaderActions" Property="Grid.ColumnSpan" Value="2"/><Setter TargetName="HeaderActions" Property="Margin" Value="0,8,0,0"/></DataTrigger><DataTrigger Binding="{Binding Path=(controls:ResponsiveLayout.IsShort), RelativeSource={RelativeSource Self}}" Value="True"><Setter Property="MinHeight" Value="40"/><Setter Property="Margin" Value="0,0,0,8"/><Setter TargetName="HeaderDescription" Property="Visibility" Value="Collapsed"/><Setter TargetName="HeaderBorder" Property="Padding" Value="0,0,0,8"/></DataTrigger></ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
@@ -42,7 +44,7 @@
     <!-- Global typography: controls inherit one family and one body size. -->
     <Style TargetType="UserControl">
         <Setter Property="FontFamily" Value="Microsoft YaHei UI, Segoe UI" />
-        <Setter Property="FontSize" Value="13" />
+        <Setter Property="FontSize" Value="{DynamicResource FontSize.Body}" />
         <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}" />
         <Setter Property="TextOptions.TextFormattingMode" Value="Display" />
         <Setter Property="UseLayoutRounding" Value="True" />
@@ -59,6 +61,8 @@
     <!-- ───────────────────────── 按钮 ───────────────────────── -->
     <Style x:Key="Button.Base" TargetType="Button">
         <Setter Property="Height" Value="{DynamicResource Size.Button}" />
+        <Setter Property="MinHeight" Value="36" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
         <Setter Property="Padding" Value="16,0" />
         <Setter Property="FontSize" Value="{DynamicResource FontSize.Body}" />
         <Setter Property="FontWeight" Value="Medium" />
@@ -344,6 +348,11 @@
         <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Auto" />
         <Setter Property="EnableRowVirtualization" Value="True" />
         <Setter Property="EnableColumnVirtualization" Value="True" />
+        <Setter Property="ScrollViewer.CanContentScroll" Value="True" />
+        <Setter Property="ScrollViewer.IsDeferredScrollingEnabled" Value="True" />
+        <Setter Property="controls:ResponsiveLayout.HandoffMouseWheelAtBoundary" Value="True" />
+        <Setter Property="VirtualizingPanel.IsVirtualizing" Value="True" />
+        <Setter Property="VirtualizingPanel.VirtualizationMode" Value="Recycling" />
     </Style>
     <!-- ───────────────────────── 输入控件 ───────────────────────── -->
     <Style TargetType="TextBox">
@@ -533,6 +542,8 @@
     </Style>
     <Style x:Key="Menu.ToolbarDropdown" TargetType="MenuItem">
         <Setter Property="Height" Value="{DynamicResource Size.Button}" />
+        <Setter Property="MinHeight" Value="36" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
         <Setter Property="Padding" Value="16,0" />
         <Setter Property="FontSize" Value="{DynamicResource FontSize.Body}" />
         <Setter Property="FontWeight" Value="Medium" />
@@ -668,7 +679,9 @@
         <Setter Property="BorderThickness" Value="1,0,0,0" />
         <Setter Property="Padding" Value="24" />
         <Setter Property="HorizontalAlignment" Value="Right" />
-        <Setter Property="Width" Value="420" />
+        <Setter Property="Width" Value="{DynamicResource Size.Drawer}" />
+        <Setter Property="MaxWidth" Value="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=Grid}}"/>
+        <Style.Triggers><DataTrigger Binding="{Binding Path=(controls:ResponsiveLayout.IsCompact), RelativeSource={RelativeSource Self}}" Value="True"><Setter Property="Width" Value="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=Grid}}"/></DataTrigger></Style.Triggers>
     </Style>
     <Style x:Key="Focus.Outline" TargetType="Control">
         <Setter Property="Template">
@@ -729,5 +742,14 @@
             </ControlTemplate.Triggers>
         </ControlTemplate>
     </Setter.Value></Setter>
+</Style>
+<Style x:Key="Callout.Error" TargetType="Border">
+    <Setter Property="Background" Value="{DynamicResource Brush.SurfaceAlt}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Brush.Danger}" />
+    <Setter Property="BorderThickness" Value="3,0,0,0" />
+    <Setter Property="CornerRadius" Value="6" />
+    <Setter Property="Padding" Value="12" />
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource Brush.Danger}" />
+    <Setter Property="TextElement.FontSize" Value="{DynamicResource FontSize.Body}" />
 </Style>
 </ResourceDictionary>

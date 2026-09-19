@@ -236,13 +236,13 @@ internal static class TextEntityFactory
     public static string StripFormatCodes(string text)
     {
         if (string.IsNullOrEmpty(text)) return string.Empty;
-        return MTextFormatRegex.Replace(text, string.Empty).Trim();
+        return MTextFormatRegex.Replace(DwgTranslator.Core.Translation.CadUnicodeText.Decode(text), string.Empty).Trim();
     }
 
     public static string StripMTextFormatCodes(string text)
     {
         if (string.IsNullOrEmpty(text)) return string.Empty;
-        var result = MTextFormatRegex.Replace(text, string.Empty);
+        var result = MTextFormatRegex.Replace(DwgTranslator.Core.Translation.CadUnicodeText.Decode(text), string.Empty);
         result = Regex.Replace(result, @"\s{2,}", " ").Trim();
         return result;
     }

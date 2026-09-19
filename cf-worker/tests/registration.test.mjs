@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import { readFileSync } from 'node:fs';
 
-import worker from '../src/index.ts';
+const {default:worker} = await import(process.env.WORKER_CANDIDATE || '../src/index.ts');
+import {captchaHash,captchaBinding} from '../src/captcha.ts';
 const schema = readFileSync(new URL('../schema.sql',import.meta.url),'utf8');
 const registerCode = '/v1/auth/register/request-code';
 const passwordCode = '/v1/auth/password/request-code';
@@ -26,7 +27,15 @@ function setup(t) {
   };
   t.mock.method(globalThis,'fetch',async(url,init)=>{mails.push({url,payload:JSON.parse(init.body)});return new Response(null,{status:201});});
   const env={DB,PASSWORD_PEPPER:'test-only',MAIL_PROVIDER:'round_robin',MAIL_FALLBACK_ENABLED:'true',MAIL_FROM:'DWGC2E <noreply@example.com>',BREVO_API_KEY:'fake-brevo',RESEND_API_KEY:'fake-resend'};
-  const post=(path,body)=>worker.fetch(new Request('https://worker.example.com'+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}),env);
+  const post=async(path,body)=>{
+    if([registerCode,passwordCode].includes(path)) {
+      const id=crypto.randomUUID(),purpose=path===registerCode?'register':'password_reset';
+      // These requests carry no cf-connecting-ip, so the challenge binds to the 'unknown' client.
+      sqlite.prepare('INSERT INTO numeric_captchas(id,binding,answer_hash,expires_at) VALUES(?,?,?,?)').run(id,await captchaBinding(String(body.email||'').trim().toLowerCase(),purpose,'unknown'),await captchaHash(id+'|12345|'+env.PASSWORD_PEPPER),Math.floor(Date.now()/1000)+300);
+      body={...body,captcha_id:id,captcha_code:'12345'};
+    }
+    return worker.fetch(new Request('https://worker.example.com'+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}),env);
+  };
   return {sqlite,DB,env,writes,mails,post};
 }
 function user(db,email='existing@example.com',account='existing',active=1) {

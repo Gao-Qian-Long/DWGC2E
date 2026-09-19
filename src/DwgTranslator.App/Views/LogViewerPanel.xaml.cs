@@ -43,6 +43,15 @@ public partial class LogViewerPanel : UserControl
         if (_subscribedViewModel?.AutoScroll == true && LogListView.Items.Count > 0)
             LogListView.ScrollIntoView(LogListView.Items[^1]);
     }
+    private void LogListView_ScrollChanged(object sender, ScrollChangedEventArgs e)
+    {
+        if (_subscribedViewModel == null || e.ExtentHeightChange != 0 || e.ViewportHeightChange != 0)
+            return;
+
+        var atBottom = e.VerticalOffset >= e.ExtentHeight - e.ViewportHeight - 1;
+        if (_subscribedViewModel.AutoScroll != atBottom)
+            _subscribedViewModel.AutoScroll = atBottom;
+    }
 }
 
 /// <summary>

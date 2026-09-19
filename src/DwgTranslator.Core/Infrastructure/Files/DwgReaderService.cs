@@ -171,7 +171,7 @@ public class DwgReaderService : IDwgReaderService, IDxfReaderService
         // ACadSharp's PlainText currently leaks writer-generated width controls as
         // "W0.75;". Remove only numeric width controls from a parsing copy; retain
         // the original Value/FormatTemplate and the library's other text decoding.
-        var parsingValue = Regex.Replace(rawValue, @"(?<!\\)\\[Ww](?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+);", string.Empty);
+        var parsingValue = Regex.Replace(DwgTranslator.Core.Translation.CadUnicodeText.Decode(rawValue), @"(?<!\\)\\[Ww](?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+);", string.Empty);
         var decoded = parsingValue == rawValue ? mtext.PlainText : new CadMText { Value = parsingValue }.PlainText;
         string plainText = !string.IsNullOrWhiteSpace(decoded)
             ? decoded
@@ -341,7 +341,7 @@ public class DwgReaderService : IDwgReaderService, IDxfReaderService
     private static string StripFormatCodes(string text)
     {
         if (string.IsNullOrEmpty(text)) return string.Empty;
-        var result = MTextFormatRegex.Replace(text, string.Empty);
+        var result = MTextFormatRegex.Replace(DwgTranslator.Core.Translation.CadUnicodeText.Decode(text), string.Empty);
         result = result.Replace("{", "").Replace("}", "");
         return result.Trim();
     }
@@ -349,7 +349,7 @@ public class DwgReaderService : IDwgReaderService, IDxfReaderService
     private static string StripMTextFormatCodes(string text)
     {
         if (string.IsNullOrEmpty(text)) return string.Empty;
-        var result = MTextFormatRegex.Replace(text, string.Empty);
+        var result = MTextFormatRegex.Replace(DwgTranslator.Core.Translation.CadUnicodeText.Decode(text), string.Empty);
         result = result.Replace("{", "").Replace("}", "");
         return Regex.Replace(result, @"\s{2,}", " ").Trim();
     }

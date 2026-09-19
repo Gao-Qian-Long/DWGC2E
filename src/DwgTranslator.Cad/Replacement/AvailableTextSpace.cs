@@ -38,8 +38,8 @@ internal static class AvailableTextSpace
     /// </param>
     internal static IEnumerable<string> FindIntersections(Entity text,Transaction tr,Extents3d? baseline=null)
     {
-        var owner=tr.GetObject(text.OwnerId,OpenMode.ForRead) as BlockTableRecord;
-        if(owner==null || !owner.IsLayout || text is AttributeReference)yield break;
+        var owner=GetTextOwner(text,tr);
+        if(owner==null || owner.IsFromExternalReference || owner.IsFromOverlayReference || text is AttributeReference hidden && hidden.Invisible)yield break;
 
         // Measuring the entity's ink can fail (host reports a rectangle as extents, exploded MText
         // has no glyphs, style height is zero). That used to escape into the caller and abort the
@@ -115,6 +115,15 @@ internal static class AvailableTextSpace
         }
     }
 
+    // Attribute positions already use the containing drawing coordinates. Their owner
+    // is an INSERT, not a BlockTableRecord; applying its transform again is incorrect.
+    private static BlockTableRecord? GetTextOwner(Entity text, Transaction tr)
+    {
+        var owner=tr.GetObject(text.OwnerId,OpenMode.ForRead);
+        if(owner is BlockReference insert)
+            owner=tr.GetObject(insert.OwnerId,OpenMode.ForRead);
+        return owner as BlockTableRecord;
+    }
     private static List<Obstacle> GetObstacles(BlockTableRecord owner, Transaction tr)
     {
         var cache=Snapshots.GetOrCreateValue(tr);
@@ -138,7 +147,7 @@ internal static class AvailableTextSpace
                 foreach(ObjectId child in def)
                     if(tr.GetObject(child,OpenMode.ForRead) is Entity part)Collect(part,root,transform*block.BlockTransform,depth+1);
                 foreach(ObjectId child in block.AttributeCollection)
-                    Collect((Entity)tr.GetObject(child,OpenMode.ForRead),root,transform,depth+1);
+                    Collect((Entity)tr.GetObject(child,OpenMode.ForRead),child,transform,depth+1);
                 return;
             }
             try
@@ -185,16 +194,18 @@ internal static class AvailableTextSpace
     /// the axis-aligned bounding box of rotated text instead produces a column far too narrow and
     /// breaks words apart.
     /// </param>
-    public static Extents3d Measure(Entity text,Extents3d original,Transaction tr,bool characterColumn,out double readingLength)
+    public static Extents3d Measure(Entity text,Extents3d original,Transaction tr,bool characterColumn,out double readingLength,bool preserveSourceFootprint=true)
     {
         readingLength=0;
-        if(text is AttributeReference || text is AttributeDefinition)return original;
+        if(text is AttributeDefinition)return original;
         double rotation=text is DBText dt ? dt.Rotation : text is MText mt ? mt.Rotation : double.NaN;
         if(double.IsNaN(rotation))return original;
         bool vertical=characterColumn || Math.Abs(Math.Cos(rotation))<.001;
 
-        var owner=tr.GetObject(text.OwnerId,OpenMode.ForRead) as BlockTableRecord;
-        if(owner==null || !owner.IsLayout)return original;
+        var owner=GetTextOwner(text,tr);
+        // Definition text and its sibling geometry share block-local coordinates.
+        // Use the same cell/collision policy as layouts, without mixing insert transforms.
+        if(owner==null || owner.IsFromExternalReference || owner.IsFromOverlayReference)return original;
 
         // Rotated text used to bail out here and keep its own bounding box as the allowance, which
         // bounds the translation to the exact area the source label occupied -- English in a
@@ -222,7 +233,7 @@ internal static class AvailableTextSpace
         var measured= vertical
             ? new Extents3d(new Point3d(vMin,uMin,original.MinPoint.Z),new Point3d(vMax,uMax,original.MaxPoint.Z))
             : new Extents3d(new Point3d(uMin,vMin,original.MinPoint.Z),new Point3d(uMax,vMax,original.MaxPoint.Z));
-        return WidenToSourceFootprint(measured,original);
+        return preserveSourceFootprint ? WidenToSourceFootprint(measured,original) : measured;
     }
 
     /// <summary>
@@ -340,6 +351,25 @@ internal static class AvailableTextSpace
         double margin=Math.Max(h*.35,.05),length=hi-lo;
         double left=lo-length,right=hi+length*3,bottom=cLo,top=cHi;
         double mid=(lo+hi)/2, cmid=(cLo+cHi)/2;
+        double rowInset=Math.Max(h*.15,.05);
+        // A bounded table row has usable height beyond the source glyph footprint.
+        // Only grow between nearby borders spanning the source; never infer a cell
+        // from a distant drawing frame or consume an unbounded blank region.
+        if (text is MText)
+        {
+            double below=double.NegativeInfinity, above=double.PositiveInfinity;
+            foreach (var edge in spans)
+            {
+                if (edge.Text || edge.FarV-edge.NearV >= .001 || edge.NearU > lo || edge.FarU < hi) continue;
+                if (edge.FarV <= cmid) below=Math.Max(below,edge.FarV);
+                else above=Math.Min(above,edge.NearV);
+            }
+            if (cmid-below <= h*4 && above-cmid <= h*4 && above-below > h*.3)
+            {
+                rowInset=Math.Max(h*.08,.05);
+                bottom=below+rowInset; top=above-rowInset;
+            }
+        }
 
         foreach(var obstacle in spans)
         {
@@ -351,19 +381,23 @@ internal static class AvailableTextSpace
             {
                 // Dense title-block rows need a height-relative inset on each
                 // edge, not 70% of the original font height removed from a cell.
-                double frameInset=Math.Max(h*.15,.05);
+                double frameInset=rowInset;
                 if(t<=cmid)bottom=Math.Max(bottom,t+frameInset);
                 else top=Math.Min(top,b-frameInset);
                 continue;
             }
+            // Text in a separate row is not a horizontal obstacle. The old generous
+            // font-height margin treated the row above/below as overlapping and collapsed
+            // every narrow process-card cell back to the source Chinese word's width.
+            if(obstacle.Text && (t<=cLo+.001 || b>=cHi-.001))continue;
             if(t<cLo-margin || b>cHi+margin)continue;
             if(far<=lo+.001)
-                left=Math.Max(left,obstacle.Text ? (far+lo)/2+margin/2 : far+margin);
+                left=Math.Max(left,obstacle.Text ? (far+lo)/2+margin/2 : far+Math.Max(h*.15,.05));
             else if(near>=hi-.001)
-                right=Math.Min(right,obstacle.Text ? (near+hi)/2-margin/2 : near-margin);
+                right=Math.Min(right,obstacle.Text ? (near+hi)/2-margin/2 : near-Math.Max(h*.15,.05));
             else if(!obstacle.Text && far-near<.001)
             {
-                if(far<mid)left=Math.Max(left,far+margin);else right=Math.Min(right,near-margin);
+                if(far<mid)left=Math.Max(left,far+Math.Max(h*.15,.05));else right=Math.Min(right,near-Math.Max(h*.15,.05));
             }
             else if(obstacle.Text && near>lo+.01 && far<hi-.01 && text is DBText label &&
                 System.Text.RegularExpressions.Regex.IsMatch(label.TextString,@"^[共第]\s+页$"))

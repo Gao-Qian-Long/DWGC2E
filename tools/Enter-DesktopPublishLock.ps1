@@ -24,7 +24,10 @@ try {
     $handle.SetLength(0)
     $handle.Write($metadata, 0, $metadata.Length)
     $handle.Flush($true)
-    Write-Output -NoEnumerate $handle
+    # A FileStream is enumerable in modern .NET. Write-Output -NoEnumerate wraps it in a
+    # List<object> under PowerShell 7, which breaks typed downstream parameters.
+    # Returning it directly preserves a scalar FileStream in both Windows PowerShell 5.1 and pwsh.
+    return $handle
 }
 catch {
     $handle.Dispose()

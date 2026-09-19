@@ -9,7 +9,7 @@ using System.Threading.Tasks;
 
 namespace DwgTranslator.Core.Api;
 
-public sealed partial class WorkerApiClient : ICloudGlossaryClient
+public sealed partial class WorkerApiClient : IIncrementalCloudGlossaryClient
 {
     private CloudGlossaryState? _legacyGlossaryBasis;
 
@@ -36,6 +36,16 @@ public sealed partial class WorkerApiClient : ICloudGlossaryClient
         return saved;
     }
 
+    public async Task<CloudGlossaryState> PatchCloudGlossaryAsync(CloudGlossaryState basis, IReadOnlyList<CloudGlossaryEntry> upserts, IReadOnlyList<string> deleteIds, CancellationToken ct = default)
+    {
+        var session = RequireGlossarySession();
+        if (basis.Session != session) throw new CloudGlossaryException("session_changed", "账号已变化，请重新读取。");
+        if (upserts.Count > 1000 || upserts.Any(x => !ValidEntry(x) || !Guid.TryParseExact(x.Id,"D",out _))) throw new CloudGlossaryException("invalid_entries","词条格式无效，未提交。");
+        var payload = new { version = 2, expected_revision = basis.Revision, upserts = upserts.Select(ToWire).ToList(), delete_ids = deleteIds };
+        var outcome = await SendAsync(HttpMethod.Patch, Url("/v1/glossary"), JsonContent(payload), DefaultTimeout, ct, expectedSession: session).ConfigureAwait(false);
+        return ReadGlossaryOutcome(outcome, session);
+    }
+
     private string RequireGlossarySession()
     {
         if (!IsConfigured) throw new CloudGlossaryException("unconfigured", "未配置云端地址。");
@@ -60,7 +70,7 @@ public sealed partial class WorkerApiClient : ICloudGlossaryClient
         if (wire?.Success != true || wire.Entries == null || wire.Revision == null || !Regex.IsMatch(wire.Revision, "\\A[a-f0-9]{64}\\z"))
             throw new CloudGlossaryException("invalid_response", "云端响应不完整，未替换本机内容，也未确认保存成功。");
         var entries = wire.Entries.Select(x => x == null ? null : new CloudGlossaryEntry
-        { Id=x.Id, Note=x.Note, Source=x.Source!, Target=x.Target!, Category=x.Category ?? "", Folder=x.Folder ?? "", Enabled=x.Enabled }).ToList();
+        { SourceLang=x.SourceLang ?? "", TargetLang=x.TargetLang ?? "", DirectionPending=x.DirectionPending ?? true, Id=x.Id, Note=x.Note, Source=x.Source!, Target=x.Target!, Category=x.Category ?? "", Folder=x.Folder ?? "", Enabled=x.Enabled }).ToList();
         if (entries.Any(x => x == null || !ValidEntry(x) || string.IsNullOrWhiteSpace(x.Id)) || entries.Select(x => x!.Id).Distinct().Count() != entries.Count)
             throw new CloudGlossaryException("invalid_response", "云端词条格式异常，未替换本机内容。");
         return new CloudGlossaryState(wire.Revision, entries.Select(x => x!).ToList(), session);
@@ -72,7 +82,7 @@ public sealed partial class WorkerApiClient : ICloudGlossaryClient
         && (x.Category?.Length ?? 0) <= 128 && (x.Folder?.Length ?? 0) <= 128 && (x.Note?.Length ?? 0) <= 1000
         && (x.Id == null || Guid.TryParseExact(x.Id, "D", out _));
     private static WireCloudGlossaryEntry ToWire(CloudGlossaryEntry x) => new()
-    { Id=x.Id, Note=x.Note, Source=x.Source, Target=x.Target, Category=x.Category ?? "", Folder=x.Folder ?? "", Enabled=x.Enabled };
+    { SourceLang=x.SourceLang, TargetLang=x.TargetLang, DirectionPending=x.DirectionPending, Id=x.Id, Note=x.Note, Source=x.Source, Target=x.Target, Category=x.Category ?? "", Folder=x.Folder ?? "", Enabled=x.Enabled };
 
     // Retain the old interface without allowing blind overwrites by legacy callers.
     public async Task<IReadOnlyList<CloudGlossaryEntry>?> GetGlossaryAsync(CancellationToken cancellationToken = default)
@@ -90,6 +100,9 @@ public sealed partial class WorkerApiClient : ICloudGlossaryClient
     }
     private sealed class WireCloudGlossaryEntry
     {
+        [JsonPropertyName("source_lang")] public string? SourceLang { get; set; }
+        [JsonPropertyName("target_lang")] public string? TargetLang { get; set; }
+        [JsonPropertyName("direction_pending")] public bool? DirectionPending { get; set; }
         [JsonPropertyName("id"), JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingNull)] public string? Id { get; set; }
         [JsonPropertyName("note"), JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingNull)] public string? Note { get; set; }
         [JsonPropertyName("source")] public string? Source { get; set; }

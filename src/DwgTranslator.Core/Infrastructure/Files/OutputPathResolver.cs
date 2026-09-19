@@ -40,7 +40,7 @@ public sealed class OutputPathResult
 ///
 /// 三条硬规则：
 ///   ① 默认绝不返回与源文件相同的路径（即使命名规则恰好算成同名也要改）；
-///   ② 重名默认 skip（跳过并说明），rename 才自动加序号，overwrite 必须用户显式选择；
+///   ② 重名默认 rename（自动加序号），overwrite 必须用户显式选择；
 ///   ③ 批量场景一次性规划，同时预留「源文件路径」与「已分配目标路径」，
 ///      避免 A.dwg 的输出路径正好是 B.dwg 的源路径而把别人覆盖掉。
 ///
@@ -163,24 +163,10 @@ public sealed class OutputPathResolver
         var candidate = Path.Combine(directory, fileName);
         if (string.Equals(SafeFullPath(candidate), sourceFull, StringComparison.OrdinalIgnoreCase))
         {
-            if (!_config.AllowOverwriteSource)
-            {
-                var stem = Path.GetFileNameWithoutExtension(fileName);
-                var ext = Path.GetExtension(fileName);
-                candidate = Path.Combine(directory, $"{stem}_translated{ext}");
-                result.Reason += "命名规则与源文件同名，已自动改名以避免覆盖源文件；";
-            }
-            else
-            {
-                result.Resolution = DuplicateResolution.OverwriteExisting;
-                result.OutputPath = candidate;
-                result.Reason += "用户已允许覆盖源文件；";
-                result.BackupPath = _config.BackupSourceBeforeWrite ? BuildBackupPath(sourceFull, occupied) : null;
-                if (_config.BackupSourceBeforeWrite && result.BackupPath is null)
-                    return Reject(result, candidate, "源文件备份路径已耗尽，拒绝继续");
-                if (result.BackupPath is not null) occupied.Add(SafeFullPath(result.BackupPath));
-                return result;
-            }
+            var stem = Path.GetFileNameWithoutExtension(fileName);
+            var ext = Path.GetExtension(fileName);
+            candidate = Path.Combine(directory, $"{stem}_translated{ext}");
+            result.Reason += "命名规则与源文件同名，已自动改名以避免覆盖源文件；";
         }
 
         // ③ 与已分配/已存在的路径冲突处理
@@ -249,8 +235,8 @@ public sealed class OutputPathResolver
 
     private string NormalizedPolicy()
     {
-        var policy = (_config.DuplicatePolicy ?? "skip").Trim().ToLowerInvariant();
-        return policy is "overwrite" or "rename" ? policy : "skip";
+        var policy = (_config.DuplicatePolicy ?? "rename").Trim().ToLowerInvariant();
+        return policy is "overwrite" or "skip" ? policy : "rename";
     }
 
     private static string? MakeUniquePath(string path, HashSet<string> occupied)
@@ -261,27 +247,22 @@ public sealed class OutputPathResolver
 
         for (int i = 2; i < 1000; i++)
         {
-            var candidate = Path.Combine(dir, $"{stem}_{i}{ext}");
+            var candidate = Path.Combine(dir, $"{stem} ({i}){ext}");
             if (!occupied.Contains(SafeFullPath(candidate)) && !SafeFileExists(candidate)) return candidate;
         }
         return null; // Fail closed when all numbered paths are occupied.
     }
 
-    private static string? BuildBackupPath(string sourceFull, HashSet<string> occupied)
-    {
-        var candidate = sourceFull + ".bak";
-        if (!occupied.Contains(SafeFullPath(candidate)) && !SafeFileExists(candidate)) return candidate;
-
-        var stem = Path.GetFileNameWithoutExtension(sourceFull);
-        var ext = Path.GetExtension(sourceFull);
-        var dir = Path.GetDirectoryName(sourceFull) ?? ".";
-        for (int i = 2; i < 1000; i++)
-        {
-            var next = Path.Combine(dir, $"{stem}{ext}.{i}.bak");
-            if (!occupied.Contains(SafeFullPath(next)) && !SafeFileExists(next)) return next;
-        }
-        return null;
-    }
+    /// <summary>
+    /// 源图备份路径：同一张图纸永远对应同一个名字（<c>x.dwg.bak</c>）。
+    /// <para>
+    /// 旧实现按"路径不存在才用"递增到 <c>x.dwg.2.bak</c>、<c>.3.bak</c>……：一次失败的导出/重试就会
+    /// 规划出一个新名字，几次之后源图旁边堆满整份副本。备份的语义是"这张图写回之前的上一份"，属于
+    /// 同一个回滚点，就该复用同一个名字。只有该名字在本批次里已被别的输出占用时才 fail closed。
+    /// </para>
+    /// </summary>
+    private static string? BuildBackupPath(string sourceFull, HashSet<string> occupied) =>
+        occupied.Contains(SafeFullPath(sourceFull + ".bak")) ? null : sourceFull + ".bak";
 
     private static IEnumerable<string> FindUnknownTokens(string pattern)
     {

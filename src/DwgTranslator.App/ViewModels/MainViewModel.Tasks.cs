@@ -1,3 +1,5 @@
+using CommunityToolkit.Mvvm.Input;
+using System.IO;
 using DwgTranslator.Core.Api;
 using DwgTranslator.Core.Models;
 using DwgTranslator.Core.Resources;
@@ -34,13 +36,37 @@ public partial class MainViewModel
 
     #region 事件订阅
 
-    /// <summary>构造函数里调用一次；Dispose 时（进程退出）不需要单独退订。</summary>
+    // The task manager is a singleton while MainViewModel is transient, so every handler must be
+    // stored and detached again — otherwise each MainWindow keeps a disposed ViewModel alive.
+    private EventHandler<TranslationTask>? _taskUpdatedHandler;
+    private EventHandler<string>? _taskProgressHandler;
+    private EventHandler<double>? _taskOverallProgressHandler;
+    private EventHandler<TranslationPair>? _taskTranslationCompletedHandler;
+
     private void SubscribeTaskEvents()
     {
-        _taskManager.TaskUpdated += (_, task) => { var version = _sessionVersion; OnUiThread(() => { if (version == _sessionVersion) OnTaskUpdated(task); }); };
-        _taskManager.ProgressMessage += (_, message) => { var version = _sessionVersion; OnUiThread(() => { if (version == _sessionVersion) OnTaskProgressMessage(message); }); };
-        _taskManager.OverallProgressChanged += (_, percent) => { var version = _sessionVersion; OnUiThread(() => { if (version == _sessionVersion) OnTaskOverallProgress(percent); }); };
-        _taskManager.TranslationCompleted += (_, pair) => { var version = _sessionVersion; OnUiThread(() => { if (version == _sessionVersion) OnEntityTranslated(pair); }); };
+        _taskUpdatedHandler ??= (_, task) => { var version = _sessionVersion; OnUiThread(() => { if (version == _sessionVersion) OnTaskUpdated(task); }); };
+        _taskProgressHandler ??= (_, message) => { var version = _sessionVersion; OnUiThread(() => { if (version == _sessionVersion) OnTaskProgressMessage(message); }); };
+        _taskOverallProgressHandler ??= (_, percent) => { var version = _sessionVersion; OnUiThread(() => { if (version == _sessionVersion) OnTaskOverallProgress(percent); }); };
+        _taskTranslationCompletedHandler ??= (_, pair) => { var version = _sessionVersion; OnUiThread(() => { if (version == _sessionVersion) OnEntityTranslated(pair); }); };
+        // Detach before attaching so a repeated call can never subscribe twice.
+        _taskManager.TaskUpdated -= _taskUpdatedHandler;
+        _taskManager.TaskUpdated += _taskUpdatedHandler;
+        _taskManager.ProgressMessage -= _taskProgressHandler;
+        _taskManager.ProgressMessage += _taskProgressHandler;
+        _taskManager.OverallProgressChanged -= _taskOverallProgressHandler;
+        _taskManager.OverallProgressChanged += _taskOverallProgressHandler;
+        _taskManager.TranslationCompleted -= _taskTranslationCompletedHandler;
+        _taskManager.TranslationCompleted += _taskTranslationCompletedHandler;
+    }
+
+    /// <summary>Releases the singleton task manager's references to this ViewModel.</summary>
+    private void UnsubscribeTaskEvents()
+    {
+        if (_taskUpdatedHandler != null) _taskManager.TaskUpdated -= _taskUpdatedHandler;
+        if (_taskProgressHandler != null) _taskManager.ProgressMessage -= _taskProgressHandler;
+        if (_taskOverallProgressHandler != null) _taskManager.OverallProgressChanged -= _taskOverallProgressHandler;
+        if (_taskTranslationCompletedHandler != null) _taskManager.TranslationCompleted -= _taskTranslationCompletedHandler;
     }
 
     private void OnTaskUpdated(TranslationTask task)
@@ -150,7 +176,16 @@ public partial class MainViewModel
     /// </summary>
     /// <param name="retryFailedFirst">true = 先把失败任务重置回等待中再跑（重试失败按钮）。</param>
     /// <param name="askWritebackMode">是否先问写回方式（离线 / AutoCAD）；恢复续跑时沿用上次选择。</param>
-    private async Task RunTaskQueueAsync(bool retryFailedFirst, bool askWritebackMode = true)
+    [RelayCommand]
+    private async Task RetryDrawingAsync(DrawingFileItem? item)
+    {
+        if (item == null || IsProcessing) return;
+        var task = _taskManager.Tasks.FirstOrDefault(t => string.Equals(t.FilePath, item.FullPath, StringComparison.OrdinalIgnoreCase));
+        if (task == null) return;
+        await RunTaskQueueAsync(false, false, task.Id);
+    }
+
+    private async Task RunTaskQueueAsync(bool retryFailedFirst, bool askWritebackMode = true, string? onlyTaskId = null)
     {
         if (!RequireAccount()) return;
         if (IsGlossaryLoading) { StatusMessage = "正在加载术语，请稍候再开始任务。"; return; }
@@ -190,7 +225,7 @@ public partial class MainViewModel
             return;
         }
 
-        var runnable = retryFailedFirst
+        var runnable = onlyTaskId != null ? tasks.Where(t => t.Id == onlyTaskId).ToList() : retryFailedFirst
             ? tasks.Where(t => t.Status is TranslationTaskStatus.Failed or TranslationTaskStatus.PartiallyCompleted).ToList()
             : tasks.Where(t => t.Status == TranslationTaskStatus.Pending
                 || t.Status == TranslationTaskStatus.Paused).ToList();
@@ -201,24 +236,8 @@ public partial class MainViewModel
             return;
         }
 
-        TaskWritebackMode writebackMode = _taskManager.WritebackMode;
-        if (askWritebackMode)
-        {
-            var modeDialog = new Views.ExportModeDialog(_autoCadInteropService.IsAutoCADAvailable(_config))
-            {
-                Owner = Application.Current?.MainWindow
-            };
-            if (modeDialog.ShowDialog() != true)
-            {
-                StatusMessage = Strings.Get("StatusExportCancelled");
-                return;
-            }
-            writebackMode = modeDialog.SelectedMode == Views.ExportModeDialog.ExportMode.AutoCAD
-                ? TaskWritebackMode.AutoCad
-                : TaskWritebackMode.Offline;
-        }
-
-        _taskManager.ConfigureRun(CurrentSourceLang, CurrentTargetLang, _config.ExportDirectory, writebackMode);
+        // 翻译阶段只解析、提取并生成译文；输出目录与写回模式在“回写并导出”时选择。
+        _taskManager.ConfigureRun(CurrentSourceLang, CurrentTargetLang);
 
         IsProcessing = true;
         IsTranslating = true;
@@ -234,11 +253,14 @@ public partial class MainViewModel
                 ? $"正在重试 {runnable.Count} 张失败的图纸…"
                 : $"队列开始：{runnable.Count} 张图纸（本地并发 {_taskManager.Options.LocalWorkerCount}，单图纸 AI 并发 {_taskManager.Options.AiConcurrency}）";
 
-            if (retryFailedFirst)
+            if (onlyTaskId != null)
+                await _taskManager.RetryTaskAsync(onlyTaskId, _cts.Token).ConfigureAwait(true);
+            else if (retryFailedFirst)
                 await _taskManager.RetryFailedAsync(_cts.Token).ConfigureAwait(true);
             else
                 await _taskManager.RunAsync(_cts.Token).ConfigureAwait(true);
 
+            ArchiveTranslationRun(runnable);
             StatusMessage = BuildQueueSummary();
         }
         catch (OperationCanceledException)
@@ -274,6 +296,7 @@ public partial class MainViewModel
     private string BuildQueueSummary()
     {
         var tasks = _taskManager.Tasks;
+        int ready = tasks.Count(t => t.Status == TranslationTaskStatus.ReadyForReview);
         int completed = tasks.Count(t => t.Status == TranslationTaskStatus.Completed);
         int failed = tasks.Count(t => t.Status == TranslationTaskStatus.Failed);
         int partial = tasks.Count(t => t.Status == TranslationTaskStatus.PartiallyCompleted);
@@ -281,14 +304,12 @@ public partial class MainViewModel
         int cancelled = tasks.Count(t => t.Status == TranslationTaskStatus.Cancelled);
         int pending = tasks.Count(t => t.Status is TranslationTaskStatus.Pending or TranslationTaskStatus.Paused);
 
-        var summary = $"队列结束：成功 {completed} 张，失败 {failed} 张";
+        var summary = $"队列结束：待校对 {ready} 张，翻译完成 {completed} 张，失败 {failed} 张";
         if (partial > 0) summary += $"，部分完成 {partial} 张";
         if (skipped > 0) summary += $"，跳过 {skipped} 张";
         if (cancelled > 0) summary += $"，取消 {cancelled} 张";
         if (pending > 0) summary += $"，待处理 {pending} 张";
 
-        var written = tasks.Count(t => !string.IsNullOrWhiteSpace(t.OutputPath));
-        if (written > 0) summary += $"；已写回 {written} 份图纸到 {_config.ExportDirectory}";
         return summary;
     }
 
@@ -387,4 +408,3 @@ public partial class MainViewModel
 
     #endregion
 }
-

@@ -6,10 +6,11 @@ $fixture=Join-Path $ResultDir 'workspace';$candidate=Join-Path $fixture 'artifac
 if(Test-Path -LiteralPath $fixture){throw 'Fixture already exists'}
 New-Item -ItemType Directory -Path $candidate -Force|Out-Null
 Get-ChildItem -LiteralPath $PublishDir | Copy-Item -Destination $candidate -Recurse
-foreach($relative in @('settings.json.example','assets/glossaries/mechanical_zh_en.json','assets/prompts/deepl_context.txt')){$target=Join-Path $fixture $relative;New-Item -ItemType Directory -Path ([IO.Path]::GetDirectoryName($target)) -Force|Out-Null;Copy-Item -LiteralPath (Join-Path $root $relative) -Destination $target}
+foreach($relative in @('settings.json.example','assets/glossaries/mechanical_zh_en.json')){$target=Join-Path $fixture $relative;New-Item -ItemType Directory -Path ([IO.Path]::GetDirectoryName($target)) -Force|Out-Null;Copy-Item -LiteralPath (Join-Path $root $relative) -Destination $target}
 $tool=Join-Path $root 'tools/Get-DesktopPayload.ps1'
 $payload=@(& $tool -PublishDir $candidate -WorkspaceRoot $fixture)
-if($payload.Count -lt 9 -or @($payload | Where-Object {-not $_.sha256}).Count){throw 'Invalid runtime receipt'}
+if($payload.Count -lt 8 -or @($payload | Where-Object {-not $_.sha256}).Count){throw 'Invalid runtime receipt'}
+if(@($payload | Where-Object {$_.path -match '(^|/)prompts?(/|$)'}).Count){throw 'Client prompt content entered the public runtime receipt'}
 $checks=@('clean runtime accepted')
 foreach($relative in @('.env','private-account.json','CadPlugin/extra.dll','debug.log','AGENTS.md','glossaries/personal.json')){
  $p=Join-Path $candidate $relative;[IO.File]::WriteAllText($p,'synthetic private data')

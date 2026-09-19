@@ -15,6 +15,7 @@ public enum TranslationTaskStatus
     Translating,
     LayoutOptimizing,
     Writing,
+    ReadyForReview,
     Completed,
     Failed,
     Cancelled,
@@ -36,6 +37,7 @@ public enum TaskPriority
 /// </summary>
 public sealed class TranslationTask
 {
+    public const int CurrentSchemaVersion = 2;
     public TranslationTask(string filePath, TaskPriority priority = TaskPriority.Normal)
     {
         Id = Guid.NewGuid().ToString("N");
@@ -43,6 +45,8 @@ public sealed class TranslationTask
         FileName = System.IO.Path.GetFileName(filePath);
         Priority = priority;
         CreatedAt = DateTime.UtcNow;
+        UpdatedAt = CreatedAt;
+        StatusChangedAt = CreatedAt;
     }
 
     public string Id { get; set; }
@@ -50,6 +54,18 @@ public sealed class TranslationTask
     public string FileName { get; set; }
 
     public TranslationTaskStatus Status { get; set; } = TranslationTaskStatus.Pending;
+
+    /// <summary>Schema version of this persisted task row. Version 1 is the pre-state-machine format.</summary>
+    public int SchemaVersion { get; set; } = CurrentSchemaVersion;
+
+    /// <summary>State immediately before <see cref="Status"/>.</summary>
+    public TranslationTaskStatus PreviousStatus { get; set; } = TranslationTaskStatus.Pending;
+
+    /// <summary>Stable machine-readable reason for the latest state change.</summary>
+    public TranslationTaskTransitionReason LastTransitionReason { get; set; } = TranslationTaskTransitionReason.Created;
+
+    /// <summary>UTC timestamp of the latest state change.</summary>
+    public DateTime StatusChangedAt { get; set; }
 
     /// <summary>0..100，按已译文本占该图纸可译文本的比例推进。</summary>
     public double Progress { get; set; }
@@ -69,7 +85,14 @@ public sealed class TranslationTask
     /// <summary>排版阶段统计：通过缩小字号解决干涉的次数。</summary>
     public int InterferenceResolvedCount { get; set; }
 
-    /// <summary>输出文件绝对路径（成功写回后填入）。</summary>
+    /// <summary>Worker 翻译计费上下文（online/offline）；与后续 CAD 写回模式无关。</summary>
+    public string? BillingMode { get; set; }
+    /// <summary>关联的翻译项目。输出路径由项目导出历史管理。</summary>
+    public string? ProjectId { get; set; }
+    /// <summary>最近一次成功导出的文件路径，仅作为任务列表的快速显示/打开缓存。</summary>
+    /// <remarks>权威记录仍然是翻译项目的 ExportHistory。</remarks>
+    public string? LastExportPath { get; set; }
+    [Obsolete("输出路径已迁移到翻译项目的导出历史。仅为旧任务记录兼容保留。")]
     public string? OutputPath { get; set; }
 
     public string CheckpointSignature { get; set; } = string.Empty;
@@ -80,8 +103,23 @@ public sealed class TranslationTask
     public string? Error { get; set; }
 
     public DateTime CreatedAt { get; set; }
+
+    /// <summary>最近一次状态、进度、校对或导出发生变化的时间。</summary>
+    public DateTime UpdatedAt { get; set; }
+
     public DateTime? StartedAt { get; set; }
+
+    /// <summary>翻译流水线结束时间；待校对任务也会记录，不能等同于校对完成。</summary>
     public DateTime? CompletedAt { get; set; }
+
+    /// <summary>用户成功保存校对并将任务推进到待导出的时间。</summary>
+    public DateTime? ReviewCompletedAt { get; set; }
+
+    /// <summary>最近一次成功导出图纸的时间。</summary>
+    public DateTime? LastExportedAt { get; set; }
+
+    /// <summary>用户主动重试该图纸的次数。</summary>
+    public int RetryCount { get; set; }
 
     public TimeSpan Elapsed => StartedAt == null
         ? TimeSpan.Zero
@@ -92,7 +130,7 @@ public sealed class TranslationTask
         ? string.Empty
         : (Elapsed.TotalHours >= 1 ? Elapsed.ToString(@"hh\:mm\:ss") : Elapsed.ToString(@"mm\:ss"));
 
-    public bool IsFinished => Status is TranslationTaskStatus.Completed
+    public bool IsFinished => Status is TranslationTaskStatus.ReadyForReview or TranslationTaskStatus.Completed
         or TranslationTaskStatus.Failed or TranslationTaskStatus.Cancelled
         or TranslationTaskStatus.PartiallyCompleted or TranslationTaskStatus.Skipped;
 
@@ -109,7 +147,8 @@ public sealed class TranslationTask
         TranslationTaskStatus.Translating => "翻译中",
         TranslationTaskStatus.LayoutOptimizing => "排版优化",
         TranslationTaskStatus.Writing => "写回中",
-        TranslationTaskStatus.Completed => "已完成",
+        TranslationTaskStatus.ReadyForReview => "待校对",
+        TranslationTaskStatus.Completed => "翻译完成",
         TranslationTaskStatus.Failed => "失败",
         TranslationTaskStatus.Cancelled => "已取消",
         TranslationTaskStatus.Paused => "已暂停",
@@ -125,11 +164,28 @@ public sealed class TranslationTask
         _ => "普通"
     };
 
+    /// <summary>兼容旧任务记录：补齐首版任务文件中没有的审计时间。</summary>
+    public void NormalizeAuditMetadata()
+    {
+        if (CreatedAt == default)
+            CreatedAt = StartedAt ?? CompletedAt ?? ReviewCompletedAt ?? LastExportedAt ?? DateTime.UtcNow;
+
+        if (UpdatedAt == default)
+            UpdatedAt = LastExportedAt ?? ReviewCompletedAt ?? CompletedAt ?? StartedAt ?? CreatedAt;
+
+        if (UpdatedAt < CreatedAt) UpdatedAt = CreatedAt;
+        if (StatusChangedAt == default) StatusChangedAt = UpdatedAt;
+        if (StatusChangedAt < CreatedAt) StatusChangedAt = CreatedAt;
+        if (!Enum.IsDefined(PreviousStatus)) PreviousStatus = TranslationTaskStatus.Pending;
+        if (!Enum.IsDefined(LastTransitionReason)) LastTransitionReason = TranslationTaskTransitionReason.LegacyMigration;
+        SchemaVersion = CurrentSchemaVersion;
+    }
+
     /// <summary>恢复上次运行遗留的任务（任务恢复）：清掉运行态，回到可重跑的状态。</summary>
     public void ResetForResume()
     {
         if (Status is TranslationTaskStatus.Completed or TranslationTaskStatus.PartiallyCompleted or TranslationTaskStatus.Skipped) return;
-        Status = TranslationTaskStatus.Pending;
+        this.TransitionTo(TranslationTaskStatus.Pending, TranslationTaskTransitionReason.RecoveredAfterInterruption);
         Progress = 0;
         StartedAt = null;
         CompletedAt = null;

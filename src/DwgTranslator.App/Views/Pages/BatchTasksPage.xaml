@@ -7,7 +7,7 @@
         </Grid.RowDefinitions>
 <StackPanel>
             <controls:PageHeader x:Name="WorkspaceHeader" Header="批量任务" Description="查看和管理图纸任务，在详情中检查并校对翻译结果。" />
-            <Border x:Name="RecoveryNotice" Visibility="{Binding HasTaskRecoveryWarning, Converter={StaticResource BoolToVis}}" Background="{DynamicResource Brush.WarningLight}" BorderBrush="{DynamicResource Brush.Warning}" BorderThickness="1" CornerRadius="6" Padding="12" Margin="0,0,0,12" AutomationProperties.Name="任务恢复警告">
+            <Border x:Name="RecoveryNotice" Visibility="{Binding HasTaskRecoveryWarning, Converter={StaticResource BoolToVis}}" Background="{DynamicResource Brush.WarningLight}" BorderBrush="{DynamicResource Brush.Warning}" BorderThickness="1" CornerRadius="6" Padding="12" Margin="{DynamicResource Spacing.StackWide}" AutomationProperties.Name="任务恢复警告">
                 <TextBlock Text="{Binding TaskRecoveryWarning}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
             </Border>
         </StackPanel>
@@ -17,89 +17,453 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
-            <WrapPanel Style="{StaticResource Workspace.Toolbar}">
-                <TextBox Style="{StaticResource Search.Input}" Tag="搜索图纸名称或任务" Width="260" Text="{Binding BatchSearch, UpdateSourceTrigger=PropertyChanged}" ToolTip="搜索任务文件名" AutomationProperties.Name="搜索任务" Margin="0,0,8,4" />
-                <ComboBox Width="120" SelectedIndex="{Binding BatchStatusFilter}" Margin="0,0,8,4" AutomationProperties.Name="任务状态">
-                    <ComboBoxItem Content="全部状态" />
-                    <ComboBoxItem Content="运行中" />
-                    <ComboBoxItem Content="等待中" />
-                    <ComboBoxItem Content="已完成" />
-                    <ComboBoxItem Content="失败" />
-                    <ComboBoxItem Content="已暂停" />
-                    <ComboBoxItem Content="已取消" />
-                    <ComboBoxItem Content="已跳过" />
-                </ComboBox>
-                <ComboBox Width="120" SelectedIndex="{Binding BatchDateFilter}" Margin="0,0,8,4" AutomationProperties.Name="创建时间">
-                    <ComboBoxItem Content="全部时间" />
-                    <ComboBoxItem Content="今天" />
-                    <ComboBoxItem Content="最近七天" />
-                </ComboBox>
-                <Button Content="重试失败" IsEnabled="{Binding HasFailedDrawingTasks}" Command="{Binding RetryFailedCommand}" Style="{StaticResource Button.Secondary}" Margin="0,0,8,4" />
-                <Button Content="取消任务" Command="{Binding CancelTranslateCommand}" Style="{StaticResource Button.Danger}" Visibility="{Binding IsTranslating, Converter={StaticResource BoolToVis}}" />
-            </WrapPanel>
-            <TextBlock Grid.Row="1" Text="{Binding BatchCountText}" Style="{StaticResource CaptionStyle}" Margin="0,0,0,12" />
+
+            <Border Grid.Row="0" x:Name="BatchSummaryBar" Style="{StaticResource Section.Surface}"
+                    Margin="{DynamicResource Spacing.Stack}" Padding="14,10" AutomationProperties.Name="任务阶段摘要">
+                <UniformGrid x:Name="BatchSummaryMetrics" Rows="1" Columns="7">
+                    <StackPanel Margin="{DynamicResource Spacing.Inline}">
+                        <TextBlock Text="全部" Style="{StaticResource InfoLabel}" />
+                        <TextBlock Text="{Binding BatchTotalCount}" Style="{StaticResource InfoValueStrong}" />
+                    </StackPanel>
+                    <StackPanel Margin="{DynamicResource Spacing.Inline}">
+                        <TextBlock Text="运行中" Style="{StaticResource InfoLabel}" />
+                        <TextBlock Text="{Binding BatchActiveCount}" Style="{StaticResource InfoValueStrong}" />
+                    </StackPanel>
+                    <StackPanel Margin="{DynamicResource Spacing.Inline}">
+                        <TextBlock Text="待处理" Style="{StaticResource InfoLabel}" />
+                        <TextBlock Text="{Binding BatchPendingCount}" Style="{StaticResource InfoValueStrong}" />
+                    </StackPanel>
+                    <StackPanel Margin="{DynamicResource Spacing.Inline}">
+                        <TextBlock Text="待校对" Style="{StaticResource InfoLabel}" />
+                        <TextBlock Text="{Binding BatchReviewCount}" Style="{StaticResource InfoValueStrong}" />
+                    </StackPanel>
+                    <StackPanel Margin="{DynamicResource Spacing.Inline}">
+                        <TextBlock Text="待导出" Style="{StaticResource InfoLabel}" />
+                        <TextBlock Text="{Binding BatchPendingExportCount}" Style="{StaticResource InfoValueStrong}" />
+                    </StackPanel>
+                    <StackPanel Margin="{DynamicResource Spacing.Inline}">
+                        <TextBlock Text="已导出" Style="{StaticResource InfoLabel}" />
+                        <TextBlock Text="{Binding BatchExportedCount}" Style="{StaticResource InfoValueStrong}" />
+                    </StackPanel>
+                    <StackPanel>
+                        <TextBlock Text="失败" Style="{StaticResource InfoLabel}" />
+                        <TextBlock Text="{Binding BatchFailedCount}" Style="{StaticResource InfoValueStrong}" />
+                    </StackPanel>
+                </UniformGrid>
+            </Border>
+
+            <Border Grid.Row="1" Style="{StaticResource Section.Surface}" Margin="{DynamicResource Spacing.Stack}" Padding="12,10">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <Grid Grid.Row="0" AutomationProperties.Name="任务筛选">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="126" />
+                            <ColumnDefinition Width="116" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox Grid.Column="0" Style="{StaticResource Search.Input}" Tag="搜索图纸名称"
+                                 Text="{Binding BatchSearch, UpdateSourceTrigger=PropertyChanged}"
+                                 ToolTip="按图纸文件名搜索" AutomationProperties.Name="搜索任务" Margin="{DynamicResource Spacing.Inline}" />
+                        <ComboBox Grid.Column="1" SelectedIndex="{Binding BatchStatusFilter}" Margin="{DynamicResource Spacing.Inline}"
+                                  AutomationProperties.Name="任务阶段">
+                            <ComboBoxItem Content="全部阶段" />
+                            <ComboBoxItem Content="运行中" />
+                            <ComboBoxItem Content="待处理" />
+                            <ComboBoxItem Content="待校对" />
+                            <ComboBoxItem Content="待导出" />
+                            <ComboBoxItem Content="已导出" />
+                            <ComboBoxItem Content="失败" />
+                            <ComboBoxItem Content="已暂停" />
+                            <ComboBoxItem Content="已取消" />
+                            <ComboBoxItem Content="已跳过" />
+                        </ComboBox>
+                        <ComboBox Grid.Column="2" SelectedIndex="{Binding BatchDateFilter}" Margin="{DynamicResource Spacing.Inline}"
+                                  AutomationProperties.Name="最近更新时间">
+                            <ComboBoxItem Content="全部时间" />
+                            <ComboBoxItem Content="今天" />
+                            <ComboBoxItem Content="最近七天" />
+                        </ComboBox>
+                        <Button Grid.Column="3" Content="重试失败" IsEnabled="{Binding HasFailedDrawingTasks}"
+                                Command="{Binding RetryFailedCommand}" Style="{StaticResource Button.Secondary}"
+                                MinWidth="94" Margin="{DynamicResource Spacing.Inline}" ToolTip="仅重试失败或部分失败的图纸" />
+                        <Button Grid.Column="4" Content="停止队列" Command="{Binding CancelTranslateCommand}"
+                                Style="{StaticResource Button.Danger}" MinWidth="94"
+                                Visibility="{Binding IsTranslating, Converter={StaticResource BoolToVis}}" />
+                    </Grid>
+
+                    <Grid Grid.Row="1" Margin="{DynamicResource Spacing.BlockTop}" AutomationProperties.Name="翻译项目操作">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="150" />
+                            <ColumnDefinition Width="220" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="16" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="翻译项目" FontWeight="SemiBold" VerticalAlignment="Center" Margin="{DynamicResource Spacing.Inline}" />
+                        <TextBox Grid.Column="1" Style="{StaticResource Search.Input}" Tag="搜索项目"
+                                 Text="{Binding ProjectSearch, UpdateSourceTrigger=PropertyChanged}"
+                                 AutomationProperties.Name="搜索翻译项目" Margin="{DynamicResource Spacing.Inline}" />
+                        <ComboBox Grid.Column="2" ItemsSource="{Binding TranslationProjects}"
+                                  SelectedItem="{Binding SelectedTranslationProject}" DisplayMemberPath="Name"
+                                  AutomationProperties.Name="历史翻译项目" Margin="{DynamicResource Spacing.Inline}" />
+                        <Button Grid.Column="3" Content="打开项目" Command="{Binding OpenTranslationProjectCommand}"
+                                CommandParameter="{Binding SelectedTranslationProject}" Style="{StaticResource Button.Secondary}" />
+                        <TextBlock Grid.Column="5" Text="项目名称" VerticalAlignment="Center" Margin="{DynamicResource Spacing.Inline}">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding SelectedTranslationProject}" Value="{x:Null}">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                        <TextBox Grid.Column="6" Tag="当前项目名称" Text="{Binding ProjectRenameName, UpdateSourceTrigger=PropertyChanged}"
+                                 AutomationProperties.Name="项目名称" Margin="{DynamicResource Spacing.Inline}">
+                            <TextBox.Style>
+                                <Style TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding SelectedTranslationProject}" Value="{x:Null}">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBox.Style>
+                        </TextBox>
+                        <Button Grid.Column="7" Content="重命名" Command="{Binding RenameSelectedProjectCommand}">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource Button.Tertiary}">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding SelectedTranslationProject}" Value="{x:Null}">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+                    </Grid>
+                </Grid>
+            </Border>
+
             <Grid Grid.Row="2">
-                <DataGrid x:Name="TaskTable" ItemsSource="{Binding BatchView}" SelectedItem="{Binding SelectedBatchTask}" SelectionMode="Single" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True" BorderThickness="0" HeadersVisibility="Column" RowHeight="{DynamicResource Size.TableRow}">
+                <DataGrid x:Name="TaskTable" ItemsSource="{Binding BatchView}" SelectedItem="{Binding SelectedBatchTask}"
+                          SelectionMode="Single" AutoGenerateColumns="False" CanUserAddRows="False"
+                          CanUserResizeColumns="False" CanUserReorderColumns="False" CanUserSortColumns="True"
+                          IsReadOnly="True" BorderThickness="0" HeadersVisibility="Column"
+                          RowHeight="{DynamicResource Size.TableRow}" ColumnHeaderStyle="{StaticResource DataGridHeaderStyle}"
+                          CellStyle="{StaticResource DataGridCellStyle}" EnableRowVirtualization="True"
+                          EnableColumnVirtualization="True" VirtualizingPanel.VirtualizationMode="Recycling"
+                          ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                          ScrollViewer.CanContentScroll="True" AutomationProperties.Name="批量任务列表">
                     <DataGrid.Columns>
-                        <DataGridTextColumn Header="任务 / 图纸" Binding="{Binding FileName}" Width="*" MinWidth="160" />
-                        <DataGridTextColumn Header="创建时间" Binding="{Binding CreatedAtText}" Width="145" />
-                        <DataGridTextColumn Header="状态" Binding="{Binding StatusText}" Width="105" />
-                        <DataGridTextColumn Header="进度" Binding="{Binding ProgressText}" Width="85" />
-                        <DataGridTextColumn Header="耗时" Binding="{Binding ElapsedText}" Width="80" />
-                        <DataGridTemplateColumn Header="操作" Width="70">
+                        <DataGridTemplateColumn Header="任务 / 图纸" Width="*" MinWidth="240" SortMemberPath="FileName">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
-                                    <Button Content="详情" Style="{StaticResource Button.Tertiary}" Command="{Binding DataContext.ShowTaskDetailCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}" CommandParameter="{Binding}" />
+                                    <TextBlock Text="{Binding FileName}" TextTrimming="CharacterEllipsis"
+                                               ToolTip="{Binding FullPath}" VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="阶段" Width="116" SortMemberPath="WorkflowStatusText">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                        <Ellipse Width="7" Height="7" Margin="{DynamicResource Spacing.Inline}">
+                                            <Ellipse.Style>
+                                                <Style TargetType="Ellipse">
+                                                    <Setter Property="Fill" Value="{DynamicResource Brush.TextMuted}" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsActive}" Value="True"><Setter Property="Fill" Value="{DynamicResource Brush.Primary}" /></DataTrigger>
+                                                        <DataTrigger Binding="{Binding WorkflowStatusText}" Value="待校对"><Setter Property="Fill" Value="{DynamicResource Brush.Warning}" /></DataTrigger>
+                                                        <DataTrigger Binding="{Binding WorkflowStatusText}" Value="待导出"><Setter Property="Fill" Value="{DynamicResource Brush.Success}" /></DataTrigger>
+                                                        <DataTrigger Binding="{Binding WorkflowStatusText}" Value="已导出"><Setter Property="Fill" Value="{DynamicResource Brush.Success}" /></DataTrigger>
+                                                        <DataTrigger Binding="{Binding HasError}" Value="True"><Setter Property="Fill" Value="{DynamicResource Brush.Danger}" /></DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Ellipse.Style>
+                                        </Ellipse>
+                                        <TextBlock Text="{Binding WorkflowStatusText}" TextTrimming="CharacterEllipsis" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTextColumn Header="结果" Binding="{Binding BatchResultText}" Width="168" />
+                        <DataGridTemplateColumn Header="进度" Width="128" SortMemberPath="ProgressPercent">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <Grid VerticalAlignment="Center">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="38" />
+                                        </Grid.ColumnDefinitions>
+                                        <ProgressBar Height="4" Maximum="100" Value="{Binding ProgressPercent, Mode=OneWay}"
+                                                     VerticalAlignment="Center" Foreground="{DynamicResource Brush.Primary}"
+                                                     Background="{DynamicResource Brush.BackgroundAlt}" />
+                                        <TextBlock Grid.Column="1" Text="{Binding ProgressText}" FontSize="12"
+                                                   Margin="{DynamicResource Spacing.LeftGap}" VerticalAlignment="Center"
+                                                   Foreground="{DynamicResource Brush.TextSecondary}" />
+                                    </Grid>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTextColumn Header="最近更新" Binding="{Binding LastUpdatedText}" Width="142" />
+                        <DataGridTemplateColumn Header="操作" Width="106">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <Button Content="查看详情" Style="{StaticResource Button.Compact.Secondary}"
+                                            HorizontalAlignment="Center" AutomationProperties.Name="查看任务详情"
+                                            Command="{Binding DataContext.ShowTaskDetailCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                            CommandParameter="{Binding}" />
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
                     </DataGrid.Columns>
                 </DataGrid>
-                <controls:EmptyState><controls:EmptyState.Style><Style TargetType="controls:EmptyState" BasedOn="{StaticResource {x:Type controls:EmptyState}}"><Setter Property="Header" Value="暂无翻译任务"/><Setter Property="Description" Value="添加图纸后，任务会显示在这里；仅显示当前会话的任务。"/><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding Items.Count, ElementName=TaskTable}" Value="0"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding HasDrawingFiles}" Value="True"><Setter Property="Header" Value="没有符合当前条件的任务"/><Setter Property="Description" Value="请清除或调整上方筛选条件。"/></DataTrigger></Style.Triggers></Style></controls:EmptyState.Style><StackPanel Orientation="Horizontal"><Button Content="添加图纸" Command="{Binding ImportDwgCommand}" Style="{StaticResource Button.Primary}" Visibility="{Binding HasDrawingFiles, Converter={StaticResource BoolToVis}, ConverterParameter=false}"/><Button Content="清除筛选" Click="ClearFilters_Click" Style="{StaticResource Button.Secondary}" Visibility="{Binding HasDrawingFiles, Converter={StaticResource BoolToVis}}"/></StackPanel></controls:EmptyState>
-            </Grid>
-            <Border Grid.RowSpan="3" Style="{StaticResource Drawer.Surface}" Visibility="{Binding IsTaskDetailOpen, Converter={StaticResource BoolToVis}}">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <StackPanel>
-                        <DockPanel>
-                            <Button Content="关闭" DockPanel.Dock="Right" Command="{Binding CloseTaskDetailCommand}" Style="{StaticResource Button.Tertiary}" />
-                            <TextBlock Text="任务详情" Style="{StaticResource SectionTitleStyle}" />
-                        </DockPanel>
-                        <TextBlock Text="{Binding SelectedBatchTask.FileName}" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,20,0,8" />
-                        <TextBlock Text="{Binding SelectedBatchTask.StatusText}" />
-                        <ProgressBar Height="4" Value="{Binding SelectedBatchTask.ProgressPercent, Mode=OneWay}" Maximum="100" Margin="0,12" />
-                        <TextBlock Text="{Binding SelectedBatchTask.SummaryText}" TextWrapping="Wrap" />
-                        <TextBlock Text="{Binding SelectedBatchTask.ElapsedText, StringFormat=耗时：{0}}" Margin="0,8" />
-                        <TextBlock Text="{Binding SelectedBatchTask.ErrorText}" Foreground="{DynamicResource Brush.Danger}" TextWrapping="Wrap" Margin="0,8" />
-                        <TextBlock Text="{Binding SelectedBatchTask.OutputText}" TextWrapping="Wrap" />
-                        <Button Content="打开输出文件" Command="{Binding OpenDrawingOutputCommand}" CommandParameter="{Binding SelectedBatchTask}" Style="{StaticResource Button.Secondary}" Margin="0,12" Visibility="{Binding SelectedBatchTask.HasOutput, Converter={StaticResource BoolToVis}}" />
-                        <Button Content="进入译文校对" Command="{Binding OpenTaskProofreadingCommand}" Style="{StaticResource Button.Primary}" Margin="0,12" />
-                        <Button Content="查看运行日志" Command="{Binding ToggleLogViewerCommand}" Style="{StaticResource Button.Tertiary}" />
+
+                <controls:EmptyState>
+                    <controls:EmptyState.Style>
+                        <Style TargetType="controls:EmptyState" BasedOn="{StaticResource {x:Type controls:EmptyState}}">
+                            <Setter Property="Header" Value="暂无翻译任务" />
+                            <Setter Property="Description" Value="添加图纸后，任务会按翻译、校对、导出阶段显示在这里。" />
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding Items.Count, ElementName=TaskTable}" Value="0"><Setter Property="Visibility" Value="Visible" /></DataTrigger>
+                                <DataTrigger Binding="{Binding HasDrawingFiles}" Value="True">
+                                    <Setter Property="Header" Value="没有符合当前条件的任务" />
+                                    <Setter Property="Description" Value="请清除或调整上方筛选条件。" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </controls:EmptyState.Style>
+                    <StackPanel Orientation="Horizontal">
+                        <Button Content="添加图纸" Command="{Binding ImportDwgCommand}" Style="{StaticResource Button.Primary}"
+                                Visibility="{Binding HasDrawingFiles, Converter={StaticResource BoolToVis}, ConverterParameter=false}" />
+                        <Button Content="清除筛选" Click="ClearFilters_Click" Style="{StaticResource Button.Secondary}"
+                                Visibility="{Binding HasDrawingFiles, Converter={StaticResource BoolToVis}}" />
                     </StackPanel>
-                </ScrollViewer>
-            </Border>
+                </controls:EmptyState>
+            </Grid>
         </Grid>
+
         <Grid Grid.Row="1" Visibility="{Binding IsProofreading, Converter={StaticResource BoolToVis}}">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
-            </Grid.RowDefinitions>
-            <WrapPanel Margin="0,0,0,12">
-                <Button Content="返回任务列表" Command="{Binding BackToTaskListCommand}" Style="{StaticResource Button.Secondary}" Margin="0,0,12,0" />
-                <TextBlock Text="{Binding SelectedDrawingFile.FileName}" VerticalAlignment="Center" Margin="0,0,12,0" />
-                <Button Content="全部标为已校对" Command="{Binding MarkAllReviewedCommand}" Style="{StaticResource Button.Secondary}" Margin="0,0,8,4" />
-                <Button Content="保存更改" Command="{Binding SaveProofreadingCommand}" IsEnabled="{Binding HasUnsavedProofreading}" Style="{StaticResource Button.Primary}" Margin="0,0,8,4" />
-                <Button Content="取消编辑" Command="{Binding DiscardProofreadingCommand}" IsEnabled="{Binding HasUnsavedProofreading}" Style="{StaticResource Button.Secondary}" Margin="0,0,8,4" />
-                <Button Content="导出校对结果" Command="{Binding ExportDwgCommand}" Style="{StaticResource Button.Primary}" />
-                <TextBlock Text="Enter 确认单元格，Esc 取消；完成后保存更改。" VerticalAlignment="Center" Margin="12,0" />
-            </WrapPanel>
-            <DataGrid Grid.Row="1" ToolTip="双击译文编辑；Enter 确认单元格，完成后保存更改。" ItemsSource="{Binding FilteredEntities}" AutoGenerateColumns="False" IsReadOnly="{Binding IsProcessing}" CellEditEnding="TranslationGrid_CellEditEnding" CanUserAddRows="False" BorderThickness="0" MinRowHeight="{DynamicResource Size.TableRow}" ColumnHeaderStyle="{StaticResource DataGridHeaderStyle}" CellStyle="{StaticResource DataGridCellStyle}">
+</Grid.RowDefinitions>            <Grid Margin="{DynamicResource Spacing.StackWide}" AutomationProperties.Name="校对操作">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <Grid Grid.Row="0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Button Grid.Column="0" Content="返回任务列表" Command="{Binding BackToTaskListCommand}" Style="{StaticResource Button.Secondary}" Margin="{DynamicResource Spacing.InlineWide}" />
+                    <TextBlock Grid.Column="1" Text="{Binding SelectedDrawingFile.FileName}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="{DynamicResource Spacing.InlineWide}" ToolTip="{Binding SelectedDrawingFile.FileName}" />
+                    <Button Grid.Column="2" Content="全部标为已校对" Command="{Binding MarkAllReviewedCommand}" Style="{StaticResource Button.Secondary}" Margin="{DynamicResource Spacing.Inline}" />
+                    <Button Grid.Column="3" Content="保存更改" Command="{Binding SaveProofreadingCommand}" IsEnabled="{Binding HasUnsavedProofreading}" Style="{StaticResource Button.Primary}" Margin="{DynamicResource Spacing.Inline}" />
+                    <Button Grid.Column="4" Content="取消编辑" Command="{Binding DiscardProofreadingCommand}" IsEnabled="{Binding HasUnsavedProofreading}" Style="{StaticResource Button.Secondary}" Margin="{DynamicResource Spacing.Inline}" />
+                    <Button Grid.Column="5" Content="导出已校对图纸" Command="{Binding ExportDwgCommand}" Style="{StaticResource Button.Primary}" />
+                </Grid>
+                <TextBlock Grid.Row="1" Text="Enter 确认单元格，Esc 取消；完成后保存更改。" Style="{StaticResource CaptionStyle}" Margin="{DynamicResource Spacing.BlockTop}" />
+            </Grid>
+            <Border Grid.Row="1" Background="{DynamicResource Brush.SurfaceSubtle}" Padding="10" Margin="{DynamicResource Spacing.Stack}" CornerRadius="6" VerticalAlignment="Top" Panel.ZIndex="2">                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Grid Grid.Row="0" Margin="{DynamicResource Spacing.Stack}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="2*" />
+                            <ColumnDefinition Width="1.5*" />
+                            <ColumnDefinition Width="1.5*" />
+                            <ColumnDefinition Width="120" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox Grid.Column="0" MinWidth="180" Margin="{DynamicResource Spacing.Inline}" Tag="搜索原文或译文" Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBox Grid.Column="1" MinWidth="150" Margin="{DynamicResource Spacing.Inline}" Tag="查找译文" Text="{Binding BatchFindText, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBox Grid.Column="2" MinWidth="150" Margin="{DynamicResource Spacing.Inline}" Tag="替换为" Text="{Binding BatchReplacementText, UpdateSourceTrigger=PropertyChanged}" />
+                        <ComboBox Grid.Column="3" SelectedIndex="{Binding ProofreadingScope}"><ComboBoxItem Content="当前图纸"/><ComboBoxItem Content="所选图纸"/><ComboBoxItem Content="全部图纸"/></ComboBox>
+                    </Grid>
+                    <Grid Grid.Row="1">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="{Binding BatchReplaceMatchCount, StringFormat=命中 {0} 条}" VerticalAlignment="Center" />
+                        <Button Grid.Column="1" Content="预览并替换" Command="{Binding ApplyBatchReplaceCommand}" Style="{StaticResource Button.Secondary}" Margin="8,0,8,0" />
+                        <Button Grid.Column="2" Content="撤销批量操作" Command="{Binding UndoBulkEditCommand}" IsEnabled="{Binding CanUndoBulkEdit}" Style="{StaticResource Button.Tertiary}" Margin="{DynamicResource Spacing.Inline}" />
+                        <Button Grid.Column="3" Content="应用术语到当前项目" Command="{Binding ApplyGlossaryToProjectCommand}" Style="{StaticResource Button.Secondary}" />
+                    </Grid>
+                </Grid>
+            </Border>
+            <DataGrid Grid.Row="2" ToolTip="双击译文编辑；Enter 确认单元格，完成后保存更改。" ItemsSource="{Binding FilteredEntities}" AutoGenerateColumns="False" IsReadOnly="{Binding IsProcessing}" CellEditEnding="TranslationGrid_CellEditEnding" CanUserAddRows="False" BorderThickness="0" MinRowHeight="{DynamicResource Size.TableRow}" ColumnHeaderStyle="{StaticResource DataGridHeaderStyle}" CellStyle="{StaticResource DataGridCellStyle}" EnableRowVirtualization="True" EnableColumnVirtualization="True" VirtualizingPanel.VirtualizationMode="Recycling" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.CanContentScroll="True">
                 <DataGrid.Columns>
                     <DataGridTextColumn Header="句柄" ElementStyle="{StaticResource CenteredCellStyle}" IsReadOnly="True" Binding="{Binding Handle}" Width="90" />
-                    <DataGridTextColumn Header="原文" IsReadOnly="True" Binding="{Binding PlainText}" Width="*" ElementStyle="{StaticResource WrapCellStyle}" />
-                    <DataGridTextColumn Header="译文" Binding="{Binding TranslatedText, Mode=TwoWay, UpdateSourceTrigger=Explicit}" Width="*" ElementStyle="{StaticResource WrapCellStyle}" />
+                    <DataGridTextColumn Header="原文" IsReadOnly="True" Binding="{Binding PlainText}" Width="1.15*" MinWidth="300" ElementStyle="{StaticResource WrapCellStyle}" />
+                    <DataGridTextColumn Header="译文" Binding="{Binding TranslatedText, Mode=TwoWay, UpdateSourceTrigger=Explicit}" Width="1.35*" MinWidth="360" ElementStyle="{StaticResource WrapCellStyle}" />
                 </DataGrid.Columns>
             </DataGrid>
         </Grid>
 
+        <Border x:Name="TaskDetailDrawer" Panel.ZIndex="10" Grid.Row="0" Grid.RowSpan="3"
+                Style="{StaticResource Drawer.Surface}"
+                Visibility="{Binding IsTaskDetailOpen, Converter={StaticResource BoolToVis}}"
+                controls:DrawerFocusBehavior.IsEnabled="True"
+                controls:DrawerFocusBehavior.FocusOnOpen="{Binding ElementName=TaskDrawerCloseButton}"
+                controls:DrawerFocusBehavior.RestoreFocusFallback="{Binding ElementName=TaskTable}"
+                AutomationProperties.Name="任务详情抽屉">
+            <DockPanel LastChildFill="True">
+                <DockPanel DockPanel.Dock="Top">
+                    <Button x:Name="TaskDrawerCloseButton" Content="关闭" DockPanel.Dock="Right" Command="{Binding CloseTaskDetailCommand}"
+                            Style="{StaticResource Button.Tertiary}" />
+                    <TextBlock Text="任务详情" Style="{StaticResource SectionTitleStyle}" VerticalAlignment="Center" />
+                </DockPanel>
+
+                <Grid DockPanel.Dock="Bottom" Margin="{DynamicResource Spacing.BlockTopWide}">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <UniformGrid Grid.Row="0" Columns="2">
+                        <Button Content="进入译文校对" Command="{Binding OpenTaskProofreadingCommand}"
+                                IsEnabled="{Binding SelectedBatchTask.CanOpenProofreading}"
+                                Style="{StaticResource Button.Primary}" Margin="0,0,4,8" />
+                        <Button Content="导出此图纸" Command="{Binding ExportSelectedDrawingCommand}"
+                                CommandParameter="{Binding SelectedBatchTask}"
+                                Visibility="{Binding SelectedBatchTask.CanExport, Converter={StaticResource BoolToVis}}"
+                                Style="{StaticResource Button.Primary}" Margin="4,0,0,8" />
+                        <Button Content="打开输出文件" Command="{Binding OpenDrawingOutputCommand}"
+                                CommandParameter="{Binding SelectedBatchTask}"
+                                Visibility="{Binding SelectedBatchTask.HasOutput, Converter={StaticResource BoolToVis}}"
+                                Style="{StaticResource Button.Secondary}" Margin="0,0,4,8" />
+                        <Button Content="重试此任务" Command="{Binding RetryDrawingCommand}"
+                                CommandParameter="{Binding SelectedBatchTask}"
+                                Visibility="{Binding SelectedBatchTask.CanRetry, Converter={StaticResource BoolToVis}}"
+                                Style="{StaticResource Button.Secondary}" Margin="4,0,0,8" />
+                    </UniformGrid>
+                    <Button Grid.Row="1" Content="查看运行日志" Command="{Binding ToggleLogViewerCommand}"
+                            Style="{StaticResource Button.Tertiary}" HorizontalAlignment="Stretch" />
+                </Grid>
+
+                <controls:ToastHost DockPanel.Dock="Bottom" IsScoped="True" MaximumVisible="1" />
+
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                              CanContentScroll="True" controls:ResponsiveLayout.HandoffMouseWheelAtBoundary="True">
+                    <StackPanel Margin="{DynamicResource Spacing.BlockTopWide}">
+                        <TextBlock Text="{Binding SelectedBatchTask.FileName}" FontSize="16" FontWeight="SemiBold"
+                                   TextWrapping="Wrap" ToolTip="{Binding SelectedBatchTask.FullPath}" />
+                        <TextBlock Text="{Binding SelectedBatchTask.FullPath}" Margin="0,4,0,12"
+                                   Style="{StaticResource CaptionStyle}" TextWrapping="Wrap" />
+
+                        <Border Background="{DynamicResource Brush.SurfaceSubtle}" CornerRadius="6" Padding="12,10">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <DockPanel>
+                                    <TextBlock DockPanel.Dock="Right" Text="{Binding SelectedBatchTask.ProgressText}"
+                                               FontWeight="SemiBold" />
+                                    <TextBlock Text="{Binding SelectedBatchTask.WorkflowStatusText}"
+                                               FontWeight="SemiBold" />
+                                </DockPanel>
+                                <ProgressBar Grid.Row="1" Height="5" Maximum="100"
+                                             Value="{Binding SelectedBatchTask.ProgressPercent, Mode=OneWay}"
+                                             Margin="{DynamicResource Spacing.Vertical}" />
+                                <TextBlock Grid.Row="2" Text="{Binding SelectedBatchTask.NextActionText}"
+                                           TextWrapping="Wrap" Foreground="{DynamicResource Brush.TextSecondary}" />
+                            </Grid>
+                        </Border>
+
+                        <TextBlock Text="任务概况" Style="{StaticResource SectionTitleStyle}" Margin="{DynamicResource Spacing.RowInset}" />
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="112" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <TextBlock Grid.Row="0" Text="文本结果" Style="{StaticResource CaptionStyle}" Margin="{DynamicResource Spacing.Stack}" />
+                            <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding SelectedBatchTask.BatchResultText}" Margin="{DynamicResource Spacing.Stack}" />
+                            <TextBlock Grid.Row="1" Text="耗时" Style="{StaticResource CaptionStyle}" Margin="{DynamicResource Spacing.Stack}" />
+                            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SelectedBatchTask.ElapsedDisplayText}" Margin="{DynamicResource Spacing.Stack}" />
+                            <TextBlock Grid.Row="2" Text="优先级" Style="{StaticResource CaptionStyle}" Margin="{DynamicResource Spacing.Stack}" />
+                            <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding SelectedBatchTask.PriorityText}" Margin="{DynamicResource Spacing.Stack}" />
+                            <TextBlock Grid.Row="3" Text="重试次数" Style="{StaticResource CaptionStyle}" Margin="{DynamicResource Spacing.Stack}" />
+                            <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding SelectedBatchTask.RetryCountText}" Margin="{DynamicResource Spacing.Stack}" />
+                            <TextBlock Grid.Row="4" Text="最近更新" Style="{StaticResource CaptionStyle}" />
+                            <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding SelectedBatchTask.LastUpdatedText}" />
+                        </Grid>
+
+                        <TextBlock Text="阶段时间线" Style="{StaticResource SectionTitleStyle}" Margin="{DynamicResource Spacing.RowInset}" />
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="112" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <TextBlock Grid.Row="0" Text="创建任务" Style="{StaticResource CaptionStyle}" Margin="{DynamicResource Spacing.Stack}" />
+                            <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding SelectedBatchTask.CreatedAtText}" Margin="{DynamicResource Spacing.Stack}" />
+                            <TextBlock Grid.Row="1" Text="开始翻译" Style="{StaticResource CaptionStyle}" Margin="{DynamicResource Spacing.Stack}" />
+                            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SelectedBatchTask.StartedAtText}" Margin="{DynamicResource Spacing.Stack}" />
+                            <TextBlock Grid.Row="2" Text="翻译完成" Style="{StaticResource CaptionStyle}" Margin="{DynamicResource Spacing.Stack}" />
+                            <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding SelectedBatchTask.TranslationCompletedAtText}" Margin="{DynamicResource Spacing.Stack}" />
+                            <TextBlock Grid.Row="3" Text="校对完成" Style="{StaticResource CaptionStyle}" Margin="{DynamicResource Spacing.Stack}" />
+                            <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding SelectedBatchTask.ReviewCompletedAtText}" Margin="{DynamicResource Spacing.Stack}" />
+                            <TextBlock Grid.Row="4" Text="最近导出" Style="{StaticResource CaptionStyle}" />
+                            <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding SelectedBatchTask.LastExportedAtText}" />
+                        </Grid>
+
+                        <Border Style="{StaticResource Callout.Error}" Margin="{DynamicResource Spacing.BlockTopLoose}"
+                                Visibility="{Binding SelectedBatchTask.HasError, Converter={StaticResource BoolToVis}}">
+                            <StackPanel>
+                                <TextBlock Text="失败原因" FontWeight="SemiBold" Margin="{DynamicResource Spacing.StackTight}" />
+                                <TextBlock Text="{Binding SelectedBatchTask.ErrorText}" TextWrapping="Wrap"
+                                           AutomationProperties.LiveSetting="Polite" />
+                            </StackPanel>
+                        </Border>
+
+                        <StackPanel Margin="{DynamicResource Spacing.BlockTopLoose}">
+                            <TextBlock Text="输出文件" Style="{StaticResource SectionTitleStyle}" Margin="{DynamicResource Spacing.StackTight}" />
+                            <TextBlock Text="{Binding SelectedBatchTask.OutputPathText}" TextWrapping="Wrap"
+                                       Foreground="{DynamicResource Brush.TextSecondary}" />
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+            </DockPanel>
+        </Border>
     </Grid>
 </UserControl>

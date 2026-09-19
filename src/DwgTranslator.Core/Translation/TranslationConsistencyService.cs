@@ -41,7 +41,9 @@ public class TranslationConsistencyService : ITranslationConsistencyService
     /// <param name="cacheFilePath">Path to JSON cache file for persistence. If empty, uses in-memory only.</param>
     public TranslationConsistencyService(string cacheFilePath = "")
     {
-        _cache = new Dictionary<string, string>(StringComparer.Ordinal);
+        // 大小写不敏感：术语匹配本来就是 OrdinalIgnoreCase，"Valve"/"VALVE" 在图上是同一条标签，
+        // 缓存把它们当两个键存就会绕开去重、给同一条文字翻出两份可能不一致的译文。
+        _cache = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         _cacheFilePath = cacheFilePath;
 
         if (!string.IsNullOrEmpty(_cacheFilePath))
@@ -247,8 +249,28 @@ public class TranslationConsistencyService : ITranslationConsistencyService
     private const string CacheSeparator = "|";
 
     /// <summary>
-    /// Full cache key: direction + source text. The same source text has a different translation per
-    /// target language, so the direction has to be part of the key.
+    /// 缓存键 = 作用域 + 源文本。作用域是"语言方向 + 术语表指纹"：同一个源文本在不同目标语言、
+    /// 或同一方向但术语表已经改过（改术语/增删条目/换账号换术语库）时，落到的键必须不同。
+    /// <para>
+    /// 只带语言方向的旧键会把改过术语表之前的译文继续命中，用户看到的是"术语表明明改了、图上还是旧译文"
+    /// 的静默错误。指纹接进作用域后这类条目不再命中，必须重新翻译。
+    /// </para>
+    /// </summary>
+    public static string ScopedCacheKey(string scopedDirection, string sourceText)
+    {
+        // 旧条目只带"ZH&gt;EN|文本"两层，历史上首次发布的版本更早、连方向都没有（裸文本键，见 LoadCache）。
+        var scope = string.IsNullOrWhiteSpace(scopedDirection) ? LegacyDirection : scopedDirection.Trim().ToUpperInvariant();
+        var separator = scope.IndexOf(CacheSeparator, StringComparison.Ordinal);
+        if (separator >= 0) scope = scope[..separator];
+        return scope + CacheSeparator + NormalizeForCache(sourceText);
+    }
+
+    /// <summary>缓存文件里的条目是否落在给定作用域内（旧缓存迁移用）。</summary>
+    private static bool IsInScope(string cacheKey, string scope) =>
+        cacheKey.StartsWith(scope + CacheSeparator, StringComparison.Ordinal);
+
+    /// <summary>
+    /// 完整缓存键：作用域（方向 + 术语表指纹）+ 源文本。
     /// </summary>
     private static string CacheKey(string sourceText, string direction)
     {

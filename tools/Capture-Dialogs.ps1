@@ -62,12 +62,24 @@ $cases = @(
     @{ Name = '帮助';            Open = { $root.SetFocus(); Start-Sleep -Milliseconds 300; [System.Windows.Forms.SendKeys]::SendWait('{F1}'); $true } }
 )
 
+$failed = @()
 foreach ($case in $cases) {
-    & $case.Open | Out-Null
+    $opened = & $case.Open
     Start-Sleep -Seconds 3
     $out = & powershell -NoProfile -ExecutionPolicy Bypass -File "$PSScriptRoot\Capture-AppWindow.ps1" -Tag $Tag 2>&1
+    $captureExit = $LASTEXITCODE
     $saved = ($out | Where-Object { $_ -like 'captured:*' } | Select-Object -First 1)
-    Write-Output "DIALOG=$($case.Name)  $saved"
+    # A dialog that never opened, a failed capture process, or a missing PNG must be visible as a
+    # failure instead of an apparently successful run.
+    if ($opened -eq $false -or $captureExit -ne 0 -or -not $saved) {
+        $failed += "DIALOG_FAILED:$($case.Name)(opened=$opened,exit=$captureExit)"
+        Write-Output "DIALOG_FAILED: $($case.Name)  opened=$opened exit=$captureExit"
+    } else {
+        Write-Output "DIALOG=$($case.Name)  $saved"
+    }
     Close-Dialogs
     Start-Sleep -Seconds 1
 }
+if ($failed.Count) { Write-Output ("DIALOG_ERRORS=" + ($failed -join ',')); exit 1 }
+Write-Output "DIALOGS_OK=$($cases.Count)"
+exit 0

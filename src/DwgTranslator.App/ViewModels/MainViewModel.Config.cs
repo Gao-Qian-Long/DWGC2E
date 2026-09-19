@@ -1,4 +1,4 @@
-using DwgTranslator.Core.Models;
+﻿using DwgTranslator.Core.Models;
 using DwgTranslator.Core.Resources;
 using DwgTranslator.Core.Services;
 using DwgTranslator.Core.Translation;
@@ -83,9 +83,7 @@ public partial class MainViewModel
                     _config.AutoCadInstallPath, _config.CadPluginPath);
             }
 
-            _config.DeepSeekApiKey = AppConfig.DecryptApiKey(_config.DeepSeekApiKey);
-
-            _config.ExportDirectory = Path.Combine(AccountDataDirectory, "exports");
+            _config.ExportDirectory = AccountWorkspace.OutputDirectoryFor(_config, App.AppDataDir);
             if (!Path.IsPathRooted(_config.LogDirectory))
                 _config.LogDirectory = Path.Combine(App.AppDataDir, _config.LogDirectory);
             if (!Path.IsPathRooted(_config.GlossaryPath))
@@ -95,7 +93,7 @@ public partial class MainViewModel
                     _config.GlossaryPath = appDataGlossary;
             }
 
-            Directory.CreateDirectory(_config.ExportDirectory);
+            if (!string.IsNullOrWhiteSpace(_config.ExportDirectory)) Directory.CreateDirectory(_config.ExportDirectory);
 
             RefreshGlossaryData();
 
@@ -259,14 +257,8 @@ public partial class MainViewModel
 
     private string ResolveGlossaryPath()
     {
-        var fileName = TranslationLanguages.GlossaryFileName(CurrentSourceLang, CurrentTargetLang);
-        var appDataGlossary = Path.Combine(AccountDataDirectory, "glossaries", fileName);
-        if (File.Exists(appDataGlossary)) return appDataGlossary;
-
-        var bundledGlossary = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "assets", "default-glossaries", fileName);
-        if (File.Exists(bundledGlossary)) return bundledGlossary;
-
-        return string.Empty;
+        EnsureWorkspace();
+        return WorkspacePath;
     }
 
     #endregion

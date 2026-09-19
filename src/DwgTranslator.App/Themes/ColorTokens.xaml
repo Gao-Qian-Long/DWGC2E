@@ -55,9 +55,9 @@
     <Color x:Key="Color.DropScrim">#262521</Color>
     <SolidColorBrush x:Key="Brush.TitleBarBackground" Color="#FFFCF5" />
     <SolidColorBrush x:Key="Brush.DataGridHeader" Color="#F7F5F0" />
-    <!-- 圆角：小控件 6 / 按钮输入卡片 8 / 大卡片 10；不要再出现 11~25 -->
-    <CornerRadius x:Key="CornerRadius.Small" TopLeft="4" TopRight="4" BottomLeft="4" BottomRight="4" />
-    <CornerRadius x:Key="CornerRadius.Medium" TopLeft="6" TopRight="6" BottomLeft="6" BottomRight="6" />
+    <!-- Controls 6 DIP; surfaces/cards 8 DIP; micro badges keep their compact radius. -->
+    <CornerRadius x:Key="CornerRadius.Small" TopLeft="6" TopRight="6" BottomLeft="6" BottomRight="6" />
+    <CornerRadius x:Key="CornerRadius.Medium" TopLeft="8" TopRight="8" BottomLeft="8" BottomRight="8" />
     <CornerRadius x:Key="CornerRadius.Large" TopLeft="8" TopRight="8" BottomLeft="8" BottomRight="8" />
     <CornerRadius x:Key="CornerRadius.Pill" TopLeft="4" TopRight="4" BottomLeft="4" BottomRight="4" />
 </ResourceDictionary>

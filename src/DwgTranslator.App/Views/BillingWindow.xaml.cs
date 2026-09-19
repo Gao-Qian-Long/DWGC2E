@@ -29,7 +29,7 @@ public partial class BillingWindow : Window
  {
   InitializeComponent();_client=client;_valid=valid;_apply=apply;Account.Text="购买账号："+account;
   Loaded+=async(_,_)=>await InitializeAsync();
-  Closed+=(_,_)=>{_expiryTimer.Stop();_timer.Stop();_life.Cancel();_pendingStore?.Dispose();};
+  Closed+=(_,_)=>{_expiryTimer.Stop();_timer.Stop();_life.Cancel();_life.Dispose();_pendingStore?.Dispose();};
   Activated+=async(_,_)=>{if(_initialized)await RefreshAsync();};
   Deactivated+=(_,_)=>_timer.Stop();
   _expiryTimer.Tick+=(_,_)=>{if(_current is {Status:"pending"} o && o.ExpiresAt<=DateTimeOffset.UtcNow){Qr.Source=null;Qr.Visibility=Visibility.Collapsed;QrStatus.Text="该订单二维码展示期限已结束，不再提供扫码入口。请刷新原订单确认，已付款请勿再次支付。";}};_expiryTimer.Start();

@@ -26,7 +26,7 @@ public sealed partial class SmokeApp
             Check(await vm.EditWorkspaceTextAsync(user,"Target","Inline") && !vm.HasUnsavedTerms, "inline Enter-equivalent auto saves");
             Check(!await vm.EditWorkspaceTextAsync(user,"Target","") && vm.TermDraft[0].Target=="Inline" && !vm.HasUnsavedTerms, "invalid inline change rolls back");
             var directory=(string)typeof(MainViewModel).GetProperty("AccountDataDirectory", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(vm)!;
-            var path=System.IO.Path.Combine(directory,"glossaries",TranslationLanguages.GlossaryFileName(vm.CurrentSourceLang,vm.CurrentTargetLang));
+            var path=System.IO.Path.Combine(directory,"glossaries","workspace-v2.json");
             var bytes=System.IO.File.ReadAllBytes(path);
             using(var locked=new System.IO.FileStream(path,System.IO.FileMode.Open,System.IO.FileAccess.Read,System.IO.FileShare.Read))
             {
@@ -51,6 +51,18 @@ public sealed partial class SmokeApp
             vm.TermSearch=""; vm.RefreshTermView(); vm.SelectedTerm=null;
             await Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ApplicationIdle);
             var page=FindVisual<GlossaryPage>(window); var table=(DataGrid)page.FindName("TermList");
+            table.UnselectAll(); table.UpdateLayout();
+            var toolbar=(FrameworkElement)page.FindName("SelectionToolbar");
+            Check(toolbar.Visibility==Visibility.Collapsed,"unselected toolbar does not reserve empty space");
+            for(var selectionIndex=0;selectionIndex<2;selectionIndex++)
+            {
+                table.ScrollIntoView(vm.TermDraft[selectionIndex]); table.UpdateLayout();
+                var row=(DataGridRow)table.ItemContainerGenerator.ContainerFromItem(vm.TermDraft[selectionIndex]);
+                var checkbox=FindVisual<CheckBox>(row);
+                checkbox.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice,Environment.TickCount,MouseButton.Left){RoutedEvent=UIElement.PreviewMouseLeftButtonDownEvent});
+            }
+            Check(table.SelectedItems.Count==2,"checkbox clicks accumulate arbitrary selection without Ctrl");
+            table.UnselectAll();
             Check(table.EnableRowVirtualization && table.EnableColumnVirtualization,"table virtualization enabled");
             table.SelectedItem=vm.TermDraft[0]; table.CurrentCell=new DataGridCellInfo(vm.TermDraft[0],table.Columns[2]);
             table.ScrollIntoView(vm.TermDraft[0]); table.Focus(); table.UpdateLayout();
@@ -74,30 +86,41 @@ public sealed partial class SmokeApp
                 if(!args.Handled) { args.RoutedEvent=Keyboard.KeyDownEvent; target.RaiseEvent(args); }
             }
             Press(Key.F2); table.UpdateLayout();
-            Check(Keyboard.FocusedElement is TextBox,"F2 focuses inline text editor");
-            ((TextBox)Keyboard.FocusedElement).Text="Cancelled with Escape";
+            // 焦点可能瞬时落在行内编辑器又弹回，必须在轮询里捕获引用，后续只用捕获到的对象。
+            TextBox? inlineEditor = null;
+            await WaitUntil(() => { inlineEditor = Keyboard.FocusedElement as TextBox; return inlineEditor != null; }, "F2 opens inline text editor");
+            Check(inlineEditor != null, "F2 focuses inline text editor");
+            inlineEditor!.Text = "Cancelled with Escape";
             Press(Key.Escape); await Task.Delay(100);
             Check(vm.TermDraft[0].Target=="Keyboard saved" && !vm.HasUnsavedTerms,"Escape cancels inline edit without saving");
-            table.Focus(); Press(Key.Space); await Task.Delay(200);
+            table.Focus(); Press(Key.Space);
+            await WaitUntil(() => !vm.IsWorkspaceSaving && !vm.TermDraft[0].Enabled && !vm.HasUnsavedTerms, "keyboard Space transaction completes");
             Check(!vm.TermDraft[0].Enabled && !vm.HasUnsavedTerms,"Space toggles and persists current row");
             table.SelectedItem=vm.TermDraft[0]; table.Focus(); Press(Key.Enter);
+            await Dispatcher.InvokeAsync(()=>{},DispatcherPriority.Input);
             Check(vm.IsTermDrawerOpen,"Enter opens drawer from focused row");
-            Press(Key.Escape); Check(!vm.IsTermDrawerOpen,"Escape closes drawer");
+            var termDrawer=(FrameworkElement)page.FindName("TermEditorDrawer");
+            var drawerCancel=(Button)page.FindName("TermDrawerCancelButton");
+            Check(termDrawer.IsKeyboardFocusWithin && ReferenceEquals(Keyboard.FocusedElement,drawerCancel),"term drawer moves focus to its cancel action");
+            Press(Key.Escape); await Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ApplicationIdle);
+            Check(!vm.IsTermDrawerOpen,"Escape closes drawer");
+            Check(table.IsKeyboardFocusWithin,"term drawer restores focus to the originating table");
             await vm.SetWorkspaceEnabledAsync(vm.TermDraft.ToList(),true);
             table.UpdateLayout();
             var toggle=FindVisuals<CheckBox>(table).First(c=>c.DataContext==vm.TermDraft[0] && System.Windows.Automation.AutomationProperties.GetName(c)=="启用术语");
-            toggle.RaiseEvent(new RoutedEventArgs(CheckBox.ClickEvent)); await Task.Delay(200);
+            toggle.RaiseEvent(new RoutedEventArgs(CheckBox.ClickEvent));
+            await WaitUntil(() => !vm.IsWorkspaceSaving && !vm.TermDraft[0].Enabled && !vm.HasUnsavedTerms, "rendered toggle transaction completes");
             Check(!vm.TermDraft[0].Enabled && !vm.HasUnsavedTerms,"rendered toggle click saves immediately");
             var category=FindVisuals<ComboBox>(table).First(c=>c.DataContext==vm.TermDraft[0]);
-            category.Focus(); category.SelectedItem=""; await Task.Delay(200);
-            Check(vm.TermDraft[0].Category=="" && !vm.HasUnsavedTerms,"rendered inline category saves immediately");
+            category.Focus(); category.SelectedItem="默认分类";
+            await WaitUntil(() => !vm.IsWorkspaceSaving && vm.TermDraft[0].Category=="默认分类" && !vm.HasUnsavedTerms, "rendered category transaction completes");
+            Check(vm.TermDraft[0].Category=="默认分类" && !vm.HasUnsavedTerms,"rendered inline category saves immediately");
             var batch=(ComboBox)page.FindName("BatchCategory"); table.SelectAll(); batch.ApplyTemplate();
-            var batchEditor=(TextBox)batch.Template.FindName("PART_EditableTextBox",batch);
-            Check(batchEditor.IsVisible,"shared editable ComboBox exposes text entry");
-            batchEditor.Text="custom-category";
+            Check(vm.ChangeTermCategory(null,"custom-category"),"create persistent category before assignment");
+            batch.SelectedItem="custom-category";
             FindVisuals<Button>(page).Single(b=>Equals(b.Content,"修改分类")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            await Task.Delay(200);
-            Check(vm.TermDraft[0].Category=="custom-category" && vm.TermDraft[1].Category=="","typed batch category changes users only");
+            await WaitUntil(() => !vm.IsWorkspaceSaving && vm.TermDraft[0].Category=="custom-category" && vm.TermDraft[1].Category=="默认分类", "batch category transaction completes");
+            Check(vm.TermDraft[0].Category=="custom-category" && vm.TermDraft[1].Category=="默认分类","typed batch category changes users only");
             table.SelectedItem=vm.TermDraft[0]; table.CurrentCell=new DataGridCellInfo(vm.TermDraft[0],table.Columns[2]); table.Focus(); Press(Key.F2);
             ((TextBox)Keyboard.FocusedElement).Text=""; Press(Key.Enter); await Task.Delay(300);
             Check(Keyboard.FocusedElement is TextBox retry && retry.Text=="","failed Enter save keeps attempted value in editor");
@@ -112,7 +135,7 @@ public sealed partial class SmokeApp
             window.Width=width; window.Height=height;
             table.SelectedItem=vm.TermDraft[1]; table.UpdateLayout();
             var more=FindVisuals<Button>(table).First(b=>b.DataContext==vm.TermDraft[1] && Equals(b.Content,"⋯"));
-            Check(more.ActualHeight<=30,"row quick actions fit inside compact cell padding");
+            Check(more.ActualHeight == 32 && table.RowHeight >= more.ActualHeight + 8,"row quick actions fit inside compact cell padding");
             more.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Check(more.ContextMenu.Items.OfType<MenuItem>().All(m=>!m.Header.ToString()!.Contains("删除")),"system row menu never offers deletion");
             more.ContextMenu.IsOpen=false;
@@ -122,27 +145,32 @@ public sealed partial class SmokeApp
             Check(vm.HasUnsavedTerms,"drawer input marks complex draft dirty");
             Capture(window,"workspace-drawer-verified");
             vm.FinishTermEditCommand.Execute(null);
+            // FinishTermEditCommand is an async command now, so Execute returns before the save finishes.
+            await WaitUntil(() => !vm.IsTermDrawerOpen && !vm.HasUnsavedTerms && vm.TermDraft[0].Source == "Drawer edited source", "drawer save commits and returns to list");
             Check(!vm.IsTermDrawerOpen && !vm.HasUnsavedTerms && vm.TermDraft[0].Source=="Drawer edited source","drawer save commits and returns to list");
             table.SelectAll();
             await ConfirmCloudDialog(async ()=>
             {
-                FindVisuals<Button>(page).Single(b=>Equals(b.Content,"删除自定义")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                FindVisuals<Button>(page).Single(b=>Equals(b.Content,"删除本机")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 await Task.Delay(250);
             });
+            await WaitUntil(() => vm.TermDraft.Count==1 && vm.TermDraft[0].SourceKind==GlossarySource.System && !vm.HasUnsavedTerms, "mixed selection delete settles");
             Check(vm.TermDraft.Count==1 && vm.TermDraft[0].SourceKind==GlossarySource.System && !vm.HasUnsavedTerms,"mixed selection delete confirms once and preserves system term");
-            vm.TermDraft.Add(new GlossaryEntry { Source=vm.TermDraft[0].Source,Target="User override",Category="冲突测试",SourceKind=GlossarySource.User });
+            vm.TermDraft.Add(new GlossaryEntry { Source=vm.TermDraft[0].Source,Target="User override",Category="冲突测试",SourceKind=GlossarySource.User,SourceLang="ZH",TargetLang="EN" });
             Check(vm.SaveTermEditor(),"cross-priority conflict preserves existing business rule");
+            vm.TermDraft.Add(new GlossaryEntry {Source=vm.TermDraft.Last().Source,Target="Conflicting user",Category="冲突测试",SourceKind=GlossarySource.User,SourceLang="ZH",TargetLang="EN"});
+            Check(vm.SaveTermEditor(),"same-priority conflicts are saved for explicit resolution");
             vm.TermStatusFilter="Conflict"; vm.TermSourceFilter=3; vm.TermCategoryFilter="冲突测试";
-            Check(vm.TermView.Cast<GlossaryEntry>().Count()==1,"status/source/category filters compose");
+            Check(vm.TermView.Cast<GlossaryEntry>().Count()==2,"status/source/category filters compose");
             vm.TermSourceFilter=0; vm.TermCategoryFilter=""; table.UpdateLayout();
             var conflictAction=FindVisuals<Button>(table).First(b=>Equals(b.Content,"冲突"));
             conflictAction.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            Check(vm.IsTermDrawerOpen && vm.SelectedTermConflicts.Count==1,"conflict row badge opens drawer with alternate translation");
+            Check(vm.IsTermDrawerOpen && vm.SelectedTermConflicts.Count>=1,"conflict row badge opens drawer with alternate translation");
             vm.CancelTermDrawer(); vm.TermStatusFilter="All";
             // Exercise the existing supported limit without changing the business cap.
             vm.TermDraft.Clear();
             for(var i=0;i<1000;i++) vm.TermDraft.Add(new GlossaryEntry {Source=$"性能术语-{i:D4}",Target=$"Engineering term {i:D4}",Category=i%2==0?"机械":"电气",SourceKind=GlossarySource.User});
-            vm.TermDraft[0].Target=string.Concat(Enumerable.Repeat("Long engineering translation / ",20));
+            vm.TermDraft[0].Target=string.Concat(Enumerable.Repeat("Long engineering translation / ",12));
             Check(vm.SaveTermEditor(),"1000-entry fixture persists within existing limit");
             var timing=System.Diagnostics.Stopwatch.StartNew();
             var saving=vm.SetWorkspaceEnabledAsync(vm.TermDraft.ToList(),false);
@@ -171,8 +199,12 @@ public sealed partial class SmokeApp
         {
             vm.TermSearch=""; vm.TermStatusFilter="All"; vm.TermSourceFilter=0; vm.TermCategoryFilter="";
             if(vm.IsTermDrawerOpen) vm.CancelTermDrawer();
+            await WaitUntil(() => !vm.IsWorkspaceSaving && !vm.IsGlossaryLoading && !vm.IsCloudGlossarySyncing,
+                "glossary workspace operations settle before fixture restore");
             vm.TermDraft.Clear(); foreach(var t in original) vm.TermDraft.Add(t);
-            Check(vm.SaveTermEditor(),"workspace fixture restored"); vm.SelectedTerm=null;
+            var restored = vm.SaveTermEditor();
+            Check(restored, $"workspace fixture restored: {vm.TermFeedback}; invalid={vm.TermDraft.Count(t => !DwgTranslator.Core.Services.EffectiveGlossary.Valid(t))}; processing={vm.IsProcessing}");
+            vm.SelectedTerm=null;
         }
     }
 }

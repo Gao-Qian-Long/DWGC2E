@@ -1,3 +1,4 @@
+using DwgTranslator.App.Services;
 using CommunityToolkit.Mvvm.Input;
 using DwgTranslator.Core.Models;
 using DwgTranslator.Core.Resources;
@@ -137,23 +138,47 @@ public partial class MainViewModel
     private void ShowEnvironmentCheck() { SettingsSection = 3; CurrentPage = PageSettings; }
 
     /// <summary>Opens a folder in Explorer; used by the self-check for logs and settings.</summary>
-    public void OpenFolder(string path)
+    public bool OpenFolder(string path)
     {
         try
         {
-            if (Directory.Exists(path)) Process.Start(new ProcessStartInfo("explorer.exe", $"\"{path}\"") { UseShellExecute = true });
+            if (string.IsNullOrWhiteSpace(path) || !Directory.Exists(path))
+            {
+                ToastService.Warning("目录不存在或暂时不可访问，请检查路径后重试。");
+                return false;
+            }
+            var process = Process.Start(new ProcessStartInfo("explorer.exe", $"\"{path}\"") { UseShellExecute = true });
+            if (process != null) return true;
+            ToastService.Warning("无法打开文件资源管理器，请稍后重试。");
+            return false;
         }
-        catch (Exception ex) { Log.Warning(ex, "Opening {Path} failed", path); }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Opening {Path} failed", path);
+            ToastService.Warning("无法打开目录，请检查权限或路径后重试。");
+            return false;
+        }
     }
 
-    public void RevealPath(string path)
+    public bool RevealPath(string path)
     {
         try
         {
-            if (File.Exists(path)) Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{path}\"") { UseShellExecute = true });
-            else OpenFolder(Path.GetDirectoryName(path) ?? App.AppDataDir);
+            if (File.Exists(path))
+            {
+                var process = Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{path}\"") { UseShellExecute = true });
+                if (process != null) return true;
+                ToastService.Warning("无法打开文件资源管理器，请稍后重试。");
+                return false;
+            }
+            return OpenFolder(Path.GetDirectoryName(path) ?? App.AppDataDir);
         }
-        catch (Exception ex) { Log.Warning(ex, "Revealing {Path} failed", path); }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Revealing {Path} failed", path);
+            ToastService.Warning("无法定位文件，请检查路径或权限后重试。");
+            return false;
+        }
     }
 
     /// <summary>

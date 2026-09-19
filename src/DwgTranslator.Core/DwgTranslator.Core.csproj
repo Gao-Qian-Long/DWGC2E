@@ -19,6 +19,13 @@
   -->
   <ItemGroup Condition="'$(TargetFramework)' == 'net8.0'">
     <Compile Remove="Compatibility\TextEntity.NetFramework.cs" />
+    <!-- Direct provider clients and bundled prompt loaders exist only for legacy debug tests.
+         Production binaries are Worker-only and must not expose provider plumbing or prompts. -->
+    <Compile Remove="Api\DirectApiClient.cs" Condition="'$(Configuration)' == 'Release'" />
+    <Compile Remove="Application\Translation\SettingsBackedDeepSeekClient.cs" Condition="'$(Configuration)' == 'Release'" />
+    <Compile Remove="Application\Translation\TranslationPrompt.cs" Condition="'$(Configuration)' == 'Release'" />
+    <Compile Remove="Infrastructure\Api\DeepSeekClient.cs" Condition="'$(Configuration)' == 'Release'" />
+    <Compile Remove="Infrastructure\Api\DeepSeekClientFactory.cs" Condition="'$(Configuration)' == 'Release'" />
     <PackageReference Include="ACadSharp" Version="3.6.12" />
     <PackageReference Include="ClosedXML" Version="0.104.2" />
     <PackageReference Include="Serilog" Version="4.2.0" />
@@ -33,6 +40,7 @@
        Keeping this surface small avoids shipping the WPF app's offline DWG/Excel stack in-process. -->
   <ItemGroup Condition="'$(TargetFramework)' == 'net48'">
     <Compile Include="Compatibility\IsExternalInit.cs" />
+    <Compile Include="Translation\CadUnicodeText.cs" />
     <Compile Include="Compatibility\TextEntity.NetFramework.cs" />
     <Compile Include="Models\CadWriteResult.cs" />
     <Compile Include="Models\WritebackOptions.cs" />

@@ -1,4 +1,4 @@
-using System.Windows.Threading;
+﻿using System.Windows.Threading;
 using DwgTranslator.Core.Services;
 using Serilog;
 
@@ -8,6 +8,17 @@ public partial class MainViewModel
 {
     private DispatcherTimer? _sessionCleanupTimer;
     private string? _pendingRejectedCredential;
+
+    private void OnAuthenticationRejected(DwgTranslator.Core.Api.ApiAuthenticationException failure)
+    {
+        Log.Information("Worker 已拒绝当前会话：{ErrorCode}", failure.ErrorCode);
+        OnUiThread(() =>
+        {
+            if (!HasSavedAccountSession) return;
+            // Reuse the established expiry path so unsaved proofreading, terms and settings survive.
+            _ = RefreshAccountAsync();
+        });
+    }
 
     private void ScheduleRejectedCredentialCleanup(string encryptedToken)
     {

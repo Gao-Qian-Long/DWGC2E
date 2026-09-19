@@ -17,7 +17,12 @@ public partial class MainViewModel
     [RelayCommand]
     private async Task TranslateAsync()
     {
-        if (IsProcessing || !ConfirmLeaveProofreading()) return;
+        if (IsProcessing)
+        {
+            DwgTranslator.App.Services.ToastService.Info("当前任务正在执行，请勿重复启动。");
+            return;
+        }
+        if (!ConfirmLeaveProofreading()) return;
         await RunTaskQueueAsync(retryFailedFirst: false).ConfigureAwait(true);
     }
 
@@ -44,7 +49,12 @@ public partial class MainViewModel
     [RelayCommand]
     private async Task RetryFailedAsync()
     {
-        if (IsProcessing || !ConfirmLeaveProofreading()) return;
+        if (IsProcessing)
+        {
+            DwgTranslator.App.Services.ToastService.Info("当前任务正在执行，请完成或取消后再重试失败项。");
+            return;
+        }
+        if (!ConfirmLeaveProofreading()) return;
         await RunTaskQueueAsync(retryFailedFirst: true).ConfigureAwait(true);
     }
 

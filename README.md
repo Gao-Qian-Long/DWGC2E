@@ -36,9 +36,10 @@ release/
 ├─ settings.json              # 默认配置模板（不包含私人 API Key）
 ├─ assets/default-glossaries/ # 随包默认术语资源
 ├─ glossaries/                # 默认术语表兼容副本
-├─ prompts/                   # 翻译提示词
 └─ CadPlugin/                 # 当前发布包对应宿主的 NETLOAD 插件及平台清单
 ```
+
+客户端提示词已退役：Release 构建不再编译 `Application/Translation/TranslationPrompt.cs`，`tools/Verify-ReleasePackage.ps1` 会拒绝任何 `prompts/` 目录，安装器还会删除遗留的 `{app}\prompts\deepl_context.txt`。不要把 `assets/prompts/` 重新塞回发布产物。
 
 运行时的个人配置、日志、术语表和导出文件保存在 `%APPDATA%\DwgTranslator\`。私人 API Key 和运行日志不会提交到仓库。
 
@@ -175,7 +176,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools/Verify-ProjectMoves.ps
 
 ### 构建与诊断工具导航
 
-[工具目录与副作用说明](docs/deployment/tool-catalog.md)覆盖tools根目录的20个脚本，区分本地交付、离线验证、联网诊断、交互截图及一次性历史清理。维护者应先确认目标环境，不要把线上探针当离线测试运行。
+[工具目录与副作用说明](docs/deployment/tool-catalog.md)覆盖tools根目录的26个脚本，区分本地交付、离线验证、联网诊断、交互截图及一次性历史清理。维护者应先确认目标环境，不要把线上探针当离线测试运行。
 
 工程结构回归：`powershell -NoProfile -File tests/BuildPipeline/Test-ProjectStructure.ps1`。仅评估Core双目标及App的源文件、依赖边界和资源映射，不构建APP，不改release；详细范围见架构文档。
 

@@ -70,7 +70,7 @@ try {
  while((Test-Path -LiteralPath (Join-Path $install 'DwgTranslator.exe')) -and (Get-Date) -lt $deadline){Start-Sleep -Milliseconds 200}
  Check (-not(Test-Path -LiteralPath (Join-Path $install 'DwgTranslator.exe'))) 'clean uninstall removes executable'
  # Reset only verified seeded fixture defaults; no production/user data is touched.
- foreach($relative in @('app/settings.json','app/prompts/deepl_context.txt','app/glossaries/mechanical_zh_en.json','user-data/settings.json','user-data/glossaries/mechanical_zh_en.json')){
+ foreach($relative in @('app/settings.json','app/glossaries/mechanical_zh_en.json','user-data/settings.json','user-data/glossaries/mechanical_zh_en.json')){
   $seed=Join-Path $sandbox $relative
   $sourceRelative=$relative.Substring($relative.IndexOf('/')+1)
   if(Test-Path -LiteralPath $seed){Check ((Hash $seed) -eq (Hash (Join-Path $publish $sourceRelative))) ('clean fixture seed unchanged: '+$relative);Remove-Item -LiteralPath $seed}
@@ -95,10 +95,10 @@ try {
  Run $setup 'fresh-install' @('/CURRENTUSER','/TASKS="desktopicon,startmenu"','/LANG=chinesesimplified')
  foreach($path in $upgradeKeep.Keys){Check ((Hash $path) -eq $upgradeKeep[$path]) 'cross-build upgrade preserves user file'}
  Check ((Hash (Join-Path $install 'DwgTranslator.exe')) -eq $info.sha256) 'installed executable matches verified candidate'
- foreach($relative in @('settings.json','prompts/deepl_context.txt','glossaries/mechanical_zh_en.json','assets/default-glossaries/mechanical_zh_en.json','CadPlugin/DwgTranslator.Cad.dll','CadPlugin/DwgTranslator.Core.dll')){$expectedSource=$publish;if($PreviousPublishDir -and $relative -in @('settings.json','prompts/deepl_context.txt','glossaries/mechanical_zh_en.json')){$expectedSource=$previous};Check ((Hash (Join-Path $install $relative)) -eq (Hash (Join-Path $expectedSource $relative))) "installed resource obeys ownership: $relative"}
+ foreach($relative in @('settings.json','glossaries/mechanical_zh_en.json','assets/default-glossaries/mechanical_zh_en.json','CadPlugin/DwgTranslator.Cad.dll','CadPlugin/DwgTranslator.Core.dll')){$expectedSource=$publish;if($PreviousPublishDir -and $relative -in @('settings.json','glossaries/mechanical_zh_en.json')){$expectedSource=$previous};Check ((Hash (Join-Path $install $relative)) -eq (Hash (Join-Path $expectedSource $relative))) "installed resource obeys ownership: $relative"}
  foreach($item in $payload){
   $expected=$item.sha256
-  if($PreviousPublishDir -and $item.path -in @('settings.json','prompts/deepl_context.txt','glossaries/mechanical_zh_en.json')){$expected=Hash (Join-Path $previous $item.path)}
+  if($PreviousPublishDir -and $item.path -in @('settings.json','glossaries/mechanical_zh_en.json')){$expected=Hash (Join-Path $previous $item.path)}
   Check ((Hash (Join-Path $install $item.path)) -eq $expected) ('full payload hash: '+$item.path)
  }
  foreach($file in Get-ChildItem -LiteralPath $install -File -Recurse){
@@ -121,7 +121,7 @@ try {
    Check (EqualSnapshot $snapshotBefore (Snapshot $install)) ("source marker rejection preserves entire installation: "+$marker)
    Remove-Item -LiteralPath $markerPath
  }
- $personal=@{ 'app/settings.json'='{"personal":"keep"}';'app/prompts/deepl_context.txt'='personal prompt';'app/glossaries/mechanical_zh_en.json'='{"personal":"term"}';'user-data/settings.json'='{"account":"isolated"}';'user-data/glossaries/mechanical_zh_en.json'='{"custom":"keep"}';'app/exports/sample.txt'='output';'app/logs/user.log'='log';'app/unknown-user-file.txt'='unknown';'user-data/exports/sample.txt'='appdata output' }
+ $personal=@{ 'app/settings.json'='{"personal":"keep"}';'app/prompts/user-note.txt'='personal note';'app/glossaries/mechanical_zh_en.json'='{"personal":"term"}';'user-data/settings.json'='{"account":"isolated"}';'user-data/glossaries/mechanical_zh_en.json'='{"custom":"keep"}';'app/exports/sample.txt'='output';'app/logs/user.log'='log';'app/unknown-user-file.txt'='unknown';'user-data/exports/sample.txt'='appdata output' }
  $keep=@{};foreach($relative in $personal.Keys){$path=Join-Path $sandbox $relative;Put $path $personal[$relative];$keep[$path]=Hash $path}
  # A real earlier UI-version candidate is not required: this is same-version repair/overwrite acceptance.
  Put (Join-Path $install 'CadPlugin/DwgTranslator.Cad.dll') 'corrupt fixture plugin'

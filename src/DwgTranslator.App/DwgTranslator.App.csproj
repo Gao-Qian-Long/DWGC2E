@@ -23,8 +23,6 @@
              CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\..\assets\glossaries\mechanical_zh_en.json" Link="assets\default-glossaries\mechanical_zh_en.json"
              CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
-    <Content Include="..\..\assets\prompts\deepl_context.txt" Link="prompts\deepl_context.txt"
-             CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
   <!-- Self-contained publish profile -->

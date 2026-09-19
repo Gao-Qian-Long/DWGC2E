@@ -6,6 +6,8 @@ using System.Windows;
 using System.IO;
 using System.Diagnostics;
 using DwgTranslator.Core.Tasks;
+using DwgTranslator.Core.Services;
+using Serilog;
 
 namespace DwgTranslator.App.ViewModels;
 
@@ -22,10 +24,105 @@ public partial class MainViewModel
     private readonly HashSet<DrawingFileItem> _batchRows = new();
     public ICollectionView BatchView => _batchView ??= CreateBatchView();
     public string ShellStatusText => IsProcessing ? StatusMessage : "就绪";
-    partial void OnIsProcessingChanged(bool value) => OnPropertyChanged(nameof(ShellStatusText));
+
+    public int WorkspaceFileCount => DrawingFiles.Count;
+    public int WorkspaceActiveCount => DrawingFiles.Count(x => x.IsActive);
+    public int WorkspaceSuccessfulCount => DrawingFiles.Count(x => x.IsTranslationSuccessful);
+    public int WorkspaceFailedCount => DrawingFiles.Count(IsFailedTask);
+    public int WorkspaceReviewCount => DrawingFiles.Count(x => x.NeedsReview);
+    public int WorkspacePendingExportCount => DrawingFiles.Count(x => x.NeedsExport);
+    public int WorkspaceExportedCount => DrawingFiles.Count(x => x.HasOutput);
+    public double WorkspaceOverallProgress => DrawingFiles.Count == 0
+        ? 0
+        : Math.Clamp(DrawingFiles.Average(x => x.ProgressPercent), 0, 100);
+    public string WorkspaceProgressText => $"{WorkspaceOverallProgress:0}%";
+    public string WorkspaceRunStateText => IsExporting
+        ? "正在导出"
+        : IsTranslating || _taskManager.IsRunning
+            ? (IsCancellationRequested ? "正在停止" : "正在翻译")
+            : WorkspaceFailedCount > 0
+                ? "需要处理"
+                : WorkspaceReviewCount > 0
+                    ? "等待校对"
+                    : WorkspacePendingExportCount > 0
+                        ? "等待导出"
+                        : WorkspaceExportedCount > 0 && WorkspaceExportedCount == WorkspaceFileCount
+                            ? "已全部导出"
+                            : HasDrawingFiles ? "就绪" : "未添加图纸";
+    public string WorkspaceNextStepText
+    {
+        get
+        {
+            if (!HasDrawingFiles) return "下一步：添加 DWG / DXF 图纸。";
+            if (IsTranslating || WorkspaceActiveCount > 0) return $"正在处理 {Math.Max(1, WorkspaceActiveCount)} 张图纸，请等待队列完成。";
+            if (WorkspaceFailedCount > 0) return $"下一步：先重试 {WorkspaceFailedCount} 张失败图纸，或在批量任务中查看原因。";
+            if (WorkspaceReviewCount > 0) return $"下一步：校对 {WorkspaceReviewCount} 张翻译结果；保存后才进入待导出。";
+            if (WorkspacePendingExportCount > 0) return $"下一步：导出 {WorkspacePendingExportCount} 张已校对图纸。";
+            if (WorkspaceExportedCount > 0) return $"已导出 {WorkspaceExportedCount} 张图纸，可继续添加新图纸。";
+            return CanStartWorkspaceTranslation ? "下一步：开始翻译。" : "当前队列没有可执行任务。";
+        }
+    }
+    public bool CanStartWorkspaceTranslation => !IsProcessing && !IsTranslating && !IsExporting
+        && DrawingFiles.Any(x => x.Task == null || x.Task.Status is TranslationTaskStatus.Pending or TranslationTaskStatus.Paused);
+    public bool CanRetryFailedDrawingTasks => !IsProcessing && !IsTranslating && !IsExporting && HasFailedDrawingTasks;
+    public bool CanExportWorkspace => !IsProcessing && !IsTranslating && !IsExporting
+        && DrawingFiles.Any(x => x.IsIncludedForExport && x.NeedsExport);
+
+    private void RaiseWorkspaceSummaryProperties()
+    {
+        OnPropertyChanged(nameof(WorkspaceFileCount));
+        OnPropertyChanged(nameof(WorkspaceActiveCount));
+        OnPropertyChanged(nameof(WorkspaceSuccessfulCount));
+        OnPropertyChanged(nameof(WorkspaceFailedCount));
+        OnPropertyChanged(nameof(WorkspaceReviewCount));
+        OnPropertyChanged(nameof(WorkspacePendingExportCount));
+        OnPropertyChanged(nameof(WorkspaceExportedCount));
+        OnPropertyChanged(nameof(WorkspaceOverallProgress));
+        OnPropertyChanged(nameof(WorkspaceProgressText));
+        OnPropertyChanged(nameof(WorkspaceRunStateText));
+        OnPropertyChanged(nameof(WorkspaceNextStepText));
+        OnPropertyChanged(nameof(CanStartWorkspaceTranslation));
+        OnPropertyChanged(nameof(CanRetryFailedDrawingTasks));
+        OnPropertyChanged(nameof(CanExportWorkspace));
+    }
+
+    partial void OnIsProcessingChanged(bool value)
+    {
+        OnPropertyChanged(nameof(ShellStatusText));
+        RaiseWorkspaceSummaryProperties();
+    }
     partial void OnStatusMessageChanged(string value) => OnPropertyChanged(nameof(ShellStatusText));
+    partial void OnIsTranslatingChanged(bool value) => RaiseWorkspaceSummaryProperties();
+    partial void OnIsExportingChanged(bool value) => RaiseWorkspaceSummaryProperties();
+    partial void OnProgressValueChanged(double value) => RaiseWorkspaceSummaryProperties();
+    partial void OnHasDrawingFilesChanged(bool value) => RaiseWorkspaceSummaryProperties();
+    partial void OnTranslatedCountChanged(int value) => RaiseWorkspaceSummaryProperties();
+    partial void OnFailedCountChanged(int value) => RaiseWorkspaceSummaryProperties();
+    partial void OnIsCancellationRequestedChanged(bool value) => RaiseWorkspaceSummaryProperties();
     public bool HasFailedDrawingTasks => DrawingFiles.Any(IsFailedTask);
-    public string BatchCountText => $"全部 {DrawingFiles.Count}    运行中 {DrawingFiles.Count(x => x.IsActive)}    已完成 {DrawingFiles.Count(x => x.Task?.Status == TranslationTaskStatus.Completed)}    失败 {DrawingFiles.Count(IsFailedTask)}";
+    public int BatchTotalCount => DrawingFiles.Count;
+    public int BatchActiveCount => DrawingFiles.Count(x => x.IsActive);
+    public int BatchPendingCount => DrawingFiles.Count(x => x.Task?.Status == TranslationTaskStatus.Pending
+        || x.Task == null && !x.IsActive && !x.IsFinished && !x.HasError);
+    public int BatchReviewCount => DrawingFiles.Count(x => x.NeedsReview);
+    public int BatchPendingExportCount => DrawingFiles.Count(x => x.NeedsExport);
+    public int BatchExportedCount => DrawingFiles.Count(x => x.HasOutput);
+    public int BatchCompletedCount => BatchPendingExportCount + BatchExportedCount;
+    public int BatchFailedCount => DrawingFiles.Count(IsFailedTask);
+    public string BatchCountText => $"全部 {BatchTotalCount}    运行中 {BatchActiveCount}    待处理 {BatchPendingCount}    待校对 {BatchReviewCount}    待导出 {BatchPendingExportCount}    已导出 {BatchExportedCount}    失败 {BatchFailedCount}";
+    private void RaiseBatchSummaryProperties()
+    {
+        OnPropertyChanged(nameof(BatchTotalCount));
+        OnPropertyChanged(nameof(BatchActiveCount));
+        OnPropertyChanged(nameof(BatchPendingCount));
+        OnPropertyChanged(nameof(BatchReviewCount));
+        OnPropertyChanged(nameof(BatchCompletedCount));
+        OnPropertyChanged(nameof(BatchPendingExportCount));
+        OnPropertyChanged(nameof(BatchExportedCount));
+        OnPropertyChanged(nameof(BatchFailedCount));
+        OnPropertyChanged(nameof(BatchCountText));
+        OnPropertyChanged(nameof(HasFailedDrawingTasks));
+    }
     private ListCollectionView CreateBatchView()
     {
         var view = new ListCollectionView(DrawingFiles) { Filter = MatchBatch };
@@ -41,7 +138,7 @@ public partial class MainViewModel
             if (e.NewItems != null) foreach (DrawingFileItem row in e.NewItems)
                 { if (_batchRows.Add(row)) PropertyChangedEventManager.AddHandler(row, BatchRowChanged, ""); }
             if (SelectedBatchTask != null && !DrawingFiles.Contains(SelectedBatchTask)) { SelectedBatchTask = null; IsTaskDetailOpen = false; IsProofreading = false; }
-            OnPropertyChanged(nameof(BatchCountText)); OnPropertyChanged(nameof(HasFailedDrawingTasks));
+            RaiseBatchSummaryProperties();
         };
         foreach (var row in DrawingFiles) { _batchRows.Add(row); PropertyChangedEventManager.AddHandler(row, BatchRowChanged, ""); }
         return view;
@@ -49,28 +146,87 @@ public partial class MainViewModel
     private bool _batchRefreshQueued;
     private void BatchRowChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName != nameof(DrawingFileItem.StatusText) || _batchRefreshQueued) return;
+        if (_batchRefreshQueued || e.PropertyName is not (nameof(DrawingFileItem.StatusText)
+            or nameof(DrawingFileItem.WorkflowStatusText) or nameof(DrawingFileItem.HasOutput)
+            or nameof(DrawingFileItem.NeedsExport) or nameof(DrawingFileItem.IsActive)
+            or nameof(DrawingFileItem.HasError) or nameof(DrawingFileItem.LastUpdatedText))) return;
         _batchRefreshQueued = true;
-        Application.Current.Dispatcher.BeginInvoke(new Action(() => { _batchRefreshQueued = false; RefreshBatch(); }));
+        OnUiThread(() => { _batchRefreshQueued = false; RefreshBatch(); });
     }
     private static bool IsFailedTask(DrawingFileItem row) => row.HasError || row.Task?.Status is TranslationTaskStatus.Failed or TranslationTaskStatus.PartiallyCompleted;
     private bool MatchBatch(object value)
     {
         if (value is not DrawingFileItem row) return false;
         if (!row.FileName.Contains((BatchSearch ?? "").Trim(), StringComparison.OrdinalIgnoreCase)) return false;
-        if (BatchDateFilter > 0 && (row.Task == null || row.Task.CreatedAt.ToLocalTime().Date < DateTime.Today.AddDays(BatchDateFilter == 1 ? 0 : -6))) return false;
-        return BatchStatusFilter switch { 1 => row.IsActive, 2 => row.Task?.Status == TranslationTaskStatus.Pending || row.Task == null && !row.IsActive && !row.IsFinished && !row.HasError, 3 => row.Task?.Status == TranslationTaskStatus.Completed || row.IsFinished && !row.HasError && row.Task == null, 4 => IsFailedTask(row), 5 => row.Task?.Status == TranslationTaskStatus.Paused, 6 => row.Task?.Status == TranslationTaskStatus.Cancelled, 7 => row.Task?.Status == TranslationTaskStatus.Skipped, _ => true };
+        if (BatchDateFilter > 0)
+        {
+            if (row.Task == null) return false;
+            var updatedAt = row.Task.UpdatedAt == default ? row.Task.CreatedAt : row.Task.UpdatedAt;
+            if (updatedAt.ToLocalTime().Date < DateTime.Today.AddDays(BatchDateFilter == 1 ? 0 : -6)) return false;
+        }
+        return BatchStatusFilter switch
+        {
+            1 => row.IsActive,
+            2 => row.Task?.Status == TranslationTaskStatus.Pending
+                || row.Task == null && !row.IsActive && !row.IsFinished && !row.HasError,
+            3 => row.NeedsReview,
+            4 => row.NeedsExport,
+            5 => row.HasOutput,
+            6 => IsFailedTask(row),
+            7 => row.Task?.Status == TranslationTaskStatus.Paused,
+            8 => row.Task?.Status == TranslationTaskStatus.Cancelled,
+            9 => row.Task?.Status == TranslationTaskStatus.Skipped,
+            _ => true
+        };
     }
-    private void RefreshBatch() { _batchView?.Refresh(); OnPropertyChanged(nameof(BatchCountText)); OnPropertyChanged(nameof(HasFailedDrawingTasks)); }
+    private void RefreshBatch() { _batchView?.Refresh(); RaiseBatchSummaryProperties(); }
     partial void OnBatchSearchChanged(string value) => RefreshBatch();
     partial void OnBatchStatusFilterChanged(int value) => RefreshBatch();
     partial void OnBatchDateFilterChanged(int value) => RefreshBatch();
-    partial void OnSelectedBatchTaskChanged(DrawingFileItem? value) { if (value != null) IsTaskDetailOpen = true; }
     [RelayCommand] private void SelectAllDrawingOutputs() { foreach (var row in DrawingFiles) row.IsIncludedForExport = true; }
     [RelayCommand] private void ClearDrawingOutputs() { foreach (var row in DrawingFiles) row.IsIncludedForExport = false; }
     [RelayCommand] private void ShowTaskDetail(DrawingFileItem? row) { if (row == null) return; SelectedBatchTask = row; IsTaskDetailOpen = true; }
     [RelayCommand] private void CloseTaskDetail() => IsTaskDetailOpen = false;
-    [RelayCommand] private void OpenTaskProofreading() { if (SelectedBatchTask == null || !ConfirmLeaveProofreading()) return; SelectedDrawingFile = SelectedBatchTask; ApplyFilter(); IsProofreading = true; IsTaskDetailOpen = false; }
+
+    [RelayCommand]
+    private void OpenTaskProofreading()
+    {
+        if (SelectedBatchTask == null) return;
+        if (SelectedBatchTask.Task?.IsActive == true)
+        {
+            Services.ToastService.Warning("任务正在执行，请完成或停止后再校对。");
+            return;
+        }
+        if (!SelectedBatchTask.CanOpenProofreading)
+        {
+            Services.ToastService.Warning(SelectedBatchTask.HasError
+                ? "此任务尚未生成可校对译文，请先重试失败任务。"
+                : "此任务尚未完成翻译，暂时不能进入校对。");
+            return;
+        }
+        if (!ConfirmLeaveProofreading()) return;
+        SelectedDrawingFile = SelectedBatchTask;
+        ApplyFilter();
+        IsProofreading = true;
+        IsTaskDetailOpen = false;
+    }
+
+    [RelayCommand]
+    private async Task ExportSelectedDrawingAsync(DrawingFileItem? item)
+    {
+        if (item == null || !item.CanExport || IsProcessing) return;
+        var previousSelection = DrawingFiles.ToDictionary(row => row, row => row.IsIncludedForExport);
+        try
+        {
+            foreach (var row in DrawingFiles) row.IsIncludedForExport = ReferenceEquals(row, item);
+            await ExportDwgAsync();
+        }
+        finally
+        {
+            foreach (var pair in previousSelection) pair.Key.IsIncludedForExport = pair.Value;
+        }
+    }
+
     [RelayCommand] private void BackToTaskList() { if (ConfirmLeaveProofreading()) IsProofreading = false; }
 
     private readonly Dictionary<DwgTranslator.Core.Models.TextEntity, (string? Text, DwgTranslator.Core.Models.TranslationStatus Status)> _proofreadingOriginals = new();
@@ -107,9 +263,56 @@ public partial class MainViewModel
     [RelayCommand]
     private void OpenDrawingOutput(DrawingFileItem? row)
     {
-        var path = row?.Task?.OutputPath;
-        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path)) { StatusMessage = "输出文件尚未生成或已移动，请先导出图纸。"; return; }
+        var path = ResolveDrawingOutputPath(row);
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+        {
+            StatusMessage = "输出文件尚未生成、已移动或已删除，请重新导出图纸。";
+            return;
+        }
+
+        // Project export history is authoritative. Once a historical path is found, repair the
+        // task cache so the task table and the next launch do not need to repeat the lookup.
+        if (row?.Task != null && !string.Equals(row.Task.LastExportPath, path, StringComparison.OrdinalIgnoreCase))
+        {
+            try { _taskManager.RecordExportPath(row.Task.Id, path); }
+            catch (Exception ex) { Log.Debug(ex, "回填任务导出路径失败 {TaskId}", row.Task.Id); }
+        }
+
         try { Process.Start(new ProcessStartInfo(path) { UseShellExecute = true }); }
-        catch { StatusMessage = "无法打开输出文件，请确认已安装对应的 CAD 软件，或从输出目录打开。"; }
+        catch (Exception ex) { Log.Warning(ex, "打开输出文件失败 {Path}", path); StatusMessage = "无法打开输出文件，请确认已安装对应的 CAD 软件，或从输出目录打开。"; }
     }
+
+    /// <summary>
+    /// Resolve output paths in migration-safe order:
+    /// task cache → project export history → legacy task field.
+    /// A stale latest history entry is skipped in favour of the newest existing export.
+    /// </summary>
+    private string? ResolveDrawingOutputPath(DrawingFileItem? row)
+    {
+        if (row == null) return null;
+
+        var cached = row.Task?.LastExportPath;
+        if (IsExistingFile(cached)) return cached;
+
+        var project = ActiveTranslationProject;
+        var projectId = row.Task?.ProjectId;
+        if (project == null || (!string.IsNullOrWhiteSpace(projectId) && !string.Equals(project.Id, projectId, StringComparison.OrdinalIgnoreCase)))
+        {
+            if (!string.IsNullOrWhiteSpace(projectId))
+            {
+                try { project = ProjectStore.Load(projectId); }
+                catch (Exception ex) { Log.Debug(ex, "读取项目导出历史失败 {ProjectId}", projectId); }
+            }
+        }
+
+        var historyPath = TranslationProjectExportLocator.FindLatestOutputPath(project, row.FullPath);
+        if (IsExistingFile(historyPath)) return historyPath;
+
+        // OutputPath is intentionally last: it is an obsolete field retained only for old tasks.
+        var legacy = row.Task?.OutputPath;
+        return IsExistingFile(legacy) ? legacy : null;
+    }
+
+    private static bool IsExistingFile(string? path)
+        => !string.IsNullOrWhiteSpace(path) && File.Exists(path);
 }

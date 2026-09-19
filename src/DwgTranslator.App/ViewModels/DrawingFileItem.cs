@@ -58,12 +58,16 @@ public partial class DrawingFileItem : ObservableObject
     public TranslationTask? Task => _task;
 
     public bool HasTask => _task != null;
-    public string CreatedAtText => _task?.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm") ?? "—";
+    public string CreatedAtText => _task == null ? "—" : FormatDateTime(_task.CreatedAt);
 
     /// <summary>任务层推进后调用：把所有依赖任务的列一次性通知给界面。</summary>
     public void RefreshFromTask()
     {
         OnPropertyChanged(nameof(StatusText));
+        OnPropertyChanged(nameof(WorkflowStatusText));
+        OnPropertyChanged(nameof(IsTranslationSuccessful));
+        OnPropertyChanged(nameof(NeedsReview));
+        OnPropertyChanged(nameof(NeedsExport));
         OnPropertyChanged(nameof(ProgressPercent));
         OnPropertyChanged(nameof(ProgressText));
         OnPropertyChanged(nameof(ElapsedText));
@@ -73,9 +77,24 @@ public partial class DrawingFileItem : ObservableObject
         OnPropertyChanged(nameof(ErrorText));
         OnPropertyChanged(nameof(HasError));
         OnPropertyChanged(nameof(PriorityText));
+        OnPropertyChanged(nameof(LastExportPath));
+        OnPropertyChanged(nameof(OutputPath));
         OnPropertyChanged(nameof(OutputText));
         OnPropertyChanged(nameof(HasOutput));
         OnPropertyChanged(nameof(IsFinished));
+        OnPropertyChanged(nameof(LastUpdatedText));
+        OnPropertyChanged(nameof(BatchResultText));
+        OnPropertyChanged(nameof(RetryCountText));
+        OnPropertyChanged(nameof(NextActionText));
+        OnPropertyChanged(nameof(StartedAtText));
+        OnPropertyChanged(nameof(TranslationCompletedAtText));
+        OnPropertyChanged(nameof(ReviewCompletedAtText));
+        OnPropertyChanged(nameof(LastExportedAtText));
+        OnPropertyChanged(nameof(ElapsedDisplayText));
+        OnPropertyChanged(nameof(OutputPathText));
+        OnPropertyChanged(nameof(CanOpenProofreading));
+        OnPropertyChanged(nameof(CanRetry));
+        OnPropertyChanged(nameof(CanExport));
     }
 
     #endregion
@@ -97,6 +116,84 @@ public partial class DrawingFileItem : ObservableObject
             return "等待中";
         }
     }
+
+    /// <summary>
+    /// Commercial workflow wording. Translation completion, proofreading completion and export are
+    /// deliberately distinct so the table never presents “translated” as if the deliverable exists.
+    /// </summary>
+    public string WorkflowStatusText
+    {
+        get
+        {
+            if (!string.IsNullOrWhiteSpace(ImportError)) return "导入失败";
+            if (HasOutput) return "已导出";
+            if (_task?.Status == TranslationTaskStatus.ReadyForReview) return "待校对";
+            if (_task?.Status == TranslationTaskStatus.Completed) return "待导出";
+            return StatusText;
+        }
+    }
+
+    public bool IsTranslationSuccessful => HasOutput
+        || _task?.Status is TranslationTaskStatus.ReadyForReview or TranslationTaskStatus.Completed
+        || _task == null && IsFinished && !HasError;
+
+    public bool NeedsReview => _task?.Status == TranslationTaskStatus.ReadyForReview;
+
+    public bool NeedsExport => !HasOutput && (_task?.Status == TranslationTaskStatus.Completed
+        || _task == null && IsFinished && !HasError);
+    public string LastUpdatedText => FormatDateTime(_task?.UpdatedAt);
+
+    public string StartedAtText => FormatDateTime(_task?.StartedAt);
+
+    public string TranslationCompletedAtText => FormatDateTime(_task?.CompletedAt);
+
+    public string ReviewCompletedAtText => FormatDateTime(_task?.ReviewCompletedAt);
+
+    public string LastExportedAtText => FormatDateTime(_task?.LastExportedAt);
+
+    public string RetryCountText => _task == null ? "—" : _task.RetryCount.ToString("N0");
+
+    public string BatchResultText
+    {
+        get
+        {
+            if (_task == null)
+                return EntityCount == 0 ? "尚未统计" : $"已完成 {CompletedCount:N0}/{EntityCount:N0}";
+            if (_task.TextCount <= 0) return _task.FailedCount > 0 ? $"失败 {_task.FailedCount:N0}" : "尚未统计";
+            return $"已译 {_task.TranslatedCount:N0}/{_task.TextCount:N0}"
+                + (_task.FailedCount > 0 ? $" · 失败 {_task.FailedCount:N0}" : string.Empty);
+        }
+    }
+
+    public string NextActionText
+    {
+        get
+        {
+            if (!string.IsNullOrWhiteSpace(ImportError)) return "修复源文件后重新添加";
+            if (HasOutput) return "打开输出；如有需要可再次校对";
+            if (_task == null) return "开始翻译";
+            return _task.Status switch
+            {
+                TranslationTaskStatus.Parsing or TranslationTaskStatus.Extracting
+                    or TranslationTaskStatus.Translating or TranslationTaskStatus.LayoutOptimizing
+                    or TranslationTaskStatus.Writing => "等待当前阶段完成",
+                TranslationTaskStatus.ReadyForReview => "进入校对并保存更改",
+                TranslationTaskStatus.Completed => "导出已校对图纸",
+                TranslationTaskStatus.Failed or TranslationTaskStatus.PartiallyCompleted => "查看错误并重试",
+                TranslationTaskStatus.Paused => "继续任务",
+                TranslationTaskStatus.Cancelled => "重新提交任务",
+                TranslationTaskStatus.Skipped => "确认是否需要重新处理",
+                _ => "开始翻译"
+            };
+        }
+    }
+
+    public bool CanOpenProofreading => HasOutput
+        || _task?.Status is TranslationTaskStatus.ReadyForReview or TranslationTaskStatus.Completed;
+
+    public bool CanRetry => _task?.Status is TranslationTaskStatus.Failed or TranslationTaskStatus.PartiallyCompleted;
+
+    public bool CanExport => NeedsExport;
 
     /// <summary>0..100 — share of this drawing's entities that finished.</summary>
     public double ProgressPercent => _task?.Progress
@@ -122,6 +219,8 @@ public partial class DrawingFileItem : ObservableObject
     }
 
     /// <summary>True while this drawing is being processed (drives the status colour in the table).</summary>
+    public string ElapsedDisplayText => string.IsNullOrWhiteSpace(ElapsedText) ? "—" : ElapsedText;
+
     public bool IsActive => _task?.IsActive ?? (CompletedCount > 0 && CompletedCount < EntityCount);
 
     /// <summary>True when the task layer is done with this drawing (done / failed / cancelled).</summary>
@@ -144,12 +243,27 @@ public partial class DrawingFileItem : ObservableObject
 
     public bool HasError => !string.IsNullOrWhiteSpace(ErrorText);
 
-    /// <summary>Written output file (the task layer writes as part of the queue).</summary>
-    public string OutputText => string.IsNullOrWhiteSpace(_task?.OutputPath)
-        ? string.Empty
-        : Path.GetFileName(_task!.OutputPath!);
+    /// <summary>最近一次成功导出的文件路径（项目导出历史的 UI 缓存）。</summary>
+    public string? LastExportPath => _task?.LastExportPath;
 
-    public bool HasOutput => !string.IsNullOrWhiteSpace(_task?.OutputPath) && File.Exists(_task.OutputPath);
+    /// <summary>
+    /// Display compatibility for older task records. New records use <see cref="LastExportPath"/>;
+    /// the obsolete task field is only exposed when a pre-migration task has no new cache yet.
+    /// </summary>
+    public string? OutputPath => LastExportPath ?? _task?.OutputPath;
+
+    public string OutputText => string.IsNullOrWhiteSpace(OutputPath)
+        ? string.Empty
+        : Path.GetFileName(OutputPath);
+
+    /// <summary>
+    /// Live filesystem probe on purpose: the UI smoke contract asserts that deleting the exported
+    /// file clears the action without any refresh (<c>UiSmoke/Program.cs:279-280</c>), so a cached
+    /// result would be a behaviour regression, not an optimisation.
+    /// </summary>
+    public bool HasOutput => !string.IsNullOrWhiteSpace(OutputPath) && File.Exists(OutputPath);
+
+    public string OutputPathText => string.IsNullOrWhiteSpace(OutputPath) ? "尚未导出" : OutputPath!;
 
     public string SummaryText => _task != null
         ? $"{_task.TextCount} 条 · 已译 {_task.TranslatedCount} · 失败 {_task.FailedCount}"
@@ -186,6 +300,14 @@ public partial class DrawingFileItem : ObservableObject
         _completedUtc = null;
         OnPropertyChanged(nameof(ElapsedText));
     }
+
+    private static string FormatDateTime(DateTime? value)
+        => value is { } timestamp && timestamp != default
+            ? timestamp.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+            : "—";
+
+    private static string FormatDateTime(DateTime value)
+        => value == default ? "—" : value.ToLocalTime().ToString("yyyy-MM-dd HH:mm");
 
     private static string Normalize(string? path)
     {

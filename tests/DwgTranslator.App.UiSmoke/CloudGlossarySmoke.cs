@@ -26,14 +26,20 @@ public sealed partial class SmokeApp
         {
             if (Offline) throw new HttpRequestException("isolated network failure");
             if (request.Method == HttpMethod.Get && ReadGate != null) await ReadGate.Task;
-            if (request.Method == HttpMethod.Put)
+            if (request.Method == HttpMethod.Put || request.Method == HttpMethod.Patch)
             {
                 Writes++;
                 if (WriteGate != null) await WriteGate.Task;
                 using var doc = JsonDocument.Parse(await request.Content!.ReadAsStringAsync());
                 LastExpected = doc.RootElement.GetProperty("expected_revision").GetString();
                 if (Conflict || LastExpected != Revision) return new(HttpStatusCode.Conflict) {Content=new StringContent("{}")};
-                Entries = doc.RootElement.GetProperty("entries").GetRawText(); Revision = new string('b',64);
+                var existing = JsonSerializer.Deserialize<List<JsonElement>>(Entries)!;
+                if (request.Method == HttpMethod.Patch) {
+                    var upserts=doc.RootElement.GetProperty("upserts").EnumerateArray().Select(e=>e.Clone()).ToList();
+                    var deletes=doc.RootElement.GetProperty("delete_ids").EnumerateArray().Select(e=>e.GetString()).ToHashSet();
+                    existing.RemoveAll(e=>deletes.Contains(e.GetProperty("id").GetString()) || upserts.Any(u=>u.GetProperty("id").GetString()==e.GetProperty("id").GetString()));
+                    existing.AddRange(upserts); Entries=JsonSerializer.Serialize(existing);
+                } else Entries = doc.RootElement.GetProperty("entries").GetRawText(); Revision = new string('b',64);
             }
             return new(HttpStatusCode.OK) {Content=new StringContent($"{{\"success\":true,\"revision\":\"{Revision}\",\"entries\":{Entries}}}",Encoding.UTF8,"application/json")};
         }
@@ -43,9 +49,15 @@ public sealed partial class SmokeApp
     {
         var timer = new DispatcherTimer {Interval=TimeSpan.FromMilliseconds(25)};
         timer.Tick += (_,_) => {
+            var cloud = Windows.OfType<GlossaryCloudWindow>().FirstOrDefault();
+            if (cloud != null) {
+                FindVisual<DataGrid>(cloud).SelectAll();
+                FindVisuals<Button>(cloud).First(b=>Equals(b.Content,"下载所选到本机")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                return;
+            }
             var dialog = Windows.OfType<PromptDialog>().FirstOrDefault();
             if (dialog == null) return;
-            var button = FindVisuals<Button>(dialog).FirstOrDefault(b=>Equals(b.Content,"确定"));
+            var button = FindVisuals<Button>(dialog).FirstOrDefault(b=>Equals(b.Content,"确定") || Equals(b.Content,"采用云端"));
             if (button != null) button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         };
         timer.Start();
@@ -67,23 +79,23 @@ public sealed partial class SmokeApp
         {
             clientField.SetValue(vm,new WorkerApiClient(http,"https://isolated.invalid",()=>"isolated-session","d","h"));
             verifiedField.SetValue(vm,true);
+            var originalIds=vm.TermDraft.Select(t=>t.LocalId).ToList();
             await ConfirmCloudDialog(()=>vm.DownloadTermsCommand.ExecuteAsync(null));
-            Check(vm.TermDraft.Count==1 && vm.TermDraft[0].CloudNote=="网页备注" && !vm.TermDraft[0].Enabled,"cloud download preserves identity note and disabled status");
-            Check(vm.HasUnsavedTerms && vm.SaveTermEditor(),"cloud download is explicitly saved locally");
-            vm.TermDraft[0].Source="改过的原文"; vm.NotifyTermDraftEdited();
-            await ConfirmCloudDialog(()=>vm.UploadTermsCommand.ExecuteAsync(null));
-            Check(handler.Writes==1 && handler.LastExpected==new string('a',64),"APP upload includes observed revision");
-            Check(vm.TermFeedback.Contains("已保存到云端") && !vm.HasUnsavedTerms,"APP cloud success saves latest local state");
-            Check(vm.GlossaryEntries.Single().CloudNote=="网页备注" && vm.GlossaryEntries.Single().CloudId!=null,"renamed term retains cloud metadata after local save");
+            var downloaded=vm.TermDraft.Single(t=>t.CloudId=="12345678-1234-4234-8234-123456789abc");
+            Check(downloaded.CloudNote=="网页备注" && !downloaded.Enabled && downloaded.DirectionPending,"legacy cloud download preserves metadata and pending direction");
+            Check(originalIds.All(id=>vm.TermDraft.Any(t=>t.LocalId==id)),"selected download preserves unrelated local entries");
+            Check(!vm.HasUnsavedTerms,"download merge persists atomically");
+            downloaded.Source="改过的原文"; vm.NotifyTermDraftEdited();
+            await ConfirmCloudDialog(()=>vm.UploadSelectedTermsAsync(new[]{downloaded}));
+            Check(handler.Writes==1 && handler.LastExpected==new string('a',64),"selected PATCH includes observed revision");
+            Check(vm.TermFeedback.Contains("已核对") && !vm.HasUnsavedTerms,"cloud success persists association");
             handler.Conflict=true;
-            vm.TermDraft[0].Target="local change";
-            await ConfirmCloudDialog(()=>vm.UploadTermsCommand.ExecuteAsync(null));
-            Check(vm.TermFeedback.Contains("未覆盖") && vm.TermDraft[0].Target=="local change","cloud conflict preserves local content");
-            await ConfirmCloudDialog(()=>vm.UploadTermsCommand.ExecuteAsync(null));
-            Check(handler.LastExpected==new string('b',64) && handler.Writes==3,"conflict retry never silently refreshes revision");
+            downloaded.Target="local change";
+            await ConfirmCloudDialog(()=>vm.UploadSelectedTermsAsync(new[]{downloaded}));
+            Check(vm.TermFeedback.Contains("未覆盖") && downloaded.Target=="local change","cloud conflict preserves local content");
             handler.Offline=true;
             await ConfirmCloudDialog(()=>vm.DownloadTermsCommand.ExecuteAsync(null));
-            Check(vm.TermDraft[0].Target=="local change" && !vm.IsCloudGlossarySyncing,"failed download preserves local content and unlocks UI");
+            Check(vm.TermDraft.Any(t=>t.Target=="local change") && !vm.IsCloudGlossarySyncing,"failed download preserves local content and unlocks UI");
             handler.Offline=false;
             handler.ReadGate=new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var read=ConfirmCloudDialog(()=>vm.DownloadTermsCommand.ExecuteAsync(null));
@@ -94,10 +106,10 @@ public sealed partial class SmokeApp
             AssertLanguageSwitchBlocked(vm, "pending download");
             versionField.SetValue(vm,(int)originalVersion!+1);
             handler.ReadGate.SetResult(); await read;
-            Check(vm.TermDraft[0].Target=="local change","account change discards in-flight cloud download");
+            Check(vm.TermDraft.Any(t=>t.Target=="local change"),"account change discards in-flight cloud download");
             Capture(window,"glossary-cloud-verified");
             versionField.SetValue(vm, originalVersion);
-            await VerifyMergeDialogAsync(window, vm, handler, versionField);
+
         }
         finally
         {

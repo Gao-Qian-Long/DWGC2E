@@ -3,77 +3,130 @@
  xmlns:controls="clr-namespace:DwgTranslator.App.Views.Controls" PreviewKeyDown="Workspace_KeyDown">
  <UserControl.Resources>
   <Style x:Key="TermCellText" TargetType="TextBlock"><Setter Property="TextTrimming" Value="CharacterEllipsis"/><Setter Property="ToolTip" Value="{Binding Text, RelativeSource={RelativeSource Self}}"/><Setter Property="VerticalAlignment" Value="Center"/></Style>
+  <Style x:Key="TermMetaText" TargetType="TextBlock" BasedOn="{StaticResource TermCellText}"><Setter Property="HorizontalAlignment" Value="Center"/><Setter Property="TextAlignment" Value="Center"/></Style>
+  <Style x:Key="TermSourceText" TargetType="TextBlock" BasedOn="{StaticResource TermMetaText}"><Setter Property="ToolTip" Value="{Binding SourceText}"/></Style>
   <Style x:Key="TermToggle" TargetType="CheckBox"><Setter Property="Focusable" Value="False"/><Setter Property="VerticalAlignment" Value="Center"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="CheckBox"><Border x:Name="Track" Width="32" Height="18" CornerRadius="9" Background="{DynamicResource Brush.BorderStrong}"><Ellipse x:Name="Thumb" Width="12" Height="12" Margin="3" HorizontalAlignment="Left" Fill="{DynamicResource Brush.Surface}"/></Border><ControlTemplate.Triggers><Trigger Property="IsChecked" Value="True"><Setter TargetName="Track" Property="Background" Value="{DynamicResource Brush.Primary}"/><Setter TargetName="Thumb" Property="HorizontalAlignment" Value="Right"/></Trigger><Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.45"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>
+  <!-- One state style keeps every toolbar action disabled consistently while the glossary is busy. -->
+  <Style x:Key="WorkspaceToolbarState" TargetType="Grid">
+   <Style.Triggers>
+    <DataTrigger Binding="{Binding IsTermDrawerOpen}" Value="True"><Setter Property="IsEnabled" Value="False"/></DataTrigger>
+    <DataTrigger Binding="{Binding IsProcessing}" Value="True"><Setter Property="IsEnabled" Value="False"/></DataTrigger>
+    <DataTrigger Binding="{Binding IsGlossaryLoading}" Value="True"><Setter Property="IsEnabled" Value="False"/></DataTrigger>
+    <DataTrigger Binding="{Binding IsWorkspaceSaving}" Value="True"><Setter Property="IsEnabled" Value="False"/></DataTrigger>
+    <DataTrigger Binding="{Binding IsCloudGlossarySyncing}" Value="True"><Setter Property="IsEnabled" Value="False"/></DataTrigger>
+   </Style.Triggers>
+  </Style>
  </UserControl.Resources>
  <Grid Margin="{DynamicResource Spacing.Page}">
   <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
   <controls:PageHeader x:Name="WorkspaceHeader" Header="术语库" Description="管理工程术语、翻译规则及启用状态"><Button Content="＋ 添加术语" Command="{Binding AddTermCommand}" Style="{StaticResource Button.Primary}" ToolTip="新增术语 (Ctrl+N)"/></controls:PageHeader>
-  <WrapPanel Grid.Row="2" Margin="0,8,0,4">
-   <TextBox x:Name="SearchBox" Width="260" Text="{Binding TermSearch, UpdateSourceTrigger=PropertyChanged}" Tag="搜索原文或译文" Style="{StaticResource Search.Input}" ToolTip="搜索原文、译文、分类 (Ctrl+F)" Margin="0,0,8,6"/>
-   <ComboBox Width="120" SelectedIndex="{Binding TermSourceFilter}" AutomationProperties.Name="来源" Margin="0,0,8,6"><ComboBoxItem Content="全部来源"/><ComboBoxItem Content="系统术语"/><ComboBoxItem Content="企业术语"/><ComboBoxItem Content="用户术语"/><ComboBoxItem Content="关联云端"/></ComboBox>
-   <ComboBox Width="130" ItemsSource="{Binding TermCategories}" SelectedItem="{Binding TermCategoryFilter}" ToolTip="分类" AutomationProperties.Name="分类" Margin="0,0,8,6"><ComboBox.ItemTemplate><DataTemplate><TextBlock><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Text" Value="{Binding}"/><Style.Triggers><DataTrigger Binding="{Binding}" Value=""><Setter Property="Text" Value="全部分类"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock></DataTemplate></ComboBox.ItemTemplate></ComboBox>
-   <ComboBox Width="110" SelectedValuePath="Tag" SelectedValue="{Binding TermStatusFilter}" AutomationProperties.Name="状态" Margin="0,0,8,6"><ComboBoxItem Content="全部状态" Tag="All"/><ComboBoxItem Content="已启用" Tag="Enabled"/><ComboBoxItem Content="已停用" Tag="Disabled"/><ComboBoxItem Content="有冲突" Tag="Conflict"/></ComboBox>
-   <CheckBox x:Name="DetailColumns" Content="详细列" VerticalAlignment="Center" Checked="DetailColumns_Changed" Unchecked="DetailColumns_Changed"/>
-  </WrapPanel>
-  <StackPanel Grid.Row="1" Margin="0,12,0,0">
-   <WrapPanel x:Name="NormalToolbar"><WrapPanel.Style><Style TargetType="WrapPanel"><Style.Triggers><DataTrigger Binding="{Binding IsTermDrawerOpen}" Value="True"><Setter Property="IsEnabled" Value="False"/></DataTrigger><DataTrigger Binding="{Binding IsProcessing}" Value="True"><Setter Property="IsEnabled" Value="False"/></DataTrigger><DataTrigger Binding="{Binding IsGlossaryLoading}" Value="True"><Setter Property="IsEnabled" Value="False"/></DataTrigger><DataTrigger Binding="{Binding IsWorkspaceSaving}" Value="True"><Setter Property="IsEnabled" Value="False"/></DataTrigger><DataTrigger Binding="{Binding IsProcessing}" Value="True"><Setter Property="IsEnabled" Value="False"/></DataTrigger><DataTrigger Binding="{Binding IsGlossaryLoading}" Value="True"><Setter Property="IsEnabled" Value="False"/></DataTrigger><DataTrigger Binding="{Binding IsWorkspaceSaving}" Value="True"><Setter Property="IsEnabled" Value="False"/></DataTrigger><DataTrigger Binding="{Binding IsCloudGlossarySyncing}" Value="True"><Setter Property="IsEnabled" Value="False"/></DataTrigger></Style.Triggers></Style></WrapPanel.Style>
-    <Button Content="导入" Command="{Binding ImportGlossaryCommand}" Style="{StaticResource Button.Secondary}" Margin="0,0,6,6"/>
-    <Button Content="导出" Click="Export_Click" Style="{StaticResource Button.Secondary}" Margin="0,0,6,6"/>
-    <Menu Background="Transparent"><MenuItem x:Name="CloudSyncMenu" Header="云端同步" Style="{StaticResource Menu.ToolbarDropdown}"><MenuItem Header="比较并合并（推荐）" Command="{Binding MergeTermsCommand}"/><MenuItem Header="以本机替换云端" Command="{Binding UploadTermsCommand}"/><MenuItem Header="从云端下载" Command="{Binding DownloadTermsCommand}"/></MenuItem></Menu>
-   </WrapPanel>
-   <WrapPanel x:Name="SelectionToolbar" Visibility="Collapsed"><WrapPanel.Style><Style TargetType="WrapPanel"><Style.Triggers><DataTrigger Binding="{Binding IsTermDrawerOpen}" Value="True"><Setter Property="IsEnabled" Value="False"/></DataTrigger><DataTrigger Binding="{Binding IsProcessing}" Value="True"><Setter Property="IsEnabled" Value="False"/></DataTrigger><DataTrigger Binding="{Binding IsGlossaryLoading}" Value="True"><Setter Property="IsEnabled" Value="False"/></DataTrigger><DataTrigger Binding="{Binding IsWorkspaceSaving}" Value="True"><Setter Property="IsEnabled" Value="False"/></DataTrigger><DataTrigger Binding="{Binding IsCloudGlossarySyncing}" Value="True"><Setter Property="IsEnabled" Value="False"/></DataTrigger></Style.Triggers></Style></WrapPanel.Style>
-    <TextBlock x:Name="SelectionCount" VerticalAlignment="Center" Margin="0,0,12,6"/>
-    <Button Content="启用" Tag="True" Click="BatchEnabled_Click" Margin="0,0,6,6"/><Button Content="停用" Tag="False" Click="BatchEnabled_Click" Margin="0,0,6,6"/>
-    <ComboBox x:Name="BatchCategory" Width="120" IsEditable="True" ItemsSource="{Binding TermCategories}" ToolTip="选择或输入分类" Margin="0,0,6,6"/><Button Content="修改分类" Click="BatchCategory_Click" Margin="0,0,6,6"/>
-    <Button Content="导出" Click="Export_Click" Margin="0,0,6,6"/><Button x:Name="DeleteSelectionButton" Content="删除自定义" Click="Delete_Click" Margin="0,0,6,6"/><Button Content="取消选择" Click="ClearSelection_Click" Margin="0,0,6,6"/>
-   </WrapPanel>
-  </StackPanel>
-  <WrapPanel Grid.Row="3">
-    <Button Content="{Binding AllTermsLabel}" Tag="All" Click="Status_Click" Margin="0,0,6,6"><Button.Style><Style TargetType="Button" BasedOn="{StaticResource Button.Secondary}"><Style.Triggers><DataTrigger Binding="{Binding TermStatusFilter}" Value="All"><Setter Property="Background" Value="{DynamicResource Brush.PrimarySoft}"/><Setter Property="Foreground" Value="{DynamicResource Brush.Primary}"/><Setter Property="BorderBrush" Value="{DynamicResource Brush.Primary}"/></DataTrigger></Style.Triggers></Style></Button.Style></Button>
-    <Button Content="{Binding EnabledTermsLabel}" Tag="Enabled" Click="Status_Click" Margin="0,0,6,6"><Button.Style><Style TargetType="Button" BasedOn="{StaticResource Button.Secondary}"><Style.Triggers><DataTrigger Binding="{Binding TermStatusFilter}" Value="Enabled"><Setter Property="Background" Value="{DynamicResource Brush.PrimarySoft}"/><Setter Property="Foreground" Value="{DynamicResource Brush.Primary}"/><Setter Property="BorderBrush" Value="{DynamicResource Brush.Primary}"/></DataTrigger></Style.Triggers></Style></Button.Style></Button>
-    <Button Content="{Binding DisabledTermsLabel}" Tag="Disabled" Click="Status_Click" Margin="0,0,6,6"><Button.Style><Style TargetType="Button" BasedOn="{StaticResource Button.Secondary}"><Style.Triggers><DataTrigger Binding="{Binding TermStatusFilter}" Value="Disabled"><Setter Property="Background" Value="{DynamicResource Brush.PrimarySoft}"/><Setter Property="Foreground" Value="{DynamicResource Brush.Primary}"/><Setter Property="BorderBrush" Value="{DynamicResource Brush.Primary}"/></DataTrigger></Style.Triggers></Style></Button.Style></Button>
-    <Button Content="{Binding ConflictTermsLabel}" Tag="Conflict" Click="Status_Click" Margin="0,0,16,6"><Button.Style><Style TargetType="Button" BasedOn="{StaticResource Button.Secondary}"><Style.Triggers><DataTrigger Binding="{Binding TermStatusFilter}" Value="Conflict"><Setter Property="Background" Value="{DynamicResource Brush.PrimarySoft}"/><Setter Property="Foreground" Value="{DynamicResource Brush.Primary}"/><Setter Property="BorderBrush" Value="{DynamicResource Brush.Primary}"/></DataTrigger></Style.Triggers></Style></Button.Style></Button>
-  </WrapPanel>
+
+  <!-- Fixed grid rows replace business-level WrapPanels. Normal desktop widths keep every control visible. -->
+  <Grid Grid.Row="1" Grid.RowSpan="3" Margin="{DynamicResource Spacing.BlockTopTight}">
+   <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+   <Grid Grid.Row="0" Margin="{DynamicResource Spacing.BlockTop}">
+    <Grid.ColumnDefinitions>
+     <ColumnDefinition Width="*" MinWidth="240"/><ColumnDefinition Width="120"/><ColumnDefinition Width="130"/><ColumnDefinition Width="110"/><ColumnDefinition Width="Auto"/>
+    </Grid.ColumnDefinitions>
+    <TextBox x:Name="SearchBox" Grid.Column="0" Text="{Binding TermSearch, UpdateSourceTrigger=PropertyChanged}" Tag="搜索原文或译文" Style="{StaticResource Search.Input}" ToolTip="搜索原文、译文、分类 (Ctrl+F)" Margin="{DynamicResource Spacing.Inline}"/>
+    <ComboBox Grid.Column="1" SelectedIndex="{Binding TermSourceFilter}" AutomationProperties.Name="来源" Margin="{DynamicResource Spacing.Inline}"><ComboBoxItem Content="全部来源"/><ComboBoxItem Content="系统术语"/><ComboBoxItem Content="企业术语"/><ComboBoxItem Content="用户术语"/><ComboBoxItem Content="关联云端"/></ComboBox>
+    <ComboBox Grid.Column="2" ItemsSource="{Binding TermCategoryFilters}" SelectedItem="{Binding TermCategoryFilter}" ToolTip="分类" AutomationProperties.Name="分类" Margin="{DynamicResource Spacing.Inline}"><ComboBox.ItemTemplate><DataTemplate><TextBlock><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Text" Value="{Binding}"/><Style.Triggers><DataTrigger Binding="{Binding}" Value=""><Setter Property="Text" Value="全部分类"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock></DataTemplate></ComboBox.ItemTemplate></ComboBox>
+    <ComboBox Grid.Column="3" SelectedValuePath="Tag" SelectedValue="{Binding TermStatusFilter}" AutomationProperties.Name="状态" Margin="{DynamicResource Spacing.Inline}"><ComboBoxItem Content="全部状态" Tag="All"/><ComboBoxItem Content="已启用" Tag="Enabled"/><ComboBoxItem Content="已停用" Tag="Disabled"/><ComboBoxItem Content="有冲突" Tag="Conflict"/></ComboBox>
+    <CheckBox x:Name="DetailColumns" Grid.Column="4" Content="详细列" VerticalAlignment="Center" Checked="DetailColumns_Changed" Unchecked="DetailColumns_Changed"/>
+   </Grid>
+
+   <Grid x:Name="NormalToolbar" Grid.Row="1" Margin="{DynamicResource Spacing.BlockTop}" Style="{StaticResource WorkspaceToolbarState}">
+    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+    <Button Grid.Column="0" Content="导入" Command="{Binding ImportGlossaryCommand}" Style="{StaticResource Button.Secondary}" Margin="{DynamicResource Spacing.Inline}"/>
+    <Button Grid.Column="1" Content="导出" Click="Export_Click" Style="{StaticResource Button.Secondary}" Margin="{DynamicResource Spacing.Inline}"/>
+    <Button Grid.Column="2" Content="分类管理" Click="Categories_Click" Margin="{DynamicResource Spacing.Inline}"/>
+    <Button Grid.Column="4" x:Name="CloudSyncMenu" Content="云端管理" Command="{Binding DownloadTermsCommand}"/>
+   </Grid>
+
+   <Grid x:Name="SelectionToolbar" Grid.Row="2" Margin="{DynamicResource Spacing.BlockTop}" Visibility="Collapsed" Style="{StaticResource WorkspaceToolbarState}">
+    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="120"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+    <TextBlock x:Name="SelectionCount" Grid.Column="0" VerticalAlignment="Center" Margin="{DynamicResource Spacing.InlineWide}"/>
+    <Button Grid.Column="1" Content="上传所选" Click="UploadSelected_Click" Margin="{DynamicResource Spacing.InlineTight}"/>
+    <Button Grid.Column="2" Content="指定方向" Click="BatchDirection_Click" Margin="{DynamicResource Spacing.InlineTight}"/>
+    <Button Grid.Column="3" Content="启用" Tag="True" Click="BatchEnabled_Click" Margin="{DynamicResource Spacing.InlineTight}"/>
+    <Button Grid.Column="4" Content="停用" Tag="False" Click="BatchEnabled_Click" Margin="{DynamicResource Spacing.InlineTight}"/>
+    <ComboBox x:Name="BatchCategory" Grid.Column="5" SelectedIndex="0" ItemsSource="{Binding TermCategories}" ToolTip="选择或输入分类" Margin="{DynamicResource Spacing.InlineTight}"/>
+    <Button Grid.Column="6" Content="修改分类" Click="BatchCategory_Click" Margin="{DynamicResource Spacing.InlineTight}"/>
+    <Button Grid.Column="7" Content="导出" Click="Export_Click" Margin="{DynamicResource Spacing.InlineTight}"/>
+    <Button Grid.Column="8" x:Name="DeleteSelectionButton" Content="删除本机" Click="Delete_Click" Margin="{DynamicResource Spacing.InlineTight}"/>
+    <Button Grid.Column="9" Content="取消选择" Click="ClearSelection_Click" HorizontalAlignment="Left"/>
+   </Grid>
+
+   <Grid Grid.Row="3" Margin="{DynamicResource Spacing.BlockTop}">
+    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+    <Button Grid.Column="0" Content="{Binding AllTermsLabel}" Tag="All" Click="Status_Click" Margin="{DynamicResource Spacing.InlineTight}"><Button.Style><Style TargetType="Button" BasedOn="{StaticResource Button.Secondary}"><Style.Triggers><DataTrigger Binding="{Binding TermStatusFilter}" Value="All"><Setter Property="Background" Value="{DynamicResource Brush.PrimarySoft}"/><Setter Property="Foreground" Value="{DynamicResource Brush.Primary}"/><Setter Property="BorderBrush" Value="{DynamicResource Brush.Primary}"/></DataTrigger></Style.Triggers></Style></Button.Style></Button>
+    <Button Grid.Column="1" Content="{Binding EnabledTermsLabel}" Tag="Enabled" Click="Status_Click" Margin="{DynamicResource Spacing.InlineTight}"><Button.Style><Style TargetType="Button" BasedOn="{StaticResource Button.Secondary}"><Style.Triggers><DataTrigger Binding="{Binding TermStatusFilter}" Value="Enabled"><Setter Property="Background" Value="{DynamicResource Brush.PrimarySoft}"/><Setter Property="Foreground" Value="{DynamicResource Brush.Primary}"/><Setter Property="BorderBrush" Value="{DynamicResource Brush.Primary}"/></DataTrigger></Style.Triggers></Style></Button.Style></Button>
+    <Button Grid.Column="2" Content="{Binding DisabledTermsLabel}" Tag="Disabled" Click="Status_Click" Margin="{DynamicResource Spacing.InlineTight}"><Button.Style><Style TargetType="Button" BasedOn="{StaticResource Button.Secondary}"><Style.Triggers><DataTrigger Binding="{Binding TermStatusFilter}" Value="Disabled"><Setter Property="Background" Value="{DynamicResource Brush.PrimarySoft}"/><Setter Property="Foreground" Value="{DynamicResource Brush.Primary}"/><Setter Property="BorderBrush" Value="{DynamicResource Brush.Primary}"/></DataTrigger></Style.Triggers></Style></Button.Style></Button>
+    <Button Grid.Column="3" Content="{Binding ConflictTermsLabel}" Tag="Conflict" Click="Status_Click" Margin="{DynamicResource Spacing.InlineLoose}"><Button.Style><Style TargetType="Button" BasedOn="{StaticResource Button.Secondary}"><Style.Triggers><DataTrigger Binding="{Binding TermStatusFilter}" Value="Conflict"><Setter Property="Background" Value="{DynamicResource Brush.PrimarySoft}"/><Setter Property="Foreground" Value="{DynamicResource Brush.Primary}"/><Setter Property="BorderBrush" Value="{DynamicResource Brush.Primary}"/></DataTrigger></Style.Triggers></Style></Button.Style></Button>
+   </Grid>
+  </Grid>
   <Grid Grid.Row="4">
-   <DataGrid x:Name="TermList" ItemsSource="{Binding TermView}" SelectedItem="{Binding SelectedTerm}" AutoGenerateColumns="False" CanUserAddRows="False" CanUserDeleteRows="False" SelectionMode="Extended" SelectionUnit="FullRow" IsReadOnly="False" HeadersVisibility="Column" BorderThickness="0" RowHeight="38" EnableRowVirtualization="True" EnableColumnVirtualization="True" VirtualizingPanel.VirtualizationMode="Recycling" LoadingRow="TermRow_Loading" MouseDoubleClick="TermList_DoubleClick" SelectionChanged="Selection_Changed" BeginningEdit="BeginningEdit" CellEditEnding="CellEditEnding">
+   <DataGrid x:Name="TermList" ItemsSource="{Binding TermView}" SelectedItem="{Binding SelectedTerm}" AutoGenerateColumns="False" CanUserAddRows="False" CanUserDeleteRows="False" CanUserResizeColumns="True" CanUserSortColumns="True" SelectionMode="Extended" SelectionUnit="FullRow" IsReadOnly="False" HeadersVisibility="Column" BorderThickness="0" RowHeight="{DynamicResource Size.TableRow}" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.CanContentScroll="True" EnableRowVirtualization="True" EnableColumnVirtualization="True" VirtualizingPanel.VirtualizationMode="Recycling" LoadingRow="TermRow_Loading" MouseDoubleClick="TermList_DoubleClick" SelectionChanged="Selection_Changed" BeginningEdit="BeginningEdit" CellEditEnding="CellEditEnding">
     <DataGrid.Style><Style TargetType="DataGrid" BasedOn="{StaticResource {x:Type DataGrid}}"><Style.Triggers><DataTrigger Binding="{Binding IsTermDrawerOpen}" Value="True"><Setter Property="IsEnabled" Value="False"/></DataTrigger><DataTrigger Binding="{Binding IsProcessing}" Value="True"><Setter Property="IsEnabled" Value="False"/></DataTrigger><DataTrigger Binding="{Binding IsGlossaryLoading}" Value="True"><Setter Property="IsEnabled" Value="False"/></DataTrigger><DataTrigger Binding="{Binding IsWorkspaceSaving}" Value="True"><Setter Property="IsEnabled" Value="False"/></DataTrigger><DataTrigger Binding="{Binding IsCloudGlossarySyncing}" Value="True"><Setter Property="IsEnabled" Value="False"/></DataTrigger></Style.Triggers></Style></DataGrid.Style>
     <DataGrid.Columns>
-     <DataGridTemplateColumn Width="48" IsReadOnly="True"><DataGridTemplateColumn.Header><CheckBox x:Name="SelectAll" Click="SelectAll_Click" ToolTip="选择当前结果 (Ctrl+A)"/></DataGridTemplateColumn.Header><DataGridTemplateColumn.CellTemplate><DataTemplate><CheckBox IsChecked="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=DataGridRow}, Mode=TwoWay}" HorizontalAlignment="Center" VerticalAlignment="Center"/></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
-     <controls:WorkspaceTextColumn ElementStyle="{StaticResource TermCellText}" Header="原文" SortMemberPath="Source" Binding="{Binding Source, UpdateSourceTrigger=Explicit}" Width="2*" MinWidth="140"/>
-     <controls:WorkspaceTextColumn ElementStyle="{StaticResource TermCellText}" Header="译文" SortMemberPath="Target" Binding="{Binding Target, UpdateSourceTrigger=Explicit}" Width="2*" MinWidth="140"/>
-     <DataGridTemplateColumn Header="分类" Width="156" IsReadOnly="True"><DataGridTemplateColumn.CellTemplate><DataTemplate><ComboBox Height="28" MinHeight="28" Padding="6,0" VerticalAlignment="Center" ToolTip="{Binding Category}" ItemsSource="{Binding DataContext.TermCategories, RelativeSource={RelativeSource AncestorType=UserControl}}" SelectedItem="{Binding Category, Mode=OneWay}" SelectionChanged="Category_Changed"><ComboBox.Style><Style TargetType="ComboBox" BasedOn="{StaticResource {x:Type ComboBox}}"><Setter Property="IsEnabled" Value="False"/><Style.Triggers><DataTrigger Binding="{Binding SourceText}" Value="用户术语"><Setter Property="IsEnabled" Value="True"/></DataTrigger></Style.Triggers></Style></ComboBox.Style></ComboBox></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
-     <DataGridTextColumn Header="来源" Binding="{Binding SourceText}" Width="80" IsReadOnly="True"/>
-     <DataGridTemplateColumn Header="启用" Width="72" IsReadOnly="True"><DataGridTemplateColumn.CellTemplate><DataTemplate><CheckBox Style="{StaticResource TermToggle}" IsChecked="{Binding Enabled, Mode=OneWay}" Click="Toggle_Click" ToolTip="即时保存到本机 (Space)" AutomationProperties.Name="启用术语"/></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
-     <DataGridTemplateColumn Header="操作" Width="136" IsReadOnly="True"><DataGridTemplateColumn.CellTemplate><DataTemplate><StackPanel Orientation="Horizontal"><StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Opacity" Value="0"/><Style.Triggers><DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=DataGridRow}}" Value="True"><Setter Property="Opacity" Value="1"/></DataTrigger><DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=DataGridRow}}" Value="True"><Setter Property="Opacity" Value="1"/></DataTrigger><DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource AncestorType=DataGridRow}}" Value="True"><Setter Property="Opacity" Value="1"/></DataTrigger></Style.Triggers></Style></StackPanel.Style><Button Click="Edit_Click" Height="26" MinHeight="26" Padding="4,0" ToolTip="详情 / 冲突 (Enter)"><Button.Style><Style TargetType="Button" BasedOn="{StaticResource Button.Secondary}"><Setter Property="Content" Value="编辑"/><Style.Triggers><DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource AncestorType=DataGridRow}}" Value="True"><Setter Property="Content" Value="冲突"/><Setter Property="Foreground" Value="{DynamicResource Brush.Warning}"/></DataTrigger></Style.Triggers></Style></Button.Style></Button><Button Content="复制" Click="Copy_Click" Height="26" MinHeight="26" Padding="4,0" ToolTip="复制为自定义术语"/><Button Content="⋯" Click="More_Click" Height="26" MinHeight="26" Padding="4,0" ToolTip="更多操作" AutomationProperties.Name="术语更多操作"/></StackPanel></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+     <DataGridTemplateColumn Width="40" MinWidth="40" MaxWidth="40" IsReadOnly="True">
+      <DataGridTemplateColumn.Header><CheckBox x:Name="SelectAll" IsThreeState="True" Click="SelectAll_Click" ToolTip="选择当前结果 (Ctrl+A)" AutomationProperties.Name="选择全部术语"/></DataGridTemplateColumn.Header>
+      <DataGridTemplateColumn.CellTemplate><DataTemplate><CheckBox PreviewMouseLeftButtonDown="SelectionCheckbox_MouseDown" PreviewKeyDown="SelectionCheckbox_KeyDown" AutomationProperties.Name="选择术语" IsChecked="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=DataGridRow}, Mode=TwoWay}" HorizontalAlignment="Center" VerticalAlignment="Center"/></DataTemplate></DataGridTemplateColumn.CellTemplate>
+     </DataGridTemplateColumn>
+     <controls:WorkspaceTextColumn ElementStyle="{StaticResource TermCellText}" Header="原文" SortMemberPath="Source" Binding="{Binding Source, UpdateSourceTrigger=Explicit}" Width="1.2*" MinWidth="220" MaxWidth="520"/>
+     <controls:WorkspaceTextColumn ElementStyle="{StaticResource TermCellText}" Header="译文" SortMemberPath="Target" Binding="{Binding Target, UpdateSourceTrigger=Explicit}" Width="1.45*" MinWidth="220" MaxWidth="560"/>
+     <DataGridTemplateColumn Header="分类" Width="156" MinWidth="152" MaxWidth="184" IsReadOnly="True">
+      <DataGridTemplateColumn.CellTemplate><DataTemplate>
+       <ComboBox Height="28" MinHeight="28" Padding="6,0" Margin="2,0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" VerticalAlignment="Center" ToolTip="{Binding Category}" ItemsSource="{Binding DataContext.TermCategories, RelativeSource={RelativeSource AncestorType=UserControl}}" SelectedItem="{Binding Category, Mode=OneWay}" SelectionChanged="Category_Changed">
+        <ComboBox.Style><Style TargetType="ComboBox" BasedOn="{StaticResource {x:Type ComboBox}}"><Setter Property="IsEnabled" Value="False"/><Style.Triggers><DataTrigger Binding="{Binding SourceText}" Value="用户术语"><Setter Property="IsEnabled" Value="True"/></DataTrigger></Style.Triggers></Style></ComboBox.Style>
+       </ComboBox>
+      </DataTemplate></DataGridTemplateColumn.CellTemplate>
+     </DataGridTemplateColumn>
+     <DataGridTextColumn Header="适用方向" Binding="{Binding DirectionText}" Width="80" MinWidth="76" MaxWidth="110" ElementStyle="{StaticResource TermMetaText}" IsReadOnly="True"/>
+     <DataGridTextColumn Header="同步状态" Binding="{Binding SyncStatus}" Width="84" MinWidth="80" Visibility="Collapsed" ElementStyle="{StaticResource TermMetaText}" IsReadOnly="True"/>
+     <DataGridTextColumn Header="来源" Binding="{Binding SourceShortText}" Width="64" MinWidth="60" ElementStyle="{StaticResource TermSourceText}" IsReadOnly="True"/>
+     <DataGridTemplateColumn Header="启用" Width="56" MinWidth="54" IsReadOnly="True"><DataGridTemplateColumn.CellTemplate><DataTemplate><CheckBox Style="{StaticResource TermToggle}" IsChecked="{Binding Enabled, Mode=OneWay}" Click="Toggle_Click" ToolTip="即时保存到本机 (Space)" AutomationProperties.Name="启用术语"/></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+     <DataGridTemplateColumn Header="操作" Width="154" MinWidth="150" IsReadOnly="True">
+      <DataGridTemplateColumn.CellTemplate><DataTemplate>
+       <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+        <Button Click="Edit_Click" Width="48" MinWidth="48" Height="32" MinHeight="32" Padding="4,0" Margin="{DynamicResource Spacing.InlineTight}" ToolTip="打开术语详情 (Enter)" AutomationProperties.Name="打开术语详情">
+         <Button.Style><Style TargetType="Button" BasedOn="{StaticResource Button.Secondary}"><Setter Property="Content" Value="详情"/><Style.Triggers><DataTrigger Binding="{Binding SourceText}" Value="用户术语"><Setter Property="Content" Value="编辑"/></DataTrigger><DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource AncestorType=DataGridRow}}" Value="True"><Setter Property="Content" Value="冲突"/><Setter Property="Foreground" Value="{DynamicResource Brush.Warning}"/></DataTrigger></Style.Triggers></Style></Button.Style>
+        </Button>
+        <Button Content="复制" Click="Copy_Click" Width="44" MinWidth="44" Height="32" MinHeight="32" Padding="4,0" Margin="{DynamicResource Spacing.InlineTight}" ToolTip="复制为自定义术语" AutomationProperties.Name="复制为自定义术语"/>
+        <Button Content="⋯" Click="More_Click" Width="32" MinWidth="32" Height="32" MinHeight="32" Padding="0" ToolTip="更多操作" AutomationProperties.Name="术语更多操作"/>
+       </StackPanel>
+      </DataTemplate></DataGridTemplateColumn.CellTemplate>
+     </DataGridTemplateColumn>
      <DataGridTextColumn Header="文件夹" Binding="{Binding Folder}" Width="100" Visibility="Collapsed" IsReadOnly="True"/><DataGridTextColumn Header="方向" Binding="{Binding Direction}" Width="85" Visibility="Collapsed" IsReadOnly="True"/><DataGridTextColumn Header="最近命中" Binding="{Binding LastHitAt, StringFormat=yyyy-MM-dd}" Width="100" Visibility="Collapsed" IsReadOnly="True"/>
     </DataGrid.Columns>
    </DataGrid>
    <controls:EmptyState Header="没有匹配的术语" Description="调整筛选条件，或添加工程术语。" Visibility="{Binding TermView.IsEmpty, Converter={StaticResource BoolToVis}}"><Button Content="清除筛选" Click="ClearFilters_Click"/></controls:EmptyState>
-   <Border x:Name="TermEditorDrawer" Style="{StaticResource Drawer.Surface}" Visibility="{Binding IsTermDrawerOpen, Converter={StaticResource BoolToVis}}">
-    <DockPanel>
-     <WrapPanel DockPanel.Dock="Bottom" Margin="0,16,0,0"><Button Content="取消" Click="CancelDrawer_Click" Margin="0,0,8,0"/><Button Content="保存到本机" IsEnabled="{Binding HasUnsavedTerms}" Command="{Binding FinishTermEditCommand}" Style="{StaticResource Button.Primary}"/></WrapPanel>
-    <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel>
-     <TextBlock Text="术语详情 / 编辑" Style="{StaticResource SectionTitleStyle}"/>
-     <StackPanel IsEnabled="{Binding CanEditSelectedContent}">
-      <TextBlock Text="原文" Margin="0,16,0,6"/><TextBox Text="{Binding SelectedTerm.Source, UpdateSourceTrigger=PropertyChanged}"/>
-      <TextBlock Text="译文" Margin="0,12,0,6"/><TextBox Text="{Binding SelectedTerm.Target, UpdateSourceTrigger=PropertyChanged}"/>
-      <TextBlock Text="分类" Margin="0,12,0,6"/><TextBox Text="{Binding SelectedTerm.Category, UpdateSourceTrigger=PropertyChanged}"/>
-      <TextBlock Text="备注" Margin="0,12,0,6"/><TextBox Text="{Binding SelectedTerm.CloudNote, UpdateSourceTrigger=PropertyChanged}" TextWrapping="Wrap" AcceptsReturn="True" MinHeight="60"/>
-      <Expander Header="高级属性" Margin="0,12,0,0"><StackPanel><TextBlock Text="文件夹"/><TextBox Text="{Binding SelectedTerm.Folder, UpdateSourceTrigger=PropertyChanged}"/><TextBlock Text="语言方向"/><TextBox Text="{Binding SelectedTerm.Direction, UpdateSourceTrigger=PropertyChanged}"/><TextBlock Text="{Binding SelectedTerm.HitCount, StringFormat=命中次数：{0}}"/><TextBlock Text="{Binding SelectedTerm.CloudId, StringFormat=云端标识：{0}}"/><TextBlock Text="{Binding SelectedTerm.LastHitAt, StringFormat=最近命中：{0:yyyy-MM-dd}}"/></StackPanel></Expander>
-     </StackPanel>
-     <TextBlock Text="{Binding SelectedTerm.SourceText, StringFormat=来源：{0}}" Margin="0,12,0,6"/>
-     <CheckBox Content="启用" IsChecked="{Binding SelectedTerm.Enabled}" Margin="0,6,0,12"/>
-     <TextBlock Text="同原文的其它译法（选择后仍需保存）" TextWrapping="Wrap"/>
-     <ItemsControl ItemsSource="{Binding SelectedTermConflicts}"><ItemsControl.ItemTemplate><DataTemplate><StackPanel Margin="0,4"><TextBlock Text="{Binding Target}" TextWrapping="Wrap"/><CheckBox Content="启用此译法" IsChecked="{Binding Enabled}"/></StackPanel></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
-
-     <TextBlock Text="系统及企业术语内容只读，可停用或复制为自定义。云端需手动同步。" TextWrapping="Wrap" Margin="0,12,0,0" Foreground="{DynamicResource Brush.TextSecondary}"/>
-    </StackPanel></ScrollViewer></DockPanel>
-   </Border>
    <Border x:Name="MergeDrawer" Style="{StaticResource Drawer.Surface}" Visibility="Collapsed"/>
   </Grid>
-  <Grid Grid.Row="5" Margin="0,8,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-   <StackPanel><WrapPanel><TextBlock Text="{Binding TermCountText}" Margin="0,0,16,0"/><TextBlock Text="{Binding TermLocalStatus}" Margin="0,0,16,0"/><TextBlock Text="{Binding TermCloudStatus}"/></WrapPanel><TextBlock Text="{Binding TermFeedback}" TextWrapping="Wrap" Foreground="{DynamicResource Brush.TextSecondary}"/></StackPanel>
+  <Grid Grid.Row="5" Margin="{DynamicResource Spacing.BlockTop}"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+   <StackPanel><WrapPanel><TextBlock Text="{Binding TermCountText}" Margin="{DynamicResource Spacing.InlineLoose}"/><TextBlock Text="{Binding TermLocalStatus}" Margin="{DynamicResource Spacing.InlineLoose}"/><TextBlock Text="{Binding TermCloudStatus}"/></WrapPanel><TextBlock Text="{Binding TermFeedback}" TextWrapping="Wrap" MaxHeight="44" TextTrimming="CharacterEllipsis" ToolTip="{Binding TermFeedback}" Foreground="{DynamicResource Brush.TextSecondary}"/></StackPanel>
    <StackPanel Grid.Column="1" Orientation="Horizontal" Visibility="{Binding ShowTermDraftActions, Converter={StaticResource BoolToVis}}"><Button Content="放弃草稿" Command="{Binding DiscardTermsCommand}" Margin="8,0"/><Button Content="保存草稿到本机" Command="{Binding SaveTermsCommand}"/></StackPanel>
   </Grid>
+   <Border x:Name="TermEditorDrawer" Grid.RowSpan="6" Panel.ZIndex="20" Style="{StaticResource Drawer.Surface}" Visibility="{Binding IsTermDrawerOpen, Converter={StaticResource BoolToVis}}" controls:DrawerFocusBehavior.IsEnabled="True" controls:DrawerFocusBehavior.FocusOnOpen="{Binding ElementName=TermDrawerCancelButton}" controls:DrawerFocusBehavior.RestoreFocusFallback="{Binding ElementName=TermList}">
+    <DockPanel>
+     <TextBlock DockPanel.Dock="Top" Text="术语详情 / 编辑" Style="{StaticResource SectionTitleStyle}" Margin="{DynamicResource Spacing.StackWide}"/><WrapPanel DockPanel.Dock="Bottom" Margin="{DynamicResource Spacing.BlockTopLoose}"><Button x:Name="TermDrawerCancelButton" Content="取消" Click="CancelDrawer_Click" Margin="{DynamicResource Spacing.Inline}"/><Button Content="保存到本机" IsEnabled="{Binding HasUnsavedTerms}" Command="{Binding FinishTermEditCommand}" Style="{StaticResource Button.Primary}"/></WrapPanel>
+    <controls:ToastHost DockPanel.Dock="Bottom" IsScoped="True" MaximumVisible="1"/>
+    <ScrollViewer VerticalScrollBarVisibility="Auto" CanContentScroll="True" controls:ResponsiveLayout.HandoffMouseWheelAtBoundary="True"><StackPanel>
+
+     <StackPanel IsEnabled="{Binding CanEditSelectedContent}">
+      <TextBlock Text="原文" Margin="0,16,0,6"/><TextBox Text="{Binding SelectedTerm.Source, UpdateSourceTrigger=PropertyChanged}"/>
+      <TextBlock Text="译文" Margin="{DynamicResource Spacing.CardInset}"/><TextBox Text="{Binding SelectedTerm.Target, UpdateSourceTrigger=PropertyChanged}"/>
+      <TextBlock Text="分类" Margin="{DynamicResource Spacing.CardInset}"/><ComboBox ItemsSource="{Binding TermCategories}" SelectedItem="{Binding SelectedTerm.Category}"/>
+      <TextBlock Text="适用方向（待确认的词条不参与翻译）" Margin="{DynamicResource Spacing.CardInset}"/><ComboBox ItemsSource="{Binding TermLanguages}" DisplayMemberPath="DisplayName" SelectedValuePath="Code" SelectedValue="{Binding SelectedTerm.SourceLang}"/><ComboBox ItemsSource="{Binding TermLanguages}" DisplayMemberPath="DisplayName" SelectedValuePath="Code" SelectedValue="{Binding SelectedTerm.TargetLang}"/><TextBlock Text="备注" Margin="{DynamicResource Spacing.CardInset}"/><TextBox Text="{Binding SelectedTerm.CloudNote, UpdateSourceTrigger=PropertyChanged}" TextWrapping="Wrap" AcceptsReturn="True" MinHeight="60"/>
+      <Expander Header="高级属性" Margin="{DynamicResource Spacing.BlockTopWide}"><StackPanel><TextBlock Text="文件夹"/><TextBox Text="{Binding SelectedTerm.Folder, UpdateSourceTrigger=PropertyChanged}"/><TextBlock Text="{Binding SelectedTerm.HitCount, StringFormat=命中次数：{0}}"/><TextBlock Text="{Binding SelectedTerm.CloudId, StringFormat=云端标识：{0}}"/><TextBlock Text="{Binding SelectedTerm.LastHitAt, StringFormat=最近命中：{0:yyyy-MM-dd}}"/></StackPanel></Expander>
+     </StackPanel>
+     <TextBlock Text="{Binding SelectedTerm.SourceText, StringFormat=来源：{0}}" Margin="{DynamicResource Spacing.CardInset}"/>
+     <CheckBox Content="启用" IsChecked="{Binding SelectedTerm.Enabled}" Margin="0,6,0,12"/>
+     <TextBlock Text="同原文的其它译法（选择后仍需保存）" TextWrapping="Wrap"/>
+     <ItemsControl ItemsSource="{Binding SelectedTermConflicts}"><ItemsControl.ItemTemplate><DataTemplate><StackPanel Margin="{DynamicResource Spacing.Vertical}"><TextBlock Text="{Binding Target}" TextWrapping="Wrap"/><CheckBox Content="启用此译法" IsChecked="{Binding Enabled}"/></StackPanel></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+
+     <TextBlock Text="系统及企业术语内容只读，可停用或复制为自定义。云端需手动同步。" TextWrapping="Wrap" Margin="{DynamicResource Spacing.BlockTopWide}" Foreground="{DynamicResource Brush.TextSecondary}"/>
+    </StackPanel></ScrollViewer></DockPanel>
+   </Border>
  </Grid>
 </UserControl>

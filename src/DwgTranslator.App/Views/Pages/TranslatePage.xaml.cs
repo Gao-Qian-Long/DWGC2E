@@ -1,8 +1,8 @@
-﻿using System.Windows.Controls;
+using System.Windows.Controls;
 
 namespace DwgTranslator.App.Views.Pages;
 
-/// <summary>TranslatePage — 设计稿中的一个页面，由 MainWindow 的侧栏切换。</summary>
+/// <summary>翻译工作区：左侧队列与右侧设置使用独立滚动表面，避免嵌套页面滚动。</summary>
 public partial class TranslatePage : UserControl
 {
     private void QueueMenu_Click(object sender, System.Windows.RoutedEventArgs e)
@@ -13,15 +13,8 @@ public partial class TranslatePage : UserControl
         button.ContextMenu.IsOpen = true;
     }
 
-    private void UpdateWorkspaceHeight()
-    {
-        QueueAreaRow.Height = new System.Windows.GridLength(System.Math.Clamp(TranslationScroll.ActualHeight - 340, QueueWorkspace.IsVisible ? 200 : 160, 330));
-    }
-
     public TranslatePage()
     {
         InitializeComponent();
-        TranslationScroll.SizeChanged += (_, _) => UpdateWorkspaceHeight();
-        QueueWorkspace.IsVisibleChanged += (_, _) => UpdateWorkspaceHeight();
     }
 }

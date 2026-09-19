@@ -221,9 +221,10 @@ public partial class MainViewModel
                 or TranslationStatus.WritebackSuccess or TranslationStatus.WritebackFailed)
             .ToList();
 
+        var writebackGlossary = EffectiveGlossary.Resolve(_glossaryService.GetAllEntries(), CurrentSourceLang, CurrentTargetLang);
         var invalidTranslations = translatedEntities
-            .Where(e => !TranslationQualityValidator.IsAcceptable(
-                e.PlainText, e.TranslatedText, CurrentSourceLang, CurrentTargetLang))
+            .Where(e => !TranslationQualityValidator.IsAcceptableCadText(
+                e.PlainText, e.TranslatedText, CurrentSourceLang, CurrentTargetLang, writebackGlossary))
             .ToList();
         if (invalidTranslations.Count > 0)
         {
@@ -270,25 +271,31 @@ public partial class MainViewModel
             return;
         }
 
-        var folderDialog = new OpenFolderDialog
+        var targetFolder = AccountWorkspace.OutputDirectoryFor(_config, App.AppDataDir);
+        if (string.IsNullOrWhiteSpace(targetFolder) || !Path.IsPathFullyQualified(targetFolder))
         {
-            Title = $"选择导出文件夹（将导出 {targets.Count} 张图纸）",
-            InitialDirectory = Path.GetDirectoryName(targets[0]) ?? string.Empty
-        };
-        if (folderDialog.ShowDialog() != true) return;
-        var targetFolder = folderDialog.FolderName;
-        // 用户在对话框里选定的目录优先；命名规则（motor_zh.dwg）、重名策略与源文件保护
-        // 由 OutputPathResolver 按配置执行，被跳过的文件不会静默覆盖既有输出。
-        _config.ExportDirectory = targetFolder;
-        var exportPlan = BatchExportPlanner.CreateExportPlan(targets, CurrentTargetLang, _config);
-        var destinations = exportPlan.Destinations;
-        if (exportPlan.Skipped.Count > 0)
-        {
-            StatusMessage = "已跳过 " + exportPlan.Skipped.Count + " 个已存在的输出文件（重名策略：" + _config.DuplicatePolicy + "）";
-            Log.Information("Export skipped {Count} existing outputs: {Reasons}",
-                exportPlan.Skipped.Count, string.Join("; ", exportPlan.Skipped.Select(s => s.Reason)));
+            var folderDialog = new OpenFolderDialog
+            {
+                Title = $"首次回写：选择并保存账号默认导出目录（将导出 {targets.Count} 张图纸）",
+                InitialDirectory = Path.GetDirectoryName(targets[0]) ?? string.Empty
+            };
+            if (folderDialog.ShowDialog() != true)
+            {
+                StatusMessage = "未设置默认导出目录，未写入任何文件。";
+                return;
+            }
+            targetFolder = Path.GetFullPath(folderDialog.FolderName);
+            _config.AccountOutputDirectories ??= new();
+            var accountKey = string.IsNullOrWhiteSpace(_config.ActiveAccountId) ? "guest" : _config.ActiveAccountId;
+            _config.AccountOutputDirectories[accountKey] = targetFolder;
+            SettingsStore.Update(_settingsPath ?? Path.Combine(App.AppDataDir, "settings.json"), latest =>
+            {
+                latest.AccountOutputDirectories ??= new();
+                latest.AccountOutputDirectories[accountKey] = targetFolder;
+                latest.ExportDirectory = targetFolder;
+            });
         }
-
+        _config.ExportDirectory = targetFolder;
         var modeDialog = new Views.ExportModeDialog(_autoCadInteropService.IsAutoCADAvailable(_config))
         {
             Owner = Application.Current.MainWindow
@@ -299,8 +306,35 @@ public partial class MainViewModel
             return;
         }
         var mode = modeDialog.SelectedMode;
+        if (!string.IsNullOrWhiteSpace(modeDialog.TemporaryDirectory))
+            targetFolder = modeDialog.TemporaryDirectory;
+        Directory.CreateDirectory(targetFolder);
 
-        var written = new List<(string Path, int Count)>();
+        var exportConfig = System.Text.Json.JsonSerializer.Deserialize<AppConfig>(System.Text.Json.JsonSerializer.Serialize(_config))!;
+        exportConfig.ExportDirectory = targetFolder;
+        var exportPlan = BatchExportPlanner.CreateExportPlan(targets, CurrentTargetLang, exportConfig);
+        var plannedBySource = exportPlan.Results.ToDictionary(
+            result => NormalizeSourcePath(result.SourcePath),
+            StringComparer.OrdinalIgnoreCase);
+        var overwriteFiles = exportPlan.Results.Where(r => r.Resolution == DuplicateResolution.OverwriteExisting && File.Exists(r.OutputPath)).Select(r => r.OutputPath).ToArray();
+        if (overwriteFiles.Length > 0 && Views.PromptDialog.Show(
+            "即将覆盖以下输出文件（源图始终不会覆盖）：\n\n" + string.Join("\n", overwriteFiles.Select(Path.GetFileName)),
+            "确认覆盖输出文件", MessageBoxButton.OKCancel, MessageBoxImage.Warning) != MessageBoxResult.OK) return;
+        if (exportPlan.Skipped.Count > 0)
+        {
+            StatusMessage = "已跳过 " + exportPlan.Skipped.Count + " 个已存在的输出文件（重名策略：" + exportConfig.DuplicatePolicy + "）";
+            Log.Information("Export skipped {Count} existing outputs: {Reasons}",
+                exportPlan.Skipped.Count, string.Join("; ", exportPlan.Skipped.Select(s => s.Reason)));
+        }
+
+        if (mode == Views.ExportModeDialog.ExportMode.AutoCAD)
+        {
+            var preflight = await EnsureCadPluginReadyAsync();
+            if (preflight == CadPreflightOutcome.Cancelled) return;
+            if (preflight == CadPreflightOutcome.UseOffline) mode = Views.ExportModeDialog.ExportMode.Offline;
+        }
+
+        var written = new List<(string Source, string Path, int Count, DuplicateResolution Resolution)>();
         var failed = new List<string>();
         var skipped = new List<string>();
 
@@ -345,7 +379,20 @@ public partial class MainViewModel
                         continue;
                     }
 
-                    var dest = destinations[source];
+                    if (!plannedBySource.TryGetValue(source, out var planned))
+                    {
+                        failed.Add($"{name}：未找到输出规划结果");
+                        ProgressValue = (index + 1) * step;
+                        continue;
+                    }
+                    if (planned.ShouldSkip)
+                    {
+                        skipped.Add($"{name}（{planned.Reason}）");
+                        ProgressValue = (index + 1) * step;
+                        continue;
+                    }
+
+                    var dest = planned.OutputPath;
                     if (string.Equals(Path.GetFullPath(source), Path.GetFullPath(dest),
                             StringComparison.OrdinalIgnoreCase))
                     {
@@ -356,14 +403,14 @@ public partial class MainViewModel
 
                     try
                     {
-                        var (result, _, cancelled) = await ExecuteWritebackWithMode(mode, source, dest, mine);
+                        var (result, _, cancelled) = await ExecuteWritebackWithMode(mode, source, dest, mine, planned.BackupPath);
                         if (cancelled) break;
                         if (result.SuccessCount > 0)
                         {
                             if (result.FailCount == 0 && result.SuccessCount >= mine.Count)
                                 foreach (var entity in mine)
                                     entity.Status = TranslationStatus.WritebackSuccess;
-                            written.Add((dest, result.SuccessCount));
+                            written.Add((source, dest, result.SuccessCount, planned.Resolution));
                             if (result.FailCount > 0)
                                 failed.Add($"{name}：{result.FailCount} 条未写入 —— {string.Join("; ", result.Errors.Take(2))}");
                         }
@@ -388,8 +435,8 @@ public partial class MainViewModel
 
                 var summary = new System.Text.StringBuilder();
                 summary.AppendLine($"已导出 {written.Count} 张图纸到：{targetFolder.Replace('\\', '/')}");
-                foreach (var (path, count) in written)
-                    summary.AppendLine($"    ✓ {Path.GetFileName(path)}（{count} 条译文）");
+                foreach (var item in written)
+                    summary.AppendLine($"    ✓ {Path.GetFileName(item.Path)}（{item.Count} 条译文，{DescribeDuplicateResolution(item.Resolution)}）");
                 if (skipped.Count > 0)
                 {
                     summary.AppendLine().AppendLine($"跳过 {skipped.Count} 张：");
@@ -411,6 +458,35 @@ public partial class MainViewModel
                 else
                     DwgTranslator.App.Services.ToastService.Error($"导出失败：{failed.Count} 张未写出，详见日志");
 
+                if (written.Count > 0)
+                {
+                    // Keep the task row fast and usable after export while project history remains authoritative.
+                    foreach (var item in written)
+                    {
+                        var task = _taskManager.Tasks
+                            .Where(candidate => string.Equals(
+                                NormalizeSourcePath(candidate.FilePath),
+                                NormalizeSourcePath(item.Source),
+                                StringComparison.OrdinalIgnoreCase))
+                            .OrderByDescending(candidate => candidate.CreatedAt)
+                            .FirstOrDefault();
+                        if (task != null)
+                            _taskManager.RecordExportPath(task.Id, item.Path);
+                    }
+                }
+
+                if (ActiveTranslationProject != null && written.Count > 0)
+                {
+                    var record = new TranslationProjectExport { OutputDirectory = targetFolder, WritebackMode = mode.ToString() };
+                    foreach (var item in written) record.Files.Add(new TranslationProjectExportFile { SourcePath = item.Source, OutputPath = item.Path, SuccessCount = item.Count, Message = item.Resolution.ToString() });
+                    ProjectStore.AppendExport(ActiveTranslationProject.Id, record);
+                    ActiveTranslationProject = ProjectStore.Load(ActiveTranslationProject.Id);
+                }
+                if (written.Count > 0)
+                {
+                    var resultWindow = new Views.SavedOutputsWindow(written.Select(item => item.Path).ToArray()) { Owner = Application.Current.MainWindow };
+                    resultWindow.Show();
+                }
                 ApplyFilter();
                 UpdateStatistics();
             }, Strings.Get("OperationExporting"), "StatusCadExportFailed", "MsgCadExportError");
@@ -421,43 +497,73 @@ public partial class MainViewModel
         }
     }
 
-    /// <summary>
-    /// Executes the writeback via AutoCAD interop or offline mode.
-    /// </summary>
-    private async Task<(CadWriteResult result, bool usedAcadInterop, bool cancelled)> ExecuteWriteback(
-        string sourceFilePath, string destFilePath,
-        List<TextEntity> entitiesToWrite, bool isDxfSource)
+    private static string DescribeDuplicateResolution(DuplicateResolution resolution) => resolution switch
     {
-        var modeDialog = new Views.ExportModeDialog(
-            _autoCadInteropService.IsAutoCADAvailable(_config))
-        {
-            Owner = Application.Current.MainWindow
-        };
+        DuplicateResolution.OverwriteExisting => "已覆盖既有输出",
+        DuplicateResolution.Renamed => "已自动重命名",
+        _ => "新文件"
+    };
+    private enum CadPreflightOutcome { Ready, UseOffline, Cancelled }
 
-        if (modeDialog.ShowDialog() != true)
+    private async Task<CadPreflightOutcome> EnsureCadPluginReadyAsync()
+    {
+        var cadPath = ResolveCadInstallPath();
+        if (string.IsNullOrWhiteSpace(cadPath))
         {
-            StatusMessage = Strings.Get("StatusExportCancelled");
-            return (new CadWriteResult(), false, true);
+            var choice = Views.PromptDialog.Show("未找到可用 CAD。选择“是”改用离线导出，选择“取消”返回。", "CAD 精准回写不可用", MessageBoxButton.OKCancel, MessageBoxImage.Warning);
+            return choice == MessageBoxResult.OK ? CadPreflightOutcome.UseOffline : CadPreflightOutcome.Cancelled;
         }
-
-        return await ExecuteWritebackWithMode(
-            modeDialog.SelectedMode, sourceFilePath, destFilePath, entitiesToWrite);
+        while (true)
+        {
+            var status = CadPluginInstaller.Inspect(cadPath, CadPluginDirectory);
+            if (status.Ready) return CadPreflightOutcome.Ready;
+            var running = new[] { "acad", "acadlt", "gcad" }.Any(name => System.Diagnostics.Process.GetProcessesByName(name).Length > 0);
+            if (running)
+            {
+                var choice = Views.PromptDialog.Show("CAD 插件缺失、过期或自动加载配置异常，且检测到 CAD 正在运行。\n\n请先保存图纸并关闭 CAD。\n“是”＝重新检测；“否”＝改用离线导出；“取消”＝停止导出。\nAPP 不会强制关闭 CAD。",
+                    "CAD 插件预检", MessageBoxButton.YesNoCancel, MessageBoxImage.Warning);
+                if (choice == MessageBoxResult.No) return CadPreflightOutcome.UseOffline;
+                if (choice != MessageBoxResult.Yes) return CadPreflightOutcome.Cancelled;
+                continue;
+            }
+            var repair = Views.PromptDialog.Show("CAD 已关闭。精准回写需要修复插件并重新校验版本、文件哈希和自动加载配置。\n\n“是”＝立即修复；“否”＝改用离线导出；“取消”＝停止导出。",
+                "修复 CAD 插件", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
+            if (repair == MessageBoxResult.No) return CadPreflightOutcome.UseOffline;
+            if (repair != MessageBoxResult.Yes) return CadPreflightOutcome.Cancelled;
+            var result = await Task.Run(() => CadPluginInstaller.Install(cadPath, CadPluginDirectory));
+            if (!result.Success)
+            {
+                Log.Error("CAD plugin repair failed: {Summary}; {Error}; Steps={Steps}", result.Summary, result.Error, string.Join(" | ", result.Steps));
+                var failure = Views.PromptDialog.Show("插件修复失败：" + result.Summary + "\n\n" + result.Error + "\n失败步骤：" + string.Join(" → ", result.Steps) + "\n日志目录：" + LogDirectory + "\n\n“是”＝重新检测；“否”＝改用离线导出；“取消”＝停止导出。",
+                    "CAD 插件修复失败", MessageBoxButton.YesNoCancel, MessageBoxImage.Error);
+                if (failure == MessageBoxResult.No) return CadPreflightOutcome.UseOffline;
+                if (failure != MessageBoxResult.Yes) return CadPreflightOutcome.Cancelled;
+                continue;
+            }
+            status = CadPluginInstaller.Inspect(cadPath, CadPluginDirectory);
+            if (status.Ready) return CadPreflightOutcome.Ready;
+            var recheck = Views.PromptDialog.Show("插件文件已复制，但版本、哈希或自动加载配置复检仍未通过。\n日志目录：" + LogDirectory + "\n\n“是”＝重新检测；“否”＝改用离线导出；“取消”＝停止导出。",
+                "CAD 插件复检失败", MessageBoxButton.YesNoCancel, MessageBoxImage.Error);
+            if (recheck == MessageBoxResult.No) return CadPreflightOutcome.UseOffline;
+            if (recheck != MessageBoxResult.Yes) return CadPreflightOutcome.Cancelled;
+        }
     }
-
     /// <summary>
     /// Executes the writeback in an already chosen mode, so a batch export asks once instead of
-    /// once per drawing.
+    /// once per drawing. Every export path must plan its destination first (see
+    /// <see cref="BatchExportPlanner.CreateExportPlan"/>) and pass the planned backup path, otherwise
+    /// AutoCAD writeback with "back up source before writeback" enabled fails inside the COM call.
     /// </summary>
     private async Task<(CadWriteResult result, bool usedAcadInterop, bool cancelled)> ExecuteWritebackWithMode(
         Views.ExportModeDialog.ExportMode mode, string sourceFilePath, string destFilePath,
-        List<TextEntity> entitiesToWrite)
+        List<TextEntity> entitiesToWrite, string? plannedBackupPath = null)
     {
         if (mode == Views.ExportModeDialog.ExportMode.AutoCAD)
         {
             var progress = new Progress<string>(msg => StatusMessage = msg);
             var result = await Task.Run(async () =>
                 await _autoCadInteropService.WritebackViaAutoCadAsync(
-                    sourceFilePath, destFilePath, entitiesToWrite, TargetIsCjk, _config, progress,
+                    sourceFilePath, destFilePath, entitiesToWrite, TargetIsCjk, _config, plannedBackupPath, progress,
                     _exportCts!.Token), _exportCts!.Token);
             return (result, true, false);
         }
@@ -466,7 +572,12 @@ public partial class MainViewModel
             var result = await Task.Run(() =>
                 _dwgWriterService.WriteTranslations(
                     sourceFilePath, destFilePath, entitiesToWrite, TargetIsCjk, _exportCts!.Token,
-                    new WritebackOptions { OverwriteExisting = _config.DuplicatePolicy == "overwrite", BackupSource = _config.BackupSourceBeforeWrite }),
+                    new WritebackOptions
+                    {
+                        OverwriteExisting = _config.DuplicatePolicy == "overwrite",
+                        BackupSource = _config.BackupSourceBeforeWrite,
+                        BackupPath = plannedBackupPath
+                    }),
                 _exportCts!.Token);
             return (result, false, false);
         }
@@ -645,12 +756,4 @@ public partial class MainViewModel
 
     #endregion
 }
-
-
-
-
-
-
-
-
 

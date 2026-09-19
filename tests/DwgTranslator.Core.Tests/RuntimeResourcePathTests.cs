@@ -31,6 +31,7 @@ public sealed class RuntimeResourcePathTests : IDisposable
         Assert.Equal(legacy, AutoCadDetector.FindCadPlugin(Path.Combine(root, "app")));
     }
 
+#if DEBUG
     [Fact]
     public void UserPromptTakesPrecedenceWithoutChangingBundledPrompt()
     {
@@ -53,6 +54,8 @@ public sealed class RuntimeResourcePathTests : IDisposable
         Assert.Equal(TranslationPrompt.Fallback, TranslationPrompt.LoadSystemPrompt(Path.Combine(root, "data"), Path.Combine(root, "app")));
         Assert.False(Directory.Exists(root));
     }
+
+#endif
 
     public void Dispose()
     {

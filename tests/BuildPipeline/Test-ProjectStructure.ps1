@@ -37,7 +37,6 @@ foreach($spec in @(
   foreach($contract in @(
    @{Kind='Content';Link='settings.json';Source='settings.json.example'},
    @{Kind='Content';Link='assets\default-glossaries\mechanical_zh_en.json';Source='assets/glossaries/mechanical_zh_en.json'},
-   @{Kind='Content';Link='prompts\deepl_context.txt';Source='assets/prompts/deepl_context.txt'},
    @{Kind='Resource';Link='icon.ico';Source='assets/icons/icon.ico'}
   )) {
    $items=@($data.Items.($contract.Kind) | Where-Object {$_.Link -eq $contract.Link})

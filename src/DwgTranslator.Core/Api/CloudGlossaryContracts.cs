@@ -15,6 +15,11 @@ public sealed class CloudGlossaryState
     { Revision = revision; Entries = entries; Session = session; }
 }
 
+public interface IIncrementalCloudGlossaryClient : ICloudGlossaryClient
+{
+    Task<CloudGlossaryState> PatchCloudGlossaryAsync(CloudGlossaryState basis, IReadOnlyList<CloudGlossaryEntry> upserts, IReadOnlyList<string> deleteIds, CancellationToken ct = default);
+}
+
 public interface ICloudGlossaryClient
 {
     Task<CloudGlossaryState> ReadCloudGlossaryAsync(CancellationToken ct = default);

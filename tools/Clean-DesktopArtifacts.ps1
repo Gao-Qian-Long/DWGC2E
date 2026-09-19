@@ -2,7 +2,8 @@
 # Input: WorkspaceRoot (optional). Output: cleanup summary; may DELETE obsolete artifacts.
 # Usage: powershell -NoProfile -File tools/Clean-DesktopArtifacts.ps1 -WhatIf (preview first).
 [CmdletBinding(SupportsShouldProcess)]
-param([string]$WorkspaceRoot = (Join-Path $PSScriptRoot '..'))
+param([string]$WorkspaceRoot)
+if (!$WorkspaceRoot) { $WorkspaceRoot = Join-Path $PSScriptRoot '..' }
 $ErrorActionPreference = 'Stop'
 $root = [IO.Path]::GetFullPath($WorkspaceRoot)
 $artifacts = Join-Path $root 'artifacts'
@@ -36,10 +37,28 @@ $builds = @(foreach ($dir in $items | Where-Object { $_.PSIsContainer -and $_.Na
     foreach ($zip in $packages) { [pscustomobject]@{Dir=$dir; Zip=$zip; Platform=($zip.Name -replace '^DwgTranslator-win-x64-(.+)-\d{8}-\d{6}\.zip$', '$1')} }
 })
 if (!$builds.Count) { Write-Warning 'No verified candidate: cleanup skipped.'; return }
+# Only candidates whose executable matches their own build-info.json are proven build products.
+# Everything else (hand-made or tampered directories) keeps the strict identical-copy rule.
+$verifiedCandidates = @($builds | ForEach-Object { $_.Dir.FullName } | Select-Object -Unique)
 $latest = @($builds | Group-Object Platform | ForEach-Object { $_.Group | Select-Object -First 1 })
 $keep = @($latest | ForEach-Object { $_.Dir.FullName; $_.Zip.FullName })
 $backup = $items | Where-Object { $_.PSIsContainer -and $_.Name -match '^release-backup-\d{8}-\d{6}$' } | Sort-Object Name -Descending | Select-Object -First 1
 if ($backup) { $keep += $backup.FullName }
+# The installed release records the exact candidate and rollback directory it was built from.
+# The next delivery refuses to build an upgrade installer without that candidate, so both recorded
+# paths are protected unconditionally. An unreadable record is fail-closed: nothing is deleted.
+$current = $null
+$currentFile = Join-Path $artifacts 'current-release.json'
+if (Test-Path -LiteralPath $currentFile) {
+    try { $current = Get-Content -LiteralPath $currentFile -Raw | ConvertFrom-Json }
+    catch { throw "current-release.json is unreadable; refusing to delete artifacts because its recorded candidate and rollback directory cannot be protected. $($_.Exception.Message)" }
+    if (!$current) { throw 'current-release.json parsed to nothing; refusing to delete artifacts because its recorded candidate and rollback directory cannot be protected.' }
+    foreach ($recorded in @($current.candidate, $current.rollbackDirectory)) {
+        $text = [string]$recorded
+        if ([string]::IsNullOrWhiteSpace($text)) { continue }
+        try { $keep += [IO.Path]::GetFullPath($text) } catch { $keep += $text }
+    }
+}
 $releaseInfo = Join-Path $release 'build-info.json'
 if (Test-Path -LiteralPath $releaseInfo) {
     $version = (Get-Content -LiteralPath $releaseInfo -Raw | ConvertFrom-Json).version
@@ -52,7 +71,10 @@ $running = @(Get-Process DwgTranslator -ErrorAction SilentlyContinue | Where-Obj
 $references = @($release) + @($latest | ForEach-Object { $_.Dir.FullName })
 $deleted = @(); [long]$bytes = 0
 foreach ($item in $items) {
-    $recognized = if ($item.PSIsContainer) { $item.Name -match '^(publish|review-publish|publish-\d{8}-\d{6}|release-backup-\d{8}-\d{6})$' } else { $item.Name -match '^DwgTranslator-win-x64-[A-Za-z0-9]+(-\d{8}-\d{6})?\.zip$' }
+    # release-next-*/release-failed-* are interrupted or failed swap directories. They hold a copy of
+    # the installed release plus portable user data, so they are recognized for cleanup but always
+    # pass through the identical-copy rule below.
+    $recognized = if ($item.PSIsContainer) { $item.Name -match '^(publish|review-publish|publish-\d{8}-\d{6}|release-backup-\d{8}-\d{6}|release-next-\d{8}-\d{6}|release-failed-\d{8}-\d{6})$' } else { $item.Name -match '^DwgTranslator-win-x64-[A-Za-z0-9]+(-\d{8}-\d{6})?\.zip$' }
     if (!$recognized -or $item.FullName -in $keep) { continue }
     $target = Assert-SafeTarget $item.FullName
     if ($running | Where-Object { $_.StartsWith($target + '\', [StringComparison]::OrdinalIgnoreCase) }) { Write-Warning "Running app retained: $target"; continue }
@@ -62,6 +84,12 @@ foreach ($item in $items) {
         # Only declared program files are disposable. Unknown DBs/files, including files
         # under assets or CadPlugin, must have an identical live copy before deletion.
         $owned=@('DwgTranslator.exe','DwgTranslator.pdb','DwgTranslator.Core.pdb','build-info.json','architecture-audit.json','assets\default-glossaries\mechanical_zh_en.json','CadPlugin\cad-files.txt')
+        # settings.json in a verified publish-* candidate is a byte copy of the reviewed
+        # settings.json.example (Assert-CleanPackageInput.ps1 enforces that at publish time), and the
+        # publish flow states it must never carry personal settings. It therefore cannot be unique
+        # user data, unlike the same file inside release-backup-*/release-next-*/release-failed-*,
+        # which is an installed release and keeps the identical-copy requirement.
+        if ($target -in $verifiedCandidates) { $owned += 'settings.json' }
         $manifest=Join-Path $target 'CadPlugin/cad-files.txt'
         if(Test-Path -LiteralPath $manifest){foreach($entry in Get-Content -LiteralPath $manifest){
             if($entry.Replace('\','/') -match '(^/|:|(^|/)\.\.(/|$))'){throw 'Unsafe old CAD manifest'}
@@ -88,9 +116,8 @@ foreach ($item in $items) {
 }
 # Remove only completed, explicitly inventoried old delivery trees. Failed/incomplete
 # deliveries and anything altered after acceptance are reported for separate review.
-$currentFile=Join-Path $artifacts 'current-release.json'
-if(Test-Path -LiteralPath $currentFile){
-    $current=Get-Content -LiteralPath $currentFile -Raw | ConvertFrom-Json
+# $current (parsed above, fail-closed) supplies the protected delivery directory.
+if($current){
     foreach($dir in $items | Where-Object {$_.PSIsContainer -and $_.Name -match '^delivery-\d{8}-\d{6}$'}){
         if($dir.FullName -eq $current.deliveryDirectory){continue}
         $target=Assert-SafeTarget $dir.FullName

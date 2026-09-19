@@ -85,7 +85,7 @@ public sealed class RejectedSessionTests
             if (path == "/v1/version") return Reply(200, "{\"latest_version\":\"2.2.0\"}");
             return Reply(404);
         }));
-        var client = new WorkerApiClient(http, "https://unit.invalid", () => "old", "device", "name");
+        var client = new WorkerApiClient(http, "https://unit.invalid", "https://unit.invalid/update/latest.json", () => "old", "device", "name");
         await Assert.ThrowsAsync<ApiAuthenticationException>(() => client.GetProfileAsync());
         Assert.True((await client.LoginAsync("dummy", "dummy")).Success);
         Assert.NotNull(await client.CheckVersionAsync("2.1.1"));

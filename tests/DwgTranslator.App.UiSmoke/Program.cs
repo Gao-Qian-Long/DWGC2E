@@ -1,6 +1,7 @@
 using System.IO;
 using System.Reflection;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
@@ -16,7 +17,10 @@ public static class Program
     [STAThread] public static int Main()
     {
         Environment.SetEnvironmentVariable("DWGC2E_DATA_DIR", Path.Combine(Path.GetTempPath(), "dwgc2e-ui-" + Guid.NewGuid().ToString("N")));
-        SettingsStore.Update(Path.Combine(Environment.GetEnvironmentVariable("DWGC2E_DATA_DIR")!, "settings.json"), c => { c.ApiMode = "direct"; c.ApiBaseUrl = ""; c.AuthTokenEncrypted = DwgTranslator.Core.Models.AppConfig.EncryptApiKey("saved-simulation-token"); });
+        var settingsPath = Path.Combine(Environment.GetEnvironmentVariable("DWGC2E_DATA_DIR")!, "settings.json");
+        SettingsStore.Update(settingsPath, c => { c.ApiBaseUrl = ""; c.AuthTokenEncrypted = DwgTranslator.Core.Models.AppConfig.EncryptApiKey("saved-simulation-token"); });
+        var legacyJson = File.ReadAllText(settingsPath).TrimStart();
+        File.WriteAllText(settingsPath, legacyJson.Insert(legacyJson.IndexOf('{') + 1, "\n  \"apiMode\": \"direct\","));
         var app = new SmokeApp();
         app.Resources = new ResourceDictionary();
         foreach (var name in new[] { "ColorTokens", "Icons", "Metrics", "MainWindowStyles" })
@@ -56,6 +60,49 @@ public sealed partial class SmokeApp : App
         }
         await Dispatcher.CurrentDispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
     }
+    /// <summary>
+    /// 等待布局、渲染与动画全部落定。
+    /// 仅靠 ApplicationIdle 是不够的：toast 等控件带高度/透明度动画，
+    /// 在动画中途读取 ActualWidth/ActualHeight 会得到中间帧，造成断言随机失败。
+    /// 这里按 Input→Loaded→Render→Background→Idle 顺序排空队列并强制一次布局，重复若干轮。
+    /// </summary>
+    private static async Task SettleAsync(int rounds = 3)
+    {
+        for (var round = 0; round < rounds; round++)
+        {
+            foreach (var priority in new[] { DispatcherPriority.Input, DispatcherPriority.Loaded, DispatcherPriority.Render, DispatcherPriority.Background, DispatcherPriority.ApplicationIdle })
+                await Dispatcher.CurrentDispatcher.InvokeAsync(() => { }, priority);
+            Application.Current?.MainWindow?.UpdateLayout();
+            await Task.Delay(10);
+        }
+    }
+
+    /// <summary>
+    /// 轮询直到某个测量值连续稳定（用于动画/虚拟化/异步布局）。
+    /// 比固定延时可靠：动画快时立即返回，动画慢时不会误测中间帧。
+    /// </summary>
+    private static async Task WaitForStableAsync(Func<double> measure, string description, int stableReads = 4, int timeoutMs = 8000)
+    {
+        var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
+        var last = double.NaN;
+        var stable = 0;
+        while (DateTime.UtcNow < deadline)
+        {
+            await Dispatcher.CurrentDispatcher.InvokeAsync(() => { }, DispatcherPriority.Render);
+            await Dispatcher.CurrentDispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+            Application.Current?.MainWindow?.UpdateLayout();
+            var current = measure();
+            if (!double.IsNaN(last) && Math.Abs(current - last) < 0.01)
+            {
+                if (++stable >= stableReads) return;
+            }
+            else stable = 0;
+            last = current;
+            await Task.Delay(16);
+        }
+        throw new TimeoutException("布局或动画未在超时内稳定：" + description);
+    }
+
     private static T FindVisual<T>(DependencyObject parent) where T : DependencyObject
     {
         if (parent is T match) return match;
@@ -75,11 +122,56 @@ public sealed partial class SmokeApp : App
     private static void Capture(FrameworkElement window, string name)
     {
         window.UpdateLayout();
-        var bitmap = new RenderTargetBitmap((int)window.ActualWidth, (int)window.ActualHeight, 96, 96, PixelFormats.Pbgra32);
-        bitmap.Render(window);
+        var background = window is Window native ? native.Background : Brushes.Transparent;
+        // VisualBrush uses local client coordinates; Render(window) includes layout
+        // offsets such as a dialog content margin and clips the opposite edge.
+        if (window is Window shell && shell.Content is FrameworkElement client) window = client;
+        var offset = VisualTreeHelper.GetOffset(window);
+        var width = Math.Max(1, (int)Math.Ceiling(window.ActualWidth + Math.Max(0, offset.X) + Math.Max(0, window.Margin.Right)));
+        var height = Math.Max(1, (int)Math.Ceiling(window.ActualHeight + Math.Max(0, offset.Y) + Math.Max(0, window.Margin.Bottom)));
+        var bitmap = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
+        var visual = new DrawingVisual();
+        using (var drawing = visual.RenderOpen())
+        {
+            var bounds = new Rect(0, 0, width, height);
+            drawing.DrawRectangle(background ?? Brushes.White, null, bounds);
+            var brush = new VisualBrush(window) { ViewboxUnits = BrushMappingMode.Absolute, Viewbox = bounds, Stretch = Stretch.Fill };
+            drawing.DrawRectangle(brush, null, bounds);
+        }
+        bitmap.Render(visual);
         var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(bitmap));
         var output = Path.GetFullPath(Environment.GetEnvironmentVariable("DWGC2E_UI_SMOKE_OUTPUT") ?? "artifacts/ui-smoke"); Directory.CreateDirectory(output);
         using var stream = File.Create(Path.Combine(output, name + ".png")); encoder.Save(stream);
+    }
+    // Isolated layout evidence: never render a large visual through a smaller HWND's
+    // layout clip, and never label this detached 96-DPI tree as physical monitor evidence.
+    private static void CaptureLayout(Window owner, Size size, string name)
+    {
+        var content = (FrameworkElement)owner.Content;
+        var previousContext = content.ReadLocalValue(FrameworkElement.DataContextProperty);
+        var holder = new System.Windows.Controls.Border { Width = size.Width, Height = size.Height, Background = owner.Background, DataContext = owner.DataContext, UseLayoutRounding = true };
+        System.Windows.Documents.TextElement.SetFontFamily(holder, owner.FontFamily);
+        System.Windows.Documents.TextElement.SetFontSize(holder, owner.FontSize);
+        holder.Resources.MergedDictionaries.Add(owner.Resources);
+        DwgTranslator.App.Views.Controls.ResponsiveLayout.SetIsCompact(holder, size.Width < 1100);
+        DwgTranslator.App.Views.Controls.ResponsiveLayout.SetIsShort(holder, size.Height < 540);
+        owner.Content = null;
+        try
+        {
+            content.DataContext = owner.DataContext;
+            holder.Child = content;
+            holder.Measure(size); holder.Arrange(new Rect(size)); holder.UpdateLayout();
+            Check(Math.Abs(content.ActualWidth - size.Width) < 2 && Math.Abs(content.ActualHeight - size.Height) < 2, "detached render matches requested DIP canvas " + name);
+            Capture(holder, name);
+        }
+        finally
+        {
+            holder.Child = null;
+            if (previousContext == DependencyProperty.UnsetValue) content.ClearValue(FrameworkElement.DataContextProperty);
+            else content.SetValue(FrameworkElement.DataContextProperty, previousContext);
+            owner.Content = content;
+            owner.UpdateLayout();
+        }
     }
     private static IEnumerable<T> FindVisuals<T>(DependencyObject parent) where T : DependencyObject
     {
@@ -93,8 +185,15 @@ public sealed partial class SmokeApp : App
     private async Task VerifyWorkspaceUi(MainWindow window, MainViewModel vm)
     {
         vm.CurrentPage = MainViewModel.PageTranslate;
-        var translate = FindVisual<DwgTranslator.App.Views.Pages.TranslatePage>(window);
         await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+        var translate = FindVisual<DwgTranslator.App.Views.Pages.TranslatePage>(window);
+        Check(translate != null, "translate page is attached before workspace interaction");
+        var outputSettings=FindVisuals<System.Windows.Controls.Button>(translate).Single(b=>Equals(b.Content,"输出设置"));
+        ((System.Windows.Automation.Provider.IInvokeProvider)new System.Windows.Automation.Peers.ButtonAutomationPeer(outputSettings).GetPattern(System.Windows.Automation.Peers.PatternInterface.Invoke)).Invoke();
+        await Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ApplicationIdle);
+        Check(vm.CurrentPage==MainViewModel.PageSettings && vm.SettingsSection==2,"output settings button opens file/output section");
+        vm.CurrentPage=MainViewModel.PageTranslate;
+        await Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ApplicationIdle);
         var pinButton = (System.Windows.Controls.Button)window.FindName("TopmostButton");
         var pinViewport = (FrameworkElement)pinButton.Content;
         var pin = FindVisual<System.Windows.Shapes.Path>(pinViewport);
@@ -127,10 +226,12 @@ public sealed partial class SmokeApp : App
         var drop = (FrameworkElement)translate.FindName("EmptyDropZone");
         var centerOrigin = center.TranslatePoint(new Point(0, 0), drop);
         Check(Math.Abs(centerOrigin.X + center.ActualWidth / 2 - drop.ActualWidth / 2) <= 1 && Math.Abs(centerOrigin.Y + center.ActualHeight / 2 - drop.ActualHeight / 2) <= 1, "drop content geometrically centered");
-        Check(System.Windows.Controls.Grid.GetRow((FrameworkElement)translate.FindName("TranslationSettingsSection")) == 1 && System.Windows.Controls.Grid.GetRow((FrameworkElement)translate.FindName("OutputSection")) == 2, "translation and output have separate grid rows");
+        var translationSettingsSection = (FrameworkElement)translate.FindName("TranslationSettingsSection");
+         var outputSection = (FrameworkElement)translate.FindName("OutputSection");
+         Check(translationSettingsSection.Parent is System.Windows.Controls.Grid settingsColumn && outputSection.Parent == settingsColumn && System.Windows.Controls.Grid.GetRow(translationSettingsSection) == 0 && System.Windows.Controls.Grid.GetRow(outputSection) == 1, "translation and output have separate settings rows");
         Check(((FrameworkElement)translate.FindName("EmptyDropZone")).IsVisible, "empty queue has large import entry");
         Check(!((FrameworkElement)translate.FindName("QueueWorkspace")).IsVisible, "empty queue does not show redundant table");
-        Check(!((System.Windows.Controls.Expander)translate.FindName("WorkspaceLog")).IsExpanded, "log is subordinate by default");
+        Check(translate.FindName("WorkspaceLogLauncher") is FrameworkElement, "log is represented by a compact launcher by default");
         var editEntity = new DwgTranslator.Core.Models.TextEntity { Handle = "proof-test", PlainText = "原文", TranslatedText = "original" };
         vm.Entities.Add(editEntity);
         vm.TrackProofreadingEdit(editEntity); editEntity.TranslatedText = "changed";
@@ -144,59 +245,71 @@ public sealed partial class SmokeApp : App
         Check(((FrameworkElement)translate.FindName("EmptyDropZone")).ActualHeight <= 360, "empty drop zone capped at 360 DIP");
         Check(!vm.HasFailedDrawingTasks,"retry disabled without failed tasks");
         Capture(window, "workspace-empty");
-        var viewport = (System.Windows.Controls.ScrollViewer)window.FindName("PageViewport");
         var pageHost = (FrameworkElement)window.FindName("PageHost");
-        Console.WriteLine($"PAGE_LAYOUT actual={viewport.ActualWidth}x{viewport.ActualHeight} viewport={viewport.ViewportWidth}x{viewport.ViewportHeight} extent={viewport.ExtentWidth}x{viewport.ExtentHeight} host={pageHost.Width}x{pageHost.Height}");
-        var states = new[] { DwgTranslator.Core.Tasks.TranslationTaskStatus.Pending, DwgTranslator.Core.Tasks.TranslationTaskStatus.Translating, DwgTranslator.Core.Tasks.TranslationTaskStatus.Completed, DwgTranslator.Core.Tasks.TranslationTaskStatus.Failed, DwgTranslator.Core.Tasks.TranslationTaskStatus.Paused };
+        Console.WriteLine($"PAGE_LAYOUT hostActual={pageHost.ActualWidth}x{pageHost.ActualHeight} desired={pageHost.DesiredSize.Width}x{pageHost.DesiredSize.Height} maxWidth={pageHost.MaxWidth}");
+        var states = new[] { DwgTranslator.Core.Tasks.TranslationTaskStatus.Pending, DwgTranslator.Core.Tasks.TranslationTaskStatus.Translating, DwgTranslator.Core.Tasks.TranslationTaskStatus.ReadyForReview, DwgTranslator.Core.Tasks.TranslationTaskStatus.Completed, DwgTranslator.Core.Tasks.TranslationTaskStatus.Failed, DwgTranslator.Core.Tasks.TranslationTaskStatus.Paused };
         foreach (var state in states)
         {
             var path = Path.Combine(AppDataDir, "验收图纸-" + state + ".dwg");
             var row = new DrawingFileItem(path);
-            row.AttachTask(new DwgTranslator.Core.Tasks.TranslationTask(path) { Status = state, TextCount = 128, Progress = state == DwgTranslator.Core.Tasks.TranslationTaskStatus.Completed ? 100 : 30, Error = state == DwgTranslator.Core.Tasks.TranslationTaskStatus.Failed ? "图纸无法读取，请检查文件后重试。" : null });
+            row.AttachTask(new DwgTranslator.Core.Tasks.TranslationTask(path) { Status = state, TextCount = 128, Progress = state is DwgTranslator.Core.Tasks.TranslationTaskStatus.Completed or DwgTranslator.Core.Tasks.TranslationTaskStatus.ReadyForReview ? 100 : 30, Error = state == DwgTranslator.Core.Tasks.TranslationTaskStatus.Failed ? "图纸无法读取，请检查文件后重试。" : null });
             vm.DrawingFiles.Add(row);
         }
         vm.HasDrawingFiles = true;
         await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
         Check(!((FrameworkElement)translate.FindName("EmptyDropZone")).IsVisible, "import releases drop zone space");
         Check(((FrameworkElement)translate.FindName("DrawingQueue")).ActualHeight >= 120, "queue remains bounded and scrollable in compact workspace");
-        var log = (System.Windows.Controls.Expander)translate.FindName("WorkspaceLog");
-        log.IsExpanded = true;
+        vm.ToggleLogViewerCommand.Execute(null);
         await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
-        Check(Math.Abs(((FrameworkElement)log.Content).ActualHeight - 170) <= 1 / VisualTreeHelper.GetDpi(log).DpiScaleY, "expanded log keeps 170 DIP height");
-        Capture(window, "workspace-expanded-log");
-        log.IsExpanded = false;
+        var logWindow = Application.Current.Windows.OfType<LogViewerWindow>().Single();
+        Check(logWindow.IsVisible && vm.LogViewModel.IsVisible, "log opens in a dedicated virtualized window");
+        Capture(logWindow, "workspace-log-window");
+        logWindow.Close();
         await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
-        Capture(window, "workspace-five-drawings");
-        Check(!vm.DrawingFiles[2].HasOutput, "completed task without output has no open action");
+        Check(!vm.LogViewModel.IsVisible, "closing log window suspends live UI updates");
+        Capture(window, "workspace-six-drawings");
+        Check(!vm.DrawingFiles[3].HasOutput, "completed task without output has no open action");
         vm.ClearDrawingOutputsCommand.Execute(null);
         Check(vm.DrawingFiles.All(x => !x.IsIncludedForExport), "clear output selection");
         vm.SelectAllDrawingOutputsCommand.Execute(null);
         Check(vm.DrawingFiles.All(x => x.IsIncludedForExport), "select all outputs");
         var output = Path.Combine(AppDataDir, "test-output.dwg"); File.WriteAllText(output, "controlled fixture, not a real drawing");
-        vm.DrawingFiles[2].Task!.OutputPath = output;
-        Check(vm.DrawingFiles[2].HasOutput, "existing output enables result action");
+        vm.DrawingFiles[3].Task!.LastExportPath = output;
+        Check(vm.DrawingFiles[3].HasOutput, "existing output enables result action");
         File.Delete(output);
-        Check(!vm.DrawingFiles[2].HasOutput, "removed output disables result action");
-        var count = vm.BatchView.Cast<object>().Count(); Check(count == 5, "batch view contains all tasks");
-        vm.BatchStatusFilter = 4; Check(vm.BatchView.Cast<object>().Count() == 1, "failure filter");
+        Check(!vm.DrawingFiles[3].HasOutput, "removed output disables result action");
+        var count = vm.BatchView.Cast<object>().Count(); Check(count == 6, "batch view contains all tasks");
+        vm.BatchStatusFilter = 6; Check(vm.BatchView.Cast<object>().Count() == 1, "failure filter");
         vm.BatchStatusFilter = 1; Check(vm.BatchView.Cast<object>().Count() == 1, "running filter");
         vm.BatchStatusFilter = 0; vm.BatchSearch = "Paused"; Check(vm.BatchView.Cast<object>().Count() == 1, "search preserves paused state");
-        vm.BatchSearch = ""; vm.BatchDateFilter = 1; Check(vm.BatchView.Cast<object>().Count() == 5, "today filter"); vm.BatchDateFilter = 0;
-        vm.CurrentPage = MainViewModel.PageBatch; vm.SelectedBatchTask = vm.DrawingFiles[3];
-        Check(vm.IsTaskDetailOpen, "selection opens task detail");
+        vm.BatchSearch = ""; vm.BatchDateFilter = 1; Check(vm.BatchView.Cast<object>().Count() == 6, "today filter"); vm.BatchDateFilter = 0;
+        vm.CurrentPage = MainViewModel.PageBatch; vm.ShowTaskDetailCommand.Execute(vm.DrawingFiles[4]);
+        Check(vm.IsTaskDetailOpen, "explicit detail action opens task detail");
         await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle); Capture(window, "task-error-detail");
-        vm.OpenTaskProofreadingCommand.Execute(null); Check(vm.IsProofreading && vm.SelectedDrawingFile == vm.DrawingFiles[3], "detail opens selected drawing proofreading");
+        vm.OpenTaskProofreadingCommand.Execute(null); Check(!vm.IsProofreading && vm.SelectedDrawingFile != vm.DrawingFiles[4], "failed detail cannot enter proofreading");
+        vm.SelectedBatchTask = vm.DrawingFiles[2]; vm.OpenTaskProofreadingCommand.Execute(null); Check(vm.IsProofreading && vm.SelectedDrawingFile == vm.DrawingFiles[2], "review detail opens selected drawing proofreading");
         await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle); Capture(window, "task-proofreading");
-        vm.BackToTaskListCommand.Execute(null); Check(!vm.IsProofreading && vm.SelectedBatchTask == vm.DrawingFiles[3], "back preserves selected task");
+        vm.BackToTaskListCommand.Execute(null); Check(!vm.IsProofreading && vm.SelectedBatchTask == vm.DrawingFiles[2], "back preserves selected task");
         vm.CloseTaskDetailCommand.Execute(null);
-        vm.ShowTaskDetailCommand.Execute(vm.DrawingFiles[3]);
+        vm.ShowTaskDetailCommand.Execute(vm.DrawingFiles[4]);
         Check(vm.IsTaskDetailOpen, "same task detail can reopen");
         vm.CloseTaskDetailCommand.Execute(null);
-        for (var i = 0; i < 600; i++) vm.DrawingFiles.Add(new DrawingFileItem(Path.Combine(AppDataDir, "长文件名-" + new string('图', 80) + i + ".dwg")));
+        for (var i = 0; i < 1000; i++) vm.DrawingFiles.Add(new DrawingFileItem(Path.Combine(AppDataDir, "长文件名-" + new string('图', 80) + i + ".dwg")));
         await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
         var batchPage = FindVisual<DwgTranslator.App.Views.Pages.BatchTasksPage>(window);
         var taskTable = (System.Windows.Controls.DataGrid)batchPage.FindName("TaskTable");
-        Check(taskTable.Items.Count == 605, "large task queue retains every row");
+        taskTable.ScrollIntoView(vm.DrawingFiles[0]);
+        taskTable.UpdateLayout();
+        var detailRow = (System.Windows.Controls.DataGridRow)taskTable.ItemContainerGenerator.ContainerFromItem(vm.DrawingFiles[0]);
+        var detailButton = FindVisual<System.Windows.Controls.Button>(detailRow);
+        Check(detailButton != null && detailButton.IsVisible && detailButton.IsEnabled, "task detail button visible and enabled");
+        var detailPeer = new System.Windows.Automation.Peers.ButtonAutomationPeer(detailButton!);
+        ((System.Windows.Automation.Provider.IInvokeProvider)detailPeer.GetPattern(System.Windows.Automation.Peers.PatternInterface.Invoke)).Invoke();
+        await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+        Check(vm.IsTaskDetailOpen && vm.SelectedBatchTask == vm.DrawingFiles[0], "real detail button binding opens correct task");
+        Check(((FrameworkElement)batchPage.FindName("TaskDetailDrawer")).IsVisible, "detail drawer renders above task table");
+        vm.CloseTaskDetailCommand.Execute(null);
+        Check(taskTable.Items.Count == 1006, "large task queue retains every row");
         Check(CountVisual<System.Windows.Controls.DataGridRow>(taskTable) < 80, "large queue uses bounded row virtualization");
         Capture(window, "task-large-queue");
         vm.DrawingFiles.Clear(); vm.HasDrawingFiles = false;
@@ -224,6 +337,22 @@ public sealed partial class SmokeApp : App
         Check(!((System.Windows.Controls.RadioButton)w.FindName("WechatPay")).IsEnabled,"unconnected WeChat payment cannot be selected");
         Check(((System.Windows.Controls.TextBlock)w.FindName("QrStatus")).Text.Contains("请使用支付宝扫码"),"QR identifies actual Alipay order channel");
         Check(((System.Windows.Controls.Image)w.FindName("Qr")).Source!=null,"native billing QR bitmap generated");Capture(w,"billing-native-qr");
+        // Verify row actions fit and share the header center at minimum and normal window widths.
+        var ordersGrid=(System.Windows.Controls.DataGrid)w.FindName("Orders");
+        foreach(var width in new[]{620d,860d})
+        {
+            w.Width=width; ordersGrid.BringIntoView();
+            await Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ApplicationIdle); w.UpdateLayout();
+            var copy=FindVisuals<System.Windows.Controls.Button>(ordersGrid).First(b=>Equals(b.Content,"复制"));
+            var cell=FindVisuals<System.Windows.Controls.DataGridCell>(ordersGrid).First(c=>FindVisuals<System.Windows.Controls.Button>(c).Contains(copy));
+            var rect=copy.TransformToAncestor(cell).TransformBounds(new Rect(0,0,copy.ActualWidth,copy.ActualHeight));
+            Check(rect.Left>=0 && rect.Top>=0 && rect.Right<=cell.ActualWidth+0.5 && rect.Bottom<=cell.ActualHeight+0.5,"billing copy button fits row at "+width);
+            var header=FindVisuals<System.Windows.Controls.Primitives.DataGridColumnHeader>(ordersGrid).First(h=>Equals(h.Content,"操作"));
+            var buttonCenter=copy.TranslatePoint(new Point(copy.ActualWidth/2,0),ordersGrid).X;
+            var headerCenter=header.TranslatePoint(new Point(header.ActualWidth/2,0),ordersGrid).X;
+            Check(Math.Abs(buttonCenter-headerCenter)<=1,"billing action header and button align at "+width);
+            Capture(w,"billing-order-action-"+width);
+        }
         fake.Order.Channel="wxpay";
         await (Task)typeof(BillingWindow).GetMethod("RefreshAsync",BindingFlags.NonPublic|BindingFlags.Instance)!.Invoke(w,null)!;
         Check(((System.Windows.Controls.Image)w.FindName("Qr")).Source==null,"unsupported order channel never displays an Alipay QR");
@@ -255,12 +384,38 @@ public sealed partial class SmokeApp : App
             window.Width = 1366; window.Height = 768;
             await Task.Delay(500);
             var vm = (MainViewModel)window.DataContext;
+            if (Environment.GetEnvironmentVariable("DWGC2E_REFINEMENT_ONLY") == "1")
+            {
+                await VerifyRefinementAsync(window, vm);
+                Console.WriteLine("REFINEMENT_SMOKE=PASS (isolated UI checks only)");
+                Shutdown(0);
+                return;
+            }
+            await VerifySidebarToastStabilityAsync(window, vm);
+            await VerifyRefinementAsync(window, vm);
+            await VerifySmallSurfacesAsync(window, vm);
             VerifyEmbeddedCadPlugin();
             VerifyPluginSourceConsistency(vm);
             await VerifyTaskRecoveryNoticeAsync(window, vm);
             VerifyRecoveryDecision(vm);
             Check(!vm.IsAccountLoggedIn, "startup does not trust unverified saved token while offline");
-            Check(SettingsStore.Read(Path.Combine(AppDataDir, "settings.json")).ApiMode == "worker", "startup migrates legacy direct config");
+            var migratedSettingsPath = Path.Combine(AppDataDir, "settings.json");
+            // Drive the legacy-config migration explicitly rather than relying on the App
+            // start-up side effect: that made this check order-dependent, because on identical
+            // code the file was sometimes still unmigrated at this point, so it passed only
+            // when start-up happened to rewrite the file first. Re-create the legacy shape
+            // here and migrate it deterministically.
+            var legacyJson = File.ReadAllText(migratedSettingsPath).TrimStart();
+            if (!legacyJson.Contains("\"apiMode\"", StringComparison.Ordinal))
+                legacyJson = legacyJson.Insert(legacyJson.IndexOf('{') + 1, "\n  \"apiMode\": \"direct\",");
+            File.WriteAllText(migratedSettingsPath, legacyJson);
+            SettingsStore.Migrate(
+                migratedSettingsPath,
+                SettingsStore.Read(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "settings.json")));
+            var migratedSettings = SettingsStore.Read(migratedSettingsPath);
+            Check(migratedSettings.ConfigurationVersion >= 2 &&
+                  !File.ReadAllText(migratedSettingsPath).Contains("apiMode", StringComparison.OrdinalIgnoreCase),
+                  "legacy direct config is migrated away");
             api.FailBilling = true;
             vm.LoginName = "simulated-account";
             await VerifyAccountSaveFailureAsync(vm, logout: false);
@@ -294,10 +449,31 @@ public sealed partial class SmokeApp : App
             await VerifyCloudGlossaryAsync(window, vm);
             vm.CurrentPage = MainViewModel.PageSettings;
             await Task.Delay(4200);
-            for (var section = 0; section < 6; section++) { vm.SettingsSection = section; await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle); Capture(window, "settings-" + section); var settingsPage=FindVisual<DwgTranslator.App.Views.Pages.SettingsPage>(window); Check(((FrameworkElement)settingsPage.FindName("SettingsSaveBar")).IsVisible == (section!=5), "save bar only on editable settings " + section); if(section==1) Check(FindVisuals<System.Windows.Controls.TextBox>(settingsPage).Where(t=>t.IsVisible).All(t=>t.ActualWidth<=160),"compact numeric settings inputs"); }
+            for (var section = 0; section < 6; section++) { vm.SettingsSection = section; await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle); Capture(window, "settings-" + section); var currentSettingsPage=FindVisual<DwgTranslator.App.Views.Pages.SettingsPage>(window); Check(((FrameworkElement)currentSettingsPage.FindName("SettingsSaveBar")).IsVisible == (section!=5), "save bar only on editable settings " + section); if(section==1) Check(FindVisuals<System.Windows.Controls.TextBox>(currentSettingsPage).Where(t=>t.IsVisible).All(t=>t.ActualWidth<=160),"compact numeric settings inputs"); }
+            vm.SettingsSection = 1;
+            await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+            var settingsPage = FindVisual<DwgTranslator.App.Views.Pages.SettingsPage>(window);
+            var saveSettingsButton = (Button)settingsPage.FindName("SaveSettingsButton");
+            var discardSettingsButton = (Button)settingsPage.FindName("DiscardSettingsButton");
+            var restoreSettingsButton = (Button)settingsPage.FindName("RestoreSettingsButton");
+            Check(((FrameworkElement)settingsPage.FindName("SettingsDraftStatus")).IsVisible && vm.SettingsStateText == "已应用", "settings exposes applied draft state");
+            Check(!saveSettingsButton.IsEnabled && !discardSettingsButton.IsEnabled, "clean settings disable save and discard");
+            Check(restoreSettingsButton.IsVisible && Equals(restoreSettingsButton.Content, "恢复本节推荐值"), "settings exposes per-section recommended defaults");
+            var retryInput = (TextBox)settingsPage.FindName("MaxRetryCountInput");
+            retryInput.Text = "99";
+            await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+            Check(Validation.GetHasError(retryInput) && vm.HasSettingsValidationErrors && !saveSettingsButton.IsEnabled, "invalid settings show inline error and block save");
+            retryInput.Text = "3";
+            await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+            Check(!Validation.GetHasError(retryInput) && !vm.HasSettingsValidationErrors, "corrected settings clear inline error");
             vm.SettingsDraft.ExportDirectory = Path.Combine(AppDataDir, "output-test");
-            Check(vm.HasUnsavedSettings, "settings dirty"); Check(vm.SaveSettingsPage(), "settings save");
+            vm.NotifySettingsDraftState(true);
+            await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+            Check(vm.HasUnsavedSettings && vm.SettingsStateText == "有未保存更改" && saveSettingsButton.IsEnabled && discardSettingsButton.IsEnabled, "settings dirty state drives bound action bar");
+            Check(vm.SaveSettingsPage(), "settings save");
+            await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
             Check(SettingsStore.Read(Path.Combine(AppDataDir, "settings.json")).ExportDirectory.EndsWith("output-test"), "settings persisted");
+            Check(vm.SettingsStateText == "已应用" && !saveSettingsButton.IsEnabled, "settings save returns to applied state");
             vm.CurrentPage = MainViewModel.PageTranslate;
             Check(!vm.RequireAccount() && vm.CurrentPage == MainViewModel.PageAccount, "cloud gate navigates without executing");
             vm.LoginName = "simulated-account";
@@ -309,6 +485,7 @@ public sealed partial class SmokeApp : App
             Check(vm.CurrentPage == MainViewModel.PageTranslate, "login returns without starting translation");
             Check(!vm.IsProcessing && api.TranslationCalls == 0, "no quota-consuming action");
             vm.CurrentPage = MainViewModel.PageAccount; await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle); Capture(window, "account-simulated-login");
+            await VerifyMembershipLayoutAsync(window, vm, loginPage);
             var quota = (System.Windows.Controls.ProgressBar)loginPage.FindName("QuotaProgress");
             var usageBefore = vm.OnlineUsage;
             foreach (var used in new[] { 0L, 50L, 100L })
@@ -331,29 +508,14 @@ public sealed partial class SmokeApp : App
             await VerifyGlossaryWorkspace(window, vm);
             var count = vm.TermDraft.Count; vm.LoadTermEditor(); Check(vm.TermDraft.Count == count, "term count after reload");
             vm.FinishTermEditCommand.Execute(null);
+            // Async command: wait for the save to settle instead of assuming it completed synchronously.
+            await WaitUntil(() => !vm.IsTermDrawerOpen && !vm.HasUnsavedTerms, "term drawer closes after finishing edit");
             vm.SelectedTerm = null;
             await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
             var glossaryPage = FindVisual<DwgTranslator.App.Views.Pages.GlossaryPage>(window);
-            var syncMenu = (System.Windows.Controls.MenuItem)glossaryPage.FindName("CloudSyncMenu");
-            Check(Math.Abs(syncMenu.ActualHeight - (double)window.FindResource("Size.Button")) <= 1, "cloud sync matches toolbar button height");
-            Check(syncMenu.Template.FindName("DropdownSurface", syncMenu) is System.Windows.Controls.Border, "cloud sync replaces native blue menu chrome");
-            Check(ReferenceEquals(((System.Windows.Controls.MenuItem)syncMenu.Items[0]).Command, vm.MergeTermsCommand) && ReferenceEquals(((System.Windows.Controls.MenuItem)syncMenu.Items[1]).Command, vm.UploadTermsCommand) && ReferenceEquals(((System.Windows.Controls.MenuItem)syncMenu.Items[2]).Command, vm.DownloadTermsCommand), "cloud sync recommends merge and keeps explicit replace/download commands");
-            syncMenu.IsSubmenuOpen = true;
-            await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
-            var syncPopup = (System.Windows.Controls.Primitives.Popup)syncMenu.Template.FindName("PART_Popup", syncMenu);
-            Check(syncPopup.IsOpen, "cloud sync dropdown opens");
-            var syncSurface = (System.Windows.Controls.Border)syncMenu.Template.FindName("DropdownSurface", syncMenu);
-            Check(Equals(syncSurface.Background, window.FindResource("Brush.PrimaryLight")), "cloud sync open state uses warm accent");
-            foreach (System.Windows.Controls.MenuItem item in syncMenu.Items)
-            {
-                item.ApplyTemplate();
-                Check(item.Template.FindName("MenuSurface", item) is System.Windows.Controls.Border, "cloud sync command replaces native submenu chrome");
-            }
-            Capture(window, "glossary-sync-trigger-open");
-            Capture((FrameworkElement)syncPopup.Child, "glossary-sync-popup");
-            syncMenu.IsSubmenuOpen = false;
-            await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
-            Check(!syncPopup.IsOpen, "cloud sync dropdown closes without executing commands");
+            var cloudButton=FindVisuals<System.Windows.Controls.Button>(glossaryPage).Single(b=>Equals(b.Content,"云端管理"));
+            Check(cloudButton.IsVisible,"cloud management remains visible without selection");
+            Capture(window,"glossary-cloud-toolbar");
             vm.OpenTermDrawer(vm.TermDraft.First(t => t.SourceKind == DwgTranslator.Core.Models.GlossarySource.User));
             await Dispatcher.InvokeAsync(() => {}, DispatcherPriority.ApplicationIdle);
             var editorDrawer = (FrameworkElement)glossaryPage.FindName("TermEditorDrawer");
@@ -384,31 +546,27 @@ public sealed partial class SmokeApp : App
                     content.Measure(size); content.Arrange(new Rect(size)); content.UpdateLayout();
                     Check(Math.Abs(content.ActualWidth - size.Width) < 2, "effective viewport width " + page);
                     var headers = FindVisuals<DwgTranslator.App.Views.Controls.PageHeader>(window).Where(x => x.IsVisible).ToList();
-                    Check(headers.Count == 1 && Math.Abs(headers[0].ActualHeight - 86) < 1, "one shared 86 DIP header " + page);
-                    Check(Math.Abs(headers[0].TranslatePoint(new Point(), content).X - 252) < 3, "shared 28 DIP page inset " + page);
-                    var bitmap = new RenderTargetBitmap((int)size.Width, (int)size.Height, 96, 96, PixelFormats.Pbgra32);
-                    bitmap.Render(content);
-                    var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(bitmap));
-                    using var image = File.Create(Path.Combine(Path.GetFullPath(Environment.GetEnvironmentVariable("DWGC2E_UI_SMOKE_OUTPUT") ?? "artifacts/ui-smoke"), $"matrix-{page}-{layout.Item1}-{layout.Item3}.png"));
-                    encoder.Save(image);
+                    Check(headers.Count == 1 && headers[0].ActualHeight >= 72, "one shared adaptive header " + page);
+                    Check(Math.Abs(headers[0].TranslatePoint(new Point(), (FrameworkElement)window.FindName("PageHost")).X - 32) < 3, "shared 32 DIP page inset " + page);
+                    CaptureLayout(window, size, $"matrix-{page}-{layout.Item1}-{layout.Item3}");
                     if (page == "settings")
                     {
-                        var settingsPage = FindVisual<DwgTranslator.App.Views.Pages.SettingsPage>(window);
+                        var matrixSettingsPage = FindVisual<DwgTranslator.App.Views.Pages.SettingsPage>(window);
                         for (var section = 0; section < 6; section++)
                         {
                             vm.SettingsSection = section;
                             await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
                             content.Measure(size); content.Arrange(new Rect(size)); content.UpdateLayout();
-                            var form = (FrameworkElement)settingsPage.FindName("SettingsContent");
-                            var footer = (FrameworkElement)settingsPage.FindName("SettingsSaveBar");
-                            Check(form.ActualWidth <= (section == 5 ? 820 : 740) && form.ActualWidth > 400, "settings form bounded " + section);
+                            var form = (FrameworkElement)matrixSettingsPage.FindName("SettingsContent");
+                            var footer = (FrameworkElement)matrixSettingsPage.FindName("SettingsSaveBar");
+                            Check(form.ActualWidth <= 1080 && form.ActualWidth > 400, "settings form bounded " + section);
                             Check(footer.IsVisible == (section != 5), "settings footer visibility " + section);
                             if (section != 5)
                             {
-                                Check(Math.Abs(form.ActualWidth - footer.ActualWidth) < 2, "settings footer aligns with form " + section);
+                                Check(Math.Abs(form.ActualWidth - footer.ActualWidth) < 2, $"settings footer aligns with form {section}; form={form.ActualWidth:F1}, footer={footer.ActualWidth:F1}, formX={form.TranslatePoint(new Point(), content).X:F1}, footerX={footer.TranslatePoint(new Point(), content).X:F1}");
                                 Check(footer.TranslatePoint(new Point(0, footer.ActualHeight), content).Y <= size.Height - 30, "settings footer stays reachable " + section);
                             }
-                            Capture(window, $"matrix-settings-section-{section}-{layout.Item1}-{layout.Item3}");
+                            CaptureLayout(window, size, $"matrix-settings-section-{section}-{layout.Item1}-{layout.Item3}");
                         }
                     }
                 }

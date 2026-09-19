@@ -18,7 +18,9 @@ public partial class MainViewModel
     [ObservableProperty] private ProfileInfo? _onlineProfile;
     [ObservableProperty] private SubscriptionInfo? _onlineSubscription;
     [ObservableProperty] private UsageInfo? _onlineUsage;
-    [ObservableProperty] private bool _isAccountRefreshing;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(RefreshAccountButtonText))]
+    private bool _isAccountRefreshing;
     public ObservableCollection<DeviceInfo> OnlineDevices { get; } = new();
     [ObservableProperty] private string _loginName = string.Empty;
     [ObservableProperty] private string _accountFeedback = "可先浏览软件，使用云端翻译前请登录。";
@@ -28,7 +30,11 @@ public partial class MainViewModel
     private bool _devicesSynced;
     private int _sessionVersion;
     private string? _loginReturnPage;
+    private DateTime _lastMembershipRefreshUtc = DateTime.MinValue;
+    private bool _isMembershipActivationRefreshRunning;
     public bool IsAccountLoggedIn => _sessionVerified;
+    public string RefreshAccountButtonText => IsAccountRefreshing ? "同步中…" : "刷新权益";
+    public string SavedSessionRecoveryButtonText => IsAccountRefreshing ? "正在验证…" : "重新验证会话";
     public bool HasSavedAccountSession => !string.IsNullOrWhiteSpace(AppConfig.DecryptApiKey(_config.AuthTokenEncrypted));
     public string AccountEntryText => IsAccountLoggedIn ? AccountDisplayNameText : "登录账号";
     public bool RequireAccount()
@@ -55,14 +61,22 @@ public partial class MainViewModel
     public string AccountDisplayNameText => string.IsNullOrWhiteSpace(OnlineProfile?.DisplayName) ? (IsAccountLoggedIn ? "已登录账号" : "未登录") : OnlineProfile.DisplayName;
     public string AccountEmailText => OnlineProfile?.Email ?? string.Empty;
     public string OnlinePlanText => string.IsNullOrWhiteSpace(OnlineSubscription?.PlanName) ? "未同步套餐" : OnlineSubscription.PlanName;
+    public string MembershipTierColor => (OnlineSubscription?.PlanName ?? "").ToLowerInvariant() switch
+    { "max" => "#A66B12", "pro" => "#974719", "go" => "#188568", _ => "#6E6B64" };
+    public bool HasPaidTier => OnlineSubscription?.PlanName?.ToLowerInvariant() is "pro" or "max" or "go";
+    partial void OnOnlineSubscriptionChanged(SubscriptionInfo? value)
+    {
+        OnPropertyChanged(nameof(MembershipTierColor)); OnPropertyChanged(nameof(HasPaidTier));
+        OnPropertyChanged(nameof(OnlinePlanText)); OnPropertyChanged(nameof(OnlineMembershipExpiryText));
+    }
     public string OnlineMembershipExpiryText => OnlineSubscription?.ExpiresAt is DateTime expiry
-        ? $"会员到期：{expiry.ToLocalTime():yyyy-MM-dd HH:mm}" : "当前无付费会员有效期";
+        ? $"会员到期：{expiry.ToLocalTime():yyyy-MM-dd HH:mm}" : HasPaidTier ? "到期时间未提供，以账号权益为准" : "免费套餐 · 无需续费";
 
     private DwgTranslator.App.Views.BillingWindow? _billingWindow;
     [RelayCommand]
     private void OpenMembershipCheckout()
     {
-        if (!IsAccountLoggedIn || _apiClient is not IBillingClient billing) { AccountFeedback = "请使用账户服务登录后购买；直连模式不支持购买。"; return; }
+        if (!IsAccountLoggedIn || _apiClient is not IBillingClient billing) { AccountFeedback = "请先登录账户后购买会员；会员权益和额度以账户服务为准。"; return; }
         if (_billingWindow != null) { _billingWindow.Activate(); return; }
         var version = _sessionVersion;
         var window = new DwgTranslator.App.Views.BillingWindow(billing, AccountEmailText,
@@ -82,10 +96,19 @@ public partial class MainViewModel
     }
     public async Task RefreshMembershipOnActivationAsync()
     {
-        if (!IsAccountLoggedIn || IsAccountRefreshing || _apiClient is not IBillingClient billing) return;
+        if (!IsAccountLoggedIn || IsAccountRefreshing || _isMembershipActivationRefreshRunning || _apiClient is not IBillingClient billing) return;
+        if (DateTime.UtcNow - _lastMembershipRefreshUtc < TimeSpan.FromMinutes(5)) return;
+
+        _lastMembershipRefreshUtc = DateTime.UtcNow;
         var version = _sessionVersion;
-        try { var snapshot = await billing.GetBillingEntitlementsAsync(); if(version == _sessionVersion && IsAccountLoggedIn) ApplyBillingEntitlements(snapshot); }
+        _isMembershipActivationRefreshRunning = true;
+        try
+        {
+            var snapshot = await billing.GetBillingEntitlementsAsync();
+            if (version == _sessionVersion && IsAccountLoggedIn) ApplyBillingEntitlements(snapshot);
+        }
         catch (Exception ex) { Log.Debug("会员自动同步未完成：{Type}", ex.GetType().Name); }
+        finally { _isMembershipActivationRefreshRunning = false; }
     }
 
     private static async Task<BillingEntitlements?> ReadOptionalBillingSnapshot(IBillingClient billing)
@@ -95,13 +118,32 @@ public partial class MainViewModel
         catch (Exception ex) { Log.Debug("会员快照暂不可用：{Type}", ex.GetType().Name); return null; }
     }
 
+    partial void OnOnlineUsageChanged(UsageInfo? value) => OnPropertyChanged(nameof(OnlineQuotaText));
     public string OnlineQuotaText => OnlineUsage == null ? "额度待同步" : $"剩余 {OnlineUsage.Remaining:N0} / {OnlineUsage.MonthlyQuota:N0}";
     public string DeviceCountText => !_devicesSynced ? "设备待同步" : $"已绑定 {OnlineDevices.Count} 台设备";
 
     [RelayCommand]
     private async Task RefreshAccountAsync()
     {
-        if (IsAccountRefreshing || string.IsNullOrWhiteSpace(AppConfig.DecryptApiKey(_config.AuthTokenEncrypted)) || !_apiClient.IsConfigured) return;
+        if (IsAccountRefreshing)
+        {
+            AccountFeedback = "正在验证会话并同步账户，请稍候。";
+            ToastService.Info(AccountFeedback);
+            return;
+        }
+        if (!HasSavedAccountSession)
+        {
+            AccountFeedback = "当前没有可验证的登录会话，请输入账号和密码登录。";
+            ToastService.Info(AccountFeedback);
+            return;
+        }
+        if (!_apiClient.IsConfigured)
+        {
+            AccountState = AccountSessionState.ConfigurationError;
+            AccountFeedback = "账户服务配置异常，请联系管理员修复安装配置。";
+            ToastService.Warning(AccountFeedback);
+            return;
+        }
         var sessionVersion = _sessionVersion;
         IsAccountRefreshing = true;
         AccountState = AccountSessionState.Validating;
@@ -119,6 +161,7 @@ public partial class MainViewModel
             _sessionVerified = OnlineProfile != null || _sessionVerified;
             AccountState = OnlineProfile != null ? AccountSessionState.SignedIn : AccountSessionState.Offline;
             AccountFeedback = OnlineProfile == null ? "暂时无法同步账户，请检查网络后重试。" : "账户信息已同步。";
+            if (OnlineProfile != null) _lastMembershipRefreshUtc = DateTime.UtcNow;
             if (billingTask != null) { var snapshot = await billingTask; if(snapshot != null) ApplyBillingEntitlements(snapshot); else AccountFeedback = OnlineProfile != null ? "已登录，会员与额度暂未同步，请稍后刷新；请勿重复付款。" : AccountFeedback; }
             else { OnlineSubscription = await subscriptionTask; OnlineUsage = await usageTask; }
             var devices = await devicesTask;
@@ -186,7 +229,7 @@ public partial class MainViewModel
             NotifyAccount();
             ToastService.Warning("登录已过期，请重新登录。");
         }
-        catch (Exception ex) { if (sessionVersion != _sessionVersion) return; AccountState = AccountSessionState.Offline; AccountFeedback = "暂时无法连接服务，请检查网络后重试。"; Log.Warning(ex, "刷新在线账户信息失败"); }
+        catch (Exception ex) { if (sessionVersion != _sessionVersion) return; AccountState = AccountSessionState.Offline; AccountFeedback = "暂时无法连接服务，请检查网络后重试。"; Log.Warning(ex, "刷新在线账户信息失败"); ToastService.Warning(AccountFeedback); }
         finally { IsAccountRefreshing = false; NotifyAccount(); }
     }
     [RelayCommand]
@@ -242,8 +285,8 @@ public partial class MainViewModel
                 AccountState = _sessionVerified ? AccountSessionState.SignedIn : AccountSessionState.Offline;
                 return;
             }
-            (_taskManager as DwgTranslator.Core.Tasks.TaskManager)?.EnsureAccountStoreSaved();
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            _taskManager.EnsureAccountStoreSaved();
+            using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
             var result = await _apiClient.LoginAsync(LoginName.Trim(), password, cts.Token);
             if (!result.Success || string.IsNullOrWhiteSpace(result.Token)) { AccountState = AccountSessionState.SignedOut; AccountFeedback = result.Message ?? "登录失败，请检查账号、密码后重试。"; return; }
             if (result.ExpiresAt.HasValue && result.ExpiresAt.Value.ToUniversalTime() <= DateTime.UtcNow) { AccountState = AccountSessionState.Expired; AccountFeedback = "登录会话已过期，请重试。"; return; }
@@ -273,7 +316,7 @@ public partial class MainViewModel
         var remoteLogoutAttempted = false;
         try
         {
-            (_taskManager as DwgTranslator.Core.Tasks.TaskManager)?.EnsureAccountStoreSaved();
+            _taskManager.EnsureAccountStoreSaved();
             if (_apiClient is IAccountSessionClient sessions && HasSavedAccountSession)
             {
                 using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
@@ -312,6 +355,7 @@ public partial class MainViewModel
         _sessionVersion++;
         _sessionVerified = false;
         _devicesSynced = false;
+        _lastMembershipRefreshUtc = DateTime.MinValue;
         AccountState = AccountSessionState.SignedOut;
         OnlineProfile = null;
         OnlineSubscription = null;
@@ -323,21 +367,31 @@ public partial class MainViewModel
     private async Task SwitchAccountWorkspaceAsync(string token, string accountId)
     {
         if (_taskManager.IsRunning || IsExporting) throw new InvalidOperationException("请先停止当前任务。");
+        // Persist the outgoing account's resolved default before changing ownership.
+        _config.AccountOutputDirectories ??= new();
+        _config.AccountOutputDirectories[string.IsNullOrWhiteSpace(_config.ActiveAccountId) ? "guest" : _config.ActiveAccountId] = _config.ExportDirectory;
+        DwgTranslator.Core.Services.SettingsStore.Update(_settingsPath!, c => {
+            c.AccountOutputDirectories ??= new();
+            c.AccountOutputDirectories[string.IsNullOrWhiteSpace(_config.ActiveAccountId) ? "guest" : _config.ActiveAccountId] = _config.ExportDirectory;
+        });
         var destination = DwgTranslator.Core.Services.AccountWorkspace.DirectoryFor(App.AppDataDir, accountId);
         Directory.CreateDirectory(destination);
-        Directory.CreateDirectory(Path.Combine(destination, "exports"));
-        if (_taskManager is DwgTranslator.Core.Tasks.TaskManager manager)
-            manager.SwitchAccountStore(new DwgTranslator.Core.Tasks.JsonTaskStore(Path.Combine(destination, "tasks.json")),
-                () => SaveAccountSession(token, accountId));
-        else SaveAccountSession(token, accountId);
+        // SwitchAccountStore flushes the outgoing store and commits the session itself; calling
+        // these through ITaskManager keeps the fail-closed gate from being silently skipped.
+        _taskManager.SwitchAccountStore(
+            new DwgTranslator.Core.Tasks.JsonTaskStore(Path.Combine(destination, "tasks.json")),
+            () => SaveAccountSession(token, accountId));
         RefreshTaskRecoveryNotice();
         if (_consistencyService is DwgTranslator.Core.Translation.TranslationConsistencyService cache)
             cache.SwitchAccountFile(Path.Combine(AccountDataDirectory, "translation_cache.json"));
         DrawingFiles.Clear(); Entities.Clear(); FilteredEntities.Clear(); _entityIndex = null;
         SelectedDrawingFile = null; SelectedFilePath = ""; HasDrawingFiles = false; HasMultipleDrawingFiles = false;
         TotalCount = TranslatedCount = FailedCount = GlossaryHitCount = CacheHitCount = 0;
-        _config.ExportDirectory = Path.Combine(AccountDataDirectory, "exports");
-        Directory.CreateDirectory(_config.ExportDirectory);
+        _config.ExportDirectory = DwgTranslator.Core.Services.AccountWorkspace.OutputDirectoryFor(_config, App.AppDataDir);
+        _settingsDraft = null;
+        OnPropertyChanged(nameof(SettingsDraft));
+        if (!string.IsNullOrWhiteSpace(_config.ExportDirectory))
+            Directory.CreateDirectory(_config.ExportDirectory);
         await RefreshGlossaryDataAsync();
         foreach (var task in _taskManager.Tasks) OnTaskUpdated(task);
         await RestoreSavedProofreadingAsync();
@@ -355,7 +409,4 @@ public partial class MainViewModel
         _sessionVersion++;
     }
 }
-
-
-
 

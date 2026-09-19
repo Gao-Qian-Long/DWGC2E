@@ -35,6 +35,7 @@ public partial class FormatCodeParser : IFormatCodeParser
         if (string.IsNullOrEmpty(rawText))
             return (string.Empty, string.Empty, new List<string>());
 
+        rawText = CadUnicodeText.Decode(rawText);
         var regex = FormatCodeRegex();
         var matches = regex.Matches(rawText);
 
@@ -101,6 +102,7 @@ public partial class FormatCodeParser : IFormatCodeParser
         if (string.IsNullOrEmpty(rawText))
             return string.Empty;
 
+        rawText = CadUnicodeText.Decode(rawText);
         var regex = FormatCodeRegex();
         var result = regex.Replace(rawText, string.Empty);
         result = StripBraces(result);
@@ -144,6 +146,7 @@ public partial class FormatCodeParser : IFormatCodeParser
         if (string.IsNullOrEmpty(text))
             return new List<string>();
 
+        text = CadUnicodeText.Decode(text);
         var regex = FormatCodeRegex();
         return regex.Matches(text).Select(m => m.Value).ToList();
     }

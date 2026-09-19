@@ -1,4 +1,3 @@
-using System.Text.RegularExpressions;
 using DwgTranslator.Core.Models;
 using DwgTranslator.Core.Translation;
 using Serilog;
@@ -9,10 +8,14 @@ namespace DwgTranslator.Core.Services;
 /// Implements deduplicated concurrent translation pipeline.
 /// Same PlainText is only translated once; results are mapped back to all entities with same text.
 /// </summary>
-public class TranslationService : ITranslationService
+public class TranslationService : ITranslationService, IWritebackGlossaryProvider
 {
+    public IReadOnlyList<GlossaryEntry> GetWritebackGlossary(string sourceLanguage, string targetLanguage) =>
+        EffectiveGlossary.Resolve(_glossaryService.GetAllEntries(), sourceLanguage, targetLanguage);
+
     private readonly IGlossaryService _glossaryService;
     private readonly IFormatCodeParser _formatCodeParser;
+    private readonly IFormatCodeRestorer _formatCodeRestorer;
     private readonly IDeepSeekClient _deepSeekClient;
     private readonly string _systemPrompt;
     private readonly int _batchSize;
@@ -32,6 +35,7 @@ public class TranslationService : ITranslationService
     {
         _glossaryService = glossaryService;
         _formatCodeParser = formatCodeParser;
+        _formatCodeRestorer = new FormatCodeRestorer(formatCodeParser);
         _deepSeekClient = deepSeekClient;
         _systemPrompt = systemPrompt;
         _batchSize = Math.Max(1, batchSize);
@@ -54,14 +58,19 @@ public class TranslationService : ITranslationService
         IProgress<TranslationPair>? progress, CancellationToken cancellationToken = default)
     {
         var allResults = new List<TranslationPair>();
+        var (glossarySnapshot, glossaryConflicts) = ResolveGlossary(sourceLanguage, targetLanguage);
 
         // Keep the direction local to this batch. A mutable direction on the shared cache races
-        // when callers translate different language pairs concurrently.
-        var cacheDirection = $"{TranslationLanguages.Normalize(sourceLanguage)}>{TranslationLanguages.Normalize(targetLanguage)}";
+        // when callers translate different language pairs concurrently. The glossary fingerprint is
+        // part of the scope: a glossary edit must not let a pre-edit translation be reused.
+        var cacheDirection = EffectiveGlossary.ScopedDirection(
+            sourceLanguage, targetLanguage, EffectiveGlossary.Fingerprint(glossarySnapshot));
 
+        // 大小写变体（"Valve"/"VALVE"）在 CAD 图上指同一条标签，术语匹配也是大小写不敏感的；
+        // 分组按 OrdinalIgnoreCase，避免同一条文字被翻两遍、两个实体拿到不同译文。
         var groups = entities
             .Where(e => !string.IsNullOrWhiteSpace(e.PlainText))
-            .GroupBy(e => e.PlainText.Trim(), StringComparer.Ordinal)
+            .GroupBy(e => e.PlainText.Trim(), StringComparer.OrdinalIgnoreCase)
             .ToList();
 
         int uniqueCount = groups.Count;
@@ -81,7 +90,9 @@ public class TranslationService : ITranslationService
 
         foreach (var group in groups)
         {
-            var plainText = group.Key;
+            // 同一组里可能有不同大小写的写法，统一取第一条作为规范文本：分组键在
+            // OrdinalIgnoreCase 下是小写化的，不能直接当作要翻译的原文。
+            var plainText = group.First().PlainText.Trim();
             var representative = group.First();
 
             tasks.Add(Task.Run(async () =>
@@ -89,7 +100,7 @@ public class TranslationService : ITranslationService
                 await semaphore.WaitAsync(cancellationToken);
                 try
                 {
-                    var pair = await TranslateSingleAsync(representative, sourceLanguage, targetLanguage, cacheDirection, cancellationToken);
+                    var pair = await TranslateSingleAsync(representative, sourceLanguage, targetLanguage, cacheDirection, cancellationToken, glossarySnapshot, glossaryConflicts);
 
                     lock (mapLock) { translationMap[plainText] = pair; }
 
@@ -99,7 +110,7 @@ public class TranslationService : ITranslationService
                         // Deduplication reuses only the plain translated content. Each entity
                         // must restore its own RawText format template independently.
                         var entityTranslation = pair.Status == TranslationStatus.Translated
-                            ? RestoreFormatCodes(targetLanguage == "EN"
+                            ? RestoreFormatCodes(!pair.GlossaryHit && targetLanguage == "EN"
                                 ? CadLabelCompactor.Compact(entity.PlainText,pair.TranslatedText)
                                 : pair.TranslatedText, entity.RawText)
                             : pair.TranslatedText;
@@ -145,19 +156,36 @@ public class TranslationService : ITranslationService
     public async Task<string> TranslateAsync(string text, string sourceLanguage, string targetLanguage,
         CancellationToken cancellationToken = default)
     {
-        var (translated, _) = await TranslateWithMetadataAsync(text, sourceLanguage, targetLanguage, cancellationToken);
+        // 单条翻译直接进模型路径，没有批次级的术语快照。这里自己解析一次：既让术语生效，
+        // 也让方向级冲突有明确文案，而不是抛一句调用方看不懂的异常。
+        var (snapshot, conflicts) = ResolveGlossary(sourceLanguage, targetLanguage);
+        if (EffectiveGlossary.HasConflictingHit(text, conflicts))
+            throw new InvalidOperationException("glossary_conflict: 该文字命中了冲突术语，请先在术语库中解决后再翻译。");
+        var (translated, _) = await TranslateWithMetadataAsync(text, sourceLanguage, targetLanguage, cancellationToken, snapshot);
         return translated;
     }
 
     private async Task<TranslationPair> TranslateSingleAsync(
-        TextEntity entity, string sourceLanguage, string targetLanguage, string cacheDirection, CancellationToken ct)
+        TextEntity entity, string sourceLanguage, string targetLanguage, string cacheDirection, CancellationToken ct,
+        IReadOnlyList<GlossaryEntry> glossarySnapshot, IReadOnlyList<GlossaryEntry> glossaryConflicts)
     {
         try
         {
             if (string.IsNullOrWhiteSpace(entity.PlainText))
                 return new TranslationPair { Handle = entity.Handle, Status = TranslationStatus.Skipped };
 
-            if (TranslationFilter.IsNumericOnly(entity.PlainText))
+            // 命中冲突术语的条目只能由用户裁决，不能让模型猜：整批抛异常会把这份图纸里
+            // 其余能翻的文字一起拖下水，所以在这里逐条标失败，其余条目照常翻译。
+            if (EffectiveGlossary.HasConflictingHit(entity.PlainText, glossaryConflicts))
+                return new TranslationPair
+                {
+                    Handle = entity.Handle, SourceText = entity.PlainText, TranslatedText = string.Empty,
+                    GlossaryHit = false, Status = TranslationStatus.TranslationFailed,
+                    ErrorMessage = "glossary_conflict"
+                };
+
+            var authoritativeTerms = EffectiveGlossary.Match(entity.PlainText, glossarySnapshot);
+            if (authoritativeTerms.Count == 0 && TranslationFilter.IsNumericOnly(entity.PlainText))
             {
                 return new TranslationPair
                 {
@@ -166,7 +194,7 @@ public class TranslationService : ITranslationService
                 };
             }
 
-            if (TranslationFilter.ShouldSkipTranslation(entity.PlainText, sourceLanguage, targetLanguage))
+            if (authoritativeTerms.Count == 0 && TranslationFilter.ShouldSkipTranslation(entity.PlainText, sourceLanguage, targetLanguage))
             {
                 return new TranslationPair
                 {
@@ -175,7 +203,7 @@ public class TranslationService : ITranslationService
                 };
             }
 
-            if (_consistencyService.TryGetMatch(entity.PlainText, cacheDirection, out var cached))
+            if (authoritativeTerms.Count == 0 && _consistencyService.TryGetMatch(entity.PlainText, cacheDirection, out var cached))
             {
                 if (TranslationQualityValidator.IsAcceptable(
                     entity.PlainText, cached!, sourceLanguage, targetLanguage))
@@ -194,9 +222,9 @@ public class TranslationService : ITranslationService
             }
 
             var (translated, glossaryHit) = await TranslateWithMetadataAsync(
-                entity.PlainText, sourceLanguage, targetLanguage, ct);
+                entity.PlainText, sourceLanguage, targetLanguage, ct, glossarySnapshot);
 
-            if (!TranslationQualityValidator.IsAcceptable(
+            if (!glossaryHit && !TranslationQualityValidator.IsAcceptable(
                     entity.PlainText, translated, sourceLanguage, targetLanguage))
                 throw new InvalidDataException("Translation response still contains source-language text");
 
@@ -224,11 +252,11 @@ public class TranslationService : ITranslationService
     }
 
     private async Task<(string TranslatedText, bool GlossaryHit)> TranslateWithMetadataAsync(
-        string plainText, string sourceLanguage, string targetLanguage, CancellationToken ct)
+        string plainText, string sourceLanguage, string targetLanguage, CancellationToken ct, IReadOnlyList<GlossaryEntry>? glossarySnapshot = null)
     {
         if (string.IsNullOrWhiteSpace(plainText)) return (string.Empty, false);
 
-        var matches = _glossaryService.MatchTerms(plainText);
+        var matches = EffectiveGlossary.Match(plainText, glossarySnapshot ?? ResolveGlossary(sourceLanguage, targetLanguage).Terms);
         var glossaryHit = matches.Count > 0;
         var withPlaceholders = _glossaryService.ReplaceWithPlaceholders(plainText, matches);
         var cleanText = _formatCodeParser.StripFormatCodes(withPlaceholders);
@@ -240,9 +268,17 @@ public class TranslationService : ITranslationService
         // so the surrounding words get translated with placeholders preserved.
         var residual = _glossaryService.RestorePlaceholders(cleanText, matches);
         if (glossaryHit && IsFullyGlossaryCovered(plainText, residual, matches))
-            return (residual, true);
+        {
+            // 整条文字由术语覆盖时，正确答案就是术语的目标值。旧实现在这里返回 residual——
+            // 而 residual 是"把术语占位符还原成源术语"的文本，于是整条术语命中反而返回源文，
+            // 下游质量校验（检测到源语言残留）把这条判成翻译失败。
+            var glossaryTarget = TranslationFilter.CleanTranslationOutput(RestorePlaceholdersToTargets(residual, matches));
+            if (!string.IsNullOrWhiteSpace(glossaryTarget)) return (glossaryTarget, true);
+        }
 
         var translated = await TranslateWithRetryAsync(cleanText, sourceLanguage, targetLanguage, ct);
+        if (matches.Any(m => translated.Split(m.Placeholder, StringSplitOptions.None).Length != 2))
+            throw new InvalidDataException("AI 未完整保留已启用术语，请重试该条翻译。");
         translated = _glossaryService.RestorePlaceholders(translated, matches);
         return (TranslationFilter.CleanTranslationOutput(translated), glossaryHit);
     }
@@ -275,92 +311,35 @@ public class TranslationService : ITranslationService
             c is '×' or '±' or '°' or '#' or '%');
     }
 
-    public string RestoreFormatCodes(string translated, string rawText)
+    /// <summary>
+    /// 把术语占位符还原成术语的<b>目标</b>值（<see cref="IGlossaryService.RestorePlaceholders"/> 还原的是源术语）。
+    /// 整条术语覆盖时用它产出最终译文，不要再让模型回答一遍。
+    /// </summary>
+    private static string RestorePlaceholdersToTargets(string text, List<GlossaryMatch> matches)
     {
-        if (string.IsNullOrEmpty(rawText) || string.IsNullOrEmpty(translated)) return translated;
-
-        var (_, template, codes) = _formatCodeParser.Parse(rawText);
-        if (codes.Count == 0) return translated;
-
-        // Split template into format placeholders and text segments.
-        // Multi-segment MText (code + text + code + text) must preserve ALL
-        // text islands. Previous logic only inserted into the first non-empty
-        // segment and dropped later ones.
-        var parts = Regex.Split(template, @"(__FMT_\d+__)");
-        var textSegmentIndexes = new List<int>();
-        for (int i = 0; i < parts.Length; i++)
-        {
-            if (!Regex.IsMatch(parts[i], @"^__FMT_\d+__$") && !string.IsNullOrEmpty(parts[i]))
-                textSegmentIndexes.Add(i);
-        }
-
-        if (textSegmentIndexes.Count == 0)
-        {
-            // Template is pure format codes - append translation at the end.
-            var pure = string.Concat(parts) + translated;
-            var pureResult = _formatCodeParser.Restore(pure, codes);
-            if (rawText.Contains("\\P"))
-                pureResult = pureResult.Replace("\r\n", "\\P").Replace("\n", "\\P").Replace("\r", "\\P");
-            return pureResult;
-        }
-
-        if (textSegmentIndexes.Count == 1)
-        {
-            parts[textSegmentIndexes[0]] = translated;
-        }
-        else
-        {
-            // Multiple text islands: prefer putting the full translation into the
-            // longest original text island (usually the main content). Other
-            // islands that were pure format/noise keep their stripped emptiness.
-            // If the original islands look like multi-line content split by \P,
-            // distribute translated lines across them when counts match.
-            var originalSegments = textSegmentIndexes.Select(i => parts[i]).ToList();
-            var translatedLines = translated
-                .Replace("\r\n", "\n").Replace('\r', '\n')
-                .Split('\n');
-
-            if (translatedLines.Length == originalSegments.Count)
-            {
-                for (int i = 0; i < textSegmentIndexes.Count; i++)
-                    parts[textSegmentIndexes[i]] = translatedLines[i];
-            }
-            else if (originalSegments.Count == 2 &&
-                !TranslationQualityValidator.ContainsCjk(originalSegments[0]) &&
-                !string.IsNullOrWhiteSpace(originalSegments[0]) &&
-                translated.TrimStart().StartsWith(originalSegments[0].Trim(),StringComparison.Ordinal))
-            {
-                // Preserve an unchanged model identifier on its original first line.
-                // Putting everything in the longer second island creates a leading
-                // blank paragraph and needlessly halves the rendered font height.
-                var prefix=originalSegments[0].Trim();
-                parts[textSegmentIndexes[0]]=prefix;
-                parts[textSegmentIndexes[1]]=translated.TrimStart().Substring(prefix.Length).TrimStart();
-            }
-            else
-            {
-                int longestIdx = 0;
-                int longestLen = 0;
-                for (int i = 0; i < originalSegments.Count; i++)
-                {
-                    if (originalSegments[i].Length > longestLen)
-                    {
-                        longestLen = originalSegments[i].Length;
-                        longestIdx = i;
-                    }
-                }
-
-                for (int i = 0; i < textSegmentIndexes.Count; i++)
-                    parts[textSegmentIndexes[i]] = i == longestIdx ? translated : string.Empty;
-            }
-        }
-
-        var withPlaceholders = string.Concat(parts);
-        var result = _formatCodeParser.Restore(withPlaceholders, codes);
-        if (rawText.Contains("\\P"))
-            result = result.Replace("\r\n", "\\P").Replace("\n", "\\P").Replace("\r", "\\P");
+        var result = text;
+        foreach (var match in matches)
+            result = result.Replace(match.Placeholder, match.TargetTerm, StringComparison.Ordinal);
         return result;
     }
+
+    /// <summary>
+    /// 解析本次翻译要用的术语表，并单独摘出无法自动裁决的冲突条目。
+    /// 冲突不再让整张图纸失败：调用方对命中冲突的条目逐条标失败，其余条目照常翻译。
+    /// </summary>
+    private (IReadOnlyList<GlossaryEntry> Terms, IReadOnlyList<GlossaryEntry> Conflicting) ResolveGlossary(
+        string sourceLanguage, string targetLanguage)
+    {
+        var (terms, conflicts) = EffectiveGlossary.ResolveOrCaptureConflicts(
+            _glossaryService.GetAllEntries(), sourceLanguage, targetLanguage);
+        if (conflicts.Count > 0)
+            Log.Warning("术语表存在 {Count} 条冲突条目，命中这些条目的文字将逐条标记失败：{Terms}",
+                conflicts.Count, string.Join(",", conflicts.Select(e => e.Source).Distinct(StringComparer.OrdinalIgnoreCase)));
+        return (terms, conflicts);
+    }
+
+    public string RestoreFormatCodes(string translated, string rawText) =>
+        _formatCodeRestorer.Restore(translated, rawText);
 
     private async Task<string> TranslateWithRetryAsync(string text, string src, string tgt, CancellationToken ct)
     {

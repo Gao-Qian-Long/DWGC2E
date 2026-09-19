@@ -18,10 +18,14 @@ MAX_TEXT_LENGTH = "2000"
 SESSION_TTL_DAYS = "30"
 DEVICE_PLATFORM = "Windows"
 MAIL_FROM = "DWGC2E <noreply@mail.cad.pocketter.dpdns.org>"
-LATEST_VERSION = "2.1.0"
+LATEST_VERSION = "2.1.1"
 DOWNLOAD_URL = ""
 BACKUP_DOWNLOAD_URL = ""
 RELEASE_NOTES = ""
+WORKER_BUILD_ID = "dwgc2e-api-20260919"
+WORKER_DEPLOYED_AT = "2026-09-19T00:00:00Z"
+WORKER_SCHEMA_VERSION = "2026-09-19"
+AI_ROUTING_VERSION = "router-v1"
 
 # round_robin alternates preferred providers in D1; brevo/resend pin the primary.
 # Apply migrations/0001_mail_round_robin.sql before deploying this mode.
@@ -29,12 +33,15 @@ RELEASE_NOTES = ""
 MAIL_PROVIDER = "round_robin"
 MAIL_FALLBACK_ENABLED = "true"
 
-# Payments are open to all authenticated users, as requested on 2026-09-14.
+# All ordinary users may purchase, explicitly authorized 2026-09-15. Payment acceptance remains incomplete.
 PAYMENTS_ENABLED = "true"
-# The legacy PAYMENTS_TEST_USERS variable is no longer read by the Worker.
+# PAYMENTS_TEST_USERS: optional comma-separated USER IDs, managed remotely, never emails.
 EZFPY_API_BASE_URL = "https://www.ezfpy.cn/"
 # EZFPY_PID is managed in the Dashboard; do not overwrite its value here.
 PUBLIC_WEB_URL = "https://cad.pocketter.dpdns.org"
 PUBLIC_API_URL = "https://dwgc2e-api.maplehousezz.workers.dev"
 EZFPY_QR_IMAGE_ORIGINS = ""
 # EZFPY_KEY is a Worker Secret, never a variable here.
+
+[triggers]
+crons = ["* * * * *"]

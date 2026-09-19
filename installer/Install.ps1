@@ -54,7 +54,7 @@ if ($TargetDir -eq [IO.Path]::GetPathRoot($TargetDir).TrimEnd('\') -or
     (Test-Path -LiteralPath (Join-Path $TargetDir '.git'))) {
     throw 'Refusing to install into a drive root or source workspace. Choose a separate -TargetDir.'
 }
-$required = @('DwgTranslator.exe','settings.json','CadPlugin\DwgTranslator.Cad.dll','CadPlugin\DwgTranslator.Core.dll','CadPlugin\cad-platform.txt','prompts\deepl_context.txt','glossaries\mechanical_zh_en.json','assets\default-glossaries\mechanical_zh_en.json')
+$required = @('DwgTranslator.exe','settings.json','CadPlugin\DwgTranslator.Cad.dll','CadPlugin\DwgTranslator.Core.dll','CadPlugin\cad-platform.txt','glossaries\mechanical_zh_en.json','assets\default-glossaries\mechanical_zh_en.json')
 foreach ($name in $required) {
     $file = Join-Path $SourceDir $name
     if (-not (Test-Path -LiteralPath $file -PathType Leaf) -or (Get-Item -LiteralPath $file).Length -eq 0) { throw "Missing or empty package resource: $name" }
@@ -84,16 +84,20 @@ $writeTargets=New-Object 'System.Collections.Generic.List[string]'
 foreach($name in @('DwgTranslator.exe','使用说明.txt')) {
     if(Test-Path -LiteralPath (Join-Path $SourceDir $name) -PathType Leaf){$writeTargets.Add((Join-Path $TargetDir $name))}
 }
-foreach($sub in @('CadPlugin','prompts','glossaries','assets')) {
+foreach($sub in @('CadPlugin','glossaries','assets')) {
     $sourceFolder=Join-Path $SourceDir $sub
     foreach($file in Get-ChildItem -LiteralPath $sourceFolder -File -Recurse) {
         $relative=$file.FullName.Substring($sourceFolder.TrimEnd('\').Length+1)
         $destination=Join-Path (Join-Path $TargetDir $sub) $relative
-        if($sub -in @('prompts','glossaries') -and (Test-Path -LiteralPath $destination)){continue}
+        if($sub -eq 'glossaries' -and (Test-Path -LiteralPath $destination)){continue}
         $writeTargets.Add($destination)
     }
 }
 foreach($name in @('Uninstall.ps1','installation-manifest.json','卸载.cmd')){$writeTargets.Add((Join-Path $TargetDir $name))}
+# Remove the one known legacy client-side system prompt. The exact file is snapshotted
+# by the transaction so any later installation failure restores it byte-for-byte.
+$obsoleteClientPrompt=Join-Path $TargetDir 'prompts\deepl_context.txt'
+if(Test-Path -LiteralPath $obsoleteClientPrompt -PathType Leaf){$writeTargets.Add($obsoleteClientPrompt)}
 foreach($destination in $writeTargets) {
     if(Test-Path -LiteralPath $destination) {
         if(-not(Test-Path -LiteralPath $destination -PathType Leaf)){throw "Destination is not a file: $destination"}
@@ -111,10 +115,10 @@ foreach($destination in $writeTargets){
     $relative=$destination.Substring($TargetDir.Length+1)
     $packageFile=Join-Path $SourceDir $relative
     $expectedHash=$null
-    if(Test-Path -LiteralPath $packageFile -PathType Leaf){$expectedHash=(Get-FileHash -LiteralPath $packageFile -Algorithm SHA256).Hash}
+    if(Test-Path -LiteralPath $packageFile -PathType Leaf){$expectedHash=(Get-InstallFileSha256 $packageFile)}
     Register-InstallWrite $script:InstallTransaction $destination $expectedHash
 }
-if(-not(Test-Path -LiteralPath (Join-Path $TargetDir 'settings.json'))){Register-InstallWrite $script:InstallTransaction (Join-Path $TargetDir 'settings.json') (Get-FileHash -LiteralPath (Join-Path $SourceDir 'settings.json') -Algorithm SHA256).Hash}
+if(-not(Test-Path -LiteralPath (Join-Path $TargetDir 'settings.json'))){Register-InstallWrite $script:InstallTransaction (Join-Path $TargetDir 'settings.json') (Get-InstallFileSha256 (Join-Path $SourceDir 'settings.json'))}
 New-Item -ItemType Directory -Force -Path $TargetDir | Out-Null
 foreach ($name in @('DwgTranslator.exe','settings.json','使用说明.txt')) {
     $src = Join-Path $SourceDir $name
@@ -125,18 +129,23 @@ foreach ($name in @('DwgTranslator.exe','settings.json','使用说明.txt')) {
     Copy-Item -LiteralPath $src -Destination $dst -Force
     Write-Step "复制 $name"
 }
-foreach ($sub in @('CadPlugin','prompts','glossaries','assets')) {
+foreach ($sub in @('CadPlugin','glossaries','assets')) {
     $sourceFolder = Join-Path $SourceDir $sub
     $prefix = $sourceFolder.TrimEnd('\') + '\'
     foreach ($file in Get-ChildItem -LiteralPath $sourceFolder -File -Recurse) {
         $relative = $file.FullName.Substring($prefix.Length)
         $dst = Join-Path (Join-Path $TargetDir $sub) $relative
-        if ($sub -in @('prompts','glossaries') -and (Test-Path -LiteralPath $dst)) { continue }
+        if ($sub -eq 'glossaries' -and (Test-Path -LiteralPath $dst)) { continue }
         New-Item -ItemType Directory -Force -Path ([IO.Path]::GetDirectoryName($dst)) | Out-Null
         Copy-Item -LiteralPath $file.FullName -Destination $dst -Force
     }
-    Write-Step "复制 $sub（保留已有用户词库和提示词）"
+    Write-Step "复制 $sub（保留已有用户词库）"
 }
+if(Test-Path -LiteralPath $obsoleteClientPrompt -PathType Leaf){
+    Remove-Item -LiteralPath $obsoleteClientPrompt -Force
+    Write-Step 'Removed obsolete client-side AI prompt'
+}
+
 
 # Retain previous ownership when reinstalling without creating shortcuts.
 $ownedShortcuts=New-Object 'System.Collections.Generic.List[object]'
@@ -173,7 +182,7 @@ function New-Shortcut([string]$linkPath, [string]$target, [string]$workDir, [str
             Write-Step 'Preserved shortcut belonging to another target or custom command';return
         }
         if(Test-Path -LiteralPath $linkPath){
-            $currentHash=(Get-FileHash -LiteralPath $linkPath -Algorithm SHA256).Hash
+            $currentHash=(Get-InstallFileSha256 $linkPath)
             $previousOwnership=@($ownedShortcuts | Where-Object {$_.Kind -eq $kind -and $_.Sha256 -eq $currentHash})
             if($previousOwnership.Count -ne 1){
                 Write-Step 'Preserved unregistered or user-modified shortcut';return
@@ -186,7 +195,7 @@ function New-Shortcut([string]$linkPath, [string]$target, [string]$workDir, [str
         if($script:InstallTransaction){Register-InstallWrite $script:InstallTransaction $linkPath}
         $shortcut.Save()
         for($i=$ownedShortcuts.Count-1;$i -ge 0;$i--){if($ownedShortcuts[$i].Kind -eq $kind){$ownedShortcuts.RemoveAt($i)}}
-        $ownedShortcuts.Add(@{Kind=$kind;Sha256=(Get-FileHash -LiteralPath $linkPath -Algorithm SHA256).Hash})
+        $ownedShortcuts.Add(@{Kind=$kind;Sha256=(Get-InstallFileSha256 $linkPath)})
         Write-Step "Created owned shortcut: $kind"
     } finally {
         if($shortcut){[Runtime.InteropServices.Marshal]::ReleaseComObject($shortcut) | Out-Null}
@@ -220,14 +229,14 @@ foreach($name in @('DwgTranslator.exe','使用说明.txt')) {
     $src=Join-Path $SourceDir $name
     $dst=Join-Path $TargetDir $name
     if((Test-Path -LiteralPath $src -PathType Leaf) -and (Test-Path -LiteralPath $dst -PathType Leaf)) {
-        $owned.Add(@{Path=$name;Sha256=(Get-FileHash -LiteralPath $dst -Algorithm SHA256).Hash})
+        $owned.Add(@{Path=$name;Sha256=(Get-InstallFileSha256 $dst)})
     }
 }
 foreach($sub in @('CadPlugin','assets')) {
     $sourceFolder=Join-Path $SourceDir $sub
     foreach($file in Get-ChildItem -LiteralPath $sourceFolder -File -Recurse) {
         $relative=$sub+'\'+$file.FullName.Substring($sourceFolder.TrimEnd('\').Length+1)
-        $owned.Add(@{Path=$relative;Sha256=(Get-FileHash -LiteralPath (Join-Path $TargetDir $relative) -Algorithm SHA256).Hash})
+        $owned.Add(@{Path=$relative;Sha256=(Get-InstallFileSha256 (Join-Path $TargetDir $relative))})
     }
 }
 Copy-Item -LiteralPath $uninstallerSource -Destination (Join-Path $TargetDir 'Uninstall.ps1') -Force

@@ -12,12 +12,7 @@ public sealed class PromptDialog : Window
         WindowStyle = WindowStyle.None; ResizeMode = ResizeMode.NoResize; ShowInTaskbar = false;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         Background = (Brush)Application.Current.FindResource("Brush.Surface");
-        var body = new StackPanel { Margin = new Thickness(24) };
-        var heading = new DockPanel();
-        var close = new Button { Content = "×", Width = 34, Height = 34, ToolTip = "取消并关闭", Style = (Style)Application.Current.FindResource("Button.Tertiary") };
-        close.Click += (_, _) => Close(); DockPanel.SetDock(close, Dock.Right); heading.Children.Add(close);
-        heading.Children.Add(new TextBlock { Text = title, FontSize = 18, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center }); body.Children.Add(heading);
-        body.Children.Add(new TextBlock { Text = message, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0,16,0,20) });
+        var messageBody = new TextBlock { Text = message, FontSize = 14, LineHeight = 22, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0,0,0,20) };
         var actions = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Right };
         void Add(string text, MessageBoxResult result, bool primary = false)
         {
@@ -26,14 +21,15 @@ public sealed class PromptDialog : Window
         }
         if (buttons is MessageBoxButton.OKCancel or MessageBoxButton.YesNoCancel) Add(cancelText ?? "取消", MessageBoxResult.Cancel);
         if (buttons is MessageBoxButton.YesNo or MessageBoxButton.YesNoCancel) { Add(rejectText ?? (buttons == MessageBoxButton.YesNoCancel ? "放弃更改" : "否"), MessageBoxResult.No); Add(confirmText ?? (buttons == MessageBoxButton.YesNoCancel ? "保存更改" : "确定"), MessageBoxResult.Yes, true); }
-        else Add("确定", MessageBoxResult.OK, true);
-        body.Children.Add(actions); Content = new Border { BorderBrush = (Brush)Application.Current.FindResource("Brush.BorderLight"), BorderThickness = new Thickness(1), Child = body };
+        else Add(confirmText ?? "确定", MessageBoxResult.OK, true);
+        Content = new Border { BorderBrush = (Brush)Application.Current.FindResource("Brush.BorderLight"), BorderThickness = new Thickness(1), Child = new Controls.DialogShell(title, messageBody, actions) };
+        Controls.DialogShell.Constrain(this);
         PreviewKeyDown += (_, e) => { if (e.Key == System.Windows.Input.Key.Escape) Close(); };
     }
     public static MessageBoxResult Show(string message, string title = "提示", MessageBoxButton buttons = MessageBoxButton.OK, MessageBoxImage icon = MessageBoxImage.None,
         string? confirmText = null, string? rejectText = null, string? cancelText = null)
     {
-        var owner = Application.Current.MainWindow;
+        var owner = Application.Current.Windows.OfType<Window>().FirstOrDefault(w => w.IsActive && w.IsEnabled) ?? Application.Current.MainWindow;
         var scrim = (owner as MainWindow)?.FindName("ModalScrim") as FrameworkElement;
         if (scrim != null) scrim.Visibility = Visibility.Visible;
         try { var dialog = new PromptDialog(message, title, buttons, confirmText, rejectText, cancelText) { Owner = owner }; dialog.ShowDialog(); return dialog._result; }

@@ -8,7 +8,7 @@
         ShowInTaskbar="False"
         Background="{DynamicResource Brush.Background}"
         FontFamily="Microsoft YaHei UI, Segoe UI"
-        FontSize="13">
+        FontSize="{DynamicResource FontSize.Body}">
 
     <Border Padding="22,20,22,18">
         <!-- The content carries an explicit width: with SizeToContent the panel is measured
@@ -18,11 +18,11 @@
             <TextBlock Text="翻译语言" FontSize="17" FontWeight="SemiBold"
                        Foreground="{DynamicResource Brush.TextPrimary}" />
             <TextBlock Text="选择图纸上的原文语言，以及要翻译成的目标语言。"
-                       Margin="0,5,0,0" TextWrapping="Wrap"
+                       Margin="{DynamicResource Spacing.BlockTopTight}" TextWrapping="Wrap"
                        Foreground="{DynamicResource Brush.TextMuted}" />
 
             <!-- Source / target pickers with a swap control between them -->
-            <Grid Margin="0,18,0,0">
+            <Grid Margin="{DynamicResource Spacing.BlockTopLoose}">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
@@ -32,7 +32,7 @@
                 <StackPanel Grid.Column="0">
                     <TextBlock Text="原文语言" Style="{StaticResource InputLabel}" />
                     <ComboBox x:Name="SourceCombo"
-                              Margin="0,6,0,0"
+                              Margin="{DynamicResource Spacing.BlockTopTight}"
 
                               MaxWidth="212"
                               HorizontalAlignment="Left"
@@ -65,7 +65,7 @@
                 <StackPanel Grid.Column="2">
                     <TextBlock Text="目标语言" Style="{StaticResource InputLabel}" />
                     <ComboBox x:Name="TargetCombo"
-                              Margin="0,6,0,0"
+                              Margin="{DynamicResource Spacing.BlockTopTight}"
 
                               MaxWidth="212"
                               HorizontalAlignment="Left"
@@ -78,7 +78,7 @@
 
             <!-- Live preview of the resulting direction -->
             <Border x:Name="PreviewBorder"
-                    Margin="0,16,0,0"
+                    Margin="{DynamicResource Spacing.BlockTopLoose}"
                     Padding="14,11"
                     CornerRadius="8"
                     Background="{DynamicResource Brush.PrimaryLight}">
@@ -102,7 +102,7 @@
                  runs off the dialog. -->
             <WrapPanel x:Name="PresetPanel" Width="512" HorizontalAlignment="Left" />
 
-            <Border Margin="0,18,0,0"
+            <Border Margin="{DynamicResource Spacing.BlockTopLoose}"
                     Padding="13,11"
                     CornerRadius="8"
                     Background="{DynamicResource Brush.WarningLight}">
@@ -111,7 +111,7 @@
                            Text="切换语言后会清空当前图纸上已有的译文，需要用新语言重新翻译。已经翻译过的句子保存在本地缓存中，不会重复消耗接口额度。" />
             </Border>
 
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,20,0,0">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="{DynamicResource Spacing.BlockTopSection}">
                 <Button Content="取消" MinWidth="92"
                         IsCancel="True"
                         Style="{StaticResource DialogCancelButton}"

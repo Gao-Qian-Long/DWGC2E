@@ -13,7 +13,6 @@ $required = @(
     'settings.json',
     'assets\default-glossaries\mechanical_zh_en.json',
     'glossaries\mechanical_zh_en.json',
-    'prompts\deepl_context.txt',
     'CadPlugin\DwgTranslator.Cad.dll',
     'CadPlugin\DwgTranslator.Core.dll',
     'CadPlugin\cad-platform.txt'
@@ -34,9 +33,10 @@ $config = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $publishDir 's
 if ($config.licensingEnabled -ne $false) {
     throw 'Published settings must keep licensing disabled for this release.'
 }
-if (-not [string]::IsNullOrWhiteSpace([string]$config.deepSeekApiKey)) {
-    throw 'Published settings must not contain an API key.'
+foreach ($forbidden in @('deepSeekApiKey','deepSeekBaseUrl','deepSeekModel','apiMode')) {
+    if ($config.PSObject.Properties.Name -contains $forbidden) { throw "Published settings must not expose legacy AI field: $forbidden" }
 }
+if (Test-Path -LiteralPath (Join-Path $publishDir 'prompts')) { throw 'Published package must not contain client-side AI prompts.' }
 
 $platform = (Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $publishDir 'CadPlugin\cad-platform.txt')).Trim()
 if ($platform -notin @('GstarCAD', 'AutoCAD')) {

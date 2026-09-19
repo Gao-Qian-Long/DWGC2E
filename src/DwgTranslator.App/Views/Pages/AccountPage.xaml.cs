@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using DwgTranslator.App.ViewModels;
@@ -15,6 +15,16 @@ public partial class AccountPage : UserControl
     }
     private async void Owner_Activated(object? sender, EventArgs e) { if(IsVisible && DataContext is MainViewModel vm) await vm.RefreshMembershipOnActivationAsync(); }
     private void AccountMenu_Click(object sender, RoutedEventArgs e) { if(sender is Button b && b.ContextMenu is {} menu) { menu.DataContext=DataContext; menu.PlacementTarget=b; menu.IsOpen=true; } }
+    private void MembershipDetails_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        // Stack complete sections on compact windows instead of clipping their actions.
+        var compact = e.NewSize.Width < 760;
+        Grid.SetColumn(DevicesCard, compact ? 0 : 1);
+        Grid.SetRow(DevicesCard, compact ? 1 : 0);
+        Grid.SetColumnSpan(PlansCard, compact ? 2 : 1);
+        Grid.SetColumnSpan(DevicesCard, compact ? 2 : 1);
+        PlansCard.Margin = new Thickness(0, 0, compact ? 0 : 16, 16);
+    }
     private bool _submitting;
     private async void Login_Click(object sender, RoutedEventArgs e)
     {

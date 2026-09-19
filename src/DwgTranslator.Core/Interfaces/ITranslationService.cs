@@ -29,3 +29,21 @@ public interface ITranslationService
         IProgress<TranslationPair>? progress,
         CancellationToken cancellationToken = default);
 }
+
+/// <summary>Supplies stable, translation-semantic checkpoint data.</summary>
+public interface ITranslationCheckpointContextProvider
+{
+    string GetCheckpointContext(string sourceLanguage, string targetLanguage);
+}
+
+/// <summary>Refreshes server-owned translation semantics before a checkpoint signature is computed.</summary>
+public interface IAsyncTranslationCheckpointContextProvider
+{
+    Task PrepareCheckpointContextAsync(string sourceLanguage, string targetLanguage, CancellationToken cancellationToken = default);
+}
+
+/// <summary>Revalidate prescribed glossary text at the final CAD writeback boundary.</summary>
+public interface IWritebackGlossaryProvider
+{
+    IReadOnlyList<GlossaryEntry> GetWritebackGlossary(string sourceLanguage, string targetLanguage);
+}

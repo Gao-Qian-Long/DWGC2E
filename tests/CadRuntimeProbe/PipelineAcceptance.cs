@@ -71,7 +71,7 @@ internal static class PipelineAcceptance
         foreach(var pair in new Dictionary<string,object> {
             ["AutoCadInstallPath"]=install,["CadPluginPath"]=Path.Combine(release,"CadPlugin","DwgTranslator.Cad.dll"),
             ["ExportDirectory"]=root,["OutputNamingPattern"]="{name}_pipeline",["DuplicatePolicy"]="rename",
-            ["BackupSourceBeforeWrite"]=false,["AllowOverwriteSource"]=false,["OpenOutputFolderAfterExport"]=false,
+            ["BackupSourceBeforeWrite"]=false,["OpenOutputFolderAfterExport"]=false,
             ["SourceLanguage"]="ZH",["TargetLanguage"]="EN",["GlossaryFirst"]=false,["MaxRetryCount"]=0
         }) Set(config,pair.Key,pair.Value);
         var options=New("DwgTranslator.Core.Tasks.TaskManagerOptions");

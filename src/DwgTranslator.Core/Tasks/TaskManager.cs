@@ -43,8 +43,11 @@ public enum TaskWritebackMode
 /// </summary>
 public sealed class TaskManager : ITaskManager, ITaskRecoveryDiagnostics, IRuntimeTaskConfiguration
 {
-    /// <summary>阶段总数：解析 → 提取 → 翻译 → 排版优化 → 写回 → 完成。</summary>
-    private const int StageCount = 6;
+    /// <summary>翻译任务只负责解析、提取、翻译和保存检查点；写回是独立导出操作。</summary>
+    private const int StageCount = 4;
+
+    [Obsolete("翻译阶段不再选择输出目录；请在独立导出流程中选择。")]
+    public Func<CancellationToken, Task<string?>>? SelectOutputDirectoryAsync { get; set; }
 
     public void ApplyConfiguration(AppConfig config)
     {
@@ -52,7 +55,7 @@ public sealed class TaskManager : ITaskManager, ITaskRecoveryDiagnostics, IRunti
         lock (_gate)
         {
             if (_running) throw new InvalidOperationException("Cannot change configuration during a queue run.");
-            foreach (var name in new[] { "ProtectDimensions", "ProtectTolerances", "ProtectModels", "GlossaryFirst", "MaxTranslationConcurrency", "LocalWorkerCount", "AiConcurrency", "MemoryOptimization", "MaxRetryCount", "ExportDirectory", "OutputNamingPattern", "DuplicatePolicy", "BackupSourceBeforeWrite", "AllowOverwriteSource", "AutoCadInstallPath", "CadPluginPath", "OpenOutputFolderAfterExport" })
+            foreach (var name in new[] { "ProtectDimensions", "ProtectTolerances", "ProtectModels", "GlossaryFirst", "MaxTranslationConcurrency", "LocalWorkerCount", "AiConcurrency", "MemoryOptimization", "MaxRetryCount", "ExportDirectory", "OutputNamingPattern", "DuplicatePolicy", "BackupSourceBeforeWrite", "AutoCadInstallPath", "CadPluginPath", "OpenOutputFolderAfterExport" })
             {
                 var property = typeof(AppConfig).GetProperty(name)!;
                 property.SetValue(_config, property.GetValue(config));
@@ -73,7 +76,6 @@ public sealed class TaskManager : ITaskManager, ITaskRecoveryDiagnostics, IRunti
 
     private readonly object _gate = new();
     private readonly List<TranslationTask> _tasks = new();
-    private IReadOnlyDictionary<string, OutputPathResult> _outputPlan = new Dictionary<string, OutputPathResult>();
     private readonly List<TranslationTask> _pendingFromLastRun = new();
 
     /// <summary>
@@ -85,9 +87,6 @@ public sealed class TaskManager : ITaskManager, ITaskRecoveryDiagnostics, IRunti
 
     /// <summary>暂停前的状态，恢复时逐个还原（暂停不该把"翻译中"抹成"等待中"）。</summary>
     private readonly Dictionary<string, TranslationTaskStatus> _statusBeforePause = new(StringComparer.Ordinal);
-
-    /// <summary>当前队列每个源图纸对应的输出路径（按批量导出规则批量算好，避免同名互相覆盖）。</summary>
-    private Dictionary<string, string> _destinations = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>暂停闸门：暂停时非空，工作线程 await 它即停在阶段边界，不必轮询烧 CPU。</summary>
     private TaskCompletionSource<bool>? _pauseTcs;
@@ -221,37 +220,101 @@ public sealed class TaskManager : ITaskManager, ITaskRecoveryDiagnostics, IRunti
         get { lock (_gate) return _running; }
     }
 
-    /// <summary>
-    /// 输出目录。Core 不感知 %APPDATA%，所以默认取 AppConfig.ExportDirectory（App 启动时
-    /// 已把相对路径解析到数据目录），需要指向别处就由调用方显式赋值。
-    /// </summary>
-    public string? OutputDirectory { get; set; }
-
-    /// <summary>写回方式，默认离线（不依赖 CAD 安装，也不会弹框打断批处理）。</summary>
-    public TaskWritebackMode WritebackMode { get; set; } = TaskWritebackMode.Offline;
-
     /// <summary>本队列的语言对（已规范化）。UI 只读用于日志与显示，修改请走 <see cref="ConfigureRun"/>。</summary>
     public string SourceLanguage => _sourceLanguage;
 
     public string TargetLanguage => _targetLanguage;
 
+    [Obsolete("输出目录已迁移到独立导出服务。")]
+    public string? OutputDirectory { get; set; }
+
+    [Obsolete("写回模式已迁移到独立导出服务。")]
+    public TaskWritebackMode WritebackMode { get; set; } = TaskWritebackMode.Offline;
+
     /// <inheritdoc/>
-    public void ConfigureRun(string sourceLanguage, string targetLanguage,
-        string? outputDirectory = null, TaskWritebackMode? writebackMode = null)
+    public void ConfigureRun(string sourceLanguage, string targetLanguage)
     {
         ThrowIfDisposed();
-
         _sourceLanguage = TranslationLanguages.Normalize(sourceLanguage);
         _targetLanguage = TranslationLanguages.Normalize(targetLanguage);
+        Log.Information("翻译任务运行参数：{Source} → {Target}；写回与输出目录将在项目校对后单独选择",
+            _sourceLanguage, _targetLanguage);
+    }
 
-        if (!string.IsNullOrWhiteSpace(outputDirectory)) OutputDirectory = outputDirectory;
-        if (writebackMode.HasValue) WritebackMode = writebackMode.Value;
+    [Obsolete("翻译任务只接受语言参数；输出设置会被忽略。")]
+    public void ConfigureRun(string sourceLanguage, string targetLanguage, string? outputDirectory, TaskWritebackMode? writebackMode)
+    {
+        ConfigureRun(sourceLanguage, targetLanguage);
+    }
 
-        Log.Information("任务层运行参数：{Source} → {Target}，输出目录 {Folder}，写回方式 {Mode}",
-            _sourceLanguage, _targetLanguage, OutputDirectory ?? "(配置默认)", WritebackMode);
+    public void AssignProject(string taskId, string projectId)    {
+        if (string.IsNullOrWhiteSpace(taskId)) throw new ArgumentException("任务 ID 不能为空", nameof(taskId));
+        if (string.IsNullOrWhiteSpace(projectId)) throw new ArgumentException("项目 ID 不能为空", nameof(projectId));
+        lock (_gate)
+        {
+            var task = _tasks.SingleOrDefault(item => item.Id == taskId)
+                ?? throw new ArgumentException("找不到该图纸任务", nameof(taskId));
+            task.ProjectId = projectId.Trim();
+            TouchTask(task);
+        }
+        SaveNow();
     }
 
     /// <inheritdoc/>
+
+    /// <inheritdoc/>
+    /// <inheritdoc/>
+    public void MarkReviewCompleted(string taskId)
+    {
+        ThrowIfDisposed();
+        if (string.IsNullOrWhiteSpace(taskId))
+            throw new ArgumentException("任务 ID 不能为空", nameof(taskId));
+
+        TranslationTask task;
+        lock (_gate)
+        {
+            task = _tasks.SingleOrDefault(item => item.Id == taskId)
+                ?? throw new ArgumentException("找不到该图纸任务", nameof(taskId));
+            if (task.Status != TranslationTaskStatus.ReadyForReview)
+                throw new InvalidOperationException($"任务“{task.FileName}”当前为{task.StatusText}，不能标记为校对完成。");
+
+            var now = DateTime.UtcNow;
+            task.TransitionTo(TranslationTaskStatus.Completed, TranslationTaskTransitionReason.ReviewCompleted, now);
+            task.Progress = 100;
+            task.CompletedAt ??= now;
+            task.ReviewCompletedAt = now;
+        }
+
+        SaveNow();
+        RaiseTaskUpdated(task);
+        RaiseOverallProgress();
+    }
+
+    /// <inheritdoc/>
+    public void RecordExportPath(string taskId, string outputPath)
+    {
+        if (string.IsNullOrWhiteSpace(taskId)) throw new ArgumentException("任务 ID 不能为空", nameof(taskId));
+        if (string.IsNullOrWhiteSpace(outputPath)) throw new ArgumentException("输出路径不能为空", nameof(outputPath));
+
+        var normalizedPath = Path.GetFullPath(outputPath.Trim());
+        TranslationTask task;
+        lock (_gate)
+        {
+            task = _tasks.SingleOrDefault(item => item.Id == taskId)
+                ?? throw new ArgumentException("找不到该图纸任务", nameof(taskId));
+            task.LastExportPath = normalizedPath;
+            var now = DateTime.UtcNow;
+            task.LastExportedAt = now;
+            task.UpdatedAt = now;
+            // A task loaded from pre-project versions may still carry the obsolete field.
+            // Once a project export is recorded, clear it so the UI cannot display a stale
+            // filename after a retry or a new export.
+            task.OutputPath = null;
+        }
+
+        SaveNow();
+        RaiseTaskUpdated(task);
+    }
     public event EventHandler<TranslationTask>? TaskUpdated;
 
     /// <inheritdoc/>
@@ -375,7 +438,11 @@ public sealed class TaskManager : ITaskManager, ITaskRecoveryDiagnostics, IRunti
     // ───────────────────────────── 执行 ─────────────────────────────
 
     /// <inheritdoc/>
-    public async Task RunAsync(CancellationToken cancellationToken = default)
+    public Task RunAsync(CancellationToken cancellationToken = default) => RunSelectedAsync(null, cancellationToken);
+
+    public Task RetryTaskAsync(string taskId, CancellationToken cancellationToken = default) => RunSelectedAsync(taskId, cancellationToken);
+
+    private async Task RunSelectedAsync(string? taskId, CancellationToken cancellationToken)
     {
         ThrowIfDisposed();
 
@@ -388,6 +455,14 @@ public sealed class TaskManager : ITaskManager, ITaskRecoveryDiagnostics, IRunti
                 return;
             }
 
+            if (taskId != null)
+            {
+                var task = _tasks.SingleOrDefault(t => t.Id == taskId)
+                    ?? throw new ArgumentException("找不到该图纸任务", nameof(taskId));
+                ResetForRetry(task);
+                task.RetryCount++;
+                TouchTask(task);
+            }
             _runCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             cts = _runCts;
             _running = true;
@@ -395,14 +470,13 @@ public sealed class TaskManager : ITaskManager, ITaskRecoveryDiagnostics, IRunti
 
         try
         {
-            var queue = TakeRunnableQueue();
+            var queue = TakeRunnableQueue().Where(t => taskId == null || t.Id == taskId).ToList();
             if (queue.Count == 0)
             {
                 Log.Information("队列里没有待处理的图纸");
                 return;
             }
 
-            PrepareDestinations();
             RaiseProgressMessage($"[0/{StageCount}] 队列开始：{queue.Count} 张图纸，本地并发 {LocalWorkerCount}，单图纸 AI 并发 {AiConcurrency}");
 
             // 整段调度都在线程池线程上：RunAsync 返回的 Task 可以给 UI await，
@@ -470,7 +544,7 @@ public sealed class TaskManager : ITaskManager, ITaskRecoveryDiagnostics, IRunti
             {
                 if (task.IsFinished || task.Status == TranslationTaskStatus.Paused) continue;
                 _statusBeforePause[task.Id] = task.Status;
-                task.Status = TranslationTaskStatus.Paused;
+                task.TransitionTo(TranslationTaskStatus.Paused, TranslationTaskTransitionReason.PausedByUser);
                 paused.Add(task);
             }
         }
@@ -502,7 +576,8 @@ public sealed class TaskManager : ITaskManager, ITaskRecoveryDiagnostics, IRunti
                 var previous = _statusBeforePause.TryGetValue(task.Id, out var status)
                     ? status
                     : TranslationTaskStatus.Pending;
-                task.Status = previous == TranslationTaskStatus.Paused ? TranslationTaskStatus.Pending : previous;
+                task.TransitionTo(previous == TranslationTaskStatus.Paused ? TranslationTaskStatus.Pending : previous,
+                    TranslationTaskTransitionReason.ResumedByUser);
                 resumed.Add(task);
             }
 
@@ -536,13 +611,13 @@ public sealed class TaskManager : ITaskManager, ITaskRecoveryDiagnostics, IRunti
 
             foreach (var task in _tasks)
             {
-                if (task.Status == TranslationTaskStatus.Paused) task.Status = TranslationTaskStatus.Pending;
                 // 正在执行的图纸交给取消令牌（它会走到取消分支并置 Cancelled）；
                 // 已经结束的记录保持原样，取消不该抹掉历史。
-                if (task.Status != TranslationTaskStatus.Pending) continue;
+                if (task.Status is not (TranslationTaskStatus.Pending or TranslationTaskStatus.Paused)) continue;
 
-                task.Status = TranslationTaskStatus.Cancelled;
-                task.CompletedAt = DateTime.UtcNow;
+                var cancelledAt = DateTime.UtcNow;
+                task.TransitionTo(TranslationTaskStatus.Cancelled, TranslationTaskTransitionReason.CancelledByUser, cancelledAt);
+                task.CompletedAt = cancelledAt;
                 task.Error = null;
                 cancelled.Add(task);
             }
@@ -568,17 +643,9 @@ public sealed class TaskManager : ITaskManager, ITaskRecoveryDiagnostics, IRunti
             retried = _tasks.Where(t => t.Status is TranslationTaskStatus.Failed or TranslationTaskStatus.PartiallyCompleted).ToList();
             foreach (var task in retried)
             {
-                task.Status = TranslationTaskStatus.Pending;
-                task.Progress = 0;
-                task.TextCount = 0;
-                task.TranslatedCount = 0;
-                task.FailedCount = 0;
-                task.AutoScaledLabelCount = 0;
-                task.InterferenceResolvedCount = 0;
-                task.Error = null;
-                task.StartedAt = null;
-                task.CompletedAt = null;
-                // Keep previous partial output as a protected retry artifact.
+                ResetForRetry(task);
+                task.RetryCount++;
+                TouchTask(task);
             }
         }
 
@@ -642,10 +709,68 @@ public sealed class TaskManager : ITaskManager, ITaskRecoveryDiagnostics, IRunti
         Log.Debug("TaskManager 已释放");
     }
 
+    internal string BuildCheckpointSignature(string sourceFilePath, CancellationToken cancellationToken = default)
+    {
+        var fileHash = HashFile(sourceFilePath, cancellationToken);
+
+        var serviceContext = _translationService is ITranslationCheckpointContextProvider provider
+            ? provider.GetCheckpointContext(_sourceLanguage, _targetLanguage)
+            : "service-type-v1|" + (_translationService.GetType().FullName ?? _translationService.GetType().Name);
+        var semanticContext = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            Schema = 2,
+            SourceLanguage = TranslationLanguages.Normalize(_sourceLanguage),
+            TargetLanguage = TranslationLanguages.Normalize(_targetLanguage),
+            _config.ProtectDimensions,
+            _config.ProtectTolerances,
+            _config.ProtectModels,
+            _config.GlossaryFirst,
+            ServiceContext = serviceContext
+        });
+        return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+            System.Text.Encoding.UTF8.GetBytes(fileHash + "|" + semanticContext)));
+    }
+
+    /// <summary>
+    /// 分块计算图纸哈希。以前是一次性把整份文件读进 SHA256.HashData：大图纸要等它跑完，
+    /// 用户点了取消也中断不了；现在按块喂哈希并逐块检查取消令牌，同时把"文件被占用"
+    /// 单独翻译成用户看得懂的说明（原来的 IOException 文案只说"被另一个进程使用"，
+    /// 指向不了"哪张图、为什么"，现场只能靠猜）。
+    /// </summary>
+    private static string HashFile(string sourceFilePath, CancellationToken cancellationToken)
+    {
+        const int BufferSize = 1024 * 1024;
+        try
+        {
+            using var stream = new FileStream(sourceFilePath, FileMode.Open, FileAccess.Read,
+                FileShare.ReadWrite | FileShare.Delete, BufferSize, FileOptions.SequentialScan);
+            using var hash = System.Security.Cryptography.IncrementalHash.CreateHash(
+                System.Security.Cryptography.HashAlgorithmName.SHA256);
+            var buffer = new byte[BufferSize];
+            int read;
+            while ((read = stream.Read(buffer, 0, buffer.Length)) > 0)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                hash.AppendData(buffer, 0, read);
+            }
+            return Convert.ToHexString(hash.GetHashAndReset());
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (IOException ex)
+        {
+            throw new IOException(
+                $"图纸文件无法读取，无法建立翻译断点（可能被其它程序独占或网络盘断开）：{sourceFilePath}", ex);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            throw new IOException($"没有读取图纸文件的权限，无法建立翻译断点：{sourceFilePath}", ex);
+        }
+    }
+
     // ───────────────────────────── 单张图纸流水线 ─────────────────────────────
 
     /// <summary>
-    /// 跑完一张图纸的 6 个阶段。任何一步抛异常都只影响这一张图纸：
+    /// 跑完一张图纸的 4 个翻译阶段。任何一步抛异常都只影响这一张图纸：
     /// 置 Failed + 写 Error，然后正常归还槽位，队列继续下一张。
     /// </summary>
     private async Task ProcessTaskAsync(TranslationTask task, SemaphoreSlim workerGate, CancellationToken ct)
@@ -656,23 +781,13 @@ public sealed class TaskManager : ITaskManager, ITaskRecoveryDiagnostics, IRunti
             await WaitWhilePausedAsync(ct).ConfigureAwait(false);
 
             MarkStarted(task);
-            if (_outputPlan.TryGetValue(NormalizePath(task.FilePath), out var planned) && planned.ShouldSkip)
-            {
-                if (planned.Resolution == DuplicateResolution.Error)
-                    throw new IOException(planned.Reason);
-                lock (_gate) { task.Status = TranslationTaskStatus.Skipped; task.Error = planned.Reason; task.CompletedAt = DateTime.UtcNow; task.Progress = 100; }
-                RaiseTaskUpdated(task); SaveNow(); return;
-            }
-
-            // ── [1/6] Parsing：读 DWG/DXF ──
+            // ── [1/4] Parsing：读 DWG/DXF ──
             SetStatus(task, TranslationTaskStatus.Parsing);
             RaiseProgressMessage(Stage(task, 1, "正在解析图纸"));
             var entities = await Task.Run(() => ReadTextEntities(task), ct).ConfigureAwait(false);
-            string signature;
-            using (var stream = File.OpenRead(task.FilePath))
-            using (var sha = System.Security.Cryptography.SHA256.Create())
-                signature = Convert.ToHexString(sha.ComputeHash(stream)) + "|" + _sourceLanguage + "|" + _targetLanguage + "|" + System.Text.Json.JsonSerializer.Serialize(_config) + "|" + (_translationService is WorkerTranslationService worker ? worker.CheckpointContext : Guid.NewGuid().ToString());
-            signature = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(signature)));
+            if (_translationService is IAsyncTranslationCheckpointContextProvider asyncContextProvider)
+                await asyncContextProvider.PrepareCheckpointContextAsync(_sourceLanguage, _targetLanguage, ct).ConfigureAwait(false);
+            var signature = BuildCheckpointSignature(task.FilePath, ct);
             lock (_gate)
             {
                 if (task.CheckpointSignature != signature) task.SuccessfulTranslations = new();
@@ -724,6 +839,14 @@ public sealed class TaskManager : ITaskManager, ITaskRecoveryDiagnostics, IRunti
             if (toTranslate.Count > 0)
             {
                 var progress = BuildTranslationProgress(task, toTranslate.Count);
+                // Translation no longer asks for an export/writeback mode. Worker billing still requires
+                // its own stable online/offline value, so new and legacy "translation" tasks use online.
+                var billingMode = string.Equals(task.BillingMode, "offline", StringComparison.OrdinalIgnoreCase)
+                    ? "offline"
+                    : "online";
+                task.BillingMode = billingMode;
+                using var billingScope = TranslationBillingContext.Enter(task.Id, billingMode);
+                SaveNow();
                 var pairs = await _translationService
                     .TranslateBatchWithProgressAsync(
                         toTranslate, _sourceLanguage, _targetLanguage, progress, ct)
@@ -739,71 +862,31 @@ public sealed class TaskManager : ITaskManager, ITaskRecoveryDiagnostics, IRunti
 
             await WaitWhilePausedAsync(ct).ConfigureAwait(false);
 
-            // ── [4/6] LayoutOptimizing：圈定写回范围 + 算输出路径 ──
-            SetStatus(task, TranslationTaskStatus.LayoutOptimizing);
-            RaiseProgressMessage(Stage(task, 4, "正在优化排版"));
-
-            var writebackSet = BuildWritebackSet(task, entities);
-            if (writebackSet.Count == 0)
+            // ── [4/4] ReadyForReview：保存译文检查点，等待用户校对后显式导出 ──
+            var reviewSet = BuildWritebackSet(task, entities);
+            if (reviewSet.Count == 0)
             {
                 if (task.FailedCount > 0)
-                    throw new InvalidOperationException("没有可写回的译文，所有待翻译条目均失败");
-                Finish(task, "没有可写回的译文");
+                    throw new InvalidOperationException("没有可校对的译文，所有待翻译条目均失败");
+                Finish(task, "图纸中没有需要校对的译文");
                 return;
-            }
-
-            var outputPath = ResolveOutputPath(task.FilePath);
-
-            await WaitWhilePausedAsync(ct).ConfigureAwait(false);
-
-            // ── [5/6] Writing：写回（排版收缩/解干涉就发生在这次调用内部） ──
-            SetStatus(task, TranslationTaskStatus.Writing);
-            RaiseProgressMessage(Stage(task, 5, "正在写回图纸"));
-
-            // 排版统计探针只在这次写回期间统计本异步流产生的事件（见 LayoutStatsProbe 注释）。
-            _layoutProbe.Begin();
-            CadWriteResult? result = null;
-            try
-            {
-                result = await WritebackAsync(task.FilePath, outputPath, writebackSet, ct).ConfigureAwait(false);
-            }
-            finally
-            {
-                var stats = _layoutProbe.End();
-                lock (_gate)
-                {
-                    task.AutoScaledLabelCount += stats.AutoScaled;
-                    task.InterferenceResolvedCount += stats.InterferenceResolved;
-                }
-            }
-
-            if (result == null || result.SuccessCount <= 0)
-            {
-                var detail = result != null && result.Errors.Count > 0
-                    ? string.Join("; ", result.Errors.Take(3))
-                    : "写回过程没有写入任何文本";
-                throw new InvalidOperationException(detail);
-            }
-
-            if (result.FailCount == 0 && result.SuccessCount >= writebackSet.Count)
-            {
-                foreach (var entity in writebackSet)
-                    entity.Status = TranslationStatus.WritebackSuccess;
             }
 
             lock (_gate)
             {
-                task.OutputPath = outputPath;
-                task.FailedCount += result.FailCount;
+                var now = DateTime.UtcNow;
+                task.TransitionTo(TranslationTaskStatus.ReadyForReview, TranslationTaskTransitionReason.AwaitingReview, now);
+                task.Progress = 100;
+                task.CompletedAt = now;
+                task.ReviewCompletedAt = null;
+                task.LastExportedAt = null;
+                task.LastExportPath = null;
+                task.OutputPath = null;
             }
-
-            if (result.FailCount > 0)
-                RaiseProgressMessage(Stage(task, 5, $"{result.SuccessCount} 条已写回，{result.FailCount} 条未写入"));
-
+            RaiseProgressMessage(Stage(task, 4, $"翻译完成：{task.TranslatedCount:N0} 条，等待校对和导出", 100));
             SaveNow();
-
-            // ── [6/6] Completed ──
-            Finish(task, $"完成：{task.TranslatedCount:N0} 条译文{(task.FailedCount > 0 ? $"，{task.FailedCount:N0} 条失败" : string.Empty)}，输出 {Path.GetFileName(outputPath)}");
+            RaiseTaskUpdated(task);
+            RaiseOverallProgress();
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -857,6 +940,7 @@ public sealed class TaskManager : ITaskManager, ITaskRecoveryDiagnostics, IRunti
 
                     percent = total <= 0 ? 100 : Math.Min(100, (double)done / total * 100.0);
                     task.Progress = percent;
+                    TouchTask(task);
                 }
 
                 // TaskUpdated 不节流：UI 需要连续的进度。日志行按 400ms 节流，
@@ -949,9 +1033,10 @@ public sealed class TaskManager : ITaskManager, ITaskRecoveryDiagnostics, IRunti
                 or TranslationStatus.WritebackSuccess or TranslationStatus.WritebackFailed)
             .ToList();
 
+        var writebackGlossary = (_translationService as IWritebackGlossaryProvider)?.GetWritebackGlossary(_sourceLanguage, _targetLanguage);
         var invalid = candidates
-            .Where(e => !TranslationQualityValidator.IsAcceptable(
-                e.PlainText, e.TranslatedText, _sourceLanguage, _targetLanguage))
+            .Where(e => !TranslationQualityValidator.IsAcceptableCadText(
+                e.PlainText, e.TranslatedText, _sourceLanguage, _targetLanguage, writebackGlossary))
             .ToList();
 
         if (invalid.Count > 0)
@@ -972,108 +1057,6 @@ public sealed class TaskManager : ITaskManager, ITaskRecoveryDiagnostics, IRunti
     /// 写回。与 MainViewModel.ExecuteWritebackWithMode 调用同一组服务方法，
     /// 区别只是这里不弹模式对话框（模式由 <see cref="WritebackMode"/> 决定）。
     /// </summary>
-    private async Task<CadWriteResult> WritebackAsync(
-        string sourcePath, string outputPath, List<TextEntity> entities, CancellationToken ct)
-    {
-        // 目标语言是否需要 CJK 字体，与导出流程用的是同一个判断。
-        var targetIsCjk = TranslationLanguages.IsCjk(_targetLanguage);
-
-        if (WritebackMode == TaskWritebackMode.AutoCad)
-        {
-            if (_autoCadInterop != null && _autoCadInterop.IsAutoCADAvailable(_config))
-            {
-                var progress = new Progress<string>(message =>
-                {
-                    try { ProgressMessage?.Invoke(this, message); }
-                    catch (Exception ex) { Log.Debug(ex, "AutoCAD 写回进度订阅方异常已忽略"); }
-                });
-
-                return await _autoCadInterop.WritebackViaAutoCadAsync(
-                    sourcePath, outputPath, entities, targetIsCjk, _config, progress, ct).ConfigureAwait(false);
-            }
-
-            // 选了 CAD 模式但 CAD 不可用：退回离线写回并记警告，比整批失败更有用。
-            Log.Warning("AutoCAD 写回不可用（未安装或未启动），本张图纸退回离线写回：{Path}", sourcePath);
-        }
-
-        var isDxf = string.Equals(Path.GetExtension(sourcePath), ".dxf", StringComparison.OrdinalIgnoreCase);
-        var dxfWriter = _dxfWriter;
-        var options = new WritebackOptions { OverwriteExisting = _config.DuplicatePolicy == "overwrite", BackupSource = _config.BackupSourceBeforeWrite };
-
-        return await Task.Run(() => isDxf && dxfWriter != null
-            ? dxfWriter.WriteTranslations(sourcePath, outputPath, entities, targetIsCjk, ct, options)
-            : _dwgWriter.WriteTranslations(sourcePath, outputPath, entities, targetIsCjk, ct, options), ct)
-            .ConfigureAwait(false);
-    }
-
-    // ───────────────────────────── 路径与保存 ─────────────────────────────
-
-    /// <summary>
-    /// 队列开始时按批量导出规则一次性算好每张图纸的输出路径，避免同名图纸互相覆盖。
-    /// 参与预留的是"列表里出现过的所有图纸"（含已完成的）：它们可能已经写出过同名文件，
-    /// 把新图纸映射到同一个路径会把上一次的成果覆盖掉。
-    /// </summary>
-    private void PrepareDestinations()
-    {
-        var snapshot = System.Text.Json.JsonSerializer.Deserialize<AppConfig>(
-            System.Text.Json.JsonSerializer.Serialize(_config))!;
-        snapshot.ExportDirectory = ResolveOutputFolder();
-        var tasks = Snapshot();
-        var sources = tasks.Select(t => t.FilePath);
-        var plan = new OutputPathResolver(snapshot).ResolveBatch(sources, _targetLanguage).ToDictionary(p => p.Key, p => p.Value, StringComparer.OrdinalIgnoreCase);
-        foreach (var task in tasks.Where(t => t.Status == TranslationTaskStatus.Pending && !string.IsNullOrEmpty(t.OutputPath)))
-        {
-            var item = plan[NormalizePath(task.FilePath)];
-            if (item.Resolution != DuplicateResolution.Skip) continue;
-            // Retry produces a new artifact; it never silently overwrites the successful portion.
-            item.OutputPath = Path.Combine(Path.GetDirectoryName(item.OutputPath)!, Path.GetFileNameWithoutExtension(item.OutputPath) + "_retry_" + Guid.NewGuid().ToString("N")[..8] + Path.GetExtension(item.OutputPath));
-            item.ShouldSkip = false; item.Resolution = DuplicateResolution.Renamed;
-            item.Reason = "重试使用新文件名，保留上次部分完成的输出";
-        }
-        lock (_gate)
-        {
-            _outputPlan = plan;
-            _destinations = plan.Where(p => !p.Value.ShouldSkip)
-                .ToDictionary(p => p.Key, p => p.Value.OutputPath, StringComparer.OrdinalIgnoreCase);
-        }
-    }
-
-    /// <summary>输出目录：调用方显式指定 &gt; AppConfig.ExportDirectory &gt; 正式用户数据目录。</summary>
-    private string ResolveOutputFolder()
-    {
-        var folder = OutputDirectory;
-        if (string.IsNullOrWhiteSpace(folder)) folder = _config.ExportDirectory;
-        if (string.IsNullOrWhiteSpace(folder))
-            folder = Path.Combine(Environment.GetEnvironmentVariable("DWGC2E_DATA_DIR")
-                ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "DwgTranslator"), "exports");
-        return folder;
-    }
-
-    private string ResolveOutputPath(string sourcePath)
-    {
-        var fullPath = NormalizePath(sourcePath);
-
-        string? destination = null;
-        lock (_gate) _destinations.TryGetValue(fullPath, out destination);
-
-        // 未在批量计划里（例如单文件入队）时，按同一套配置规则计算，保证命名与重名策略一致。
-        if (destination == null)
-        {
-            var planned = BatchExportPlanner.CreateDestination(fullPath, _targetLanguage, _config);
-            if (planned.ShouldSkip)
-            {
-                throw new InvalidOperationException(
-                    $"输出文件已存在，按重名策略（{_config.DuplicatePolicy}）跳过：{planned.OutputPath}");
-            }
-            destination = planned.OutputPath;
-        }
-
-        if (string.Equals(NormalizePath(destination), fullPath, StringComparison.OrdinalIgnoreCase))
-            throw new InvalidOperationException($"输出文件与源文件同名，已停止写回以免覆盖原图：{destination}");
-
-        return destination;
-    }
-
     /// <summary>
     /// 路径规范化。非法字符等极端情况退回原字符串：路径规范化失败只是一次入队不完美，
     /// 不该把这张图纸直接判死（真正的错误会在读文件时以更清楚的信息暴露出来）。
@@ -1137,6 +1120,7 @@ public sealed class TaskManager : ITaskManager, ITaskRecoveryDiagnostics, IRunti
     /// 不会自动开跑——用户通过 <see cref="PendingFromLastRun"/> 确认后才调用 RunAsync。
     /// </summary>
     /// <summary>Switch only while idle; flush old state before loading a different owner's store.</summary>
+    /// <inheritdoc/>
     public void SwitchAccountStore(ITaskStore store, Action? commitSession = null)
     {
         ArgumentNullException.ThrowIfNull(store);
@@ -1155,6 +1139,7 @@ public sealed class TaskManager : ITaskManager, ITaskRecoveryDiagnostics, IRunti
     }
 
     /// <summary>Fail closed before account authentication or revocation when the queue cannot be saved.</summary>
+    /// <inheritdoc/>
     public void EnsureAccountStoreSaved()
     {
         lock (_gate)
@@ -1180,6 +1165,39 @@ public sealed class TaskManager : ITaskManager, ITaskRecoveryDiagnostics, IRunti
         get { lock (_gate) return (_store as ITaskRecoveryDiagnostics)?.RecoveryWarning; }
     }
 
+    private static void TouchTask(TranslationTask task, DateTime? timestamp = null)
+    {
+        var value = timestamp ?? DateTime.UtcNow;
+        if (task.CreatedAt != default && value < task.CreatedAt) value = task.CreatedAt;
+        if (task.UpdatedAt != default && value < task.UpdatedAt) value = task.UpdatedAt;
+        task.UpdatedAt = value;
+    }
+
+    private static void ResetForRetry(TranslationTask task)
+    {
+        task.TransitionTo(TranslationTaskStatus.Pending, TranslationTaskTransitionReason.RetryRequested);
+        task.Progress = 0;
+        task.TextCount = 0;
+        task.TranslatedCount = 0;
+        task.FailedCount = 0;
+        task.AutoScaledLabelCount = 0;
+        task.InterferenceResolvedCount = 0;
+        task.Error = null;
+        task.StartedAt = null;
+        task.CompletedAt = null;
+        task.ReviewCompletedAt = null;
+        task.LastExportedAt = null;
+        task.LastExportPath = null;
+        task.OutputPath = null;
+    }
+
+    private static void NormalizeRestoredTask(TranslationTask task)
+    {
+        task.SuccessfulTranslations ??= new List<TranslationPair>();
+        task.CheckpointSignature ??= string.Empty;
+        task.NormalizeAuditMetadata();
+    }
+
     private void RestoreFromStore()
     {
         IReadOnlyList<TranslationTask> loaded;
@@ -1199,6 +1217,7 @@ public sealed class TaskManager : ITaskManager, ITaskRecoveryDiagnostics, IRunti
             foreach (var task in loaded)
             {
                 if (task == null) continue;
+                NormalizeRestoredTask(task);
                 _tasks.Add(task);
                 if (!task.IsFinished) _pendingFromLastRun.Add(task);
             }
@@ -1227,6 +1246,7 @@ public sealed class TaskManager : ITaskManager, ITaskRecoveryDiagnostics, IRunti
             task.StartedAt = DateTime.UtcNow;
             task.CompletedAt = null;
             task.Error = null;
+            task.LastExportPath = null;
             task.OutputPath = null;
             task.Progress = 0;
             task.TextCount = 0;
@@ -1234,12 +1254,36 @@ public sealed class TaskManager : ITaskManager, ITaskRecoveryDiagnostics, IRunti
             task.FailedCount = 0;
             task.AutoScaledLabelCount = 0;
             task.InterferenceResolvedCount = 0;
+            task.ReviewCompletedAt = null;
+            task.LastExportedAt = null;
+            TouchTask(task, task.StartedAt.Value);
         }
     }
 
     private void SetStatus(TranslationTask task, TranslationTaskStatus status)
     {
-        lock (_gate) task.Status = status;
+        lock (_gate)
+        {
+            // Pause can race with the tiny gap between WaitWhilePausedAsync and this stage update.
+            // Keep the row visibly paused and remember the stage to restore instead of throwing an
+            // illegal Paused -> active transition or falsely presenting work as resumed.
+            if (task.Status == TranslationTaskStatus.Paused)
+            {
+                _statusBeforePause[task.Id] = status;
+                return;
+            }
+
+            var reason = status switch
+            {
+                TranslationTaskStatus.Parsing => TranslationTaskTransitionReason.PipelineStarted,
+                TranslationTaskStatus.Extracting => TranslationTaskTransitionReason.ExtractionStarted,
+                TranslationTaskStatus.Translating => TranslationTaskTransitionReason.TranslationStarted,
+                TranslationTaskStatus.LayoutOptimizing => TranslationTaskTransitionReason.LayoutOptimizationStarted,
+                TranslationTaskStatus.Writing => TranslationTaskTransitionReason.WritingStarted,
+                _ => throw new InvalidOperationException($"Pipeline cannot enter {status} through SetStatus.")
+            };
+            task.TransitionTo(status, reason);
+        }
         RaiseTaskUpdated(task);
         RaiseOverallProgress();
         SaveThrottled();
@@ -1249,11 +1293,16 @@ public sealed class TaskManager : ITaskManager, ITaskRecoveryDiagnostics, IRunti
     {
         lock (_gate)
         {
-            task.Status = task.FailedCount > 0
+            var completedAt = DateTime.UtcNow;
+            var target = task.FailedCount > 0
                 ? TranslationTaskStatus.PartiallyCompleted
                 : TranslationTaskStatus.Completed;
+            var reason = task.FailedCount > 0
+                ? TranslationTaskTransitionReason.CompletedWithFailures
+                : TranslationTaskTransitionReason.CompletedWithoutContent;
+            task.TransitionTo(target, reason, completedAt);
             task.Progress = 100;
-            task.CompletedAt = DateTime.UtcNow;
+            task.CompletedAt = completedAt;
         }
 
         RaiseTaskUpdated(task);
@@ -1270,8 +1319,9 @@ public sealed class TaskManager : ITaskManager, ITaskRecoveryDiagnostics, IRunti
     {
         lock (_gate)
         {
-            task.Status = TranslationTaskStatus.Failed;
-            task.CompletedAt = DateTime.UtcNow;
+            var failedAt = DateTime.UtcNow;
+            task.TransitionTo(TranslationTaskStatus.Failed, TranslationTaskTransitionReason.Failed, failedAt);
+            task.CompletedAt = failedAt;
             task.Error = ex.Message;
         }
 
@@ -1289,8 +1339,9 @@ public sealed class TaskManager : ITaskManager, ITaskRecoveryDiagnostics, IRunti
     {
         lock (_gate)
         {
-            task.Status = TranslationTaskStatus.Cancelled;
-            task.CompletedAt = DateTime.UtcNow;
+            var cancelledAt = DateTime.UtcNow;
+            task.TransitionTo(TranslationTaskStatus.Cancelled, TranslationTaskTransitionReason.CancelledByUser, cancelledAt);
+            task.CompletedAt = cancelledAt;
         }
 
         Log.Information("任务已取消：{File}", task.FileName);
@@ -1539,7 +1590,3 @@ internal sealed class LayoutStatsProbe : IDisposable
         public int InterferenceResolved { get; }
     }
 }
-
-
-
-

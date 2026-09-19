@@ -14,11 +14,13 @@ foreach($file in Get-ChildItem (Join-Path $root 'tools') -Filter '*.ps1' | Where
 Put (Join-Path $old 'DwgTranslator.exe') 'old';Put (Join-Path $next 'DwgTranslator.exe') 'new'
 Put (Join-Path $old 'CadPlugin/cad-files.txt') 'owned.dll'
 Put (Join-Path $old 'CadPlugin/owned.dll') 'old plugin';Put (Join-Path $next 'CadPlugin/owned.dll') 'new plugin'
-$personal=@('settings.json','prompts/deepl_context.txt','glossaries/personal.json','assets/personal.txt','CadPlugin/notes.txt','unknown.db','exports/result.txt')
+$obsolete='prompts/deepl_context.txt';Put (Join-Path $old $obsolete) 'obsolete client prompt'
+$personal=@('settings.json','prompts/user-note.txt','glossaries/personal.json','assets/personal.txt','CadPlugin/notes.txt','unknown.db','exports/result.txt')
 foreach($p in $personal){Put (Join-Path $old $p) ('personal '+$p)}
 Put (Join-Path $next 'settings.json') 'default'
 & (Join-Path $root 'tools/Copy-DesktopUserData.ps1') -OldRelease $old -NewRelease $next -WorkspaceRoot $fixture
 foreach($p in $personal){Check ((Get-FileHash (Join-Path $old $p)).Hash -eq (Get-FileHash (Join-Path $next $p)).Hash) ('preserved '+$p)}
+Check (-not(Test-Path -LiteralPath (Join-Path $next $obsolete))) 'obsolete client prompt is not migrated into new release'
 Check ((Get-Content (Join-Path $next 'DwgTranslator.exe') -Raw) -eq 'new') 'new executable not overwritten'
 Check ((Get-Content (Join-Path $next 'CadPlugin/owned.dll') -Raw) -eq 'new plugin') 'new owned plugin not overwritten'
 Put (Join-Path $old 'collision.txt') 'personal';Put (Join-Path $next 'collision.txt') 'runtime'

@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using DwgTranslator.Core.Models;
+using DwgTranslator.Core.Services;
 using System.Windows.Threading;
 
 namespace DwgTranslator.App.ViewModels;
@@ -21,23 +22,31 @@ public partial class MainViewModel
     public string AllTermsLabel => $"全部 {TermDraft.Count}";
     public string EnabledTermsLabel => $"已启用 {TermDraft.Count(t => t.Enabled)}";
     public string DisabledTermsLabel => $"已停用 {TermDraft.Count(t => !t.Enabled)}";
-    public string ConflictTermsLabel { get { var conflicts = ConflictSources(); return $"冲突 {TermDraft.Count(t => conflicts.Contains(t.Source))}"; } }
-    public IEnumerable<string> TermCategories => new[] { "" }.Concat(TermDraft.Select(t => t.Category).Where(c => c.Length > 0).Distinct().OrderBy(c => c));
-    public IReadOnlyList<GlossaryEntry> SelectedTermConflicts => SelectedTerm == null ? Array.Empty<GlossaryEntry>() : TermDraft.Where(t => t != SelectedTerm && string.Equals(t.Source, SelectedTerm.Source, StringComparison.OrdinalIgnoreCase) && !string.Equals(t.Target, SelectedTerm.Target, StringComparison.OrdinalIgnoreCase)).ToList();
+    public string ConflictTermsLabel { get { var conflicts = ConflictSources(); return $"冲突 {TermDraft.Count(t => conflicts.Contains(t.LocalId))}"; } }
+    public IEnumerable<string> TermCategories => new[] { "默认分类" }.Concat(_workspace.Categories).Concat(TermDraft.Select(t => string.IsNullOrWhiteSpace(t.Category) ? "默认分类" : t.Category)).Distinct(StringComparer.OrdinalIgnoreCase);
+    public IEnumerable<string> TermCategoryFilters => new[] { "" }.Concat(TermCategories);
+    public IReadOnlyList<GlossaryEntry> SelectedTermConflicts => SelectedTerm == null ? Array.Empty<GlossaryEntry>() : EffectiveGlossary.Conflicts(TermDraft).Where(t => t != SelectedTerm && t.SourceLang == SelectedTerm.SourceLang && t.TargetLang == SelectedTerm.TargetLang && string.Equals(t.Source.Trim(), SelectedTerm.Source.Trim(), StringComparison.OrdinalIgnoreCase) && !string.Equals(t.Target.Trim(), SelectedTerm.Target.Trim(), StringComparison.Ordinal)).ToList();
     partial void OnIsTermDrawerOpenChanged(bool value) { OnPropertyChanged(nameof(ShowTermDraftActions)); OnPropertyChanged(nameof(IsEditingTerm)); OnPropertyChanged(nameof(CanEditSelectedContent)); OnPropertyChanged(nameof(SelectedTermConflicts)); }
     partial void OnTermCategoryFilterChanged(string value) => RefreshTermView();
     partial void OnTermSourceFilterChanged(int value) => RefreshTermView();
     private bool MatchesWorkspaceFilters(GlossaryEntry t) => (string.IsNullOrEmpty(TermCategoryFilter) || t.Category == TermCategoryFilter) && (TermSourceFilter == 0 || TermSourceFilter == 1 && t.SourceKind == GlossarySource.System || TermSourceFilter == 2 && t.SourceKind == GlossarySource.Enterprise || TermSourceFilter == 3 && t.SourceKind == GlossarySource.User || TermSourceFilter == 4 && t.CloudId != null);
-    public bool HasTermConflict(GlossaryEntry term) => ConflictSources().Contains(term.Source);
-    private HashSet<string> ConflictSources() => TermDraft.Where(t => t.Enabled).GroupBy(t => t.Source, StringComparer.OrdinalIgnoreCase).Where(g => g.Select(t => t.Target).Distinct(StringComparer.OrdinalIgnoreCase).Count() > 1).Select(g => g.Key).ToHashSet(StringComparer.OrdinalIgnoreCase);
+    public bool HasTermConflict(GlossaryEntry term) => ConflictSources().Contains(term.LocalId);
+    private HashSet<string> ConflictSources() => DwgTranslator.Core.Services.EffectiveGlossary.Conflicts(TermDraft).Select(t => t.LocalId).ToHashSet();
     private void RefreshWorkspaceCounts()
     {
-        foreach (var name in new[] { nameof(AllTermsLabel), nameof(EnabledTermsLabel), nameof(DisabledTermsLabel), nameof(ConflictTermsLabel), nameof(TermCategories), nameof(SelectedTermConflicts) }) OnPropertyChanged(name);
+        foreach (var name in new[] { nameof(AllTermsLabel), nameof(EnabledTermsLabel), nameof(DisabledTermsLabel), nameof(ConflictTermsLabel), nameof(TermCategories), nameof(TermCategoryFilters), nameof(SelectedTermConflicts) }) OnPropertyChanged(name);
     }
     private void QueueTermSearch()
     {
-        if (_searchTimer == null) { _searchTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(300) }; _searchTimer.Tick += (_, _) => { _searchTimer.Stop(); RefreshTermView(); }; }
+        if (_searchTimer == null) { _searchTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(300) }; _searchTimer.Tick += OnTermSearchTimerTick; }
         _searchTimer.Stop(); _searchTimer.Start();
+    }
+    private void OnTermSearchTimerTick(object? sender, EventArgs e) { _searchTimer?.Stop(); RefreshTermView(); }
+    /// <summary>Releases the debounce timer so a closed workspace stops being kept alive by its Tick.</summary>
+    private void StopTermSearchTimer()
+    {
+        if (_searchTimer == null) return;
+        _searchTimer.Stop(); _searchTimer.Tick -= OnTermSearchTimerTick; _searchTimer = null;
     }
     private void BeginDrawerSnapshot() => _drawerSnapshot = TermDraft.Select(t => t.Clone()).ToList();
     public void OpenTermDrawer(GlossaryEntry term)
@@ -48,7 +57,7 @@ public partial class MainViewModel
     public void CopyTermToDrawer(GlossaryEntry term)
     {
         if (!CanEditWorkspace || IsTermDrawerOpen) return;
-        BeginDrawerSnapshot(); var copy = term.Clone(); copy.CloudId = null; copy.SourceKind = GlossarySource.User; copy.Enabled = false;
+        BeginDrawerSnapshot(); var copy = term.Clone(); copy.LocalId = Guid.NewGuid().ToString("D"); copy.CloudId = null; copy.SourceKind = GlossarySource.User; copy.Enabled = false;
         TermDraft.Add(copy); SelectedTerm = copy; IsTermDrawerOpen = true; TermFeedback = "已复制为用户术语草稿，请检查并保存到本机。"; RefreshTermView();
     }
     public void CancelTermDrawer()
@@ -68,7 +77,7 @@ public partial class MainViewModel
         if (!CanEditWorkspace) { TermFeedback = "正在执行任务或同步，请稍候再编辑术语。"; return false; }
         var before = TermDraft.Select(t => t.Clone()).ToList();
         change();
-        if (SaveTermEditor()) { TermFeedback = "本机已保存 · 云端需手动同步"; return true; }
+        if (SaveTermEditor()) return true;
         var error = TermFeedback; RestoreWorkspace(before); TermFeedback = error + " 状态已恢复，未提交本次更改。"; return false;
     }
 
@@ -77,21 +86,27 @@ public partial class MainViewModel
         if (!CanEditWorkspace || IsTermDrawerOpen) { TermFeedback = "请先完成当前编辑或等待保存完成。"; return false; }
         var before = TermDraft.Select(t => t.Clone()).ToList();
         var context = CloudGlossaryContext;
-        var path = System.IO.Path.Combine(AccountDataDirectory, "glossaries", TranslationLanguages.GlossaryFileName(CurrentSourceLang, CurrentTargetLang));
+        var path = WorkspacePath;
         change();
         var entries = TermDraft.Select(t => { var copy = t.Clone(); copy.Source = copy.Source.Trim(); copy.Target = copy.Target.Trim(); return copy; }).ToList();
-        if (entries.Count > 1000 || entries.Any(t => string.IsNullOrWhiteSpace(t.Source) || string.IsNullOrWhiteSpace(t.Target)) || entries.Where(t => t.Enabled).GroupBy(t => (t.Source.ToUpperInvariant(), t.PriorityWeight)).Any(g => g.Select(t => t.Target).Distinct(StringComparer.OrdinalIgnoreCase).Count() > 1))
+        if (entries.Any(t => !DwgTranslator.Core.Services.EffectiveGlossary.Valid(t)))
         {
-            RestoreWorkspace(before); TermFeedback = "保存失败：原文和译文不能为空，且不能有同优先级的不同启用译法（最多 1000 条）。状态已恢复。"; Services.ToastService.Error(TermFeedback); return false;
+            RestoreWorkspace(before); TermFeedback = "保存失败：字段为空或超长。状态已恢复。"; Services.ToastService.Error(TermFeedback); return false;
         }
         IsWorkspaceSaving = true; IsGlossaryLoading = true; TermFeedback = "正在保存到本机 · 云端需手动同步"; RefreshTermView();
         await _glossaryLoadGate.WaitAsync();
         var committed = false;
         try
         {
-            await Task.Run(() => DwgTranslator.Core.Infrastructure.Glossary.GlossaryFileStore.Save(path, entries));
+            if (context != CloudGlossaryContext) return false;
+            var document = new DwgTranslator.Core.Infrastructure.Glossary.GlossaryWorkspaceDocument {
+                Entries=entries.Select(t=>t.Clone()).ToList(), Categories=_workspace.Categories.ToList(),
+                SyncBasis=new(_workspace.SyncBasis), PendingUploads=new(_workspace.PendingUploads), LastCheckedAt=_workspace.LastCheckedAt
+            };
+            await Task.Run(()=>DwgTranslator.Core.Infrastructure.Glossary.GlossaryWorkspaceStore.Save(path, document));
             committed = true;
             if (context != CloudGlossaryContext) return true; // Never project an old account's completion into the new session.
+            _workspace = document;
             await _glossaryService.LoadGlossaryAsync(path);
             if (context != CloudGlossaryContext) return true;
             RefreshGlossaryDataFromList(entries); RefreshGlossaryConflicts();

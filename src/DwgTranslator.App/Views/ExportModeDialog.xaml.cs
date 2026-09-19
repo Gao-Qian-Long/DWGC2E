@@ -1,3 +1,4 @@
+﻿using System.IO;
 using System.Windows;
 using System.Windows.Input;
 namespace DwgTranslator.App.Views;
@@ -5,9 +6,11 @@ public partial class ExportModeDialog : Window
 {
     public enum ExportMode { AutoCAD, Offline, Cancel }
     public ExportMode SelectedMode { get; private set; } = ExportMode.Cancel;
-    public ExportModeDialog(bool autoCadAvailable)
+    public string? TemporaryDirectory { get; private set; }
+    public ExportModeDialog(bool autoCadAvailable, bool isTranslation = false)
     {
         InitializeComponent();
+        if (isTranslation) OfflineHint.Text = "离线写回按在线模式的 30% 消耗字符额度（不是套餐价格打折）。AI 翻译仍需联网。同一任务重试沿用首次计费模式；导出已有译文不重复扣费。";
         CadOption.IsEnabled = autoCadAvailable;
         CadOption.IsChecked = autoCadAvailable;
         OfflineOption.IsChecked = !autoCadAvailable;
@@ -17,6 +20,16 @@ public partial class ExportModeDialog : Window
         PreviewKeyDown += (_, e) => { if (e.Key == Key.Escape) Close(); };
     }
     private void SetScrim(Visibility visibility) { if ((Owner as MainWindow)?.FindName("ModalScrim") is FrameworkElement scrim) scrim.Visibility = visibility; }
-    private void Confirm_Click(object sender, RoutedEventArgs e) { SelectedMode = CadOption.IsChecked == true ? ExportMode.AutoCAD : ExportMode.Offline; DialogResult = true; }
+    private void Confirm_Click(object sender, RoutedEventArgs e)
+    {
+        if (TemporaryDirectoryOption.IsChecked == true)
+        {
+            var dialog = new Microsoft.Win32.OpenFolderDialog { Title = "选择本批次临时导出目录" };
+            if (dialog.ShowDialog(this) != true) return;
+            TemporaryDirectory = Path.GetFullPath(dialog.FolderName);
+        }
+        SelectedMode = CadOption.IsChecked == true ? ExportMode.AutoCAD : ExportMode.Offline;
+        DialogResult = true;
+    }
     private void Cancel_Click(object sender, RoutedEventArgs e) { SelectedMode = ExportMode.Cancel; DialogResult = false; }
 }

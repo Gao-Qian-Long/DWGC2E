@@ -1,21 +1,29 @@
+import {settings} from '../admin/operations.ts';
+import {entitlementSnapshot} from '../entitlements.ts';
 import {createEzfpySign,verifyEzfpySign,moneyStringToCents,centsToMoneyString} from './sign.ts';
 export interface PaymentEnv {
  DB:D1Database; EZFPY_API_BASE_URL?:string; EZFPY_PID?:string; EZFPY_KEY?:string;
  PUBLIC_WEB_URL?:string; PUBLIC_API_URL?:string; PAYMENTS_ENABLED?:string;
- EZFPY_QR_IMAGE_ORIGINS?:string; ADMIN_API_KEY?:string;
+ EZFPY_QR_IMAGE_ORIGINS?:string; ADMIN_API_KEY?:string; PAYMENTS_TEST_USERS?:string;
+ /** Diagnostic-only switch: adds the masked provider message to the payment audit record. */
+ PAYMENT_DEBUG_DIAGNOSTICS?:string;
 }
 type Order={order_no:string;user_id:string;plan_id:string;plan_name:string;duration_days:number;membership_level:string;amount_cents:number;payable_cents:number;provider:string;channel:string;provider_trade_no:string|null;status:string;create_state:string;last_error_code?:string|null;qr_code:string|null;qr_image_url:string|null;created_at:string;expires_at:string;paid_at:string|null};
 type User={user_id:string;email?:string};
 type Created={providerTradeNo:string;qrCode:string;qrImageUrl:string;amountCents:number};
 export interface PaymentProvider { createPayment(e:PaymentEnv,o:Order,diagnostic?:CreateDiagnostic):Promise<Created>; }
 const diagnosticCodes=new Set(['payment_config','provider_http','provider_response','provider_rejected','provider_signature_rejected','provider_channel_unavailable','provider_amount_rejected','provider_merchant_rejected','provider_mismatch','provider_trade_missing','provider_amount_mismatch','invalid_money','invalid_qr','invalid_qr_image','provider_qr_missing','provider_timeout','provider_prepare','provider_network','provider_redirect','provider_read','provider_parse','provider_business','provider_validation','provider_persist','provider_audit','provider_query','provider_query_http','provider_query_redirect','provider_query_response','provider_query_rejected']);
+/** Below this amount a sale is certainly a configuration mistake, not a price. */
+const MIN_CHARGE_CENTS=100;
 type CreateStage='prepare'|'request'|'read'|'parse'|'business'|'validate'|'persist'|'audit'|'query';
 type FieldSummary={type:string;present:boolean;length?:number};
 class CreateDiagnostic {
  readonly started=Date.now();stage:CreateStage='prepare';httpStatus?:number;businessCode?:string;providerMessage?:string;
  query?:{httpStatus?:number;businessCode?:string;responseReceived:boolean;bodyRead:boolean;fields?:Record<string,FieldSummary>};
  responseReceived=false;bodyRead=false;saved=false;fields?:Record<string,FieldSummary>;
- summary(code:string){return JSON.stringify({version:1,stage:this.stage,code,elapsedMs:Math.max(0,Date.now()-this.started),httpStatus:this.httpStatus,businessCode:this.businessCode,responseReceived:this.responseReceived,bodyRead:this.bodyRead,saved:this.saved,businessMessage:this.providerMessage,fields:this.fields,query:this.query});}
+ /** The upstream message is only ever attached when the operator explicitly asks for diagnostics,
+  *  and even then with every digit masked: it is free-form text from a third party. */
+ summary(code:string,includeProviderMessage=false){return JSON.stringify({version:1,stage:this.stage,code,elapsedMs:Math.max(0,Date.now()-this.started),httpStatus:this.httpStatus,businessCode:this.businessCode,responseReceived:this.responseReceived,bodyRead:this.bodyRead,saved:this.saved,businessMessage:includeProviderMessage?this.providerMessage?.replace(/\d/g,'#'):undefined,fields:this.fields,query:this.query});}
 }
 function diagnosticCode(err:unknown,stage:CreateStage){
  if(err instanceof Error&&diagnosticCodes.has(err.message))return err.message;
@@ -31,11 +39,13 @@ function summarizeFields(d:Record<string,unknown>):Record<string,FieldSummary>{
 }
 async function recordCreateDiagnostic(e:PaymentEnv,no:string,event:string,diagnostic:CreateDiagnostic,code:string){
  // Only internally constructed metadata; no error text, payloads, URLs or credentials.
- const reason=diagnostic.summary(code);
+ const reason=diagnostic.summary(code,String(e.PAYMENT_DEBUG_DIAGNOSTICS)==='true');
  console.info(JSON.stringify({event,orderNo:no,diagnostic:JSON.parse(reason)}));
  try{await e.DB.prepare('INSERT INTO payment_events(order_no,event_type,reason,created_at) VALUES(?,?,?,?)').bind(no,event,reason,stamp()).run();}
  catch{console.error(JSON.stringify({event:'payment_audit_failed',orderNo:no,stage:'audit',code:'provider_audit',saved:diagnostic.saved}));}
 }
+/** The audit record may only carry these fixed categories, never upstream prose. */
+const settlementRejections=new Set(['payment_mismatch','payment_not_ready','settlement_mismatch','settlement_quota_mapping_missing']);
 // Fixed categories only: never persist upstream messages or credentials.
 function rejectionCode(value:unknown){const m=typeof value==='string'?value.slice(0,256):'';
  if(/签名|sign/i.test(m))return 'provider_signature_rejected';
@@ -79,6 +89,13 @@ async function queryCreatedOrder(e:PaymentEnv,o:Order,diagnostic:CreateDiagnosti
  if(moneyStringToCents(q.money)!==o.amount_cents)fail('provider_amount_mismatch');
  return q;
 }
+// The observed hosted transfer QR uses price in yuan, independently of provider money.
+// Never rewrite a provider QR: a contradiction must stop payment, not change its routing.
+function qrAmountMismatch(qr:string|null,expected:number):boolean {
+ if(!qr)return false;let url:URL;try{url=new URL(qr);}catch{return false;}
+ if(url.hostname!=='code.ymyu.cn'||url.pathname!=='/url.php')return false;
+ const prices=url.searchParams.getAll('price');try{return prices.length!==1||moneyStringToCents(prices[0])!==expected;}catch{return true;}
+}
 export class EzfpyProvider implements PaymentProvider {
  async createPayment(e:PaymentEnv,o:Order,diagnostic=new CreateDiagnostic()):Promise<Created>{
   diagnostic.stage='prepare';configured(e);
@@ -108,26 +125,28 @@ export class EzfpyProvider implements PaymentProvider {
   // Reject supplied contradictions; query missing fields instead of assuming local values.
   if((d.out_trade_no!==undefined&&String(d.out_trade_no)!==o.order_no)||(d.type!==undefined&&String(d.type)!==o.channel))fail('provider_mismatch');
   if(d.money!==undefined&&moneyStringToCents(d.money)!==o.amount_cents)fail('provider_amount_mismatch');
-  let verified=d;
-  if(d.out_trade_no===undefined||d.type===undefined||d.money===undefined){
-   diagnostic.stage='query';verified=await queryCreatedOrder(e,o,diagnostic);diagnostic.stage='validate';
-   if(String(verified.trade_no)!==String(d.trade_no)||!d.trade_no)fail('provider_mismatch');
-  }
-  if(String(verified.out_trade_no)!==o.order_no||String(verified.type)!==o.channel)fail('provider_mismatch');
+  // The observed legacy code=1 response contains trade_no + qrcode only.
+  // Bind that direct HTTPS response to our signed request, not an unauthenticated
+  // second lookup. This is QR readiness only; settlement still checks the signed
+  // callback, merchant, order, channel, amount and unique provider transaction.
+  if(d.pid!==undefined&&String(d.pid)!==e.EZFPY_PID)fail('provider_mismatch');
+  if((d.out_trade_no===undefined||d.type===undefined||d.money===undefined)&&String(d.code)!=='1')fail('provider_response');
   const trade=String(d.trade_no||'');if(!/^[a-zA-Z0-9_-]{1,128}$/.test(trade))fail('provider_trade_missing');
-  const amount=moneyStringToCents(verified.money);if(amount!==o.amount_cents)fail('provider_amount_mismatch');
+  const amount=d.money===undefined?o.amount_cents:moneyStringToCents(d.money);
+  if(amount!==o.amount_cents)fail('provider_amount_mismatch');
   const qr=typeof d.qrcode==='string'?d.qrcode:'';if(qr.length>4096)fail('invalid_qr');
   let image='';try{image=safeImage(e,d.code_url);}catch(err){if(!qr)throw err;}if(!qr&&!image)fail('provider_qr_missing');
+  if(qrAmountMismatch(qr,amount)||qrAmountMismatch(image,amount))fail('provider_amount_mismatch');
   return {providerTradeNo:trade,qrCode:qr,qrImageUrl:image,amountCents:amount};
  }
 }
 export async function settlePayment(e:PaymentEnv,o:Order,trade:string,amount:number){
- if(o.provider_trade_no!==trade||o.payable_cents!==amount)fail('payment_mismatch');
+ if(!trade||trade.length>128||(o.provider_trade_no!==null&&o.provider_trade_no!==trade)||o.payable_cents!==amount)fail('payment_mismatch');
  if(o.status==='paid'){
   const s=await e.DB.prepare('SELECT provider_trade_no,amount_cents FROM payment_settlements WHERE order_no=?').bind(o.order_no).first<{provider_trade_no:string;amount_cents:number}>();
   if(!s||s.provider_trade_no!==trade||s.amount_cents!==amount)fail('settlement_mismatch');return;
  }
- if(o.status!=='pending'||o.create_state!=='ready')fail('payment_not_ready');
+ if(!['pending','expired'].includes(o.status))fail('payment_not_ready');
  // The trigger performs order + subscription + quota + audit in the SAME transaction.
  await e.DB.prepare('INSERT INTO payment_settlements(order_no,provider_trade_no,amount_cents,settled_at) VALUES(?,?,?,?) ON CONFLICT(order_no) DO NOTHING').bind(o.order_no,trade,amount,stamp()).run();
 }
@@ -149,26 +168,43 @@ export async function notifyPayment(r:Request,e:PaymentEnv):Promise<Response>{
   const o=await e.DB.prepare('SELECT * FROM orders WHERE order_no=?').bind(orderNo).first<Order>();
   if(!o||o.provider!=='ezfpy'||o.channel!==p.type)return ack(false,400);
   await settlePayment(e,o,p.trade_no,moneyStringToCents(p.money));return ack(true);
- }catch{
+ }catch(err){
+  if(orderNo){const reason=err instanceof Error&&settlementRejections.has(err.message)?err.message:'settlement_retry_required';try{await e.DB.prepare("INSERT INTO payment_events(order_no,event_type,reason,created_at) VALUES(?,'callback_rejected',?,?)").bind(orderNo,reason,stamp()).run();}catch{/* Callback must remain retryable even if audit storage is unavailable. */}}
   // Never log callback URLs, signatures, raw payloads or upstream exception text.
   console.error(JSON.stringify({event:'payment_notify_failed',orderNo}));return ack(false,503);
  }
 }
-function publicOrder(o:Order){return {errorCode:o.last_error_code&&diagnosticCodes.has(o.last_error_code)?o.last_error_code:o.create_state==='unknown'?'create_unconfirmed':null,orderNo:o.order_no,planId:o.plan_id,planName:o.plan_name,status:o.status,createState:o.create_state,
+function isTester(e:PaymentEnv,u:User){return (e.PAYMENTS_TEST_USERS||'').split(',').map(x=>x.trim()).filter(Boolean).includes(u.user_id);}
+async function confirmationLimit(e:PaymentEnv,id:string){const t=Math.floor(Date.now()/1000);const n=await e.DB.prepare('INSERT INTO request_limits(key,window_start,count) VALUES(?,?,1) ON CONFLICT(key) DO UPDATE SET window_start=CASE WHEN window_start<? THEN excluded.window_start ELSE window_start END,count=CASE WHEN window_start<? THEN 1 ELSE count+1 END RETURNING count').bind('payment-confirm:'+id,t,t-60,t-60).first<{count:number}>();return !!n&&n.count<=5;}
+function publicOrder(o:Order){const blocked=o.status!=='paid'&&(qrAmountMismatch(o.qr_code,o.payable_cents)||qrAmountMismatch(o.qr_image_url,o.payable_cents));const canPay=!blocked&&o.status==='pending'&&o.create_state==='ready'&&Date.parse(o.expires_at)>Date.now()&&!!(o.qr_code||o.qr_image_url);return {displayState:o.status==='paid'?'paid':canPay?'awaiting_payment':['pending','expired'].includes(o.status)?'confirming':o.status,allowedActions:{pay:canPay,confirm:['pending','expired'].includes(o.status)},pollAfterMs:['pending','expired'].includes(o.status)?3000:0,errorCode:blocked?'provider_amount_mismatch':o.last_error_code&&diagnosticCodes.has(o.last_error_code)?o.last_error_code:o.create_state==='unknown'?'create_unconfirmed':null,orderNo:o.order_no,planId:o.plan_id,planName:o.plan_name,status:o.status,createState:blocked?'unknown':o.create_state,
  amountCents:o.amount_cents,payableCents:o.payable_cents,channel:o.channel,createdAt:o.created_at,expiresAt:o.expires_at,paidAt:o.paid_at,
- qrCode:o.status==='pending'&&Date.parse(o.expires_at)>Date.now()?o.qr_code:null,
- qrCodeImageUrl:o.status==='pending'&&Date.parse(o.expires_at)>Date.now()?o.qr_image_url:null};}
+ qrCode:!blocked&&o.status==='pending'&&Date.parse(o.expires_at)>Date.now()?o.qr_code:null,
+ qrCodeImageUrl:!blocked&&o.status==='pending'&&Date.parse(o.expires_at)>Date.now()?o.qr_image_url:null};}
 export async function billingRoute(r:Request,e:PaymentEnv,user:User,origin:string):Promise<Response>{
  const reply=(d:unknown,status=200)=>new Response(JSON.stringify(d),{status,headers:{'content-type':'application/json','access-control-allow-origin':origin,'cache-control':'no-store'}});
  const error=(code:string,message:string,status:number)=>reply({error_code:code,message},status);
  const url=new URL(r.url),path=url.pathname;
+ if(path==='/v1/billing/entitlements'&&r.method==='GET'){
+ return reply(await entitlementSnapshot(e,user.user_id));
+ }
+ if(/^\/v1\/billing\/orders\/DW[a-f0-9]{32}\/confirm$/.test(path)&&r.method==='POST'){
+ const no=path.split('/').at(-2)!;const o=await e.DB.prepare('SELECT * FROM orders WHERE order_no=? AND user_id=?').bind(no,user.user_id).first<Order>();
+ if(!o)return error('order_not_found','订单不存在',404);
+ if(!await confirmationLimit(e,user.user_id))return error('rate_limited','请稍后再确认',429);
+ await e.DB.prepare("UPDATE payment_recovery SET next_attempt_at=MIN(next_attempt_at,?),updated_at=? WHERE order_no=? AND state IN ('queued','waiting_callback')").bind(stamp(),stamp(),no).run();
+ return reply(publicOrder(o));
+ }
  if(path==='/v1/billing/plans'&&r.method==='GET'){
-  const available=e.PAYMENTS_ENABLED==='true';
-  const rows=available?await e.DB.prepare('SELECT id,name,price_cents,duration_days,membership_level FROM plans WHERE enabled=1 ORDER BY price_cents').all():{results:[]};
+  const available=(await settings(e,'controls')).purchases_open&&(e.PAYMENTS_ENABLED==='true'||!!user.user_id&&isTester(e,user));
+  const rows=await e.DB.prepare("SELECT *,id membership_level FROM plan_catalog ORDER BY CASE id WHEN 'free' THEN 0 WHEN 'pro' THEN 1 WHEN 'max' THEN 2 ELSE 3 END").all();
   return reply({plans:rows.results,paymentsEnabled:available,message:available?'所有已登录用户均可购买，价格与权益以下方套餐为准':'购买服务暂未开放'});
  }
  if(path==='/v1/billing/orders'&&r.method==='GET'){
-  const cursor=url.searchParams.get('before')||'9999';
+  // The cursor is a concatenated timestamp+order number. Reject anything else instead of letting
+  // an arbitrary string decide the page boundary.
+  const requestedCursor=url.searchParams.get('before');
+  if(requestedCursor!==null&&!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})DW[a-f0-9]{32}$/.test(requestedCursor))return error('invalid_cursor','分页标识无效',400);
+  const cursor=requestedCursor||'9999';
   const rows=await e.DB.prepare("SELECT * FROM orders WHERE user_id=? AND (status='paid' OR NOT EXISTS(SELECT 1 FROM payment_order_hidden h WHERE h.order_no=orders.order_no)) AND (created_at||order_no)<? ORDER BY created_at DESC,order_no DESC LIMIT 21").bind(user.user_id,cursor).all<Order>();
   const list=rows.results.slice(0,20),last=list.at(-1);return reply({orders:list.map(publicOrder),nextCursor:rows.results.length>20&&last?last.created_at+last.order_no:null});
  }
@@ -188,41 +224,56 @@ export async function billingRoute(r:Request,e:PaymentEnv,user:User,origin:strin
  if(path.startsWith('/v1/billing/orders/')&&r.method==='GET'){
   const no=path.slice('/v1/billing/orders/'.length);
   const o=await e.DB.prepare('SELECT * FROM orders WHERE order_no=? AND user_id=?').bind(no,user.user_id).first<Order>();
-  return o?reply(publicOrder(o)):error('order_not_found','订单不存在',404);
+  if(!o)return error('order_not_found','订单不存在',404);
+  const hidden=!!await e.DB.prepare('SELECT order_no FROM payment_order_hidden WHERE order_no=?').bind(no).first();
+  return reply({...publicOrder(o),hidden});
  }
  if(path!=='/v1/billing/checkout'||r.method!=='POST')return error('not_found','接口不存在',404);
- if(e.PAYMENTS_ENABLED!=='true')return error('payments_disabled','购买服务暂未开放',403);
+
  try{configured(e);}catch{return error('payment_config','支付服务尚未配置完成',503);}
  const key=r.headers.get('Idempotency-Key')||'';if(!/^[a-zA-Z0-9_-]{16,80}$/.test(key))return error('invalid_idempotency_key','缺少有效下单标识',400);
  let body:Record<string,unknown>;try{const raw=await r.text();if(raw.length>2048)throw Error();body=JSON.parse(raw);if(!body||Array.isArray(body)||typeof body!=='object')throw Error();}catch{return error('invalid_body','请求格式错误',400);}
  if(Object.keys(body).some(k=>!['planId','channel'].includes(k))||typeof body.planId!=='string'||!['alipay','wxpay'].includes(String(body.channel)))return error('invalid_checkout','套餐或支付方式无效',400);
  const existing=()=>e.DB.prepare('SELECT * FROM orders WHERE user_id=? AND idempotency_key=?').bind(user.user_id,key).first<Order>();
  const replay=(o:Order)=>o.plan_id!==body.planId||o.channel!==body.channel?error('idempotency_conflict','下单标识已用于其他请求',409):reply(publicOrder(o));
- const previous=await existing();if(previous){
-  const hidden=await e.DB.prepare('SELECT order_no FROM payment_order_hidden WHERE order_no=?').bind(previous.order_no).first();
-  if(hidden)return error('order_hidden','原订单记录已删除。此操作不取消平台订单；确认未付款后可重新选择套餐。',409);
-  return replay(previous);
- }
- const plan=await e.DB.prepare('SELECT * FROM plans WHERE id=? AND enabled=1').bind(body.planId).first<{id:string;name:string;price_cents:number;duration_days:number;membership_level:string}>();
+ const previous=await existing();if(previous)return replay(previous);
+ // Serialize new purchase intents in D1, including hidden orders and other devices.
+ // A local display timeout is not cancellation: uncertain creates stay blocked.
+ const activeSql="SELECT * FROM orders WHERE user_id=? AND status='pending' AND (expires_at>? OR create_state IN ('creating','unknown')) ORDER BY created_at DESC,order_no DESC LIMIT 1";
+ const active=()=>e.DB.prepare(activeSql).bind(user.user_id,stamp()).first<Order>();
+ const reuse=(o:Order)=>reply({error_code:'payment_order_pending',message:'已有未确认的购买订单，已保留原订单；切换套餐或支付方式不会取消旧订单。',order:publicOrder(o)},409);
+ const open=await active();if(open)return reuse(open);
+ if(!(await settings(e,'controls')).purchases_open)return error('purchases_paused','新订单暂时关闭，已有订单仍可确认到账',403);
+ if(e.PAYMENTS_ENABLED!=='true'&&!isTester(e,user))return error('payments_disabled','购买服务正在受控验收，已有订单仍可确认到账',403);
+ const plan=await e.DB.prepare('SELECT p.*,COALESCE(c.id,p.membership_level) membership_level FROM plans p LEFT JOIN plan_catalog c ON c.id=p.id WHERE p.id=? AND p.enabled=1').bind(body.planId).first<{id:string;name:string;price_cents:number;duration_days:number;membership_level:string}>();
  if(!plan)return error('invalid_plan','套餐不存在或未启用',400);
  // Atomic fixed-window count; do not trust browser-supplied forwarding headers.
  const t=Math.floor(Date.now()/1000);
  const limit=await e.DB.prepare('INSERT INTO request_limits(key,window_start,count) VALUES(?,?,1) ON CONFLICT(key) DO UPDATE SET window_start=CASE WHEN window_start<? THEN excluded.window_start ELSE window_start END,count=CASE WHEN window_start<? THEN 1 ELSE count+1 END RETURNING count').bind('checkout:'+user.user_id,t,t-60,t-60).first<{count:number}>();
  if(!limit||limit.count>5)return error('rate_limited','下单过于频繁，请一分钟后重试',429);
+ // The checkout charges plans.price_cents verbatim, so a wrong catalog value is charged verbatim
+ // too. Free is never sold here (it has no `plans` row and orders reject a zero amount), and any
+ // other tier below one yuan is a configuration error that must fail loudly.
+ if(plan.id!=='free'&&!(plan.price_cents>=MIN_CHARGE_CENTS)){
+  console.error(JSON.stringify({event:'plan_price_invalid',planId:plan.id}));
+  try{await e.DB.prepare("INSERT INTO payment_events(order_no,event_type,reason,created_at) VALUES(NULL,'plan_price_invalid','plan_price_invalid',?)").bind(stamp()).run();}
+  catch{/* The configuration error is the outcome; a failed audit write must not hide it. */}
+  return error('plan_price_invalid','套餐价格配置异常，请联系客服',503);
+ }
  const no='DW'+crypto.randomUUID().replaceAll('-',''),created=stamp(),expiry=new Date(Date.now()+15*60000).toISOString();
- await e.DB.prepare('INSERT INTO orders(order_no,user_id,plan_id,plan_name,duration_days,membership_level,amount_cents,payable_cents,channel,idempotency_key,created_at,expires_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id,idempotency_key) DO NOTHING').bind(no,user.user_id,plan.id,plan.name,plan.duration_days,plan.membership_level,plan.price_cents,plan.price_cents,body.channel,key,created,expiry).run();
- const order=(await existing())!;if(order.order_no!==no)return replay(order);
+ try { await e.DB.prepare("INSERT INTO orders(order_no,user_id,plan_id,plan_name,duration_days,membership_level,amount_cents,payable_cents,channel,idempotency_key,created_at,expires_at) SELECT ?,?,?,?,?,?,?,?,?,?,?,? WHERE NOT EXISTS (SELECT 1 FROM orders WHERE user_id=? AND status='pending' AND (expires_at>? OR create_state IN ('creating','unknown'))) ON CONFLICT(user_id,idempotency_key) DO NOTHING").bind(no,user.user_id,plan.id,plan.name,plan.duration_days,plan.membership_level,plan.price_cents,plan.price_cents,body.channel,key,created,expiry,user.user_id,created).run(); } catch(errorValue) {if(String(errorValue).includes('plan_conflict'))return error('plan_conflict','套餐配置已更新，请刷新后重试',409);throw errorValue;}
+ const order=await existing();if(!order){const winner=await active();return winner?reuse(winner):error('checkout_retry','购买状态已变化，请重试原请求。',409);}if(order.order_no!==no)return replay(order);
  const diagnostic=new CreateDiagnostic();
  try{
   const result=await new EzfpyProvider().createPayment(e,order,diagnostic);
   diagnostic.stage='persist';
   const saved=await e.DB.prepare("UPDATE orders SET provider_trade_no=?,qr_code=?,qr_image_url=?,create_state='ready' WHERE order_no=? AND status='pending' AND create_state='creating'").bind(result.providerTradeNo,result.qrCode,result.qrImageUrl,no).run();
-  if(saved.meta.changes!==1)fail('provider_persist');
+  if(saved.meta.changes!==1){const latest=await existing();if(latest?.status!=='paid'||latest.provider_trade_no!==result.providerTradeNo||latest.payable_cents!==result.amountCents)fail('provider_persist');}
   diagnostic.saved=true;
  }catch(err){
   const code=diagnosticCode(err,diagnostic.stage);
   await recordCreateDiagnostic(e,no,'payment_create_unknown',diagnostic,code);
-  try{await e.DB.prepare("UPDATE orders SET create_state='unknown',last_error_code=? WHERE order_no=? AND create_state='creating'").bind(code,no).run();}
+  try{await e.DB.prepare("UPDATE orders SET create_state='unknown',last_error_code=? WHERE order_no=? AND status='pending' AND create_state='creating'").bind(code,no).run();}
   catch{console.error(JSON.stringify({event:'payment_error_state_failed',orderNo:no,stage:'persist',code:'provider_persist'}));}
  }
  // Audit cannot turn a successfully persisted ready order into an unknown order.

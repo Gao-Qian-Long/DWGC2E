@@ -25,14 +25,14 @@
 
 保留这三个小入口有意义；不再另建含义重复的启动脚本。installer/安装.cmd 和 Install.ps1 属于受测的内部便携兼容通道，不在 Setup 主下载中提供；不是普通用户必须执行的步骤。
 
-构建机需要 .NET 8 SDK、对应 CAD SDK、Inno Setup 6 及中文语言文件；这些是维护者的工具，不是用户安装条件。发布脚本会从 PATH 和用户目录寻找 SDK，避免系统只有运行时导致误报。
+构建机需要 .NET 8 SDK、对应 CAD SDK、Inno Setup 6 及中文语言文件；这些是维护者的工具，不是用户安装条件。发布脚本会从 PATH 和用户目录寻找 SDK，避免系统只有运行时导致误报。Inno Setup 编译器按“用户级安装目录 → ProgramFiles(x86) → ProgramFiles”依次探测；装在别处时用 `-Compiler <ISCC.exe 路径>` 显式指定。
 
 ## 三、文件去留规则
 
 | 范围 | 管理决策 |
 |---|---|
 | src、测试、项目文件、tools、installer | 保留源码和回归能力，不进入用户包 |
-| assets/prompts/deepl_context.txt | 这是实际翻译服务所用运行时提示词，不是 AI 开发聊天垃圾；保留并封装到 Setup |
+| assets/prompts/deepl_context.txt | 已退役的客户端提示词资源，仅作历史保留。Release 构建不再编译 TranslationPrompt.cs，打包门禁会拒绝任何 prompts/ 目录，安装器会删除遗留的 `{app}\prompts\deepl_context.txt`；不要重新塞回发布产物 |
 | assets/glossaries、assets/icons | 保留规范资源；安装器释放运行所需资源，图标编入 EXE |
 | AGENTS.md / 开发代理规则 | 仅工作区规则，gitignore；不进入用户包，不因“AI”字样盲删 |
 | docs/history/desktop-20260916 | 旧 UI 方案、旧交付记录、旧治理清单已归档；只作追溯，不当当前操作手册 |
@@ -40,7 +40,7 @@
 | cf-worker | 产品后端源码，不能因为桌面安装器不需要就删除；单独维护、单独授权部署 |
 | bin、obj、node_modules | 可再生成的开发输出；不进安装器。首发期间不靠全删依赖目录节省小量空间 |
 | artifacts | 构建/测试/盘点证据。只按已验证所有权清理，不按文件名含 test/backup 盲删 |
-| release | 唯一本机可运行最新版。保护便携设置、词库、提示词及未知用户文件 |
+| release | 唯一本机可运行最新版。保护便携设置、词库及未知用户文件 |
 | %APPDATA%/DwgTranslator、数据恢复备份 | 个人数据，不是构建垃圾；不得随源码清理或上传 |
 | 根目录空 settings.json、字面量 %SystemDrive% 缓存目录 | 核对为空配置/错误路径缓存后可清除；不得清除真正系统缓存或 AppData |
 
@@ -54,8 +54,8 @@
 4. 严格运行文件白名单拒绝额外私有配置、日志、未知 DLL。仅使用干净 candidate 编译生产 Setup。
 5. 用隔离安装器验证新装、真实前后构建升级、修复、卸载、所有文件哈希及个人数据保留；隔离包不能上传。
 6. 再查输入未变、release 未重新运行，复制个人文件；冲突拒绝，不悄悄覆盖。
-7. 替换 release，验证已安装 EXE 哈希，原子更新 current-release.json。失败恢复旧目录；不把失败产物冒充最新版。
-8. 清理已识别旧候选/包，保留一个上一版回滚；完成的旧 delivery 仅在所有文件与所有权清单一致时删除。
+7. 替换 release，验证已安装 EXE 哈希，原子更新 current-release.json。失败恢复旧目录；不把失败产物冒充最新版。目录替换本身不是单次原子重命名：切换前写入 `artifacts/release-switch.json` 作为恢复锚点，只在 release 重新可用后删除；被强杀或断电后，下一次发布入口会用该记录把回滚备份还原为 release，而不是留下一个没有 release 的机器。
+8. 清理已识别旧候选/包，保留一个上一版回滚；`current-release.json` 记录的 candidate 与 rollbackDirectory 无条件保留（下一次升级验收需要上一版候选目录）。完成的旧 delivery 仅在所有文件与所有权清单一致时删除；清理结果写入本次 delivery 的 `artifact-cleanup.json` 并打印 `ARTIFACT_CLEANUP=` 摘要，失败不再只留一条警告。
 
 如果 APP 在运行，先正常退出。已授权正常关闭，但这不授权强杀、丢弃未保存作业。脚本默认拒绝运行中的 release，避免静默结束任务。
 

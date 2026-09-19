@@ -1,4 +1,4 @@
-﻿# ===== .NET Build Output =====
+# ===== .NET Build Output =====
 [Bb]in/
 [Oo]bj/
 *.pdb
@@ -114,3 +114,10 @@ AGENTS.md
 
 # Obsolete manually copied plugin; builds embed the freshly built CAD payload instead.
 /src/DwgTranslator.App/Embedded/CadPlugin/
+
+# ===== Local tool residue / test output / release uploads =====
+# Produced locally; never part of the repository.
+.dsh-vision-toolkit/
+tests/**/TestResults/
+*.trx
+upload/

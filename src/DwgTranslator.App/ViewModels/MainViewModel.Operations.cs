@@ -12,16 +12,30 @@ public partial class MainViewModel
     [RelayCommand]
     private void MarkAllReviewed()
     {
-        if (IsProcessing || !ConfirmLeaveProofreading()) return;
+        if (IsProcessing || IsExporting) return;
+
+        IEnumerable<TextEntity> scope = Entities;
+        if (SelectedDrawingFile != null)
+        {
+            var selectedPath = NormalizeSourcePath(SelectedDrawingFile.FullPath);
+            scope = scope.Where(entity => string.Equals(
+                NormalizeSourcePath(entity.SourceFilePath), selectedPath, StringComparison.OrdinalIgnoreCase));
+        }
 
         int count = 0;
-        foreach (var entity in Entities.Where(e => e.Status == TranslationStatus.Translated))
-        { entity.Status = TranslationStatus.Reviewed; count++; }
+        foreach (var entity in scope.Where(e => e.Status is TranslationStatus.Translated or TranslationStatus.GlossaryMatched))
+        {
+            TrackProofreadingEdit(entity);
+            entity.Status = TranslationStatus.Reviewed;
+            count++;
+        }
+
         UpdateStatistics();
         ApplyFilter();
-        StatusMessage = Strings.Get("StatusReviewed", count);
+        StatusMessage = count > 0
+            ? $"已将 {count} 条译文标记为已校对；请点击“保存更改”完成校对。"
+            : "当前图纸没有待标记的译文。";
     }
-
     [RelayCommand]
     private void ClearAll()
     {
@@ -126,20 +140,68 @@ public partial class MainViewModel
         RefreshDrawingFileSummaries();
     }
 
+    private readonly HashSet<DrawingFileItem> _observedDrawingFiles = [];
+
     private void DrawingFiles_CollectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
     {
-        if (e.OldItems != null)
-            foreach (DrawingFileItem item in e.OldItems) item.PropertyChanged -= DrawingFileItem_PropertyChanged;
-        if (e.NewItems != null)
-            foreach (DrawingFileItem item in e.NewItems) item.PropertyChanged += DrawingFileItem_PropertyChanged;
+        // ObservableCollection.Reset normally does not provide OldItems. Track the rows explicitly so
+        // a clear/rebuild cannot leave stale PropertyChanged handlers attached to abandoned rows.
+        if (e.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Reset)
+        {
+            DetachDrawingFileObservers();
+            foreach (var item in DrawingFiles) AttachDrawingFileObserver(item);
+        }
+        else
+        {
+            if (e.OldItems != null)
+                foreach (DrawingFileItem item in e.OldItems) DetachDrawingFileObserver(item);
+            if (e.NewItems != null)
+                foreach (DrawingFileItem item in e.NewItems) AttachDrawingFileObserver(item);
+        }
+
+        HasDrawingFiles = DrawingFiles.Count > 0;
+        HasMultipleDrawingFiles = DrawingFiles.Count > 1;
+        if (SelectedDrawingFile != null && !DrawingFiles.Contains(SelectedDrawingFile))
+            SelectedDrawingFile = null;
+        if (SelectedBatchTask != null && !DrawingFiles.Contains(SelectedBatchTask))
+        {
+            SelectedBatchTask = null;
+            IsTaskDetailOpen = false;
+            IsProofreading = false;
+        }
+
         UpdateDrawingSelection();
+        RaiseWorkspaceSummaryProperties();
+        RaiseBatchSummaryProperties();
+    }
+
+    private void AttachDrawingFileObserver(DrawingFileItem item)
+    {
+        if (_observedDrawingFiles.Add(item))
+            item.PropertyChanged += DrawingFileItem_PropertyChanged;
+    }
+
+    private void DetachDrawingFileObserver(DrawingFileItem item)
+    {
+        if (_observedDrawingFiles.Remove(item))
+            item.PropertyChanged -= DrawingFileItem_PropertyChanged;
+    }
+
+    private void DetachDrawingFileObservers()
+    {
+        foreach (var item in _observedDrawingFiles)
+            item.PropertyChanged -= DrawingFileItem_PropertyChanged;
+        _observedDrawingFiles.Clear();
     }
 
     private void DrawingFileItem_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(DrawingFileItem.IsIncludedForExport)) UpdateDrawingSelection();
-    }
+        if (e.PropertyName == nameof(DrawingFileItem.IsIncludedForExport))
+            UpdateDrawingSelection();
 
+        RaiseWorkspaceSummaryProperties();
+        RaiseBatchSummaryProperties();
+    }
     partial void OnIsAllDrawingsSelectedChanged(bool value)
     {
         if (_updatingDrawingSelection) return;
@@ -234,10 +296,22 @@ public partial class MainViewModel
 
     private void RefreshDrawingFileSummaries()
     {
+        // Bucket the entities once. The previous shape re-scanned the whole entity list for every row,
+        // so a workspace of D drawings and E entities cost D × E comparisons on each refresh.
+        var bySource = new Dictionary<string, List<TextEntity>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var entity in Entities)
+        {
+            var key = NormalizeSourcePath(entity.SourceFilePath);
+            if (!bySource.TryGetValue(key, out var bucket)) bySource[key] = bucket = new List<TextEntity>();
+            bucket.Add(entity);
+        }
         for (int i = 0; i < DrawingFiles.Count; i++)
         {
-            DrawingFiles[i].Index = i + 1;
-            DrawingFiles[i].Refresh(Entities);
+            var row = DrawingFiles[i];
+            row.Index = i + 1;
+            row.Refresh(bySource.TryGetValue(NormalizeSourcePath(row.FullPath), out var mine)
+                ? mine
+                : (IEnumerable<TextEntity>)Array.Empty<TextEntity>());
         }
         HasDrawingFiles = DrawingFiles.Count > 0;
     }

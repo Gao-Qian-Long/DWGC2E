@@ -23,7 +23,7 @@ function Assert-EmptySecrets($Object,[string]$Path='default'){
 }
 $template=Get-Content -LiteralPath (Join-Path $root 'settings.json.example') -Raw -Encoding UTF8|ConvertFrom-Json
 Assert-EmptySecrets $template
-Check ($null -ne $template.PSObject.Properties['deepSeekApiKey']) 'Default template declares an empty API credential field'
+foreach($legacy in @('deepSeekApiKey','deepSeekBaseUrl','deepSeekModel','apiMode')){Check ($null -eq $template.PSObject.Properties[$legacy]) ("Default template omits client-side AI field: "+$legacy)}
 # Negative control proves nonempty nested credentials cannot silently pass the gate.
 $rejected=$false
 try{Assert-EmptySecrets ([pscustomobject]@{nested=@([pscustomobject]@{apiKey='synthetic-not-a-secret'})})}catch{$rejected=$_.Exception.Message -like 'Nonempty credential field*'}

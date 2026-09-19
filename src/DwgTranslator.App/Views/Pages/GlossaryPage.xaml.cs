@@ -15,22 +15,49 @@ public partial class GlossaryPage : UserControl
     public GlossaryPage()
     {
         InitializeComponent();
+        DataContextChanged += (_, e) =>
+        {
+            if(e.OldValue is MainViewModel old) old.PropertyChanged -= FiltersChanged;
+            if(e.NewValue is MainViewModel current) current.PropertyChanged += FiltersChanged;
+        };
         TermEditorDrawer.AddHandler(TextBox.TextChangedEvent, new TextChangedEventHandler((_, _) => Vm?.NotifyTermDraftEdited()));
         TermEditorDrawer.AddHandler(System.Windows.Controls.Primitives.ToggleButton.CheckedEvent, new RoutedEventHandler((_, _) => Vm?.NotifyTermDraftEdited()));
         TermEditorDrawer.AddHandler(System.Windows.Controls.Primitives.ToggleButton.UncheckedEvent, new RoutedEventHandler((_, _) => Vm?.NotifyTermDraftEdited()));
+    }
+    private void FiltersChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    { if(e.PropertyName is "TermSearch" or "TermCategoryFilter" or "TermSourceFilter" or "TermStatusFilter" or "TermScope" or "TermConflictsOnly") TermList.UnselectAll(); }
+    private async void UploadSelected_Click(object sender,RoutedEventArgs e) { if(Vm is {} vm) await vm.UploadSelectedTermsAsync(Selection()); }
+    private void Categories_Click(object sender,RoutedEventArgs e) { if(Vm is {} vm) GlossaryManagementWindow.ShowCategories(vm); }
+    private async void BatchDirection_Click(object sender,RoutedEventArgs e)
+    {
+        if(Vm is not {} vm)return;
+        var terms=Selection().Where(t=>t.SourceKind==GlossarySource.User).ToList();
+        var pair=GlossaryManagementWindow.ChooseDirection(); if(pair==null)return;
+        await vm.CommitWorkspaceChangeAsync(()=>{foreach(var t in terms){t.SourceLang=pair.Value.Source;t.TargetLang=pair.Value.Target;}});
     }
     private List<GlossaryEntry> Selection() => TermList.SelectedItems.Cast<GlossaryEntry>().ToList();
     private void Selection_Changed(object sender, SelectionChangedEventArgs e)
     {
         if (NormalToolbar == null) return;
         var count = TermList.SelectedItems.Count;
-        NormalToolbar.Visibility = count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        NormalToolbar.Visibility = Visibility.Visible;
         SelectionToolbar.Visibility = count > 0 ? Visibility.Visible : Visibility.Collapsed;
         SelectionCount.Text = $"已选择 {count} 项";
         DeleteSelectionButton.IsEnabled = Selection().Any(t => t.SourceKind == GlossarySource.User);
-        SelectAll.IsChecked = count > 0 && count == TermList.Items.Count;
+        SelectAll.IsChecked = count == 0 ? false : count == TermList.Items.Count ? true : null;
     }
-    private void SelectAll_Click(object s, RoutedEventArgs e) { if (SelectAll.IsChecked == true) TermList.SelectAll(); else TermList.UnselectAll(); }
+    private void ToggleCheckboxSelection(object sender)
+    {
+        if (sender is not CheckBox { DataContext: GlossaryEntry term } box) return;
+        var selected = TermList.SelectedItems.Contains(term);
+        box.Focus();
+        if (selected) TermList.SelectedItems.Remove(term); else TermList.SelectedItems.Add(term);
+    }
+    private void SelectionCheckbox_MouseDown(object sender, MouseButtonEventArgs e)
+    { e.Handled = true; ToggleCheckboxSelection(sender); }
+    private void SelectionCheckbox_KeyDown(object sender, KeyEventArgs e)
+    { if (e.Key == Key.Space) { e.Handled = true; ToggleCheckboxSelection(sender); } }
+    private void SelectAll_Click(object s, RoutedEventArgs e) { if (SelectAll.IsChecked != false) TermList.SelectAll(); else TermList.UnselectAll(); }
     private void ClearSelection_Click(object s, RoutedEventArgs e) => TermList.UnselectAll();
     private void Status_Click(object s, RoutedEventArgs e)
     {
@@ -73,7 +100,7 @@ public partial class GlossaryPage : UserControl
         if (Vm is not { } vm) return;
         var terms = Selection().Where(t => t.SourceKind == GlossarySource.User).ToList();
         if (terms.Count == 0) { vm.TermFeedback = "系统及企业术语不可删除，请停用。"; return; }
-        if (PromptDialog.Show($"删除选中的 {terms.Count} 条自定义术语？系统及企业术语将保留。", "删除术语", MessageBoxButton.YesNo) != MessageBoxResult.Yes) return;
+        if (PromptDialog.Show($"仅删除本机所选 {terms.Count} 条用户术语，云端副本保留。系统及企业术语不变。", "删除术语", MessageBoxButton.YesNo) != MessageBoxResult.Yes) return;
         await vm.CommitWorkspaceChangeAsync(() => terms.ForEach(t => vm.TermDraft.Remove(t)));
     }
     private void Export_Click(object s, RoutedEventArgs e)
@@ -82,7 +109,7 @@ public partial class GlossaryPage : UserControl
         var terms = Selection(); if (terms.Count == 0) terms = vm.TermView.Cast<GlossaryEntry>().ToList();
         var dialog = new Microsoft.Win32.SaveFileDialog { Filter = "JSON 术语库|*.json", FileName = "glossary.json" };
         if (dialog.ShowDialog() != true) return;
-        try { File.WriteAllText(dialog.FileName, JsonSerializer.Serialize(terms, AppConfigJson.WriteOptions)); vm.TermFeedback = $"已导出 {terms.Count} 条术语。"; } catch (IOException) { vm.TermFeedback = "导出失败，请检查文件权限。"; } catch (UnauthorizedAccessException) { vm.TermFeedback = "导出失败，请检查文件权限。"; }
+        try { File.WriteAllText(dialog.FileName, JsonSerializer.Serialize(terms.Select(t => new { t.Source, t.Target, t.Category, t.SourceLang, t.TargetLang, t.Folder, t.CloudNote, t.Enabled }), AppConfigJson.WriteOptions)); vm.TermFeedback = $"已导出 {terms.Count} 条术语。"; } catch (IOException) { vm.TermFeedback = "导出失败，请检查文件权限。"; } catch (UnauthorizedAccessException) { vm.TermFeedback = "导出失败，请检查文件权限。"; }
     }
     private void Edit_Click(object s, RoutedEventArgs e) { if (((FrameworkElement)s).DataContext is GlossaryEntry t) Vm?.OpenTermDrawer(t); }
     private void Copy_Click(object s, RoutedEventArgs e) { if (((FrameworkElement)s).DataContext is GlossaryEntry t) Vm?.CopyTermToDrawer(t); }
@@ -99,7 +126,9 @@ public partial class GlossaryPage : UserControl
         menu.Items.Add(details); menu.Items.Add(copy); menu.Items.Add(toggle);
         if (term.SourceKind == GlossarySource.User)
         {
-            var delete = new MenuItem { Header = "删除此用户术语" };
+            var upload = new MenuItem { Header = "上传这一条" };
+            upload.Click += async (_, _) => await vm.UploadSelectedTermsAsync(new[] { term }); menu.Items.Add(upload);
+            var delete = new MenuItem { Header = "删除本机，保留云端" };
             delete.Click += (_, _) => { TermList.SelectedItem = term; TermList.UnselectAll(); TermList.SelectedItem = term; DeleteSelected(); };
             menu.Items.Add(new Separator()); menu.Items.Add(delete);
         }
@@ -134,8 +163,20 @@ public partial class GlossaryPage : UserControl
             if (e.Key == Key.Escape)
             {
                 e.Handled = true;
+                var selected = TermList.SelectedItem as GlossaryEntry;
+                var currentColumn = TermList.CurrentColumn;
                 TermList.CancelEdit(DataGridEditingUnit.Cell); TermList.CancelEdit(DataGridEditingUnit.Row);
-                vm.RefreshTermView(); return;
+                vm.RefreshTermView();
+                // Refreshing the ICollectionView can clear DataGrid selection. Preserve the row so
+                // keyboard users can immediately continue with Space/Enter after cancelling an edit.
+                if (selected != null && vm.TermDraft.Contains(selected))
+                {
+                    TermList.SelectedItem = selected;
+                    vm.SelectedTerm = selected;
+                    if (currentColumn != null) TermList.CurrentCell = new DataGridCellInfo(selected, currentColumn);
+                    TermList.Focus();
+                }
+                return;
             }
             if (e.Key == Key.Enter)
             {

@@ -38,7 +38,12 @@ public partial class MainViewModel
     [RelayCommand]
     private void RefreshGlossaryConflicts()
     {
-        var conflicts = GlossaryConflictDetector.Detect(GlossaryEntries);
+        var conflicts = EffectiveGlossary.Conflicts(GlossaryEntries)
+            .GroupBy(e => (e.SourceLang, e.TargetLang, Source:e.Source.Trim().ToUpperInvariant()))
+            .Select(group => {
+                var first=group.First(); var other=group.First(e=>e.Target.Trim()!=first.Target.Trim());
+                return new GlossaryConflict { Source=first.Source.Trim(), CandidateA=first, CandidateB=other, NeedsConfirmation=true, Suggestion="请确认" };
+            });
 
         GlossaryConflicts.Clear();
         foreach (var conflict in conflicts) GlossaryConflicts.Add(conflict);

@@ -3,7 +3,7 @@
 # Builds the folder and zip that get sent to an end user.
 #
 # The publish output is the single source of truth: it is the only folder guaranteed to contain the
-# executable, the CAD plugin, the prompts, the glossary and a valid settings.json. This script adds
+# executable, the CAD plugin, the glossary and a valid settings.json. Client-side AI prompts are forbidden. This script adds
 # the installer bootstrap and the user documentation, normalises the encoding of the Chinese
 # command files (the bootstrap selects UTF-8; the readme uses UTF-8 with BOM), and
 # zips the result.
@@ -79,7 +79,7 @@ foreach ($name in $required) {
     Copy-Item -LiteralPath $src -Destination (Join-Path $stage $name) -Force
     Write-Step "复制 $name"
 }
-foreach ($sub in 'CadPlugin', 'prompts', 'glossaries', 'assets') {
+foreach ($sub in 'CadPlugin', 'glossaries', 'assets') {
     $src = Join-Path $publish $sub
     if (-not (Test-Path -LiteralPath $src)) { throw "缺少必需目录：$sub" }
     Copy-Item -LiteralPath $src -Destination (Join-Path $stage $sub) -Recurse -Force

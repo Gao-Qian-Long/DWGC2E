@@ -15,16 +15,18 @@ public sealed partial class WorkerApiClient
     private readonly object _rejectedSessionsGate = new();
     private readonly HashSet<string> _rejectedSessions = new(StringComparer.Ordinal);
 
+    public event Action<ApiAuthenticationException>? AuthenticationRejected;
+
     private static string SessionFingerprint(string token)
     {
         using var sha = SHA256.Create();
         return Convert.ToBase64String(sha.ComputeHash(Encoding.UTF8.GetBytes(token)));
     }
 
-    private void RejectSession(string? token)
+    private bool RejectSession(string? token)
     {
-        if (string.IsNullOrEmpty(token)) return;
-        lock (_rejectedSessionsGate) _rejectedSessions.Add(SessionFingerprint(token));
+        if (string.IsNullOrEmpty(token)) return false;
+        lock (_rejectedSessionsGate) return _rejectedSessions.Add(SessionFingerprint(token));
     }
 
     private bool IsRejectedSession(string? token)
@@ -84,10 +86,20 @@ public sealed partial class WorkerApiClient
             if (includeAuth && !string.Equals(sessionAtStart, GetToken(), StringComparison.Ordinal))
                 throw new OperationCanceledException("账号会话已变更，已丢弃旧响应。");
 
-            if (includeAuth && outcome.StatusCode == 401) RejectSession(sessionAtStart);
+            if (includeAuth && outcome.StatusCode == 401 && RejectSession(sessionAtStart))
+            {
+                var (code, message) = ReadError(outcome);
+                var failure = new ApiAuthenticationException(code == "request_failed" ? "token_expired" : code, message);
+                try { AuthenticationRejected?.Invoke(failure); }
+                catch (Exception ex) { Log.Debug("失效会话通知处理失败：{ErrorType}", ex.GetType().Name); }
+            }
 
             if (response.Headers.TryGetValues("X-Chars-Used", out var values))
                 outcome.CharactersUsedHeader = values.FirstOrDefault();
+
+            // 429 的 Retry-After 是服务端唯一能告诉客户端"等多久"的信号，丢掉它就只能靠本地猜。
+            if (response.Headers.TryGetValues("Retry-After", out var retryAfter))
+                outcome.RetryAfterHeader = retryAfter.FirstOrDefault();
         }
         catch (OperationCanceledException) when (includeAuth && !string.Equals(sessionAtStart, GetToken(), StringComparison.Ordinal))
         {

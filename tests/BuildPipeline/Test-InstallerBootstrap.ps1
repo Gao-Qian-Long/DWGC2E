@@ -16,7 +16,7 @@ $checks=New-Object 'System.Collections.Generic.List[string]'
 function Check($v,[string]$label){if(-not $v){throw $label};$checks.Add($label);Write-Host "PASS $label"}
 function Hash([string]$p){(Get-FileHash -LiteralPath $p).Hash}
 function Put([string]$p,[string]$v){New-Item -ItemType Directory -Force -Path ([IO.Path]::GetDirectoryName($p))|Out-Null;[IO.File]::WriteAllText($p,$v)}
-foreach($name in @('DwgTranslator.exe','CadPlugin/DwgTranslator.Cad.dll','CadPlugin/DwgTranslator.Core.dll','CadPlugin/cad-platform.txt','prompts/deepl_context.txt')){Put (Join-Path $package $name) 'synthetic never execute'}
+foreach($name in @('DwgTranslator.exe','CadPlugin/DwgTranslator.Cad.dll','CadPlugin/DwgTranslator.Core.dll','CadPlugin/cad-platform.txt')){Put (Join-Path $package $name) 'synthetic never execute'}
 foreach($name in @('settings.json','glossaries/mechanical_zh_en.json','assets/default-glossaries/mechanical_zh_en.json')){Put (Join-Path $package $name) '{}'}
 foreach($name in @('Install.ps1','InstallTransaction.ps1','Uninstall.ps1','安装.cmd')){Copy-Item -LiteralPath (Join-Path $root ('installer/'+$name)) -Destination (Join-Path $package $name)}
 # Apply the exact production packaging conversion, rather than a test-only normalization.

@@ -9,44 +9,38 @@ public class ApiClientFactoryTests
     [Theory]
     [InlineData("{}")]
     [InlineData("{\"sourceLanguage\":\"ZH\",\"deepSeekApiKey\":\"legacy-key\"}")]
-    public void MissingModeDefaultsToConfiguredWorker(string json)
+    public void LegacyProviderFieldsDoNotChangeWorkerSelection(string json)
     {
         var config = JsonSerializer.Deserialize<AppConfig>(json, AppConfigJson.ReadOptions)!;
         using var http = new HttpClient();
-        var client = ApiClientFactory.Create(config, http, () => null, "test-device", "test-host",
-            () => throw new Exception("Direct must not be constructed"));
+        var client = ApiClientFactory.Create(config, http, () => null, "test-device", "test-host");
         Assert.Equal("worker", client.ModeName);
         Assert.True(client.IsConfigured);
         Assert.Equal("https://api.cad.pocketter.dpdns.org", config.ApiBaseUrl);
     }
 
-    [Theory]
-    [InlineData("worker")]
-    [InlineData("wroker")]
-    [InlineData(null)]
-    public void InvalidWorkerAddressDoesNotFallBackToDirect(string? mode)
+    [Fact]
+    public void InvalidWorkerAddressIsNotConfiguredAndDoesNotFallBackToDirect()
     {
         using var http = new HttpClient();
-        var client = ApiClientFactory.Create(new AppConfig { ApiMode = mode!, ApiBaseUrl = "" },
-            http, () => null, "test-device", "test-host",
-            () => throw new Exception("Direct must not be constructed"));
+        var client = ApiClientFactory.Create(new AppConfig { ApiBaseUrl = "" },
+            http, () => null, "test-device", "test-host");
         Assert.Equal("worker", client.ModeName);
         Assert.False(client.IsConfigured);
     }
 
     [Fact]
-    public void LegacyDirectModeIsForcedBackToWorker()
+    public void LegacyDirectModeJsonIsForcedBackToWorker()
     {
+        var config = JsonSerializer.Deserialize<AppConfig>("{\"apiMode\":\" DIRECT \"}", AppConfigJson.ReadOptions)!;
         using var http = new HttpClient();
-        var called = false;
-        var client = ApiClientFactory.Create(new AppConfig { ApiMode = " DIRECT " }, http, () => null, "test-device", "test-host",
-            () => { called = true; throw new NotSupportedException(); });
-        Assert.False(called);
+        var client = ApiClientFactory.Create(config, http, () => null, "test-device", "test-host");
         Assert.IsType<WorkerApiClient>(client);
+        Assert.Equal("worker", client.ModeName);
     }
 
     [Fact]
-    public void ShippedExampleIsValidAndTargetsWorker()
+    public void ShippedExampleIsValidTargetsWorkerAndOmitsProviderConfiguration()
     {
         var root = new DirectoryInfo(AppContext.BaseDirectory);
         while (root != null && !File.Exists(Path.Combine(root.FullName, "DwgTranslator.sln"))) root = root.Parent;
@@ -54,10 +48,31 @@ public class ApiClientFactoryTests
         var example = File.ReadAllText(Path.Combine(root!.FullName, "settings.json.example"));
         using var document = JsonDocument.Parse(example);
         var config = JsonSerializer.Deserialize<AppConfig>(example, AppConfigJson.ReadOptions)!;
-        Assert.Equal("worker", config.ApiMode);
         Assert.Equal(new AppConfig().ApiBaseUrl, config.ApiBaseUrl);
-        Assert.Empty(config.DeepSeekApiKey);
+        var names = document.RootElement.EnumerateObject().Select(property => property.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        Assert.DoesNotContain("apiMode", names);
+        Assert.DoesNotContain("deepSeekApiKey", names);
+        Assert.DoesNotContain("deepSeekBaseUrl", names);
+        Assert.DoesNotContain("deepSeekModel", names);
     }
+
+#if !DEBUG
+    [Fact]
+    public void ProductionCoreOmitsDirectProviderPromptAndLegacyConfigurationSurface()
+    {
+        var assembly = typeof(AppConfig).Assembly;
+        foreach (var typeName in new[]
+        {
+            "DwgTranslator.Core.Api.DirectApiClient",
+            "DwgTranslator.Core.Application.Translation.SettingsBackedDeepSeekClient",
+            "DwgTranslator.Core.Application.Translation.TranslationPrompt",
+            "DwgTranslator.Core.Infrastructure.Api.DeepSeekClient",
+            "DwgTranslator.Core.Infrastructure.Api.DeepSeekClientFactory"
+        })
+            Assert.Null(assembly.GetType(typeName, throwOnError: false));
+
+        foreach (var propertyName in new[] { "ApiMode", "DeepSeekApiKey", "DeepSeekBaseUrl", "DeepSeekModel" })
+            Assert.Null(typeof(AppConfig).GetProperty(propertyName));
+    }
+#endif
 }
-
-

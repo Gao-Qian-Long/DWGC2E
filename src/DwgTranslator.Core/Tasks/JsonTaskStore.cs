@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
+using DwgTranslator.Core.Services;
 using Serilog;
 
 namespace DwgTranslator.Core.Tasks;
@@ -95,10 +96,19 @@ public sealed class JsonTaskStore : ITaskStore, ITaskStoreDiagnostics, ITaskReco
                 var tasks = new List<TranslationTask?>();
                 foreach (var record in document.RootElement.EnumerateArray())
                 {
-                    try { tasks.Add(JsonSerializer.Deserialize<TranslationTask>(record.GetRawText(), ReadOptions)); }
+                    try
+                    {
+                        var sourceSchemaVersion = ReadSchemaVersion(record);
+                        if (sourceSchemaVersion > TranslationTask.CurrentSchemaVersion)
+                            throw new JsonException($"Unsupported task schema version {sourceSchemaVersion}.");
+
+                        var task = JsonSerializer.Deserialize<TranslationTask>(record.GetRawText(), ReadOptions);
+                        if (task != null) MigrateTaskRecord(task, sourceSchemaVersion);
+                        tasks.Add(task);
+                    }
                     catch (JsonException ex)
                     {
-                        // One malformed row must not hide unrelated recoverable drawings.
+                        // One malformed or future-version row must not hide unrelated recoverable drawings.
                         _preserveUnreadState = true;
                         _hadRecoveryIssue = true;
                         tasks.Add(null);
@@ -116,6 +126,8 @@ public sealed class JsonTaskStore : ITaskStore, ITaskStoreDiagnostics, ITaskReco
                     if (task == null || string.IsNullOrWhiteSpace(task.FilePath)
                         || string.IsNullOrWhiteSpace(task.Id)
                         || !Enum.IsDefined(typeof(TranslationTaskStatus), task.Status)
+                        || !Enum.IsDefined(typeof(TranslationTaskStatus), task.PreviousStatus)
+                        || !Enum.IsDefined(typeof(TranslationTaskTransitionReason), task.LastTransitionReason)
                         || !restoredIds.Add(task.Id))
                     {
                         _preserveUnreadState = true;
@@ -141,9 +153,13 @@ public sealed class JsonTaskStore : ITaskStore, ITaskStoreDiagnostics, ITaskReco
                         Log.Warning("任务断点数据无效，已禁用断点复用并保留原记录：{Path}", task.FilePath);
                     }
 
-                    // 已完成/已取消是历史记录，保留原状（TranslationTask.ResetForResume 只保住
-                    // Completed，所以 Cancelled 要在这里自己跳过，否则会被恢复成待跑）。
-                    if (task.Status is TranslationTaskStatus.Completed or TranslationTaskStatus.Cancelled or TranslationTaskStatus.PartiallyCompleted or TranslationTaskStatus.Skipped)
+                    task.NormalizeAuditMetadata();
+
+                    // 待校对及后续状态都是真实业务阶段，重启后必须原样保留；只有进程中断留下的
+                    // Parsing / Translating 等运行态才回到 Pending。
+                    if (task.Status is TranslationTaskStatus.ReadyForReview or TranslationTaskStatus.Completed
+                        or TranslationTaskStatus.Cancelled or TranslationTaskStatus.PartiallyCompleted
+                        or TranslationTaskStatus.Skipped)
                     {
                         restored.Add(task);
                         continue;
@@ -173,6 +189,30 @@ public sealed class JsonTaskStore : ITaskStore, ITaskStoreDiagnostics, ITaskReco
         }
     }
 
+    private static int ReadSchemaVersion(JsonElement record)
+    {
+        if (record.ValueKind != JsonValueKind.Object) throw new JsonException("Task row must be an object.");
+        if (!record.TryGetProperty("SchemaVersion", out var versionProperty)
+            && !record.TryGetProperty("schemaVersion", out versionProperty))
+            return 1;
+        if (versionProperty.ValueKind != JsonValueKind.Number || !versionProperty.TryGetInt32(out var version) || version < 1)
+            throw new JsonException("Task schema version is invalid.");
+        return version;
+    }
+
+    private static void MigrateTaskRecord(TranslationTask task, int sourceSchemaVersion)
+    {
+        if (sourceSchemaVersion < 2)
+        {
+            task.PreviousStatus = TranslationTaskStatus.Pending;
+            task.LastTransitionReason = TranslationTaskTransitionReason.LegacyMigration;
+            task.StatusChangedAt = task.UpdatedAt != default
+                ? task.UpdatedAt
+                : task.CompletedAt ?? task.StartedAt ?? task.CreatedAt;
+        }
+
+        task.SchemaVersion = TranslationTask.CurrentSchemaVersion;
+    }
     /// <inheritdoc/>
     public void Save(IEnumerable<TranslationTask> tasks)
     {
@@ -201,7 +241,10 @@ public sealed class JsonTaskStore : ITaskStore, ITaskStoreDiagnostics, ITaskReco
                 if (File.Exists(_filePath))
                 {
                     // Fail closed: never replace a recoverable file using non-atomic copy-overwrite.
-                    File.Replace(tempPath, _filePath, null);
+                    // 保留上一份队列为 .previous：替换失败时它就是唯一的旧队列，成功时清理。
+                    var preserved = SafeFileCommit.Commit(tempPath, _filePath, overwrite: true);
+                    if (preserved != null)
+                        Log.Warning("上一份任务队列未能清理，已保留为回滚点：{Path}", preserved);
                 }
                 else
                 {

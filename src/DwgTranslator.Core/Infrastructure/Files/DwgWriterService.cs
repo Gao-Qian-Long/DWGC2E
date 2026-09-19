@@ -33,11 +33,13 @@ public class DwgWriterService : IDwgWriterService, IDxfWriterService
             return result;
         }
 
-        // 1. Auto-backup original file
+        // 1. 备份时机：不在这里做。
+        //    备份要等"这次写回真的产出了可提交的新图纸"之后再落盘。旧实现放在方法开头无条件执行，
+        //    取消、没有一条能写、提交失败这些早退路径都会先留下一份源图副本；配合规划层递增的
+        //    x.dwg.2.bak / .3.bak，几次失败就在源图旁边堆起多份整图。见下方第 8 步之前的 CreateBackup。
         options ??= new WritebackOptions();
         if (string.Equals(Path.GetFullPath(sourceFilePath), Path.GetFullPath(outputFilePath), StringComparison.OrdinalIgnoreCase))
             throw new IOException("Output must not overwrite the source drawing.");
-        if (options.BackupSource) CreateBackup(sourceFilePath);
 
         // Detect file format
         var sourceExtension = Path.GetExtension(sourceFilePath).ToLowerInvariant();
@@ -125,8 +127,19 @@ public class DwgWriterService : IDwgWriterService, IDxfWriterService
                 throw new IOException("CAD writer produced an empty output file");
 
             cancellationToken.ThrowIfCancellationRequested();
-            SafeFileCommit.Commit(tempOutputPath, outputFilePath, options.OverwriteExisting);
+
+            // 8. 备份源图：只有在"新图纸已经写好、且还要提交"时才做。失败/取消的导出不会留下备份，
+            //    重试也只会复用同一个备份路径（规划层固定为 x.dwg.bak），不会累积副本。
+            if (options.BackupSource) CreateBackup(sourceFilePath, options.BackupPath);
+
+            var preserved = SafeFileCommit.Commit(tempOutputPath, outputFilePath, options.OverwriteExisting);
             tempOutputPath = null;
+            if (preserved != null)
+            {
+                // 旧输出没能清理掉：说明它被占用或只读。不静默丢路径，写进结果让导出/写回提示能看到。
+                Log.Warning("上一份输出未能清理，已保留为回滚点：{Path}", preserved);
+                result.Errors.Add($"上一份输出已保留为回滚点：{preserved}");
+            }
 
             Log.Information("{Format} writeback complete: {Success} replaced, {Failed} failed",
                 isDxfOutput ? "DXF" : "DWG", result.SuccessCount, result.FailCount);
@@ -162,19 +175,46 @@ public class DwgWriterService : IDwgWriterService, IDxfWriterService
 
     // ───────────────────── Private orchestration helpers ─────────────────────
 
-    private static void CreateBackup(string sourceFilePath)
+    private static void CreateBackup(string sourceFilePath, string? plannedBackupPath)
     {
         try
         {
-            var backupPath = sourceFilePath + ".bak";
-            if (!File.Exists(backupPath))
+            if (string.IsNullOrWhiteSpace(plannedBackupPath))
+                throw new IOException("A planned backup path is required when source backup is enabled.");
+
+            var backupPath = Path.GetFullPath(plannedBackupPath);
+            if (string.Equals(Path.GetFullPath(sourceFilePath), backupPath, StringComparison.OrdinalIgnoreCase))
+                throw new IOException("Backup path must not be the source drawing.");
+            var backupDirectory = Path.GetDirectoryName(backupPath);
+            if (string.IsNullOrEmpty(backupDirectory))
+                throw new IOException("Backup path must have a directory.");
+            Directory.CreateDirectory(backupDirectory);
+            var temporary = backupPath + "." + Guid.NewGuid().ToString("N") + ".tmp";
+            try
             {
-                File.Copy(sourceFilePath, backupPath, overwrite: false);
+                using (var source = new FileStream(sourceFilePath, FileMode.Open, FileAccess.Read, FileShare.Read))
+                using (var backup = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                {
+                    source.CopyTo(backup);
+                    backup.Flush(true);
+                }
+
+                // 备份路径由 OutputPathResolver 按图纸固定，重复导出会重复命中同一个名字。旧实现用
+                // FileMode.CreateNew，于是"备份一份"第二次必然失败、整张图纸写不出去；改成覆盖式提交，
+                // 让备份路径只有一个权威答案，同时不把上一份备份丢在没有回滚点的地方。
+                var preserved = SafeFileCommit.Commit(temporary, backupPath, overwrite: true);
+                temporary = null;
+                if (preserved != null)
+                    Log.Warning("上一份备份未能清理，已保留为回滚点：{Path}", preserved);
                 Log.Information("Backup created: {Backup}", backupPath);
             }
-            else
+            finally
             {
-                Log.Debug("Backup already exists, skipping: {Backup}", backupPath);
+                if (temporary != null)
+                {
+                    try { if (File.Exists(temporary)) File.Delete(temporary); }
+                    catch (Exception cleanupEx) { Log.Debug(cleanupEx, "Failed to remove temporary backup {Path}", temporary); }
+                }
             }
         }
         catch (Exception ex)

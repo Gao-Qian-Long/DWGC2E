@@ -3,6 +3,19 @@
 [CmdletBinding()]
 param([switch]$ConfirmRemoval,[switch]$Preview)
 $ErrorActionPreference='Stop'
+function Get-UninstallFileSha256([string]$LiteralPath) {
+    # Keep uninstall independent from PowerShell module discovery/autoload state.
+    $stream=$null
+    $sha=$null
+    try {
+        $stream=[IO.File]::Open($LiteralPath,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::Read)
+        $sha=[Security.Cryptography.SHA256]::Create()
+        return [BitConverter]::ToString($sha.ComputeHash($stream)).Replace('-','')
+    } finally {
+        if($sha){$sha.Dispose()}
+        if($stream){$stream.Dispose()}
+    }
+}
 $root=[IO.Path]::GetFullPath($PSScriptRoot).TrimEnd('\')
 function Assert-NoLink([string]$path) {
     $current=$path
@@ -34,7 +47,7 @@ foreach($entry in $manifest.Files) {
     $seen[$path]=$true
     Assert-NoLink $path
     if(-not(Test-Path -LiteralPath $path -PathType Leaf)){continue}
-    if((Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash -ne $entry.Sha256){$keep.Add($relative);continue}
+    if((Get-UninstallFileSha256 $path) -ne $entry.Sha256){$keep.Add($relative);continue}
     $handle=[IO.File]::Open($path,[IO.FileMode]::Open,[IO.FileAccess]::ReadWrite,[IO.FileShare]::None)
     $handle.Dispose()
     $remove.Add(@{Path=$path;Sha256=$entry.Sha256})
@@ -54,7 +67,7 @@ foreach($record in $shortcutRecords){
     $path=[IO.Path]::GetFullPath((Join-Path $folder 'DWG Translator.lnk'))
     Assert-NoLink $path
     if(-not(Test-Path -LiteralPath $path -PathType Leaf)){continue}
-    if((Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash -ne $record.Sha256){$keep.Add('Modified '+$record.Kind+' shortcut');continue}
+    if((Get-UninstallFileSha256 $path) -ne $record.Sha256){$keep.Add('Modified '+$record.Kind+' shortcut');continue}
     $shell=$null;$shortcut=$null
     try {
         $shell=New-Object -ComObject WScript.Shell
@@ -73,12 +86,12 @@ foreach($record in $shortcutRecords){
 }
 Write-Host ("Unchanged owned files/shortcuts eligible for removal: " + $remove.Count)
 foreach($relative in $keep){Write-Host "Preserved modified file: $relative"}
-Write-Host 'User settings, glossaries, prompts, output, logs, unknown files and AppData are preserved.'
+Write-Host 'User settings, glossaries, output, logs, unknown files and AppData are preserved.'
 if($Preview){Write-Host 'PREVIEW_ONLY';exit 0}
 if(-not $ConfirmRemoval){if((Read-Host 'Type UNINSTALL to remove only unchanged program files') -cne 'UNINSTALL'){Write-Host 'Cancelled';exit 0}}
 foreach($entry in $remove){
     Assert-NoLink $entry.Path
-    if((Get-FileHash -LiteralPath $entry.Path -Algorithm SHA256).Hash -ne $entry.Sha256){throw "File changed during uninstall: $($entry.Path)"}
+    if((Get-UninstallFileSha256 $entry.Path) -ne $entry.Sha256){throw "File changed during uninstall: $($entry.Path)"}
     Remove-Item -LiteralPath $entry.Path -Force
 }
 Write-Host 'UNINSTALL=PASS; user data, manifest and helpers retained. Only unchanged registered shortcuts targeting this installation were removed; unregistered shortcuts are preserved.'

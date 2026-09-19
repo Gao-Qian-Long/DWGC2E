@@ -39,7 +39,6 @@ $defaults = @{
     'settings.json' = 'settings.json.example'
     'glossaries\mechanical_zh_en.json' = 'assets\glossaries\mechanical_zh_en.json'
     'assets\default-glossaries\mechanical_zh_en.json' = 'assets\glossaries\mechanical_zh_en.json'
-    'prompts\deepl_context.txt' = 'assets\prompts\deepl_context.txt'
 }
 foreach ($name in $defaults.Keys) {
     $source = Join-Path $root $defaults[$name]
@@ -48,8 +47,8 @@ foreach ($name in $defaults.Keys) {
         throw "Candidate default differs from reviewed source template: $name"
     }
 }
-# Do not silently copy personal glossaries, prompts or future unreviewed resources.
-foreach ($folder in @('glossaries','assets','prompts')) {
+# Do not silently copy personal glossaries or future unreviewed resources.
+foreach ($folder in @('glossaries','assets')) {
     foreach ($file in Get-ChildItem -LiteralPath (Join-Path $publish $folder) -File -Recurse -Force) {
         $relative = $file.FullName.Substring($publish.Length + 1)
         if (-not $defaults.ContainsKey($relative)) { throw "Unreviewed resource in package: $relative" }

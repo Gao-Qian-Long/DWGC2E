@@ -101,7 +101,7 @@ public class TextExtractor
             return entities;
         }
 
-        if (btr.IsAnonymous)
+        if (btr.IsFromExternalReference || btr.IsFromOverlayReference)
             return entities;
 
         if (!visitedBlocks.Add(btr.ObjectId))

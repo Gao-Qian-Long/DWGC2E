@@ -70,7 +70,11 @@ public sealed class ProductApiEndpointTests
             if (version == 0)
                 Assert.Equal(original, File.ReadAllBytes(path + ".pre-ui-v1.bak"));
             else
-                Assert.Equal(original, File.ReadAllBytes(path));
+            {
+                Assert.False(File.Exists(path + ".pre-ui-v1.bak"));
+                Assert.NotEqual(original, File.ReadAllBytes(path));
+            }
+            Assert.Equal(2, config.ConfigurationVersion);
             var handler = new Handler();
             using var http = new HttpClient(handler);
             var client = ApiClientFactory.Create(config, http, () => "isolated-token", "d", "h");

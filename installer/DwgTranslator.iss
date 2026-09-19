@@ -5,7 +5,7 @@
 ; deliverable as a portable folder plus a one-click 安装.cmd bootstrap.
 ;
 ; Everything is packed from the PUBLISH OUTPUT rather than from the repository, because that folder
-; is the only one that is known to be complete: it carries the CAD plugin, the prompts, the glossary
+; is the only one that is known to be complete: it carries the CAD plugin, the glossary
 ; and a valid settings.json. An earlier version of this script packed ..\settings.json from the
 ; repository root, which is a 0-byte placeholder there and made the first start fail.
 
@@ -73,17 +73,20 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 Name: "startmenu"; Description: "创建开始菜单快捷方式"; GroupDescription: "{cm:AdditionalIcons}"
 
 [Files]
-; The complete self-contained application: the exe, the CAD plugin folder, prompts, glossary and a
+; The complete self-contained application: the exe, the CAD plugin folder, glossary and a
 ; valid settings.json. No .NET runtime has to be installed on the target machine.
 Source: "{#PublishDir}\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#PublishDir}\settings.json"; DestDir: "{app}"; Flags: onlyifdoesntexist uninsneveruninstall
 Source: "{#PublishDir}\CadPlugin\*"; DestDir: "{app}\CadPlugin"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "{#PublishDir}\prompts\*"; DestDir: "{app}\prompts"; Flags: onlyifdoesntexist uninsneveruninstall recursesubdirs createallsubdirs
 Source: "{#PublishDir}\glossaries\*"; DestDir: "{app}\glossaries"; Flags: onlyifdoesntexist uninsneveruninstall recursesubdirs createallsubdirs
 Source: "{#PublishDir}\assets\*"; DestDir: "{app}\assets"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#PublishDir}\settings.json"; DestDir: "{#UserDataDir}"; Flags: onlyifdoesntexist uninsneveruninstall
 Source: "{#PublishDir}\glossaries\*"; DestDir: "{#UserDataDir}\glossaries"; Flags: onlyifdoesntexist uninsneveruninstall recursesubdirs createallsubdirs
 Source: "使用说明.txt"; DestDir: "{app}"; Flags: ignoreversion
+
+[InstallDelete]
+; Remove the exact legacy client-side system prompt. Unknown files in this directory are preserved.
+Type: files; Name: "{app}\prompts\deepl_context.txt"
 
 [Dirs]
 Name: "{#UserDataDir}"; Flags: uninsneveruninstall

@@ -31,6 +31,8 @@ public sealed class TranslationItem
 
 public sealed class TranslationBatchRequest
 {
+    public string? BillingMode { get; set; }
+    public string? BillingTaskId { get; set; }
     /// <summary>Reuse for transport retries of the same immutable batch.</summary>
     public string RequestId { get; set; } = Guid.NewGuid().ToString("N");
     public string SourceLang { get; set; } = string.Empty;
@@ -45,6 +47,7 @@ public sealed class TranslationBatchRequest
 
 public sealed class GlossaryHint
 {
+    public int Priority { get; set; }
     public string Source { get; set; } = string.Empty;
     public string Target { get; set; } = string.Empty;
 }
@@ -66,6 +69,11 @@ public sealed class TranslationBatchResult
     public int CachedCount { get; set; }
     public string? ErrorCode { get; set; }
     public string? Message { get; set; }
+    /// <summary>
+    /// 服务端 429/限流时给出的建议等待秒数（HTTP <c>Retry-After</c> 或报文里的 <c>retry_after</c>）。
+    /// 调用方据此退避重试，而不是按本地固定节奏继续打同一个限流端点。
+    /// </summary>
+    public int? RetryAfterSeconds { get; set; }
 }
 
 public sealed class TranslationItemResult
@@ -78,6 +86,9 @@ public sealed class TranslationItemResult
 
 public sealed class CloudGlossaryEntry
 {
+    public string SourceLang { get; set; } = "";
+    public string TargetLang { get; set; } = "";
+    public bool DirectionPending { get; set; } = true;
     public string? Id { get; set; }
     public string? Note { get; set; }
     public string Source { get; set; } = string.Empty;
@@ -146,6 +157,11 @@ public sealed class VersionInfo
     public string? BackupDownloadUrl { get; set; }
     public string? ReleaseNotes { get; set; }
     public bool Mandatory { get; set; }
+    public long? PackageSize { get; set; }
+    public string? PackageSha256 { get; set; }
+    public string? PackageSignature { get; set; }
+    public string? PackageType { get; set; }
+    public string? SigningKeyId { get; set; }
 }
 
 /// <summary>
@@ -164,6 +180,19 @@ public sealed class ApiAuthenticationException : Exception
     {
         ErrorCode = errorCode;
     }
+}
+
+/// <summary>Worker capability used to bind resumable checkpoints to the active server-side prompt/router policy.</summary>
+public interface ITranslationContextClient
+{
+    string CachedTranslationContextVersion { get; }
+    Task<string?> RefreshTranslationContextVersionAsync(CancellationToken cancellationToken = default);
+}
+
+/// <summary>Signals that the Worker authoritatively rejected the current bearer session.</summary>
+public interface IAuthenticationFailureNotifier
+{
+    event Action<ApiAuthenticationException>? AuthenticationRejected;
 }
 
 public interface IApiClient

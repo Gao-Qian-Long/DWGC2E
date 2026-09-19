@@ -4,10 +4,12 @@
 
 | 工具 | 输入 | 输出 / 副作用 |
 |---|---|---|
-| tools/Capture-AllPages.ps1 | ExePath、Pages、Tag、StartupTimeoutSeconds、NoLaunch | 导航页面，调用 Capture-AppWindow 保存截图；打印 PAGE 记录 |
-| tools/Capture-Dialogs.ps1 | ExePath、Tag、NoLaunch | 打开设置/术语库/环境/帮助对话框并尝试取消或关闭；打印 DIALOG 记录 |
-| tools/Capture-AppWindow.ps1 | ProcessName、OutDir、Tag | 当前窗口PNG；默认写入系统临时目录 uicap |
+| tools/Capture-AllPages.ps1 | ExePath、Pages、Tag、StartupTimeoutSeconds、NoLaunch | 导航页面，调用 Capture-AppWindow 保存截图；打印 PAGE 记录，缺页或截图失败打印 CAPTURE_FAILED 并以退出码 1 结束 |
+| tools/Capture-Dialogs.ps1 | ExePath、Tag、NoLaunch | 打开设置/术语库/环境/帮助对话框并尝试取消或关闭；打印 DIALOG 记录，对话框未打开或截图失败打印 DIALOG_FAILED 并以退出码 1 结束 |
+| tools/Capture-AppWindow.ps1 | ProcessName、OutDir、Tag | 当前窗口PNG；默认写入系统临时目录 uicap；无窗口退出码 2，无可捕获窗口退出码 3 |
 | tools/Capture-DesktopReview.ps1 | Name、OutputDirectory、WindowHandle | 窗口截图，建议显式指定本任务 artifacts 子目录 |
+
+退出码 0 只代表每个页面/对话框都拿到了截图文件；`MISSING_NAV`、打开失败或 `NO_CAPTURE` 都会让脚本以非零退出码结束，便于在批处理中直接判定。
 
 ## 启动规则
 

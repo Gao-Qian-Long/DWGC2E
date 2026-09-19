@@ -22,6 +22,7 @@ internal class ReplacedEntityInfo
     public BlockTableRecord? OwningBtr { get; set; }
     public bool EnvelopeFitSucceeded { get; set; }
     public Entity? OriginalSnapshot { get; set; }
+    public string? UnfittedMTextContents { get; set; }
 }
 
 /// <summary>
@@ -123,36 +124,34 @@ public class AcadWriterEngine
             var unprocessed = new HashSet<string>(entityMap.Keys, StringComparer.OrdinalIgnoreCase);
             var layoutRejected = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var replacedEntities = new List<ReplacedEntityInfo>();
+            // Every entity is owned by exactly one block table record, so the sweep below must reach
+            // each ObjectId once. This set enforces that invariant instead of assuming it: a host
+            // that enumerates one member from two containers can then no longer inflate
+            // SuccessCount, duplicate the audit list, or register a second snapshot for an object.
+            var processedEntities = new HashSet<ObjectId>();
 
             // Model space
             var modelSpaceId = SymbolUtilityServices.GetBlockModelSpaceId(db);
             var modelSpace = (BlockTableRecord)tr.GetObject(modelSpaceId, OpenMode.ForWrite);
             var errors = new List<string>();
-            successCount += ProcessBlockTableRecord(modelSpace, tr, entityMap, unprocessed, targetIsCjk, errors, layoutRejected, replacedEntities);
-            result.Errors.AddRange(errors);
+            successCount += ProcessBlockTableRecord(modelSpace, tr, entityMap, unprocessed, targetIsCjk, errors, layoutRejected, replacedEntities, processedEntities);
 
-            // Paper space layouts and user blocks
+
+            // Match explicit extracted handles in every local definition, including *U
+            // anonymous/dynamic blocks. Names are not a reliable writeback eligibility test.
             var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
             foreach (ObjectId btrId in bt)
             {
-                var btr = (BlockTableRecord)tr.GetObject(btrId, OpenMode.ForWrite);
-                string name = btr.Name;
-
-                bool isModelSpace = name.StartsWith("*Model_Space", StringComparison.OrdinalIgnoreCase);
-                bool isPaperSpace = name.StartsWith("*Paper_Space", StringComparison.OrdinalIgnoreCase);
-
-                if (!isModelSpace)
-                {
-                    if (isPaperSpace || (!btr.IsAnonymous && !name.StartsWith("*")))
-                    {
-                        successCount += ProcessBlockTableRecord(btr, tr, entityMap, unprocessed, targetIsCjk, errors, layoutRejected, replacedEntities);
-                    }
-                }
+                if (btrId == modelSpaceId) continue;
+                var btr = (BlockTableRecord)tr.GetObject(btrId, OpenMode.ForRead);
+                if (btr.IsFromExternalReference || btr.IsFromOverlayReference) continue;
+                successCount += ProcessBlockTableRecord(btr, tr, entityMap, unprocessed,
+                    targetIsCjk, errors, layoutRejected, replacedEntities, processedEntities);
             }
-
             if (unprocessed.Count > 0)
                 Log.Warning("AcadWriter: skipped {Count} unmatched entities", unprocessed.Count);
 
+            result.Errors.AddRange(errors);
             // Rebuild from the completed layout, not the original snapshot.
             // This catches two translations growing into the same previously empty gap.
             AvailableTextSpace.Refresh(tr);
@@ -187,7 +186,7 @@ public class AcadWriterEngine
                 // English drawing is worse than a slightly smaller English one. The envelope
                 // fit only guarantees a label fits its OWN original box, so neighbouring
                 // rotated labels whose axis-aligned ink boxes overlap land here.
-                if (TryShrinkUntilClear(current, conflict.Item.OriginalHeight, tr, conflict.Baseline, out var shrinkSteps))
+                if (TryShrinkUntilClear(current, conflict.Item.OriginalHeight, tr, conflict.Baseline, out var shrinkSteps, conflict.Item.UnfittedMTextContents))
                 {
                     shrinkResolved++;
                     if (shrinkSteps > 0)
@@ -240,7 +239,7 @@ public class AcadWriterEngine
         BlockTableRecord btr, Transaction tr,
         Dictionary<string, TextEntity> entityMap, HashSet<string> unprocessed,
         bool targetIsCjk, List<string> errors, HashSet<string> layoutRejected,
-        List<ReplacedEntityInfo> replacedEntities)
+        List<ReplacedEntityInfo> replacedEntities, HashSet<ObjectId> processedEntities)
     {
         int count = 0;
         AvailableTextSpace.Prepare(btr, tr);
@@ -262,6 +261,7 @@ public class AcadWriterEngine
             var handleStr = entity.Handle.ToString();
             if (entityMap.TryGetValue(handleStr, out var textEntity))
             {
+                bool firstVisit = processedEntities.Add(entity.ObjectId);
                 bool wasAlreadyApplied = entity switch
                 {
                     DBText d => string.Equals(d.TextString, textEntity.TranslatedText, StringComparison.Ordinal),
@@ -271,7 +271,7 @@ public class AcadWriterEngine
                 };
                 Entity? originalSnapshot = wasAlreadyApplied ? null : entity.Clone() as Entity;
                 entity.UpgradeOpen();
-                if (ReplaceEntity(entity, textEntity, targetIsCjk, tr, out var envelopeFitSucceeded))
+                if (ReplaceEntity(entity, textEntity, targetIsCjk, tr, out var envelopeFitSucceeded, out var unfittedMTextContents))
                 {
                     if (!envelopeFitSucceeded)
                     {
@@ -284,13 +284,14 @@ public class AcadWriterEngine
                         originalSnapshot?.Dispose();
                         continue;
                     }
-                    count++;
+                    if (firstVisit) count++;
                     unprocessed.Remove(handleStr);
-                    if (!wasAlreadyApplied)
+                    if (firstVisit && !wasAlreadyApplied)
                     {
                         replacedEntities.Add(new ReplacedEntityInfo
                         {
                             EntityId = entity.ObjectId,
+                            UnfittedMTextContents = unfittedMTextContents,
                             OriginalHeight = textEntity.OriginalHeight > 0 ? textEntity.OriginalHeight : textEntity.Height,
                             OwningBtr = btr,
                             EnvelopeFitSucceeded = envelopeFitSucceeded,
@@ -329,12 +330,16 @@ public class AcadWriterEngine
                     var compoundHandle = $"{br.Handle}/{att.Tag}";
                     if (entityMap.TryGetValue(compoundHandle, out var attEntity))
                     {
+                        // The owning INSERT is visited once per writeback, so a second entry for the
+                        // same attribute can only come from a host that enumerates one member from
+                        // two containers; it must never inflate the counters or the audit list.
+                        bool firstAttributeVisit = processedEntities.Add(att.ObjectId);
                         if (AttributeTranslationPolicy.IsMetadataTag(att.Tag))
                         {
                             // Accept legacy requests without mutating machine mappings
                             // or asking invisible attributes for geometric extents.
                             unprocessed.Remove(compoundHandle);
-                            count++;
+                            if (firstAttributeVisit) count++;
                             Log.Information("Preserved title-block metadata {Handle}", compoundHandle);
                             continue;
                         }
@@ -349,6 +354,9 @@ public class AcadWriterEngine
                             bool unchanged = string.Equals(att.TextString, attEntity.TranslatedText, StringComparison.Ordinal);
                             Entity? originalSnapshot = unchanged ? null : att.Clone() as Entity;
                             Extents3d? originalBounds = TryGetEntityBounds(att);
+                            if (originalBounds.HasValue && !att.Invisible)
+                                originalBounds = AvailableTextSpace.Measure(att, originalBounds.Value, tr,
+                                    false, out _, preserveSourceFootprint: false);
                             att.TextString = attEntity.TranslatedText;
                             bool envelopeFitSucceeded = unchanged || FitDbTextToOriginalEnvelope(
                                 att, originalBounds, origAttHeight, attEntity.Handle);
@@ -367,9 +375,9 @@ public class AcadWriterEngine
                                 Log.Warning("Layout fit rejected attribute {Handle}; original text preserved", compoundHandle);
                                 continue;
                             }
-                            count++;
+                            if (firstAttributeVisit) count++;
                             unprocessed.Remove(compoundHandle);
-                            if (!unchanged)
+                            if (firstAttributeVisit && !unchanged)
                             {
                                 replacedEntities.Add(new ReplacedEntityInfo
                                 {
@@ -391,8 +399,10 @@ public class AcadWriterEngine
                 }
             }
 
-            if (entity is Table table)
+            if (entity is Table table && processedEntities.Add(table.ObjectId))
             {
+                // Cell handles are compound ("{table}:{row}:{col}"), so a table's own ObjectId is
+                // never an entityMap key and this guard cannot suppress a first-time visit.
                 count += ProcessTableCells(table, entityMap, unprocessed, errors);
             }
         }
@@ -449,9 +459,10 @@ public class AcadWriterEngine
 
     private static bool ReplaceEntity(
         Entity entity, TextEntity ourEntity, bool targetIsCjk, Transaction tr,
-        out bool envelopeFitSucceeded)
+        out bool envelopeFitSucceeded, out string? unfittedMTextContents)
     {
         envelopeFitSucceeded = true;
+        unfittedMTextContents = null;
         try
         {
             var translatedText = ourEntity.TranslatedText;
@@ -533,6 +544,7 @@ public class AcadWriterEngine
                         .Replace("\n", "\\P")
                         .Replace("\r", "\\P");
 
+                    unfittedMTextContents = mtext.Contents;
                     mtext.ColumnType = ColumnType.NoColumns;
                     if (characterColumn)
                     {
@@ -742,16 +754,16 @@ public class AcadWriterEngine
         MText text, Extents3d? originalBounds, double originalHeight, string handle, bool singleLine = false,
         double readingLength = 0)
     {
-        var contents=text.Contents;
+        var contents=MTextFitFormatting.NormalizeHeights(text.Contents, originalHeight > 0 ? originalHeight : text.TextHeight);
         var location=text.Location;
         var height=text.TextHeight;
         var width=text.Width;
-        var factors=new[]{1.0,.9,.8,.75};
+        var factors=new[]{1.0,.9,.8,.75,.65,.55,WritebackConstants.FallbackWidthFactorRetention};
 
         void Reset(double factor)
         {
             text.Location=location; text.TextHeight=height; text.Width=width;
-            text.Contents=factor==1 ? contents : "{\\W"+factor.ToString(System.Globalization.CultureInfo.InvariantCulture)+";"+contents+"}";
+            text.Contents=MTextFitFormatting.ScaleWidths(contents, factor);
             text.RecordGraphicsModified(true);
         }
 
@@ -762,6 +774,9 @@ public class AcadWriterEngine
         double bestFactor=0, bestHeight=0;
         foreach(double factor in factors)
         {
+            // Extra condensation is a last resort, not a way to enlarge already fitting labels.
+            if (factor < .65 && bestFactor > 0) break;
+            if (factor < .75 && bestHeight >= originalHeight * WritebackConstants.PreferredFitHeightRatio) break;
             Reset(factor);
             if(!FitMTextCandidate(text,originalBounds,originalHeight,handle,singleLine,readingLength))continue;
 
@@ -956,12 +971,40 @@ public class AcadWriterEngine
     /// stay stable and only the rendered size changes.
     /// </summary>
     /// <returns>True when the entity was separated (possibly needing no shrink at all).</returns>
-    private static bool TryShrinkUntilClear(Entity entity, double originalHeight, Transaction tr, Extents3d? baseline, out int steps)
+    private static bool TryShrinkUntilClear(Entity entity, double originalHeight, Transaction tr, Extents3d? baseline, out int steps, string? unfittedContents = null)
     {
         // A local counter: an out parameter cannot be captured by the local functions below.
         int tries = 0;
         steps = 0;
 
+        // A source label can already straddle a table border. Shrinking about its
+        // existing attachment point never clears that border. Retry inside the strict
+        // cell interior before shrinking in place; keep the change only after a full
+        // collision audit. The normal source-footprint allowance remains unchanged.
+        if (entity is MText cellText && baseline.HasValue && Math.Abs(Math.Sin(cellText.Rotation)) < .001)
+        {
+            using var saved = (MText)cellText.Clone();
+            AvailableTextSpace.Refresh(tr);
+            if (originalHeight > 0) cellText.TextHeight = originalHeight;
+            var interior = AvailableTextSpace.Measure(cellText, baseline.Value, tr, false,
+                out var cellLength, preserveSourceFootprint: false);
+            cellText.TextHeight = saved.TextHeight;
+            // Retry the original candidate, never compound the previous condensation.
+            if (unfittedContents != null) cellText.Contents = unfittedContents;
+            if (FitMTextToOriginalEnvelope(cellText, interior, originalHeight,
+                    cellText.Handle.ToString(), false, cellLength))
+            {
+                AvailableTextSpace.Refresh(tr);
+                if (!AvailableTextSpace.FindIntersections(cellText, tr, baseline).Any())
+                {
+                    steps = 1;
+                    return true;
+                }
+            }
+            cellText.CopyFrom(saved);
+            cellText.RecordGraphicsModified(true);
+            AvailableTextSpace.Refresh(tr);
+        }
         double startHeight = entity switch
         {
             DBText dbText => dbText.Height,

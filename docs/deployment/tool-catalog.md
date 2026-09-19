@@ -16,6 +16,9 @@
 | Enter-DesktopPublishLock.ps1 | 内部互斥锁，输入WorkspaceRoot，返回FileStream | 调用者finally释放；文件存在不等于锁被占用 |
 | Assert-CleanPackageInput.ps1 | 验证直接位于artifacts的时间戳候选并返回元数据 | 拒绝把用户release目录当分发输入；不是数字签名 |
 | Verify-ReleasePackage.ps1 | 输入PublishDir，检查配置、资源、CAD依赖 | 本地检查，不启动APP |
+| Verify-ExecutableIcon.ps1 | 输入ExecutablePath、可选IconPath；读取PE资源比对每个标准ICO帧，不执行候选 | 正式交付在打包前强制运行；只读检查 |
+| Refresh-DesktopShellIcon.ps1 | 输入已替换release的ExecutablePath；通知Shell刷新图标缓存 | 交付后置步骤；结束Explorer、全局清缓存、改注册表都不做 |
+| Sync-BrandIcons.ps1 | 可选WebsiteRoot、EvidenceDirectory；从APP徽标生成网站SVG与多分辨率ICO | 不在交付链中；默认写入工作区外的网站仓库目录，需显式指定路径后再运行 |
 | Verify-CadPluginPackage.ps1 | 输入PluginDir，检查插件与私有依赖 | 不加载CAD，不证明宿主兼容性 |
 | New-ReleasePackage.ps1 | 输入PublishDir，可指定InstallerDir/OutputDir/SkipZip；写安装目录及ZIP | 选择新的OutputDir，保留已有输出；不执行安装 |
 | New-DesktopReleaseManifest.ps1 | 输入PublishDir、PackagePath、OutputPath；写本地校验清单 | 不上传，不启用公开更新或强制更新 |

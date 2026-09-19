@@ -1,9 +1,46 @@
+using DwgTranslator.Core.Services;
 using DwgTranslator.Core.Tasks;
 
 namespace DwgTranslator.Core.Tests;
 
 public class JsonTaskStoreTests
 {
+    [Fact]
+    public void SaveKeepsTheReplacedQueueAsPreviousRollbackPoint()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "dwgc2e-prev-" + Guid.NewGuid().ToString("N"), "tasks.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        try
+        {
+            var store = new JsonTaskStore(path);
+            store.Save(new[] { new TranslationTask("original.dwg") });
+            Assert.Equal("original.dwg", Assert.Single(store.Load()).FilePath);
+
+            // 逐步验证提交层：目标已存在时必须先落盘回滚点，且成功时清理掉。
+            var probeTemp = Path.Combine(Path.GetDirectoryName(path)!, "probe-commit.tmp");
+            File.WriteAllText(probeTemp, "next");
+            var probeRollback = SafeFileCommit.Commit(probeTemp, path, overwrite: true);
+            Assert.True(probeRollback == null,
+                "probe rollback=" + (probeRollback ?? "cleaned") + " " + Describe(path)
+                + " existsAfter=" + File.Exists(path + SafeFileCommit.RollbackSuffix));
+
+            store.Save(new[] { new TranslationTask("new.dwg") });
+
+            // 第二次保存仍必须原子完成：队列内容正确、没有临时文件残留、也不留下多余的回滚副本。
+            Assert.False(store.LastSaveFailed, "after-second: " + Describe(path));
+            Assert.Equal("new.dwg", Assert.Single(store.Load()).FilePath);
+            Assert.Empty(Directory.GetFiles(Path.GetDirectoryName(path)!, "*.tmp"));
+            Assert.False(File.Exists(path + SafeFileCommit.RollbackSuffix), "after-second: " + Describe(path));
+        }
+        finally { Directory.Delete(Path.GetDirectoryName(path)!, true); }
+    }
+
+    private static string Describe(string path)
+    {
+        var directory = Path.GetDirectoryName(path)!;
+        return "dir=" + string.Join(",", Directory.GetFiles(directory).Select(f => Path.GetFileName(f) + ":" + new FileInfo(f).Length));
+    }
+
     [Fact]
     public void LockedDestinationPreservesPreviousStateAndNextSaveRecovers()
     {
@@ -97,6 +134,7 @@ public class JsonTaskStoreTests
     [InlineData(TranslationTaskStatus.Writing, false)]
     [InlineData(TranslationTaskStatus.Failed, false)]
     [InlineData(TranslationTaskStatus.Paused, false)]
+    [InlineData(TranslationTaskStatus.ReadyForReview, true)]
     [InlineData(TranslationTaskStatus.Completed, true)]
     [InlineData(TranslationTaskStatus.Cancelled, true)]
     [InlineData(TranslationTaskStatus.PartiallyCompleted, true)]

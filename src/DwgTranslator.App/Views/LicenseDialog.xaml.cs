@@ -21,8 +21,8 @@ public partial class LicenseDialog : Window
         var license = _licenseService.CurrentLicense;
         StatusText.Text = license.GetDisplayStatus();
         StatusText.Foreground = license.IsValid
-            ? System.Windows.Media.Brushes.Green
-            : System.Windows.Media.Brushes.OrangeRed;
+            ? (System.Windows.Media.Brush)FindResource("Brush.Success")
+            : (System.Windows.Media.Brush)FindResource("Brush.Warning");
 
         MachineIdBox.Text = LicenseService.GetMachineId();
 
@@ -44,14 +44,7 @@ public partial class LicenseDialog : Window
             _ => Strings.Get("LicenseNotActivated")
         };
 
-        LicenseTypeText.Foreground = license.Type switch
-        {
-            LicenseType.Perpetual => System.Windows.Media.Brushes.Green,
-            LicenseType.Subscription => new System.Windows.Media.SolidColorBrush(
-                (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#1976D2")),
-            _ => new System.Windows.Media.SolidColorBrush(
-                (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#78909C"))
-        };
+        LicenseTypeText.Foreground = (System.Windows.Media.Brush)FindResource("Brush.TextPrimary");
 
         // Disable activation input if already permanently licensed
         if (license.Type == LicenseType.Perpetual)
