@@ -1,4 +1,4 @@
-﻿# Purpose: bounded cleanup of recognized desktop candidates/packages, retaining rollback and unique portable data.
+# Purpose: bounded cleanup of recognized desktop candidates/packages, retaining rollback and unique portable data.
 # Input: WorkspaceRoot (optional). Output: cleanup summary; may DELETE obsolete artifacts.
 # Usage: powershell -NoProfile -File tools/Clean-DesktopArtifacts.ps1 -WhatIf (preview first).
 [CmdletBinding(SupportsShouldProcess)]
@@ -128,7 +128,12 @@ if($current){
         $target=Assert-SafeTarget $dir.FullName
         $ownership=Join-Path $target 'delivery-files.json'
         if(-not(Test-Path -LiteralPath $ownership)){Write-Warning "Unfinished delivery retained: $target";continue}
-        $receipt=Get-Content -LiteralPath $ownership -Raw | ConvertFrom-Json
+        # $ErrorActionPreference is 'Stop', so one unreadable manifest previously aborted every
+        # later deletion. delivery-20260919-075732 recorded a CJK path with a bare backslash,
+        # which ConvertFrom-Json rejects as an escape sequence. An unverifiable tree is retained,
+        # exactly like a changed one - never delete something that could not be inventoried.
+        try{$receipt=Get-Content -LiteralPath $ownership -Raw | ConvertFrom-Json}
+        catch{Write-Warning "Unreadable delivery manifest retained: $target";continue}
         $expected=@{};foreach($entry in $receipt.files){$expected[$entry.path]=$entry.sha256}
         $actual=@(Get-ChildItem -LiteralPath $target -Recurse -File -Force | Where-Object {$_.FullName -ne $ownership})
         $safe=$actual.Count -eq $expected.Count
