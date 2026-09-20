@@ -30,8 +30,9 @@
     <!-- 文字层级：主 / 次 / 说明 / 禁用 -->
     <SolidColorBrush x:Key="Brush.TextPrimary" Color="#262521" />
     <SolidColorBrush x:Key="Brush.TextSecondary" Color="#60594F" />
-    <SolidColorBrush x:Key="Brush.TextMuted" Color="#777168" />
-    <SolidColorBrush x:Key="Brush.TextDisabled" Color="#777168" />
+    <!-- 2026-09-19 杂志风重构：#777168 在纸面上对比度 4.4:1 低于 WCAG 4.5，加深。 -->
+    <SolidColorBrush x:Key="Brush.TextMuted" Color="#6E675D" />
+    <SolidColorBrush x:Key="Brush.TextDisabled" Color="#6E675D" />
     <!-- 边框：常用 / 更浅（卡片分隔） / 更强（输入框 hover） -->
     <SolidColorBrush x:Key="Brush.Border" Color="#DED2BC" />
     <SolidColorBrush x:Key="Brush.BorderLight" Color="#EDE6D8" />
@@ -61,4 +62,33 @@
     <CornerRadius x:Key="CornerRadius.Medium" TopLeft="2" TopRight="2" BottomLeft="2" BottomRight="2" />
     <CornerRadius x:Key="CornerRadius.Large" TopLeft="3" TopRight="3" BottomLeft="3" BottomRight="3" />
     <CornerRadius x:Key="CornerRadius.Pill" TopLeft="2" TopRight="2" BottomLeft="2" BottomRight="2" />
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         暖色手作杂志风（2026-09-19 重构新增；键名可增不可改，规则同上）。
+         品牌宪法：奶白纸底＋墨色反白分区＋琥珀橙高光＋沙土米辅助。
+         · 墨色 Ink：深色反白区块（侧栏/会员横幅/页脚条），文字用 OnInk 系。
+         · 琥珀 Amber #D97728 只做装饰/大图形/墨底上的高光——它在纸面上
+           对比度仅 3.0:1，禁止用作浅底小号文字；浅底上的琥珀系文字一律
+           用 Brush.Primary（#974719，6.1:1）。
+         ═══════════════════════════════════════════════════════════════════════ -->
+    <!-- 墨色反白分区
+         2026-10-02 用户反馈：深灰黑对比度太高看着不舒服。整体提亮一档（相当于降低"墨浓度"）：
+         Ink #262521→#34312A、InkAlt #322E26→#403B30、InkBorder #45402F→#544D3B。
+         反白文字对比度仍达标：OnInk 11.5:1、OnInkMuted(#B4AB99) 5.7:1。 -->
+    <SolidColorBrush x:Key="Brush.Ink" Color="#34312A" />
+    <SolidColorBrush x:Key="Brush.InkAlt" Color="#403B30" />
+    <SolidColorBrush x:Key="Brush.InkBorder" Color="#544D3B" />
+    <SolidColorBrush x:Key="Brush.OnInk" Color="#F7F2E7" />
+    <SolidColorBrush x:Key="Brush.OnInkMuted" Color="#B4AB99" />
+    <SolidColorBrush x:Key="Brush.OnInkAccent" Color="#E8933F" />
+    <!-- 琥珀装饰（波浪线/八芒星/虚线环/票据） -->
+    <SolidColorBrush x:Key="Brush.Amber" Color="#D97728" />
+    <SolidColorBrush x:Key="Brush.AmberSoft" Color="#F6E8D5" />
+    <!-- 暖色径向光斑：纸面右上角落一层极淡的琥珀光，弱化屏幕冰冷感 -->
+    <RadialGradientBrush x:Key="Brush.WarmGlow" GradientOrigin="0.86,0.04" Center="0.86,0.04" RadiusX="0.62" RadiusY="0.72">
+        <GradientStop Offset="0" Color="#16D97728" />
+        <GradientStop Offset="1" Color="#00D97728" />
+    </RadialGradientBrush>
+    <!-- 墨底上的进度/分隔（随 Ink 一起提亮，保持"比底色亮一档"的关系） -->
+    <SolidColorBrush x:Key="Brush.OnInkTrack" Color="#4A4437" />
 </ResourceDictionary>

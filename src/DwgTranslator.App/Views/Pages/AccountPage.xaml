@@ -10,6 +10,15 @@
             <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border}"/>
             <Setter Property="BorderThickness" Value="1"/><Setter Property="CornerRadius" Value="{DynamicResource CornerRadius.Medium}"/>
             <Setter Property="Padding" Value="{DynamicResource Spacing.16}"/>
+            <Setter Property="Effect" Value="{StaticResource Shadow.Hard}"/>
+        </Style>
+        <!-- 墨色反白会员横幅（暖色手作杂志风·深色反白区块）：墨底 + 墨色硬影 + 琥珀高光 -->
+        <Style x:Key="Account.InkCard" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource Brush.Ink}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="CornerRadius" Value="{DynamicResource CornerRadius.Medium}"/>
+            <Setter Property="Padding" Value="{DynamicResource Spacing.16}"/>
+            <Setter Property="Effect" Value="{StaticResource Shadow.HardPrimary}"/>
         </Style>
         <!-- 用户反馈「更换布局思路」：常用入口由一行裸文字按钮改成一整块可点的导航磁贴
              （圆形图标 + 标题 + 一行说明 + 悬停反馈），三块等宽成组，读起来是导航而不是残留按钮。
@@ -35,7 +44,7 @@
     </UserControl.Resources>
     <Grid Margin="{DynamicResource Spacing.Page}">
         <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
-        <controls:PageHeader x:Name="WorkspaceHeader" Header="会员中心" Description="查看当前套餐、剩余额度、有效期与订单。" />
+        <controls:PageHeader x:Name="WorkspaceHeader" Header="会员中心" WaveVariant="4" Description="查看当前套餐、剩余额度、有效期与订单。" />
         <!-- 用户反馈「在这个上面显示就行了」：套餐 / 字符额度 / 会员有效期三项不再单独占一排卡片，
              全部并入身份卡成为一条「身份 + 权益」卡；下半页用环形用量图与圆形导航图标补足可视化。
              合并后的结构约 222 + 详情 194 + 导航 80 ≈ 512 DIP，1500×820（可用体高约 606）与
@@ -45,7 +54,7 @@
         <StackPanel MaxWidth="1200" Width="{Binding ViewportWidth, RelativeSource={RelativeSource AncestorType=ScrollViewer}}" HorizontalAlignment="Left">
             <Border Style="{StaticResource Section.Surface}" HorizontalAlignment="Left" Width="560" MaxWidth="560" Visibility="{Binding IsAccountLoggedIn, Converter={StaticResource BoolToVis}, ConverterParameter=false}">
                 <StackPanel>
-                    <TextBlock Text="登录账号" FontSize="16" FontWeight="SemiBold" Margin="{DynamicResource Spacing.Stack}" />
+                    <TextBlock Text="登录账号" FontFamily="{DynamicResource FontFamily.Display}" FontSize="16" FontWeight="SemiBold" Margin="{DynamicResource Spacing.Stack}" />
                     <TextBlock Text="可以先浏览软件；云端翻译需要登录。" TextWrapping="Wrap" Margin="{DynamicResource Spacing.StackSection}" />
                     <TextBlock Text="账号" Margin="{DynamicResource Spacing.StackTight}" />
                     <TextBox x:Name="AccountInput" Text="{Binding LoginName, UpdateSourceTrigger=PropertyChanged}" MinHeight="{DynamicResource Size.Control}" AutomationProperties.Name="登录账号" />
@@ -81,7 +90,7 @@
                 <!-- 身份 + 权益卡（用户标注：三项权益显示在账户卡上）：
                      上行 = 头像 + 名称 + 邮箱 + 账号操作；下行 = 三项权益明细（原三张指标卡） + 额度环形用量图。
                      分组靠留白（§26 不加分隔线），卡片阴影向外溢出 3 DIP 由 Spacing.StackWide 的余量吸收。 -->
-                <Border Style="{StaticResource Account.Card}" Margin="{DynamicResource Spacing.StackWide}">
+                <Border Style="{StaticResource Account.InkCard}" Margin="{DynamicResource Spacing.StackWide}">
                     <Grid>
                         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                         <!-- 外网格：左列放「身份 + 三项权益」，右列放环形用量图（跨两行）。
@@ -89,18 +98,18 @@
                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                         <Grid Grid.Column="0">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                            <!-- 头像：圆形底 + 首字母，替代原来的 40×40 方圆角块 -->
+                            <!-- 头像：琥珀圆底 + 墨色衬线首字母（墨底横幅上的品牌高光） -->
                             <Grid Width="46" Height="46" Margin="{DynamicResource Spacing.InlineLoose}">
-                                <Ellipse Fill="{DynamicResource Brush.PrimaryLight}"/>
-                                <TextBlock Text="{Binding AccountAvatarText}" Foreground="{DynamicResource Brush.Primary}" FontSize="{DynamicResource FontSize.SectionTitle}" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                <Ellipse Fill="{DynamicResource Brush.Amber}"/>
+                                <TextBlock Text="{Binding AccountAvatarText}" FontFamily="{DynamicResource FontFamily.Display}" Foreground="{DynamicResource Brush.Ink}" FontSize="{DynamicResource FontSize.SectionTitle}" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                             </Grid>
                             <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                <TextBlock Text="{Binding AccountDisplayNameText}" FontSize="{DynamicResource FontSize.SectionTitle}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding AccountDisplayNameText}"/>
-                                <TextBlock Text="{Binding AccountEmailText}" FontSize="{DynamicResource FontSize.Secondary}" Foreground="{DynamicResource Brush.TextSecondary}" TextTrimming="CharacterEllipsis" ToolTip="{Binding AccountEmailText}" Margin="{DynamicResource Spacing.BlockTopTight}"/>
+                                <TextBlock Text="{Binding AccountDisplayNameText}" FontFamily="{DynamicResource FontFamily.Display}" Foreground="{DynamicResource Brush.OnInk}" FontSize="{DynamicResource FontSize.SectionTitle}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding AccountDisplayNameText}"/>
+                                <TextBlock Text="{Binding AccountEmailText}" FontFamily="{DynamicResource FontFamily.Mono}" FontSize="{DynamicResource FontSize.Secondary}" Foreground="{DynamicResource Brush.OnInkMuted}" TextTrimming="CharacterEllipsis" ToolTip="{Binding AccountEmailText}" Margin="{DynamicResource Spacing.BlockTopTight}"/>
                             </StackPanel>
                             <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                                 <Button Content="{Binding RefreshAccountButtonText}" Command="{Binding RefreshAccountCommand}" IsEnabled="{Binding IsAccountRefreshing, Converter={StaticResource InverseBoolConverter}}" Style="{StaticResource Button.Secondary}" Margin="{DynamicResource Spacing.Inline}"/>
-                                <Button Content="账号操作" ToolTip="重新验证会话或退出登录" Click="AccountMenu_Click" Style="{StaticResource Button.Tertiary}"><Button.ContextMenu><ContextMenu><MenuItem Header="重新验证会话" Command="{Binding RefreshAccountCommand}"/><MenuItem Header="退出登录" Command="{Binding LogoutAccountCommand}"/></ContextMenu></Button.ContextMenu></Button>
+                                <Button Content="账号操作" ToolTip="重新验证会话或退出登录" Click="AccountMenu_Click" Style="{StaticResource Button.Tertiary}" Foreground="{DynamicResource Brush.OnInkMuted}"><Button.ContextMenu><ContextMenu><MenuItem Header="重新验证会话" Command="{Binding RefreshAccountCommand}"/><MenuItem Header="退出登录" Command="{Binding LogoutAccountCommand}"/></ContextMenu></Button.ContextMenu></Button>
                             </StackPanel>
                         </Grid>
                         <Grid Grid.Row="1" Grid.Column="0" Margin="{DynamicResource Spacing.BlockTopWide}">
@@ -108,19 +117,19 @@
                             <Grid VerticalAlignment="Center">
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" MinWidth="84"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                                 <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                                <TextBlock Text="当前套餐" Style="{StaticResource InfoLabel}" VerticalAlignment="Center" Margin="{DynamicResource Spacing.InlineLoose}"/>
-                                <TextBlock Grid.Column="1" Text="{Binding OnlinePlanText}" FontSize="{DynamicResource FontSize.SectionTitle}" FontWeight="SemiBold" Foreground="{DynamicResource Brush.Primary}" TextTrimming="CharacterEllipsis" ToolTip="以当前账号同步权益为准" VerticalAlignment="Center"/>
-                                <TextBlock Grid.Row="1" Text="字符额度" Style="{StaticResource InfoLabel}" VerticalAlignment="Top" Margin="{DynamicResource Spacing.InlineLoose}"/>
+                                <TextBlock Text="当前套餐" Style="{StaticResource InfoLabel}" Foreground="{DynamicResource Brush.OnInkMuted}" VerticalAlignment="Center" Margin="{DynamicResource Spacing.InlineLoose}"/>
+                                <TextBlock Grid.Column="1" Text="{Binding OnlinePlanText}" FontFamily="{DynamicResource FontFamily.Display}" FontSize="{DynamicResource FontSize.SectionTitle}" FontWeight="SemiBold" Foreground="{DynamicResource Brush.Amber}" TextTrimming="CharacterEllipsis" ToolTip="以当前账号同步权益为准" VerticalAlignment="Center"/>
+                                <TextBlock Grid.Row="1" Text="字符额度" Style="{StaticResource InfoLabel}" Foreground="{DynamicResource Brush.OnInkMuted}" VerticalAlignment="Top" Margin="{DynamicResource Spacing.InlineLoose}"/>
                                 <StackPanel Grid.Row="1" Grid.Column="1">
-                                    <TextBlock Text="{Binding OnlineQuotaText}" FontSize="{DynamicResource FontSize.SectionTitle}" FontWeight="SemiBold" Foreground="{DynamicResource Brush.TextPrimary}" TextTrimming="CharacterEllipsis" ToolTip="离线翻译按原文字符的 30% 计量" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{Binding OnlineQuotaText}" FontFamily="{DynamicResource FontFamily.Display}" FontSize="{DynamicResource FontSize.SectionTitle}" FontWeight="SemiBold" Foreground="{DynamicResource Brush.OnInk}" TextTrimming="CharacterEllipsis" ToolTip="离线翻译按原文字符的 30% 计量" VerticalAlignment="Center"/>
                                     <!-- 额度条固定 360 DIP 并靠左：ProgressBar 自身 desired width 近 0，
                                          必须由外层给出确定宽度，否则轨道会被压成 0 宽。 -->
                                     <Grid Width="360" HorizontalAlignment="Left" Margin="{DynamicResource Spacing.BlockTopTight}">
-                                        <ProgressBar x:Name="QuotaProgress" Minimum="0" Maximum="{Binding OnlineUsage.MonthlyQuota}" Value="{Binding OnlineUsage.Remaining, Mode=OneWay}" Height="5"><ProgressBar.Style><Style TargetType="ProgressBar" BasedOn="{StaticResource {x:Type ProgressBar}}"><Style.Triggers><DataTrigger Binding="{Binding OnlineUsage}" Value="{x:Null}"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger><DataTrigger Binding="{Binding OnlineUsage.MonthlyQuota}" Value="0"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></ProgressBar.Style></ProgressBar>
+                                        <ProgressBar x:Name="QuotaProgress" Minimum="0" Maximum="{Binding OnlineUsage.MonthlyQuota}" Value="{Binding OnlineUsage.Remaining, Mode=OneWay}" Foreground="{DynamicResource Brush.Amber}" Background="{DynamicResource Brush.OnInkTrack}" Height="5"><ProgressBar.Style><Style TargetType="ProgressBar" BasedOn="{StaticResource {x:Type ProgressBar}}"><Style.Triggers><DataTrigger Binding="{Binding OnlineUsage}" Value="{x:Null}"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger><DataTrigger Binding="{Binding OnlineUsage.MonthlyQuota}" Value="0"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></ProgressBar.Style></ProgressBar>
                                     </Grid>
                                 </StackPanel>
-                                <TextBlock Grid.Row="2" Text="会员有效期" Style="{StaticResource InfoLabel}" VerticalAlignment="Center" Margin="{DynamicResource Spacing.InlineLoose}"/>
-                                <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding OnlineMembershipExpiryText}" FontSize="{DynamicResource FontSize.Body}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="购买后刷新，可同步最新权益" VerticalAlignment="Center"/>
+                                <TextBlock Grid.Row="2" Text="会员有效期" Style="{StaticResource InfoLabel}" Foreground="{DynamicResource Brush.OnInkMuted}" VerticalAlignment="Center" Margin="{DynamicResource Spacing.InlineLoose}"/>
+                                <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding OnlineMembershipExpiryText}" FontFamily="{DynamicResource FontFamily.Mono}" Foreground="{DynamicResource Brush.OnInk}" FontSize="{DynamicResource FontSize.Body}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="购买后刷新，可同步最新权益" VerticalAlignment="Center"/>
                             </Grid>
                         </Grid>
                         <!-- 额度环形用量图（已用占比）：跨卡片两行，与左侧「身份 + 三项权益」共享垂直空间。
@@ -134,12 +143,14 @@
                                     </Style.Triggers>
                                 </Style>
                             </Grid.Style>
-                            <pages:QuotaRing x:Name="QuotaRingChart" Width="136" Height="136" RingThickness="11" Used="{Binding OnlineUsage.Used}" Quota="{Binding OnlineUsage.MonthlyQuota}" TrackBrush="{DynamicResource Brush.BackgroundAlt}" FillBrush="{DynamicResource Brush.Primary}" ToolTip="{Binding OnlineQuotaText}"/>
+                            <pages:QuotaRing x:Name="QuotaRingChart" Width="136" Height="136" RingThickness="11" Used="{Binding OnlineUsage.Used}" Quota="{Binding OnlineUsage.MonthlyQuota}" TrackBrush="{DynamicResource Brush.OnInkTrack}" FillBrush="{DynamicResource Brush.Amber}" ToolTip="{Binding OnlineQuotaText}"/>
                             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False">
-                                <TextBlock Text="{Binding OnlineUsage, Converter={StaticResource Account.UsagePercentText}}" FontSize="{DynamicResource FontSize.Kpi}" FontWeight="SemiBold" Foreground="{DynamicResource Brush.Primary}" HorizontalAlignment="Center"/>
-                                <TextBlock Text="额度已用" FontSize="{DynamicResource FontSize.KpiLabel}" Foreground="{DynamicResource Brush.TextMuted}" HorizontalAlignment="Center"/>
+                                <TextBlock Text="{Binding OnlineUsage, Converter={StaticResource Account.UsagePercentText}}" FontFamily="{DynamicResource FontFamily.Display}" FontSize="{DynamicResource FontSize.Kpi}" FontWeight="SemiBold" Foreground="{DynamicResource Brush.Amber}" HorizontalAlignment="Center"/>
+                                <TextBlock Text="额度已用" FontSize="{DynamicResource FontSize.KpiLabel}" Foreground="{DynamicResource Brush.OnInkMuted}" HorizontalAlignment="Center"/>
                             </StackPanel>
                         </Grid>
+                        <!-- 手作装饰：横幅右上角的八芒星火花 -->
+                        <Path Data="{StaticResource Icon.Deco.Spark}" Width="12" Height="12" Stretch="Uniform" Fill="{DynamicResource Brush.OnInkAccent}" Opacity="0.85" Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,0,2,0" IsHitTestVisible="False"/>
                     </Grid>
                 </Border>
                 <Grid x:Name="MembershipDetails" SizeChanged="MembershipDetails_SizeChanged">
@@ -150,6 +161,7 @@
                              而是让卡片贴合自身内容（VerticalAlignment=Top），空白不再出现在卡片内部。 -->
                         <Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                             <StackPanel>
+                                <TextBlock Text="PLANS · ORDERS" Style="{StaticResource Kicker}"/>
                                 <TextBlock Text="套餐与订单" Style="{StaticResource SectionTitleStyle}"/>
                                 <TextBlock Text="选择会员或补充额度" Style="{StaticResource CaptionStyle}" Margin="{DynamicResource Spacing.BlockTopTight}"/>
                                 <!-- 与左侧设备卡等高时填补卡片中段的空白：给一条真实的本周期额度重置时间
@@ -215,7 +227,15 @@
         <!-- 刷新指示器是覆盖层：与 ScrollViewer 同级、贴顶 4 DIP，不占布局高度
              （冒烟断言要求刷新前后内容高度差 < 0.5） -->
         <Border x:Name="AccountRefreshIndicator" Panel.ZIndex="10" HorizontalAlignment="Stretch" VerticalAlignment="Top" Height="4" Background="{DynamicResource Brush.SurfaceAlt}" IsHitTestVisible="False" Visibility="{Binding IsAccountRefreshing, Converter={StaticResource BoolToVis}}">
-            <ProgressBar IsIndeterminate="True" Height="4" />
+            <!-- 刻意不使用 indeterminate ProgressBar：它的 Forever 动画——全局模板的 LoadingPulse
+                 （DoubleAnimation）与默认 Aero 模板的 DoubleAnimationUsingKeyFrames——会在视觉树被
+                 重新挂载（如冒烟 CaptureLayout 把内容摘到游离 Border 里渲染）或模板切换时被孤儿化泄漏。
+                 即便 IsAccountRefreshing 随后回到 false，这些时钟也已无法被 ExitActions/RemoveStoryboard
+                 移除，永久 tick：WPF TimeManager 因活跃时钟每帧请求合成，渲染线程空转、ApplicationIdle
+                 永久饿死（UI 冒烟卡在 account 页、生产环境隐藏进度条白烧 CPU 的根因）。
+                 静态琥珀条靠外层 Border 的 Visibility=IsAccountRefreshing 显隐即可传达"刷新中"，
+                 零动画泄漏风险；⑩ 的过程动画由状态栏 StatusPulse/ActivityDots 承担，与此无关。 -->
+            <Border Height="4" Background="{DynamicResource Brush.Amber}" />
         </Border>
         </Grid>
     </Grid>

@@ -17,6 +17,15 @@
     <sys:Double x:Key="FontSize.TableHeader">13</sys:Double>
     <sys:Double x:Key="FontSize.Kpi">26</sys:Double>
     <sys:Double x:Key="FontSize.KpiLabel">13</sys:Double>
+    <!-- ── 品牌字体（暖色手作杂志风 2026-09-19）──
+         Display = 衬线：标题 / 数据大字（拉丁走 Georgia 的编辑部数字，中文落宋体系）
+         Body    = 无衬线：正文（用户装了 Inter 就用 Inter，否则雅黑）
+         Mono    = 等宽：编号 / 标签 / 版本 / 路径 / 日志（禁止用于中文长句） -->
+    <FontFamily x:Key="FontFamily.Display">Georgia, Source Han Serif SC, Noto Serif SC, SimSun</FontFamily>
+    <FontFamily x:Key="FontFamily.Body">Inter, Microsoft YaHei UI, Segoe UI</FontFamily>
+    <FontFamily x:Key="FontFamily.Mono">Cascadia Mono, Consolas, Microsoft YaHei UI</FontFamily>
+    <sys:Double x:Key="FontSize.Kicker">11</sys:Double>
+    <sys:Double x:Key="FontSize.MonoTag">11.5</sys:Double>
     <!-- ── 8pt 间距系统 ── -->
     <Thickness x:Key="Spacing.Page">32,24</Thickness>
     <Thickness x:Key="Spacing.PageTop">0,12,0,10</Thickness>
@@ -53,6 +62,9 @@
     <Thickness x:Key="Spacing.Lead">0,6,0,0</Thickness>
     <Thickness x:Key="Spacing.CardInset">0,12,0,6</Thickness>
     <Thickness x:Key="Spacing.RowInset">0,16,0,8</Thickness>
+    <!-- §L14 全出血表格卡片（Padding=0）的标题行内衬：左右 12 与表格单元文字对齐
+         （DataGrid 单元内边距 12），标题不再贴住卡片左边框。 -->
+    <Thickness x:Key="Spacing.TableHeaderInset">12,8,12,8</Thickness>
     <Thickness x:Key="Spacing.Toolbar">0,4,0,8</Thickness>
     <Thickness x:Key="Spacing.LeftGap">8,0,0,0</Thickness>
     <!-- 选项说明文字的左缩进：对齐到单选框/复选框的文字起点，而不是圆点。 -->
@@ -72,6 +84,7 @@
     <sys:Double x:Key="Size.Stroke">1.5</sys:Double>
     <!-- ── 文本层级样式 ── -->
     <Style x:Key="PageTitleStyle" TargetType="TextBlock"><Setter Property="LineHeight" Value="32"/>
+        <Setter Property="FontFamily" Value="{DynamicResource FontFamily.Display}" />
         <Setter Property="FontSize" Value="{DynamicResource FontSize.PageTitle}" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}" />
@@ -83,11 +96,13 @@
         <Setter Property="Margin" Value="0,8,0,0" />
     </Style>
     <Style x:Key="SectionTitleStyle" TargetType="TextBlock"><Setter Property="LineHeight" Value="24"/>
+        <Setter Property="FontFamily" Value="{DynamicResource FontFamily.Display}" />
         <Setter Property="FontSize" Value="{DynamicResource FontSize.SectionTitle}" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}" />
     </Style>
     <Style x:Key="CardTitleStyle" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{DynamicResource FontFamily.Display}" />
         <Setter Property="FontSize" Value="{DynamicResource FontSize.CardTitle}" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}" />
@@ -104,6 +119,7 @@
         <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
     <Style x:Key="KpiNumberStyle" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{DynamicResource FontFamily.Display}" />
         <Setter Property="FontSize" Value="{DynamicResource FontSize.Kpi}" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}" />
@@ -249,6 +265,7 @@
         <Setter Property="StrokeThickness" Value="{DynamicResource Size.Stroke}" />
     </Style>
     <Style x:Key="EmptyState.Title" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{DynamicResource FontFamily.Display}" />
         <Setter Property="FontSize" Value="{DynamicResource FontSize.SectionTitle}" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}" />
@@ -308,6 +325,7 @@
         <Setter Property="TextTrimming" Value="CharacterEllipsis" />
     </Style>
     <Style x:Key="InfoValueStrong" TargetType="TextBlock" BasedOn="{StaticResource InfoValue}">
+        <Setter Property="FontFamily" Value="{DynamicResource FontFamily.Display}" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="FontSize" Value="{DynamicResource FontSize.SectionTitle}" />
     </Style>

@@ -48,7 +48,7 @@ public partial class MainViewModel
     }
     private void NotifyAccount()
     {
-        foreach (var name in new[] { nameof(IsAccountLoggedIn), nameof(AccountEntryText), nameof(AccountAvatarText), nameof(AccountDisplayNameText), nameof(AccountEmailText), nameof(OnlinePlanText), nameof(OnlineMembershipExpiryText), nameof(OnlineQuotaText), nameof(DeviceCountText), nameof(AccountSessionText), nameof(HasSavedAccountSession), nameof(TranslationServiceText) }) OnPropertyChanged(name);
+        foreach (var name in new[] { nameof(IsAccountLoggedIn), nameof(AccountEntryText), nameof(AccountAvatarText), nameof(AccountDisplayNameText), nameof(AccountEmailText), nameof(OnlinePlanText), nameof(OnlineMembershipExpiryText), nameof(OnlineQuotaText), nameof(OnlineQuotaCompactText), nameof(OnlineQuotaRatio), nameof(DeviceCountText), nameof(AccountSessionText), nameof(HasSavedAccountSession), nameof(TranslationServiceText) }) OnPropertyChanged(name);
     }
     public string AccountAvatarText
     {
@@ -118,8 +118,34 @@ public partial class MainViewModel
         catch (Exception ex) { Log.Debug("会员快照暂不可用：{Type}", ex.GetType().Name); return null; }
     }
 
-    partial void OnOnlineUsageChanged(UsageInfo? value) => OnPropertyChanged(nameof(OnlineQuotaText));
+    partial void OnOnlineUsageChanged(UsageInfo? value)
+    {
+        OnPropertyChanged(nameof(OnlineQuotaText));
+        OnPropertyChanged(nameof(OnlineQuotaCompactText));
+        OnPropertyChanged(nameof(OnlineQuotaRatio));
+    }
     public string OnlineQuotaText => OnlineUsage == null ? "额度待同步" : $"剩余 {OnlineUsage.Remaining:N0} / {OnlineUsage.MonthlyQuota:N0}";
+
+    /// <summary>
+    /// 顶栏会员卡 chip 的紧凑额度文案（如「剩余 10.08 亿 / 10.08 亿」）。
+    /// 完整数字仍在 <see cref="OnlineQuotaText"/>（chip 的 ToolTip）里，
+    /// MembershipLayoutSmoke 对它的断言不受影响。
+    /// </summary>
+    public string OnlineQuotaCompactText => OnlineUsage == null
+        ? "额度待同步"
+        : $"剩余 {FormatQuotaCompact(OnlineUsage.Remaining)} / {FormatQuotaCompact(OnlineUsage.MonthlyQuota)}";
+
+    /// <summary>剩余额度百分比（0-100）：顶栏 chip 内迷你进度条的值。</summary>
+    public double OnlineQuotaRatio => OnlineUsage == null || OnlineUsage.MonthlyQuota <= 0
+        ? 0
+        : Math.Clamp(OnlineUsage.Remaining * 100.0 / OnlineUsage.MonthlyQuota, 0, 100);
+
+    private static string FormatQuotaCompact(long value) => value switch
+    {
+        >= 100_000_000L => (value / 100_000_000.0).ToString("0.##") + " 亿",
+        >= 10_000L => (value / 10_000.0).ToString("0.#") + " 万",
+        _ => value.ToString("N0")
+    };
     public string DeviceCountText => !_devicesSynced ? "设备待同步" : $"已绑定 {OnlineDevices.Count} 台设备";
 
     /// <summary>
@@ -402,7 +428,7 @@ public partial class MainViewModel
         DrawingFiles.Clear(); Entities.Clear(); FilteredEntities.Clear(); _entityIndex = null;
         SelectedDrawingFile = null; SelectedFilePath = ""; HasDrawingFiles = false; HasMultipleDrawingFiles = false;
         TotalCount = TranslatedCount = FailedCount = GlossaryHitCount = CacheHitCount = 0;
-        _config.ExportDirectory = DwgTranslator.Core.Services.AccountWorkspace.OutputDirectoryFor(_config, App.AppDataDir, null, DefaultOutputFolderName);
+        _config.ExportDirectory = DwgTranslator.Core.Services.AccountWorkspace.OutputDirectoryFor(_config, App.AppDataDir, null, DefaultOutputFolderName, App.InstallDir);
         _settingsDraft = null;
         OnPropertyChanged(nameof(SettingsDraft));
         if (!string.IsNullOrWhiteSpace(_config.ExportDirectory))

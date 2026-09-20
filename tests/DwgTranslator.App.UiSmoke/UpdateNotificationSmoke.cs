@@ -17,14 +17,14 @@ public sealed partial class SmokeApp
         {
             config.AutoCheckUpdate = false;
             vm.CurrentPage = MainViewModel.PageAccount;
-            await Dispatcher.InvokeAsync(() => { }, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+            await NavIdleAsync();
             var accountPage = FindVisual<DwgTranslator.App.Views.Pages.AccountPage>(window);
             var recoveryButton = (Button)accountPage.FindName("SavedSessionRecoveryButton");
             Check(vm.HasSavedAccountSession || !recoveryButton.IsVisible, "signed-out account does not expose a dead session recovery action");
             vm.CurrentPage = MainViewModel.PageSettings; vm.SettingsSection = 5;
-            await Dispatcher.InvokeAsync(() => { }, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+            await NavIdleAsync();
             var settingsPage = FindVisual<DwgTranslator.App.Views.Pages.SettingsPage>(window);
-            Check(FindVisuals<TextBlock>(settingsPage).Any(t => t.Text.Contains("公告不参与版本判断") && t.Text.Contains("网盘仅作为下载地址")), "about page explains independent update source");
+            // §L21 原「关于页解释独立更新源」断言随内部机制说明文字一起移除：用户要求设置页不展示开发者向小字。
             Check(!vm.AppReleaseVersionText.Contains('+') && !vm.AppBuildText.Contains(vm.AppVersionText), "about page separates release version from build identity");
             Check(settingsPage.FindName("AboutUpdatePanel") is FrameworkElement, "about page has integrated update status panel");
             var updateButton = (Button)settingsPage.FindName("AboutUpdateButton");

@@ -7,7 +7,7 @@ using System.Windows.Controls.Primitives;
 
 namespace DwgTranslator.App.Views.Pages;
 
-/// <summary>BatchTasksPage — 批量任务页，由 MainWindow 的侧栏切换。</summary>
+/// <summary>BatchTasksPage — 任务中心页（原「批量任务」，2026-10-02 更名），由 MainWindow 的侧栏切换。</summary>
 public partial class BatchTasksPage : UserControl
 {
     public BatchTasksPage()

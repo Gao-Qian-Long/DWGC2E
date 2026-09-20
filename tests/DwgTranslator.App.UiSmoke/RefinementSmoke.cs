@@ -29,12 +29,12 @@ public sealed partial class SmokeApp
         Check(Math.Abs(((System.Windows.Controls.ColumnDefinition)window.FindName("SidebarColumn")).Width.Value - 64) < 0.1,
             "compact sidebar collapses to the 64 DIP icon rail");
         vm.CurrentPage = MainViewModel.PageSettings;
-        await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+        await NavIdleAsync();
         var compactSettings = FindVisual<SettingsPage>(window);
         Check(((FrameworkElement)compactSettings.FindName("CompactSections")).IsVisible,
             "compact window exposes the section picker instead of the hidden nav column");
         vm.CurrentPage = "translate";
-        await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+        await NavIdleAsync();
         window.Width = 1280; window.Height = 720;
         await WaitForStableAsync(() => window.ActualWidth, "window width 1280x720");
         Check(!ResponsiveLayout.GetIsCompact(window), "leaving the minimum restores the full sidebar");
@@ -50,7 +50,7 @@ public sealed partial class SmokeApp
             foreach (var page in new[] { "translate", "batch", "glossary", "account", "settings" })
             {
                 vm.CurrentPage = page;
-                await Dispatcher.InvokeAsync(() => {}, DispatcherPriority.ApplicationIdle);
+                await NavIdleAsync();
                 var header = FindVisuals<PageHeader>(window).Single(x => x.IsVisible);
                 Check(header.TranslatePoint(new Point(), root).X >= 64, "header remains within content " + page + size);
                 Check(header.TranslatePoint(new Point(header.ActualWidth,0), root).X <= root.ActualWidth + 1, "header not clipped horizontally " + page + size);
@@ -386,7 +386,7 @@ public sealed partial class SmokeApp
                     for (var section = 0; section < 6; section++)
                     {
                         vm.SettingsSection = section;
-                        await Dispatcher.InvokeAsync(() => {}, DispatcherPriority.ApplicationIdle);
+                        await NavIdleAsync();
                         Capture(window, $"compact-settings-{section}-{size.Width}-{size.Height}");
                     }
                     vm.SettingsSection = 0;
@@ -400,7 +400,7 @@ public sealed partial class SmokeApp
         window.Width = 1366; window.Height = 768;
         await Dispatcher.InvokeAsync(() => {}, DispatcherPriority.ApplicationIdle);
         vm.CurrentPage = previous;
-        await Dispatcher.InvokeAsync(() => {}, DispatcherPriority.ApplicationIdle);
+        await NavIdleAsync();
         // Standalone host avoids consuming actual view-model notifications in the shell.
         var toast = new ToastHost();
         var paused = false; toast.ShouldPause = () => paused;

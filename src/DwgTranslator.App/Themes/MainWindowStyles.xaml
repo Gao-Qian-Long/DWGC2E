@@ -21,15 +21,24 @@
                             <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                             <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
                             <StackPanel VerticalAlignment="Center" Margin="0,0,16,0">
-                                <TextBlock Text="{TemplateBinding Header}" Style="{StaticResource PageTitleStyle}" />
+                                <!-- 品牌签名：衬线页标题 + 琥珀手绘波浪线（暖色手作杂志风） -->
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{TemplateBinding Header}" Style="{StaticResource PageTitleStyle}" />
+                                    <Path x:Name="HeaderWaveInline" Data="{StaticResource Icon.Deco.Wave}" Width="56" Height="5" Stretch="Fill"
+                                          Stroke="{DynamicResource Brush.Amber}" StrokeThickness="1.6"
+                                          StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                          VerticalAlignment="Bottom" Margin="12,0,0,7" IsHitTestVisible="False" />
+                                </StackPanel>
                                 <!-- 副标题强制单行：它的长度随运行状态变化（TranslatePage 是 MultiBinding），
                                      换行会顶破 MinHeight 定下的页头节奏；省略号 + ToolTip 既保高度也不吞信息。 -->
                                 <TextBlock x:Name="HeaderDescription" Text="{TemplateBinding Description}" Style="{StaticResource PageSubtitleStyle}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" ToolTip="{TemplateBinding Description}" />
+                                <!-- 品牌签名：标题下的琥珀手绘波浪线（暖色手作杂志风） -->
+                                <Path x:Name="HeaderWave" Style="{StaticResource Deco.WaveRule}" Width="56" Margin="2,5,0,0" />
                             </StackPanel>
                             <ContentPresenter x:Name="HeaderActions" Grid.Column="1" VerticalAlignment="Center" ContentSource="Content" />
                         </Grid>
                     </Border>
-                    <ControlTemplate.Triggers><DataTrigger Binding="{Binding Path=IsStacked, RelativeSource={RelativeSource Self}}" Value="True"><Setter TargetName="HeaderActions" Property="Grid.Row" Value="1"/><Setter TargetName="HeaderActions" Property="Grid.Column" Value="0"/><Setter TargetName="HeaderActions" Property="Grid.ColumnSpan" Value="2"/><Setter TargetName="HeaderActions" Property="Margin" Value="0,8,0,0"/></DataTrigger><DataTrigger Binding="{Binding Path=(controls:ResponsiveLayout.IsShort), RelativeSource={RelativeSource Self}}" Value="True"><Setter Property="MinHeight" Value="40"/><Setter Property="Margin" Value="0,0,0,8"/><Setter TargetName="HeaderDescription" Property="Visibility" Value="Collapsed"/><Setter TargetName="HeaderBorder" Property="Padding" Value="0,0,0,8"/></DataTrigger></ControlTemplate.Triggers>
+                    <ControlTemplate.Triggers><DataTrigger Binding="{Binding Path=IsStacked, RelativeSource={RelativeSource Self}}" Value="True"><Setter TargetName="HeaderActions" Property="Grid.Row" Value="1"/><Setter TargetName="HeaderActions" Property="Grid.Column" Value="0"/><Setter TargetName="HeaderActions" Property="Grid.ColumnSpan" Value="2"/><Setter TargetName="HeaderActions" Property="Margin" Value="0,8,0,0"/></DataTrigger><DataTrigger Binding="{Binding Path=(controls:ResponsiveLayout.IsShort), RelativeSource={RelativeSource Self}}" Value="True"><Setter Property="MinHeight" Value="40"/><Setter Property="Margin" Value="0,0,0,8"/><Setter TargetName="HeaderDescription" Property="Visibility" Value="Collapsed"/><Setter TargetName="HeaderBorder" Property="Padding" Value="0,0,0,8"/></DataTrigger><DataTrigger Binding="{Binding Path=WaveVariant, RelativeSource={RelativeSource Self}}" Value="2"><Setter TargetName="HeaderWaveInline" Property="Data" Value="{StaticResource Icon.Deco.Wave2}"/><Setter TargetName="HeaderWave" Property="Data" Value="{StaticResource Icon.Deco.Wave2}"/></DataTrigger><DataTrigger Binding="{Binding Path=WaveVariant, RelativeSource={RelativeSource Self}}" Value="3"><Setter TargetName="HeaderWaveInline" Property="Data" Value="{StaticResource Icon.Deco.Wave3}"/><Setter TargetName="HeaderWave" Property="Data" Value="{StaticResource Icon.Deco.Wave3}"/></DataTrigger><DataTrigger Binding="{Binding Path=WaveVariant, RelativeSource={RelativeSource Self}}" Value="4"><Setter TargetName="HeaderWaveInline" Property="Data" Value="{StaticResource Icon.Deco.Wave4}"/><Setter TargetName="HeaderWave" Property="Data" Value="{StaticResource Icon.Deco.Wave4}"/></DataTrigger><DataTrigger Binding="{Binding Path=WaveVariant, RelativeSource={RelativeSource Self}}" Value="5"><Setter TargetName="HeaderWaveInline" Property="Data" Value="{StaticResource Icon.Deco.Wave5}"/><Setter TargetName="HeaderWave" Property="Data" Value="{StaticResource Icon.Deco.Wave5}"/></DataTrigger></ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
@@ -45,14 +54,14 @@
     </Style>
     <!-- Global typography: controls inherit one family and one body size. -->
     <Style TargetType="UserControl">
-        <Setter Property="FontFamily" Value="Microsoft YaHei UI, Segoe UI" />
+        <Setter Property="FontFamily" Value="{DynamicResource FontFamily.Body}" />
         <Setter Property="FontSize" Value="{DynamicResource FontSize.Body}" />
         <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}" />
         <Setter Property="TextOptions.TextFormattingMode" Value="Display" />
         <Setter Property="UseLayoutRounding" Value="True" />
     </Style>
     <Style TargetType="TextBlock">
-        <Setter Property="FontFamily" Value="Microsoft YaHei UI, Segoe UI" />
+        <Setter Property="FontFamily" Value="{DynamicResource FontFamily.Body}" />
     </Style>
     <!-- ── 转换器与效果（页面与控件通过 StaticResource 引用，键名不能变）── -->
     <conv:BoolToVisibilityConverter x:Key="BoolToVis" />
@@ -124,6 +133,9 @@
         <Setter Property="Foreground" Value="White" />
         <Setter Property="Background" Value="{DynamicResource Brush.Primary}" />
         <Setter Property="BorderThickness" Value="0" />
+        <!-- 印刷式硬偏移阴影：对应网站 .btn-primary 的 box-shadow:3px 3px 0 墨色；
+             禁用态收掉阴影，避免"能点"的错觉。 -->
+        <Setter Property="Effect" Value="{StaticResource Shadow.HardPrimary}" />
         <Style.Triggers>
             <MultiTrigger>
                 <MultiTrigger.Conditions>
@@ -132,6 +144,9 @@
                 </MultiTrigger.Conditions>
                 <Setter Property="Background" Value="{DynamicResource Brush.PrimaryHover}" />
             </MultiTrigger>
+            <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="Effect" Value="{x:Null}" />
+            </Trigger>
         </Style.Triggers>
     </Style>
     <!-- Secondary：白底 + 浅边框 -->
@@ -276,7 +291,7 @@
     <Style x:Key="ToolbarCard" TargetType="Border" BasedOn="{StaticResource Card}" />
     <Style x:Key="StripCard" TargetType="Border" BasedOn="{StaticResource Card.Inset}" />
     <Style x:Key="StatsBadge" TargetType="Border">
-        <Setter Property="Background" Value="{DynamicResource Brush.PrimaryLight}" />
+        <Setter Property="Background" Value="{DynamicResource Brush.AmberSoft}" />
         <Setter Property="CornerRadius" Value="{DynamicResource CornerRadius.Small}" />
         <Setter Property="Padding" Value="8,4" />
         <Setter Property="SnapsToDevicePixels" Value="True" />
@@ -289,6 +304,7 @@
     <Style x:Key="DataGridHeaderStyle" TargetType="DataGridColumnHeader">
         <Setter Property="Background" Value="{DynamicResource Brush.DataGridHeader}" />
         <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}" />
+        <Setter Property="FontFamily" Value="{DynamicResource FontFamily.Mono}" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="FontSize" Value="{DynamicResource FontSize.TableHeader}" />
         <Setter Property="Height" Value="{DynamicResource Size.TableHeader}" />
@@ -419,7 +435,10 @@
         <Setter Property="Background" Value="{DynamicResource Brush.Surface}" />
         <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border}" />
         <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="Padding" Value="11,0" />
+        <!-- 2026-10-02：左内边距 11→10、箭头列 30→28——「全部时间」这类四字项在 116-128 宽
+             列里被右侧截断（用户反馈）。配合 ComboBoxItem 模板去掉外边距，闭合框文字总占位
+             从 ~25px 缩到 ~20px，四字项 + 箭头在 128 列宽内完整显示。 -->
+        <Setter Property="Padding" Value="10,0" />
         <Setter Property="Cursor" Value="Hand" />
         <Setter Property="SnapsToDevicePixels" Value="True" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
@@ -431,7 +450,7 @@
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="30" />
+                                    <ColumnDefinition Width="28" />
                                 </Grid.ColumnDefinitions>
                                 <!-- 必须用完整 Binding：TemplateBinding 不跟踪 SelectionBoxItem* 的后续更新，
                                      否则 DisplayMemberPath 不生效、下拉框里显示成类型名 -->
@@ -477,14 +496,16 @@
         </Setter>
     </Style>
     <Style TargetType="ComboBoxItem">
-        <Setter Property="Padding" Value="10,7" />
+        <!-- 上下 7→6：闭合框里选中项被克隆显示，7+7+行高超过 30px 内容高会竖向裁切（"没居中"的成因之一） -->
+        <Setter Property="Padding" Value="10,6" />
         <Setter Property="FontSize" Value="{DynamicResource FontSize.Body}" />
         <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}" />
         <Setter Property="Cursor" Value="Hand" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ComboBoxItem">
-                    <Border x:Name="Bd" Background="Transparent" Margin="4,1" CornerRadius="{DynamicResource CornerRadius.Small}" Padding="{TemplateBinding Padding}" SnapsToDevicePixels="True">
+                    <!-- Margin 4,1→0：克隆进闭合框时这圈外边距会把文字再推离左边 4px 并挤占宽度 -->
+                    <Border x:Name="Bd" Background="Transparent" Margin="0" CornerRadius="{DynamicResource CornerRadius.Small}" Padding="{TemplateBinding Padding}" SnapsToDevicePixels="True">
                         <ContentPresenter VerticalAlignment="Center" />
                     </Border>
                     <ControlTemplate.Triggers>
@@ -692,14 +713,14 @@
     </Style>
     <!-- 页面区块容器。旧写法是「透明底 + 只有一条顶线」，那是分区而不是卡片，
          也是用户说「没有框架、很乱」的直接来源。现在与 Card 同为印刷卡片。
-         Padding 用 16 而不是 Spacing.Card(20)：这 11 处容器里有些高度受断言约束，
-         先在可控范围内拿到卡片观感。 -->
+         §L14 用户反馈「文字太靠近左边边框」：Padding 从 16 的妥协值回到 Spacing.Card(20)。
+         冒烟对高度的断言全是下界（≥40/≥64/≥120…），加 4 DIP 内边距只会更安全。 -->
     <Style x:Key="Section.Surface" TargetType="Border">
         <Setter Property="Background" Value="{DynamicResource Brush.Surface}" />
         <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="CornerRadius" Value="{DynamicResource CornerRadius.Medium}" />
-        <Setter Property="Padding" Value="16" />
+        <Setter Property="Padding" Value="{DynamicResource Spacing.Card}" />
         <Setter Property="SnapsToDevicePixels" Value="True" />
         <Setter Property="Effect" Value="{StaticResource Shadow.Hard}" />
     </Style>

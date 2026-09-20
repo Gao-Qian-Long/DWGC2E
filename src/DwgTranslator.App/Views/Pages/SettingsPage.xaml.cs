@@ -5,7 +5,44 @@ using DwgTranslator.Core.Services;
 namespace DwgTranslator.App.Views.Pages;
 public partial class SettingsPage : UserControl
 {
-    public SettingsPage() { InitializeComponent(); SizeChanged += (_, _) => UpdateLayoutMode(); Loaded += (_, _) => UpdateLayoutMode(); AddHandler(TextBox.TextChangedEvent, new TextChangedEventHandler((_,_) => Dispatcher.BeginInvoke(new Action(UpdateSaveState)))); AddHandler(System.Windows.Controls.Primitives.ToggleButton.CheckedEvent,new RoutedEventHandler((_,_)=>Dispatcher.BeginInvoke(new Action(UpdateSaveState)))); AddHandler(System.Windows.Controls.Primitives.ToggleButton.UncheckedEvent,new RoutedEventHandler((_,_)=>UpdateSaveState())); AddHandler(System.Windows.Controls.Primitives.Selector.SelectionChangedEvent,new SelectionChangedEventHandler((_,_)=>Dispatcher.BeginInvoke(new Action(UpdateSaveState)))); IsVisibleChanged += (_,_)=>UpdateSaveState(); Loaded += (_, _) => { if (DataContext is MainViewModel vm) { EnvironmentHost.Content = new EnvironmentCheckPanel(vm); vm.ValidateSettingsInputs = () => !HasValidationError(this); vm.NotifySettingsDraftState(!HasValidationError(this)); } }; }
+    public SettingsPage() { InitializeComponent(); SizeChanged += (_, _) => UpdateLayoutMode(); Loaded += (_, _) => UpdateLayoutMode(); AddHandler(TextBox.TextChangedEvent, new TextChangedEventHandler((_,_) => Dispatcher.BeginInvoke(new Action(UpdateSaveState)))); AddHandler(System.Windows.Controls.Primitives.ToggleButton.CheckedEvent,new RoutedEventHandler((_,_)=>Dispatcher.BeginInvoke(new Action(UpdateSaveState)))); AddHandler(System.Windows.Controls.Primitives.ToggleButton.UncheckedEvent,new RoutedEventHandler((_,_)=>UpdateSaveState())); AddHandler(System.Windows.Controls.Primitives.Selector.SelectionChangedEvent,new SelectionChangedEventHandler((_,_)=>Dispatcher.BeginInvoke(new Action(UpdateSaveState)))); IsVisibleChanged += (_,_)=>UpdateSaveState(); Loaded += (_, _) => { if (DataContext is MainViewModel vm) { EnvironmentHost.Content = new EnvironmentCheckPanel(vm); vm.ValidateSettingsInputs = () => !HasValidationError(this); vm.NotifySettingsDraftState(!HasValidationError(this)); } }; LiveLogAutoScroll(); }
+    // 实时日志列表：新条目到达时自动滚到底部，保持"正在运行"的滚动观感（设置-日志分区，2026-10-02）。
+    // Items（ItemCollection）自身实现 INotifyCollectionChanged，绑定晚到也不影响挂钩。
+    //
+    // 必须节流：日志高频流入时，逐条 ScrollIntoView 会触发布局失效风暴，其频率远高于渲染帧率，
+    // 让 Dispatcher 永远到不了 ApplicationIdle 优先级——UI 冒烟在设置日志分区可见 + 翻译进行中
+    // （日志持续流入）时实测挂死（matrix 阶段 IsProcessing=True，2026-10-02）。
+    // 注意：仅靠 IsVisible 守卫无效，因为冒烟/用户恰好在日志分区"可见"时才触发风暴。
+    // 解法：CollectionChanged 只置脏标记，由 300ms DispatcherTimer（Background 优先级）统一滚动，
+    // 把滚动频率与日志频率解耦；tick 之间队列可排空到 ApplicationIdle，等待不再被饿死。
+    private System.Windows.Threading.DispatcherTimer? _liveLogScrollTimer;
+    private volatile bool _liveLogScrollPending;
+    private void LiveLogAutoScroll()
+    {
+        if (LiveLogList == null) return;
+        ((System.Collections.Specialized.INotifyCollectionChanged)LiveLogList.Items).CollectionChanged += (_, e) =>
+        {
+            if (e.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Add
+                && e.NewItems is { Count: > 0 })
+                _liveLogScrollPending = true;
+        };
+        _liveLogScrollTimer = new System.Windows.Threading.DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(300)
+            // DispatcherTimer 默认即 Background 优先级（高于 ApplicationIdle）；300ms 的间隔让
+            // tick 之间留出空闲窗口，低优先级等待（冒烟的 Dispatcher.InvokeAsync(ApplicationIdle)）得以完成。
+        };
+        _liveLogScrollTimer.Tick += (_, _) =>
+        {
+            if (!_liveLogScrollPending) return;
+            _liveLogScrollPending = false;
+            if (LiveLogList.IsVisible && LiveLogList.IsLoaded && LiveLogList.Items.Count > 0)
+                LiveLogList.ScrollIntoView(LiveLogList.Items[^1]);
+        };
+        _liveLogScrollTimer.Start();
+        LiveLogList.Loaded += (_, _) => { if (LiveLogList.IsVisible && LiveLogList.Items.Count > 0) LiveLogList.ScrollIntoView(LiveLogList.Items[^1]); };
+        LiveLogList.Unloaded += (_, _) => { _liveLogScrollTimer?.Stop(); };
+    }
     private void UpdateLayoutMode()
     {
         var compact = Controls.ResponsiveLayout.GetIsCompact(this);

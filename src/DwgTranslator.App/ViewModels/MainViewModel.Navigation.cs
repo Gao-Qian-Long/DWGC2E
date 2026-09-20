@@ -12,7 +12,7 @@ namespace DwgTranslator.App.ViewModels;
 /// <summary>
 /// Shell navigation and the dashboard numbers shown next to the work area.
 ///
-/// The interface follows the product design: a sidebar with 图纸翻译 / 批量任务 / 术语库 / 会员中心 /
+/// The interface follows the product design: a sidebar with 图纸翻译 / 任务中心 / 术语库 / 会员中心 /
 /// an account strip, and per-page statistics. Everything here binds to data the application
 /// already owns — nothing is a placeholder that would mislead the user.
 /// </summary>

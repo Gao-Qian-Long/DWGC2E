@@ -1,8 +1,8 @@
-﻿# 五页截图巡回：启动（或复用）DWG Translator，用 UI 自动化逐个点开左侧导航并截图，
+# 五页截图巡回：启动（或复用）DWG Translator，用 UI 自动化逐个点开左侧导航并截图，
 # 用于逐页核对与设计稿的复刻程度。
 param(
     [string]$ExePath = 'D:\DWGC2E\release\DwgTranslator.exe',
-    [string[]]$Pages = @('图纸翻译', '批量任务', '术语库', '会员中心', '设置'),
+    [string[]]$Pages = @('图纸翻译', '任务中心', '术语库', '会员中心', '设置'),
     [string]$Tag = 'pages',
     [int]$StartupTimeoutSeconds = 45,
     [switch]$NoLaunch

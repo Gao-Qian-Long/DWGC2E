@@ -26,7 +26,7 @@
  </UserControl.Resources>
  <Grid Margin="{DynamicResource Spacing.Page}">
   <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-  <controls:PageHeader x:Name="WorkspaceHeader" Header="术语库" Description="管理工程术语、翻译规则及启用状态"><Button Content="＋ 添加术语" Command="{Binding AddTermCommand}" Style="{StaticResource Button.Primary}" ToolTip="新增术语 (Ctrl+N)"/></controls:PageHeader>
+  <controls:PageHeader x:Name="WorkspaceHeader" Header="术语库" WaveVariant="3" Description="管理工程术语、翻译规则及启用状态"><Button Content="＋ 添加术语" Command="{Binding AddTermCommand}" Style="{StaticResource Button.Primary}" ToolTip="新增术语 (Ctrl+N)"/></controls:PageHeader>
 
   <!-- Fixed grid rows replace business-level WrapPanels. Normal desktop widths keep every control visible. -->
   <Grid Grid.Row="1" Grid.RowSpan="3" Margin="{DynamicResource Spacing.BlockTopTight}">
@@ -147,11 +147,11 @@
   <Grid Grid.Row="5" Margin="{DynamicResource Spacing.BlockTop}">
    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
    <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-    <TextBlock Text="{Binding TermCountText}" FontSize="{DynamicResource FontSize.Secondary}" FontWeight="SemiBold" Foreground="{DynamicResource Brush.TextPrimary}" VerticalAlignment="Center"/>
+    <TextBlock Text="{Binding TermCountText}" FontFamily="{DynamicResource FontFamily.Mono}" FontSize="{DynamicResource FontSize.Secondary}" FontWeight="SemiBold" Foreground="{DynamicResource Brush.TextPrimary}" VerticalAlignment="Center"/>
     <Border Style="{StaticResource ToolbarDivider}" Height="12" VerticalAlignment="Center"/>
-    <TextBlock Text="{Binding TermLocalStatus}" FontSize="{DynamicResource FontSize.Secondary}" Foreground="{DynamicResource Brush.TextSecondary}" VerticalAlignment="Center" ToolTip="本机编辑即时保存到本地术语库"/>
+    <TextBlock Text="{Binding TermLocalStatus}" FontFamily="{DynamicResource FontFamily.Mono}" FontSize="{DynamicResource FontSize.Secondary}" Foreground="{DynamicResource Brush.TextSecondary}" VerticalAlignment="Center" ToolTip="本机编辑即时保存到本地术语库"/>
     <Border Style="{StaticResource ToolbarDivider}" Height="12" VerticalAlignment="Center"/>
-    <TextBlock Text="{Binding TermCloudStatus}" FontSize="{DynamicResource FontSize.Secondary}" Foreground="{DynamicResource Brush.TextMuted}" VerticalAlignment="Center" ToolTip="云端术语不与本机自动同步；需要时用「云端管理」"/>
+    <TextBlock Text="{Binding TermCloudStatus}" FontFamily="{DynamicResource FontFamily.Mono}" FontSize="{DynamicResource FontSize.Secondary}" Foreground="{DynamicResource Brush.TextMuted}" VerticalAlignment="Center" ToolTip="云端术语不与本机自动同步；需要时用「云端管理」"/>
    </StackPanel>
    <TextBlock Grid.Column="1" Text="{Binding TermFeedback}" MaxWidth="{DynamicResource Size.StatusTextMax}" TextTrimming="CharacterEllipsis" ToolTip="{Binding TermFeedback}" FontSize="{DynamicResource FontSize.Secondary}" Foreground="{DynamicResource Brush.TextSecondary}" VerticalAlignment="Center" Margin="{DynamicResource Spacing.InlineLoose}" AutomationProperties.LiveSetting="Polite"><TextBlock.Style><Style TargetType="TextBlock"><Style.Triggers><DataTrigger Binding="{Binding TermFeedback}" Value=""><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Visibility="{Binding ShowTermDraftActions, Converter={StaticResource BoolToVis}}"><Button Content="放弃草稿" Command="{Binding DiscardTermsCommand}" Margin="{DynamicResource Spacing.Inline}"/><Button Content="保存草稿到本机" Command="{Binding SaveTermsCommand}"/></StackPanel>

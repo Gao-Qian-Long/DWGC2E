@@ -18,6 +18,8 @@ namespace DwgTranslator.App;
 public partial class App : Application
 {
     public static string AppDataDir { get; } = ProductDataDirectory.Initialize(AppDomain.CurrentDomain.BaseDirectory);
+    /// <summary>安装目录（exe 所在目录）：默认输出 &lt;安装目录&gt;\exports 的锚点（2026-10-02 用户决定）。</summary>
+    public static string InstallDir { get; } = AppDomain.CurrentDomain.BaseDirectory;
 
     public static ILicenseService LicenseService { get; private set; } = null!;
     public static IServiceProvider Services { get; private set; } = null!;
@@ -213,9 +215,10 @@ public partial class App : Application
             string.Equals(arg, "-e", StringComparison.OrdinalIgnoreCase));
 
         // Ensure app data directories exist
+        // 注意：不再预建 AppData\exports —— 默认输出已改为 <安装目录>\exports（2026-10-02），
+        // AppData 下不留任何会被误认成"默认输出"的空目录。
         Directory.CreateDirectory(AppDataDir);
         Directory.CreateDirectory(Path.Combine(AppDataDir, "logs"));
-        Directory.CreateDirectory(Path.Combine(AppDataDir, "exports"));
         Directory.CreateDirectory(Path.Combine(AppDataDir, "glossaries"));
 
         // Configure structured logging

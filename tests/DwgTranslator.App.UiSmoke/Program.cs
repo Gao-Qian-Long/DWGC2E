@@ -23,7 +23,7 @@ public static class Program
         File.WriteAllText(settingsPath, legacyJson.Insert(legacyJson.IndexOf('{') + 1, "\n  \"apiMode\": \"direct\","));
         var app = new SmokeApp();
         app.Resources = new ResourceDictionary();
-        foreach (var name in new[] { "ColorTokens", "Icons", "Metrics", "MainWindowStyles" })
+        foreach (var name in new[] { "ColorTokens", "Icons", "Metrics", "Decorations", "MainWindowStyles" })
             app.Resources.MergedDictionaries.Add(new ResourceDictionary { Source = new Uri("pack://application:,,,/DwgTranslator;component/Themes/" + name + ".xaml") });
         return app.Run();
     }
@@ -37,7 +37,7 @@ public sealed partial class SmokeApp : App
         {
         base.OnStartup(e);
         Resources = new ResourceDictionary();
-        foreach (var name in new[] { "ColorTokens", "Icons", "Metrics", "MainWindowStyles" })
+        foreach (var name in new[] { "ColorTokens", "Icons", "Metrics", "Decorations", "MainWindowStyles" })
             Resources.MergedDictionaries.Add(new ResourceDictionary { Source = new Uri("pack://application:,,,/DwgTranslator;component/Themes/" + name + ".xaml") });
         var services = new ServiceCollection();
         typeof(App).GetMethod("ConfigureServices", BindingFlags.NonPublic | BindingFlags.Static)!.Invoke(null, new object[] { services });
@@ -68,6 +68,10 @@ public sealed partial class SmokeApp : App
     /// </summary>
     private static async Task SettleAsync(int rounds = 3)
     {
+        // 先清键盘焦点：停掉任何光标闪烁 Forever 时钟（聚焦的 TextBox），避免它饿死下面的
+        // ApplicationIdle 排空。CaptureLayout 已在摘树前清焦点（防孤儿化）；这里是针对"TextBox
+        // 合法持有焦点时直接调用 SettleAsync"路径的防御性补充（合法光标虽为 ~500ms 周期，但清掉更稳）。
+        System.Windows.Input.Keyboard.ClearFocus();
         for (var round = 0; round < rounds; round++)
         {
             foreach (var priority in new[] { DispatcherPriority.Input, DispatcherPriority.Loaded, DispatcherPriority.Render, DispatcherPriority.Background, DispatcherPriority.ApplicationIdle })
@@ -75,6 +79,27 @@ public sealed partial class SmokeApp : App
             Application.Current?.MainWindow?.UpdateLayout();
             await Task.Delay(10);
         }
+    }
+
+    /// <summary>
+    /// 页面导航后的落定助手。hang6-9 根因（dump 取证，artifacts\uismoke-hang7/8/9.dmp）：
+    /// 本方法此前用 "await Task.Delay(settleMs) + Keyboard.ClearFocus + ApplicationIdle" 结构；
+    /// Task.Delay 的定时续延在 account 页早期加载窗口（IME/TSF 初始化，约头 150ms）投递时
+    /// wmMsgPosted 偶发丢失 → dispatcher 操作队列永久冻结（hang9 dumpasync：NavIdleAsync state (0)
+    /// 卡在首个 await Task.Delay(150)；无 caret AnimationClock；TimerQueue 线程空闲=定时器已 fire、
+    /// 续延已投递却不被处理；UI 线程在 DispatchMessage 主动派发 41% CPU）。compact-account 连续 6 次挂死。
+    /// HEAD(25f74fc) 实证：其全部 24 处导航落定均为裸
+    /// `await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle)`，
+    /// matrix 循环页清单含 "account"，以此通过既往全部发布门禁（含 compact-account 与 matrix-account）；
+    /// 且 src\DwgTranslator.App\Views\Pages\AccountPage.xaml.cs 与 HEAD 无 diff（IsVisibleChanged→
+    /// BeginInvoke(AccountInput.Focus) 自动聚焦是 HEAD 既有行为）。裸 ApplicationIdle 的续延在 dispatcher
+    /// 真正空闲后才投递，避开加载窗口，实证可靠；Task.Delay 与 ClearFocus 皆毒。
+    /// "caret 饿死 ApplicationIdle" 理论已被 HEAD 实证推翻（HEAD 不清焦点照样过 account）。
+    /// settleMs 形参保留仅为兼容 20 处调用点（含 account 的 1500），现为无害死参数。
+    /// </summary>
+    private static async Task NavIdleAsync(int settleMs = 150)
+    {
+        await Dispatcher.CurrentDispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
     }
 
     /// <summary>
@@ -191,6 +216,14 @@ public sealed partial class SmokeApp : App
         holder.Resources.MergedDictionaries.Add(owner.Resources);
         DwgTranslator.App.Views.Controls.ResponsiveLayout.SetIsCompact(holder, size.Width < 1100);
         DwgTranslator.App.Views.Controls.ResponsiveLayout.SetIsShort(holder, size.Height < 540);
+        // 摘树前必须清除键盘焦点：被聚焦的 TextBox 携带一个光标闪烁时钟（CaretElement 上的
+        // Forever DoubleAnimationUsingKeyFrames + 两个 DiscreteDoubleKeyFrame）。把内容重新挂到
+        // 游离 holder（owner.Content=null → holder.Child=content）会把该时钟孤儿化——它仍挂在
+        // TimeManager 上永久 tick（ClockGroup._children 变 null 的破碎态），渲染线程每帧空转，
+        // 之后每一个 DispatcherPriority.ApplicationIdle 等待都被永久饿死（冒烟卡死、compact-account
+        // 挂起的根因）。ClearFocus 同步触发 LostKeyboardFocus→光标隐藏→闪烁时钟被移除，摘树时无从孤儿化。
+        // 与账户页 indeterminate ProgressBar 的 Forever 时钟孤儿化属同一类问题（那边已用静态 Border 修掉）。
+        System.Windows.Input.Keyboard.ClearFocus();
         owner.Content = null;
         try
         {
@@ -459,7 +492,7 @@ public sealed partial class SmokeApp : App
             vm.LoginName = "simulated-account";
             await VerifyAccountSaveFailureAsync(vm, logout: false);
             vm.CurrentPage = MainViewModel.PageAccount;
-            await Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ApplicationIdle);
+            await NavIdleAsync();
             var loginPage = FindVisual<DwgTranslator.App.Views.Pages.AccountPage>(window);
             Check(loginPage != null && loginPage.IsVisible, "login regression uses the visible account page");
             var passwordBox = (System.Windows.Controls.PasswordBox)loginPage.FindName("PasswordInput");
@@ -484,13 +517,13 @@ public sealed partial class SmokeApp : App
             await vm.LogoutAccountCommand.ExecuteAsync(null); api.FailBilling=false;
             api.Offline = false;
             foreach (var page in new[] { MainViewModel.PageTranslate, MainViewModel.PageBatch, MainViewModel.PageGlossary, MainViewModel.PageAccount, MainViewModel.PageSettings })
-            { vm.CurrentPage = page; await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle); Check(vm.CurrentPage == page, "navigate " + page); Capture(window, page); }
+            { vm.CurrentPage = page; await NavIdleAsync(); Check(vm.CurrentPage == page, "navigate " + page); Capture(window, page); }
             await VerifyCloudGlossaryAsync(window, vm);
             vm.CurrentPage = MainViewModel.PageSettings;
             await Task.Delay(4200);
-            for (var section = 0; section < 6; section++) { vm.SettingsSection = section; await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle); Capture(window, "settings-" + section); var currentSettingsPage=FindVisual<DwgTranslator.App.Views.Pages.SettingsPage>(window); Check(((FrameworkElement)currentSettingsPage.FindName("SettingsSaveBar")).IsVisible == (section!=5), "save bar only on editable settings " + section); if(section==1) Check(FindVisuals<System.Windows.Controls.TextBox>(currentSettingsPage).Where(t=>t.IsVisible).All(t=>t.ActualWidth<=160),"compact numeric settings inputs"); }
+            for (var section = 0; section < 6; section++) { vm.SettingsSection = section; await NavIdleAsync(); Capture(window, "settings-" + section); var currentSettingsPage=FindVisual<DwgTranslator.App.Views.Pages.SettingsPage>(window); Check(((FrameworkElement)currentSettingsPage.FindName("SettingsSaveBar")).IsVisible == (section!=5), "save bar only on editable settings " + section); if(section==1) Check(FindVisuals<System.Windows.Controls.TextBox>(currentSettingsPage).Where(t=>t.IsVisible).All(t=>t.ActualWidth<=160),"compact numeric settings inputs"); }
             vm.SettingsSection = 1;
-            await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+            await NavIdleAsync();
             var settingsPage = FindVisual<DwgTranslator.App.Views.Pages.SettingsPage>(window);
             var saveSettingsButton = (Button)settingsPage.FindName("SaveSettingsButton");
             var discardSettingsButton = (Button)settingsPage.FindName("DiscardSettingsButton");
@@ -523,7 +556,7 @@ public sealed partial class SmokeApp : App
             api.FailLogin = false; await vm.SubmitLoginAsync("not-a-real-password"); Check(vm.IsAccountLoggedIn, "successful controlled login");
             Check(vm.CurrentPage == MainViewModel.PageTranslate, "login returns without starting translation");
             Check(!vm.IsProcessing && api.TranslationCalls == 0, "no quota-consuming action");
-            vm.CurrentPage = MainViewModel.PageAccount; await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle); Capture(window, "account-simulated-login");
+            vm.CurrentPage = MainViewModel.PageAccount; await NavIdleAsync(); Capture(window, "account-simulated-login");
             await VerifyMembershipLayoutAsync(window, vm, loginPage);
             var quota = (System.Windows.Controls.ProgressBar)loginPage.FindName("QuotaProgress");
             var usageBefore = vm.OnlineUsage;
@@ -576,7 +609,9 @@ public sealed partial class SmokeApp : App
                 {
                     window.Width = layout.Item1 / layout.Item3; window.Height = layout.Item2 / layout.Item3;
                     vm.CurrentPage = page;
-                    await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+                    // matrix-account 先重尺寸再导航、account 页慢加载使其异步聚焦晚到(>150ms)，给足 1500ms 让 ClearFocus 落在聚焦之后；
+                    // 其余 matrix 页无异步聚焦(grep 证实只有 AccountPage 有)，默认 150ms 即可(pwsh-32 已过 matrix translate/batch/glossary)。
+                    await NavIdleAsync(page == "account" ? 1500 : 150);
                     // The current monitor may clamp native window size. Arrange the real page tree
                     // at the requested DIP size; this is not a physical-DPI acceptance test.
                     var content = (FrameworkElement)window.Content;
@@ -594,7 +629,7 @@ public sealed partial class SmokeApp : App
                         for (var section = 0; section < 6; section++)
                         {
                             vm.SettingsSection = section;
-                            await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+                            await NavIdleAsync();
                             content.Measure(size); content.Arrange(new Rect(size)); content.UpdateLayout();
                             var form = (FrameworkElement)matrixSettingsPage.FindName("SettingsContent");
                             var footer = (FrameworkElement)matrixSettingsPage.FindName("SettingsSaveBar");

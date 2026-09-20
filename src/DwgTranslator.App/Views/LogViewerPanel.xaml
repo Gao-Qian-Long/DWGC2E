@@ -127,9 +127,12 @@
 
         <!-- Log entries and stable empty/paused state -->
         <Grid Grid.Row="1">
+        <!-- §L12 Disabled（非 Auto）：Auto 让列测量宽度为无限大，星号列随最长日志膨胀，
+             整行在视口边缘被硬裁切且横向滚动条实际不可见（只能 Shift+滚轮）。
+             Disabled 恢复视口约束，星号列收缩，CharacterEllipsis+ToolTip 才能生效。 -->
         <ListView ItemsSource="{Binding LogEntries}"
                   Background="{DynamicResource Brush.Surface}" BorderThickness="0"
-                  ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                  ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                   ScrollViewer.VerticalScrollBarVisibility="Auto"
                   ScrollViewer.ScrollChanged="LogListView_ScrollChanged"
                   x:Name="LogListView"
@@ -182,9 +185,16 @@
                                    Visibility="{Binding Category, Converter={StaticResource CategoryVis}}"/>
 
                         <!-- Message + Duration + Exception -->
-                        <StackPanel Grid.Column="4" Orientation="Horizontal">
-                            <TextBlock Text="{Binding Message}" Style="{StaticResource LogText}" ToolTip="{Binding Message}"/>
-                            <TextBlock Foreground="{DynamicResource Brush.TextMuted}" FontSize="{DynamicResource FontSize.Secondary}"
+                        <!-- §L13 必须是 Grid（* + Auto）而非水平 StackPanel：StackPanel 测量时
+                             给子元素无限宽度，TextTrimming 永不触发，长消息整行硬裁到视口边缘。
+                             星号列受视口约束后省略号+ToolTip 才真正生效，耗时钉在右侧。 -->
+                        <Grid Grid.Column="4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="{Binding Message}" Style="{StaticResource LogText}" ToolTip="{Binding Message}"/>
+                            <TextBlock Grid.Column="1" Foreground="{DynamicResource Brush.TextMuted}" FontSize="{DynamicResource FontSize.Secondary}"
                                        FontFamily="Cascadia Code, Consolas" VerticalAlignment="Center"
                                        Margin="{DynamicResource Spacing.LeftGap}">
                                 <TextBlock.Style>
@@ -203,7 +213,7 @@
                                     <Binding Path="DurationMs" StringFormat="({0:F0}ms)"/>
                                 </TextBlock.Text>
                             </TextBlock>
-                        </StackPanel>
+                        </Grid>
 
                         <!-- Exception -->
                         <TextBlock Grid.Column="5" Text="{Binding Exception}" Foreground="{DynamicResource Brush.Danger}" FontSize="{DynamicResource FontSize.Secondary}"

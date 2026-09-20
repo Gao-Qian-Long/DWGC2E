@@ -17,4 +17,17 @@ public sealed class PageHeader : HeaderedContentControl
         get => (string)GetValue(DescriptionProperty);
         set => SetValue(DescriptionProperty, value);
     }
+
+    /// <summary>
+    /// 页头琥珀波浪的品牌变体（1-5，对应 Icon.Deco.Wave / Wave2..Wave5）。
+    /// 同一条波浪出现在所有页头会让五个页面缺少区分度（2026-10-02 用户反馈），
+    /// 每页挑一种节奏即可；默认 1 保持旧页面不变。
+    /// </summary>
+    public static readonly DependencyProperty WaveVariantProperty = DependencyProperty.Register(
+        nameof(WaveVariant), typeof(int), typeof(PageHeader), new PropertyMetadata(1));
+    public int WaveVariant
+    {
+        get => (int)GetValue(WaveVariantProperty);
+        set => SetValue(WaveVariantProperty, value);
+    }
 }

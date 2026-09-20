@@ -85,4 +85,44 @@ public class OutputDirectoryTests
   Assert.Equal(Path.GetFullPath(source),AccountWorkspace.DefaultBesideSource(source,null));
   Assert.Equal(string.Empty,AccountWorkspace.DefaultBesideSource(null,"已翻译图纸"));
  }
+ // ==== 2026-10-02 用户决定：默认输出 = <安装目录>\exports（发布即生效，无需重装）====
+ [Fact] public void InstallExportsIsTheDefaultWhenNothingWasChosen()
+ {
+  // 没选过目录时优先落在安装区 exports，即使能算出源图纸目录。
+  var install=Path.Combine(root,"install-a");
+  var config=new AppConfig {ActiveAccountId="alice"};
+  var source=Path.Combine(root,"drawings");
+  Assert.Equal(Path.Combine(install,"exports"),
+   AccountWorkspace.OutputDirectoryFor(config,root,source,"已翻译图纸",install));
+ }
+ [Fact] public void SavedLegacyRoamingExportsIsNotAUserChoice()
+ {
+  // 旧版把 %AppData%\DwgTranslator\exports 持久化进了 AccountOutputDirectories；
+  // 它是旧默认值，不是用户的选择 —— 必须按未设置处理并迁到安装区 exports。
+  var roaming=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),"DwgTranslator","exports");
+  var install=Path.Combine(root,"install-b");
+  var config=new AppConfig {ActiveAccountId="alice"};
+  config.AccountOutputDirectories["alice"]=roaming;
+  Assert.Equal(Path.Combine(install,"exports"),
+   AccountWorkspace.OutputDirectoryFor(config,root,null,null,install));
+ }
+ [Fact] public void SavedInstallExportsIsStableAsAUserChoice()
+ {
+  // 新默认值本身被持久化后（切账号时会保存当前解析结果）依旧原样返回，不来回跳。
+  var install=Path.Combine(root,"install-c");
+  var config=new AppConfig {ActiveAccountId="alice"};
+  config.AccountOutputDirectories["alice"]=Path.Combine(install,"exports");
+  Assert.Equal(Path.Combine(install,"exports"),
+   AccountWorkspace.OutputDirectoryFor(config,root,null,null,install));
+ }
+ [Fact] public void UnwritableInstallFallsBackToBesideSource()
+ {
+  // 安装区探测以路径指向一个文件的方式模拟"不可写"：退回源图纸旁边。
+  var notADirectory=Path.Combine(root,"blocked-file");
+  File.WriteAllText(notADirectory,"x");
+  var config=new AppConfig {ActiveAccountId="alice"};
+  var source=Path.Combine(root,"drawings");
+  Assert.Equal(Path.Combine(source,"已翻译图纸"),
+   AccountWorkspace.OutputDirectoryFor(config,root,source,"已翻译图纸",notADirectory));
+ }
 }

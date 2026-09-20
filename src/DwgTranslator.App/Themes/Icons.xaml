@@ -86,7 +86,7 @@
     <!-- 图纸翻译: sheet with text lines -->
     <PathGeometry x:Key="Icon.NavTranslate"
                   Figures="M 2,1.2 L 12,1.2 L 12,12.8 L 2,12.8 Z M 4.4,4.6 L 9.6,4.6 M 4.4,7.2 L 9.6,7.2 M 4.4,9.8 L 7.4,9.8" />
-    <!-- 批量任务: stacked sheets -->
+    <!-- 任务中心: stacked sheets -->
     <PathGeometry x:Key="Icon.NavBatch"
                   Figures="M 4.4,0.8 L 13.2,0.8 L 13.2,9.6 M 0.8,4.4 L 9.6,4.4 L 9.6,13.2 L 0.8,13.2 Z M 3.2,7.4 L 7.2,7.4 M 3.2,10.2 L 7.2,10.2" />
     <!-- 术语库: open book -->

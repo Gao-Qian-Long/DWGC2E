@@ -69,7 +69,7 @@ public partial class MainViewModel
         {
             if (!HasDrawingFiles) return "下一步：添加 DWG / DXF 图纸。";
             if (IsTranslating || WorkspaceActiveCount > 0) return $"正在处理 {Math.Max(1, WorkspaceActiveCount)} 张图纸，请等待队列完成。";
-            if (WorkspaceFailedCount > 0) return $"下一步：先重试 {WorkspaceFailedCount} 张失败图纸，或在批量任务中查看原因。";
+            if (WorkspaceFailedCount > 0) return $"下一步：先重试 {WorkspaceFailedCount} 张失败图纸，或在任务中心查看原因。";
             if (WorkspaceReviewCount > 0) return $"下一步：校对 {WorkspaceReviewCount} 张翻译结果；保存后才进入待导出。";
             if (WorkspacePendingExportCount > 0) return $"下一步：导出 {WorkspacePendingExportCount} 张已校对图纸。";
             if (WorkspaceExportedCount > 0) return $"已导出 {WorkspaceExportedCount} 张图纸，可继续添加新图纸。";

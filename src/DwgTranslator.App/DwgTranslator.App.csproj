@@ -19,6 +19,8 @@
     <!-- Embed the WPF window icon. A loose Content file is not reliable in
          compressed single-file publishes because no physical base path exists. -->
     <Resource Include="..\..\assets\icons\icon.ico" Link="icon.ico" />
+    <!-- 纸纹噪点贴图（暖色手作杂志风）：同样必须以 Resource 内嵌，单文件发布才可靠。 -->
+    <Resource Include="Assets\paper-noise.png" />
     <Content Include="..\..\settings.json.example" Link="settings.json"
              CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\..\assets\glossaries\mechanical_zh_en.json" Link="assets\default-glossaries\mechanical_zh_en.json"

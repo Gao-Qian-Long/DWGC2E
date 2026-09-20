@@ -8,6 +8,7 @@
                 <ResourceDictionary Source="Themes/ColorTokens.xaml"/>
                 <ResourceDictionary Source="Themes/Icons.xaml"/>
                 <ResourceDictionary Source="Themes/Metrics.xaml"/>
+                <ResourceDictionary Source="Themes/Decorations.xaml"/>
                 <ResourceDictionary Source="Themes/MainWindowStyles.xaml"/>
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>

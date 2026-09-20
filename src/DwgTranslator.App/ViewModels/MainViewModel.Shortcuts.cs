@@ -8,7 +8,7 @@ public partial class MainViewModel
     {
         if (CurrentPage is not (PageTranslate or PageBatch))
         {
-            ToastService.Info("当前页面不导入图纸，请先进入“图纸翻译”或“批量任务”。");
+            ToastService.Info("当前页面不导入图纸，请先进入“图纸翻译”或“任务中心”。");
             return;
         }
         if (IsProcessing)
@@ -88,7 +88,7 @@ public partial class MainViewModel
         }
         if (CurrentPage is not (PageTranslate or PageBatch))
         {
-            ToastService.Info("当前页面不执行翻译，请先进入“图纸翻译”或“批量任务”。");
+            ToastService.Info("当前页面不执行翻译，请先进入“图纸翻译”或“任务中心”。");
             return;
         }
         if (!HasDrawingFiles)

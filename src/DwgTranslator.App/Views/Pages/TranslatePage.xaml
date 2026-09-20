@@ -61,9 +61,10 @@
                             </Grid.ColumnDefinitions>
                             <ProgressBar Height="4" VerticalAlignment="Center" Maximum="100"
                                          Value="{Binding WorkspaceOverallProgress, Mode=OneWay}"
-                                         Foreground="{DynamicResource Brush.Primary}"
+                                         Foreground="{DynamicResource Brush.Amber}"
                                          Background="{DynamicResource Brush.BackgroundAlt}" />
                             <TextBlock Grid.Column="1" Text="{Binding WorkspaceProgressText}"
+                                       FontFamily="{DynamicResource FontFamily.Mono}"
                                        HorizontalAlignment="Right" VerticalAlignment="Center"
                                        Foreground="{DynamicResource Brush.TextSecondary}" />
                         </Grid>
@@ -100,7 +101,7 @@
              行序固定为 页头 / 统计带 / 操作条 / 工作区，统计带与操作条都在队列之前，
              TranslationActionBar 这个 x:Name 被 UI 冒烟用于测量（ActualHeight ≥ 40）。 -->
         <Border x:Name="TranslationActionBar" Grid.Row="2" Style="{StaticResource Section.Surface}"
-                Margin="{DynamicResource Spacing.Vertical}" Padding="0,10,0,0">
+                Margin="{DynamicResource Spacing.Vertical}" Padding="12,8">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
@@ -119,25 +120,31 @@
                             Visibility="{Binding IsExporting, Converter={StaticResource BoolToVis}}" />
                 </StackPanel>
 
-                <!-- 常驻文案：步骤顺序 + 「下一步」 + 「张数 · 输出位置」。三块都是常驻元素，
-                     文案永远非空，所以操作条宽度不随状态跳变（此前这一格会自己出现/消失）。
+                <!-- 常驻文案（2026-10-02 重排）：原「等宽步骤提示 + 下一步 + 输出摘要」三段混排
+                     被用户反馈"太乱、样式不对、没有上下居中"——步骤提示与页头说明重复且字体不一，整段删除。
+                     现在只保留两块：琥珀"下一步"胶囊（Auto 列，宽度上限 280）+ 「张数 · 输出」弱字
+                     （星号列，空间不足时先省略号让位，任何受支持宽度都不会挤进右侧按钮区）。
+                     Border Padding 同步改为上下对称的 12,8，全部内容在条内垂直居中。
                      WorkspaceNextStepTextBlock 被 UI 冒烟用几何断言测量（ActualWidth ≥ 80），
                      重排时保留它，不要改成随状态折叠的元素。 -->
-                <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right"
-                            VerticalAlignment="Center" Margin="12,0" AutomationProperties.Name="导出摘要">
-                    <TextBlock x:Name="WorkspaceSequentialHintTextBlock"
-                               Text="添加图纸 → 翻译 → 校对 → 导出"
-                               Style="{StaticResource CaptionStyle}" VerticalAlignment="Center"
-                               Margin="{DynamicResource Spacing.InlineLoose}" />
-                    <TextBlock x:Name="WorkspaceNextStepTextBlock"
-                               Text="{Binding WorkspaceNextStepText}" Style="{StaticResource CaptionStyle}"
-                               TextTrimming="CharacterEllipsis" MaxWidth="280" VerticalAlignment="Center"
-                               ToolTip="{Binding WorkspaceNextStepText}" />
-                    <TextBlock x:Name="OutputDirectoryTextBlock" Text="{Binding WorkspaceActionHintText}"
-                               TextTrimming="CharacterEllipsis" MaxWidth="300" Margin="{DynamicResource Spacing.InlineLoose}"
-                               VerticalAlignment="Center" Style="{StaticResource CaptionStyle}"
+                <Grid Grid.Column="1" Margin="12,0" VerticalAlignment="Center" AutomationProperties.Name="导出摘要">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Border VerticalAlignment="Center" MaxWidth="280" Padding="9,3" Margin="0,0,10,0"
+                            Background="{DynamicResource Brush.AmberSoft}" BorderBrush="{DynamicResource Brush.Amber}"
+                            BorderThickness="1" CornerRadius="{DynamicResource CornerRadius.Small}">
+                        <TextBlock x:Name="WorkspaceNextStepTextBlock" Text="{Binding WorkspaceNextStepText}"
+                                   Foreground="{DynamicResource Brush.Primary}" FontWeight="SemiBold"
+                                   FontSize="{DynamicResource FontSize.Secondary}" VerticalAlignment="Center"
+                                   TextTrimming="CharacterEllipsis" ToolTip="{Binding WorkspaceNextStepText}" />
+                    </Border>
+                    <TextBlock x:Name="OutputDirectoryTextBlock" Grid.Column="1" Text="{Binding WorkspaceActionHintText}"
+                               Style="{StaticResource CaptionStyle}" Foreground="{DynamicResource Brush.TextMuted}"
+                               TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
                                ToolTip="{Binding WorkspaceOutputLocationText}" />
-                </StackPanel>
+                </Grid>
 
                 <StackPanel Grid.Column="2" Orientation="Horizontal">
                     <Button Content="开始翻译" Command="{Binding TranslateCommand}"
@@ -183,11 +190,18 @@
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
-                            <Path Data="{StaticResource Icon.Log}" Width="28" Height="28" Stretch="Uniform"
-                                  Stroke="{DynamicResource Brush.TextMuted}" StrokeThickness="1.5"
-                                  HorizontalAlignment="Center" Margin="{DynamicResource Spacing.StackWide}" />
+                            <!-- 手作空状态：虚线圆环托住图纸图标，右上角一枚琥珀火花 -->
+                            <Grid HorizontalAlignment="Center" Margin="{DynamicResource Spacing.StackWide}">
+                                <Ellipse Style="{StaticResource Deco.DashedRing}" Width="64" Height="64" />
+                                <Path Data="{StaticResource Icon.Log}" Width="26" Height="26" Stretch="Uniform"
+                                      Stroke="{DynamicResource Brush.Primary}" StrokeThickness="1.5"
+                                      HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                <Path Data="{StaticResource Icon.Deco.SparkSmall}" Width="9" Height="9" Stretch="Uniform"
+                                      Fill="{DynamicResource Brush.Amber}" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,4,4,0" />
+                            </Grid>
                             <TextBlock Grid.Row="1" Text="将 DWG / DXF 文件拖到此处"
-                                       FontSize="16" FontWeight="SemiBold" TextAlignment="Center" />
+                                       FontFamily="{DynamicResource FontFamily.Display}"
+                                       FontSize="17" FontWeight="SemiBold" TextAlignment="Center" />
                             <TextBlock Grid.Row="2" Text="支持一次添加多个文件；添加后可直接批量翻译"
                                        Style="{StaticResource CaptionStyle}" TextAlignment="Center" Margin="0,7,0,14" />
                             <Button x:Name="EmptySelectFileButton" Grid.Row="3" Content="选择文件"
@@ -202,7 +216,7 @@
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="*" />
                         </Grid.RowDefinitions>
-                        <DockPanel Margin="{DynamicResource Spacing.Stack}">
+                        <DockPanel Margin="{DynamicResource Spacing.TableHeaderInset}">
                             <Button DockPanel.Dock="Right" Content="队列操作" Click="QueueMenu_Click"
                                     Style="{StaticResource Button.Tertiary}" ToolTip="选择与清空队列">
                                 <Button.ContextMenu>
@@ -216,7 +230,7 @@
                                 </Button.ContextMenu>
                             </Button>
                             <TextBlock DockPanel.Dock="Right" Text="{Binding WorkspaceFileCount, StringFormat=共 {0} 张}"
-                                       Style="{StaticResource CaptionStyle}" VerticalAlignment="Center" Margin="{DynamicResource Spacing.InlineWide}" />
+                                       Style="{StaticResource CaptionStyle}" FontFamily="{DynamicResource FontFamily.Mono}" VerticalAlignment="Center" Margin="{DynamicResource Spacing.InlineWide}" />
                             <TextBlock Text="文件队列" Style="{StaticResource SectionTitleStyle}" VerticalAlignment="Center" />
                         </DockPanel>
 
@@ -285,9 +299,10 @@
                                                 </Grid.ColumnDefinitions>
                                                 <ProgressBar Height="4" VerticalAlignment="Center" Maximum="100"
                                                              Value="{Binding ProgressPercent, Mode=OneWay}"
-                                                             Foreground="{DynamicResource Brush.Primary}"
+                                                             Foreground="{DynamicResource Brush.Amber}"
                                                              Background="{DynamicResource Brush.BackgroundAlt}" />
                                                 <TextBlock Grid.Column="1" Text="{Binding ProgressText}" FontSize="12"
+                                                           FontFamily="{DynamicResource FontFamily.Mono}"
                                                            Margin="{DynamicResource Spacing.LeftGap}" VerticalAlignment="Center"
                                                            Foreground="{DynamicResource Brush.TextSecondary}" />
                                             </Grid>
@@ -331,14 +346,17 @@
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
                     <Border x:Name="TranslationSettingsSection" Grid.Row="0"
-                            Style="{StaticResource Section.Surface}" Padding="0,14,0,0">
+                            Style="{StaticResource Section.Surface}" Padding="16,14,16,0">
                         <Grid>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
-                            <TextBlock Text="翻译设置" FontWeight="SemiBold" FontSize="16" Margin="{DynamicResource Spacing.StackWide}" />
+                            <StackPanel Margin="{DynamicResource Spacing.StackWide}">
+                                <TextBlock Text="TRANSLATION · SETTINGS" Style="{StaticResource Kicker}" Margin="0,0,0,2" />
+                                <TextBlock Text="翻译设置" FontFamily="{DynamicResource FontFamily.Display}" FontWeight="SemiBold" FontSize="16" />
+                            </StackPanel>
                             <Grid Grid.Row="1">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" MinWidth="104" />
@@ -365,8 +383,8 @@
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
                                 <StackPanel>
-                                    <TextBlock Text="术语库" FontWeight="SemiBold" />
-                                    <TextBlock Text="{Binding GlossaryStatsText}" Style="{StaticResource CaptionStyle}" Margin="{DynamicResource Spacing.BlockTopTight}" />
+                                    <TextBlock Text="术语库" FontFamily="{DynamicResource FontFamily.Display}" FontWeight="SemiBold" FontSize="14" />
+                                    <TextBlock Text="{Binding GlossaryStatsText}" Style="{StaticResource CaptionStyle}" FontFamily="{DynamicResource FontFamily.Mono}" Margin="{DynamicResource Spacing.BlockTopTight}" />
                                 </StackPanel>
                                 <Button Grid.Column="1" Content="管理术语库" Command="{Binding NavigateToCommand}"
                                         CommandParameter="glossary" Style="{StaticResource Button.Secondary}"
@@ -376,13 +394,16 @@
                     </Border>
 
                     <Border x:Name="OutputSection" Grid.Row="1" Style="{StaticResource Section.Surface}"
-                            Margin="{DynamicResource Spacing.BlockTop}" Padding="0,14,0,0">
+                            Margin="{DynamicResource Spacing.BlockTop}" Padding="16,14,16,0">
                         <Grid>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
-                            <TextBlock Text="输出" FontWeight="SemiBold" FontSize="16" Margin="{DynamicResource Spacing.Stack}" />
+                            <StackPanel Margin="{DynamicResource Spacing.Stack}">
+                                <TextBlock Text="OUTPUT" Style="{StaticResource Kicker}" Margin="0,0,0,2" />
+                                <TextBlock Text="输出" FontFamily="{DynamicResource FontFamily.Display}" FontWeight="SemiBold" FontSize="16" />
+                            </StackPanel>
                             <Grid Grid.Row="1">
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="Auto" />
@@ -390,7 +411,7 @@
                                 </Grid.RowDefinitions>
                                 <!-- 未导出过时给出明确规则，而不是留一格空白：默认落在源图纸旁边的
                                      "<图纸名>_translated" 目录，AppData 下不再有任何默认输出。 -->
-                                <TextBlock Text="{Binding WorkspaceOutputLocationText}" TextTrimming="CharacterEllipsis"
+                                <TextBlock Text="{Binding WorkspaceOutputLocationText}" FontFamily="{DynamicResource FontFamily.Mono}" FontSize="{DynamicResource FontSize.Secondary}" TextTrimming="CharacterEllipsis"
                                            ToolTip="{Binding WorkspaceOutputLocationText}" VerticalAlignment="Center" />
                                 <Grid Grid.Row="1" Margin="{DynamicResource Spacing.BlockTop}">
                                     <Grid.ColumnDefinitions>
@@ -407,7 +428,7 @@
                         </Grid>
                     </Border>
 
-                    <Border Grid.Row="2" Style="{StaticResource Section.Surface}" Margin="{DynamicResource Spacing.BlockTop}" Padding="0,14,0,0">
+                    <Border Grid.Row="2" Style="{StaticResource Section.Surface}" Margin="{DynamicResource Spacing.BlockTop}" Padding="16,14,16,0">
                         <Expander x:Name="WorkspaceLogLauncher" Header="运行日志"
                                   AutomationProperties.Name="打开运行日志">
                         <!-- §L11 日志区不再锁死 160 DIP：给下限并允许长到 320，右侧栏高时日志能显示更多行 -->
@@ -421,14 +442,18 @@
                                 <Button Content="清空" Command="{Binding ClearLogsCommand}" Style="{StaticResource Button.Tertiary}" />
                             </StackPanel>
                             <!-- §L11 与 LogViewerPanel 一致开启虚拟化，长日志滚动不掉帧 -->
+                            <!-- §L12 横向 Disabled（同 LogViewerPanel）：Auto 会让行随最长日志
+                                 无限变宽、在视口边缘硬裁切；Disabled+省略号+ToolTip 才是完整可读。 -->
                             <ListBox Grid.Row="1" ItemsSource="{Binding LogEntries}" BorderThickness="0"
-                                     Background="Transparent" FontFamily="Consolas, Microsoft YaHei UI" FontSize="12"
+                                     Background="Transparent" FontFamily="{DynamicResource FontFamily.Mono}" FontSize="12"
                                      VirtualizingPanel.IsVirtualizing="True"
                                      VirtualizingPanel.VirtualizationMode="Recycling"
-                                     ScrollViewer.HorizontalScrollBarVisibility="Auto">
+                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                                 <ListBox.ItemTemplate>
                                     <DataTemplate>
-                                        <TextBlock Text="{Binding CompactDisplayText}" />
+                                        <TextBlock Text="{Binding CompactDisplayText}"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   ToolTip="{Binding CompactDisplayText}" />
                                     </DataTemplate>
                                 </ListBox.ItemTemplate>
                             </ListBox>

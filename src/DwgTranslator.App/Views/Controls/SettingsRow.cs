@@ -24,7 +24,12 @@ public sealed class SettingsRow : Grid
         {
             SetColumn(Children[i], compact ? 0 : Math.Min(i, 1));
             SetRow(Children[i], compact ? Math.Min(i, 1) : 0);
-            if (Children[i] is TextBlock label) { label.TextWrapping = TextWrapping.Wrap; label.Margin = new Thickness(0, 0, 12, compact ? 8 : 0); }
+            // §L14 标签槽可能是 StackPanel（标题+说明文字）而不只是 TextBlock——
+            // 之前只给 TextBlock 加右边距，StackPanel 组会把 220 DIP 标签列填满、
+            // 说明文字顶到右侧开关上（用户报告「文字干涉，显示不清晰」）。
+            if (Children[i] is not FrameworkElement slot) continue;
+            if (slot is TextBlock label) label.TextWrapping = TextWrapping.Wrap;
+            if (compact || i == 0) slot.Margin = new Thickness(0, 0, 12, compact ? 8 : 0);
         }
     }
 }

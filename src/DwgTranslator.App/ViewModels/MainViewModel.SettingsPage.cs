@@ -97,7 +97,7 @@ public partial class MainViewModel
     [NotifyPropertyChangedFor(nameof(ServiceCheckButtonText))]
     private bool _isCheckingService;
     public string ServiceCheckButtonText => IsCheckingService ? "正在检测…" : "重新检测";
-    [ObservableProperty] private string _settingsFeedback = "所有修改先保存在草稿中，确认后统一应用。";
+    [ObservableProperty] private string _settingsFeedback = "修改后点击「保存更改」生效。";
     [ObservableProperty] private string _serviceFeedback = "尚未检测服务状态。";
     private AppConfig? _settingsDraft;
     private bool _settingsPendingApply;
@@ -132,8 +132,9 @@ public partial class MainViewModel
     private AppConfig BeginSettingsEdit()
     {
         var c = SettingsStore.Read(_settingsPath ?? Path.Combine(App.AppDataDir, "settings.json"));
-        // 输出目录是账号维度的：产品数据目录下的旧默认值视为未设置（见 ResolveExportDirectory）。
-        c.ExportDirectory = AccountWorkspace.OutputDirectoryFor(c, App.AppDataDir, SourceDirectoryHint(), DefaultOutputFolderName);
+        // 输出目录是账号维度的：旧默认值（AppData/旧漫游 exports）视为未设置，
+        // 未设置时默认 = <安装目录>\exports（见 ResolveExportDirectory / AccountWorkspace）。
+        c.ExportDirectory = AccountWorkspace.OutputDirectoryFor(c, App.AppDataDir, SourceDirectoryHint(), DefaultOutputFolderName, App.InstallDir);
         c.StartWithWindows = Services.StartupRegistration.IsEnabled();
         _settingsBaseline = JsonSerializer.Deserialize<AppConfig>(JsonSerializer.Serialize(c))!;
         return c;

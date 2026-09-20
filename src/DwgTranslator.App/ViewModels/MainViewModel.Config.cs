@@ -124,18 +124,19 @@ public partial class MainViewModel
     /// <summary>settings.json 是否未能读出（见 LoadConfig 的 catch）。</summary>
     private bool _configLoadFailed;
 
-    /// <summary>源图纸目录下的默认输出子目录名（随图纸走，而不是写进 AppData）。</summary>
+    /// <summary>源图纸目录下的兜底输出子目录名（仅当安装区 exports 不可写时使用）。</summary>
     internal const string DefaultOutputFolderName = "已翻译图纸";
 
     /// <summary>
     /// 把账号默认输出目录解析进 <c>_config.ExportDirectory</c>。
-    /// 产品数据目录下的旧默认值（AppData\DWGC2E\exports）按"未设置"处理；没有历史选择时，
-    /// 默认落到当前队列首张图纸旁边的 <see cref="DefaultOutputFolderName"/>，由用户显式选过的
-    /// 目录（AccountOutputDirectories）始终优先，不会被覆盖。
+    /// 旧默认值（AppData\DWGC2E\exports、旧漫游 DwgTranslator\exports）按"未设置"处理；
+    /// 没有历史选择时默认落到 <b>&lt;安装目录&gt;\exports</b>（2026-10-02 用户决定，发布即生效、
+    /// 无需重装；安装区不可写时退回源图纸旁的 <see cref="DefaultOutputFolderName"/>），
+    /// 由用户显式选过的目录（AccountOutputDirectories）始终优先，不会被覆盖。
     /// </summary>
     private void ResolveExportDirectory()
         => _config.ExportDirectory = AccountWorkspace.OutputDirectoryFor(
-            _config, App.AppDataDir, SourceDirectoryHint(), DefaultOutputFolderName);
+            _config, App.AppDataDir, SourceDirectoryHint(), DefaultOutputFolderName, App.InstallDir);
 
     /// <summary>当前队列首张图纸所在目录：导出默认目录的锚点。</summary>
     private string? SourceDirectoryHint()

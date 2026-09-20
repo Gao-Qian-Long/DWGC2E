@@ -1049,7 +1049,7 @@ AutoCAD 可能会弹出「是否加载来自非信任路径的程序集」安全
     <value>确认清空</value>
   </data>
   <data name="MsgClearConfirmBody" xml:space="preserve">
-    <value>确定要清空所有 {0} 条数据吗？
+    <value>确定要清空 {0} 条译文和 {1} 张图纸吗？
 
 此操作不可撤销。</value>
   </data>

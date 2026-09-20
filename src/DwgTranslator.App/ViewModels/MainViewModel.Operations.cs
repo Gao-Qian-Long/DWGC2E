@@ -43,10 +43,12 @@ public partial class MainViewModel
         if (Entities.Count == 0 && DrawingFiles.Count == 0) return;
 
         // 危险操作走主题化确认框（§29）
+        // 计数与 ClearAll 实际清空的两个集合同步：此前只报 Entities.Count（译文条目），
+        // 队列里有图纸但未翻译时会显示"清空所有 0 条数据"，与用户所见不符。
         var confirmed = Views.ConfirmDialog.Ask(
             Application.Current?.MainWindow,
             Strings.Get("MsgClearConfirmTitle"),
-            Strings.Get("MsgClearConfirmBody", Entities.Count),
+            Strings.Get("MsgClearConfirmBody", Entities.Count, DrawingFiles.Count),
             confirmText: "清空", danger: true);
         if (!confirmed || !TryClearSavedProofreading()) return;
 

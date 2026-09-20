@@ -6,7 +6,7 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 <StackPanel>
-            <controls:PageHeader x:Name="WorkspaceHeader" Header="批量任务" Description="查看和管理图纸任务，在详情中检查并校对翻译结果。" />
+            <controls:PageHeader x:Name="WorkspaceHeader" Header="任务中心" WaveVariant="2" Description="所有翻译任务的进度与结果都在这里；点「查看详情」检查单张图纸并进入校对。" />
             <Border x:Name="RecoveryNotice" Visibility="{Binding HasTaskRecoveryWarning, Converter={StaticResource BoolToVis}}" Background="{DynamicResource Brush.WarningLight}" BorderBrush="{DynamicResource Brush.Warning}" BorderThickness="1" CornerRadius="6" Padding="12" Margin="{DynamicResource Spacing.StackWide}" AutomationProperties.Name="任务恢复警告">
                 <TextBlock Text="{Binding TaskRecoveryWarning}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
             </Border>
@@ -75,7 +75,7 @@
                 </UniformGrid>
             </Border>
 
-            <Border Grid.Row="1" Style="{StaticResource Section.Surface}" Margin="{DynamicResource Spacing.Stack}" Padding="12,10">
+            <Border Grid.Row="1" Style="{StaticResource Section.Surface}" Margin="{DynamicResource Spacing.Stack}" Padding="16,10">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
@@ -85,8 +85,11 @@
                     <Grid Grid.Row="0" AutomationProperties.Name="任务筛选">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="126" />
-                            <ColumnDefinition Width="116" />
+                            <!-- ⑦ 筛选下拉列宽（2026-10-02）：126/116 时「全部阶段/全部时间」四字被下拉箭头截掉右缘。
+                                 闭合框开销 = 内边距 10 + 条目内边距 10 + 箭头列 28 + 边框 2 ≈ 50，四字 13px ≈ 56，
+                                 再加两侧 Spacing.Inline 外边距，132/130 才放得下。 -->
+                            <ColumnDefinition Width="132" />
+                            <ColumnDefinition Width="130" />
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
@@ -190,7 +193,7 @@
                           CellStyle="{StaticResource DataGridCellStyle}" EnableRowVirtualization="True"
                           EnableColumnVirtualization="True" VirtualizingPanel.VirtualizationMode="Recycling"
                           ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                          ScrollViewer.CanContentScroll="True" AutomationProperties.Name="批量任务列表">
+                          ScrollViewer.CanContentScroll="True" AutomationProperties.Name="任务列表">
                     <DataGrid.Columns>
                         <DataGridTemplateColumn Header="任务 / 图纸" Width="*" MinWidth="240" SortMemberPath="FileName">
                             <DataGridTemplateColumn.CellTemplate>
@@ -242,9 +245,9 @@
                                             <ColumnDefinition Width="38" />
                                         </Grid.ColumnDefinitions>
                                         <ProgressBar Height="4" Maximum="100" Value="{Binding ProgressPercent, Mode=OneWay}"
-                                                     VerticalAlignment="Center" Foreground="{DynamicResource Brush.Primary}"
+                                                     VerticalAlignment="Center" Foreground="{DynamicResource Brush.Amber}"
                                                      Background="{DynamicResource Brush.BackgroundAlt}" />
-                                        <TextBlock Grid.Column="1" Text="{Binding ProgressText}" FontSize="12"
+                                        <TextBlock Grid.Column="1" Text="{Binding ProgressText}" FontFamily="{DynamicResource FontFamily.Mono}" FontSize="12"
                                                    Margin="{DynamicResource Spacing.LeftGap}" VerticalAlignment="Center"
                                                    Foreground="{DynamicResource Brush.TextSecondary}" />
                                     </Grid>
@@ -445,12 +448,13 @@
                                 </Grid.RowDefinitions>
                                 <DockPanel>
                                     <TextBlock DockPanel.Dock="Right" Text="{Binding SelectedBatchTask.ProgressText}"
-                                               FontWeight="SemiBold" />
+                                               FontFamily="{DynamicResource FontFamily.Mono}" FontWeight="SemiBold" />
                                     <TextBlock Text="{Binding SelectedBatchTask.WorkflowStatusText}"
-                                               FontWeight="SemiBold" />
+                                               FontFamily="{DynamicResource FontFamily.Display}" FontWeight="SemiBold" />
                                 </DockPanel>
                                 <ProgressBar Grid.Row="1" Height="5" Maximum="100"
                                              Value="{Binding SelectedBatchTask.ProgressPercent, Mode=OneWay}"
+                                             Foreground="{DynamicResource Brush.Amber}"
                                              Margin="{DynamicResource Spacing.Vertical}" />
                                 <TextBlock Grid.Row="2" Text="{Binding SelectedBatchTask.NextActionText}"
                                            TextWrapping="Wrap" Foreground="{DynamicResource Brush.TextSecondary}" />
@@ -511,26 +515,67 @@
                                         <RowDefinition Height="Auto" />
                                         <RowDefinition Height="Auto" />
                                     </Grid.RowDefinitions>
-                                    <Ellipse Grid.Row="0" Width="6" Height="6" VerticalAlignment="Center"
-                                             Fill="{DynamicResource Brush.BorderStrong}" Margin="{DynamicResource Spacing.Stack}" />
+                                    <!-- 时间线节点：有时间的阶段点亮为琥珀，未到达的保持沙灰 -->
+                                    <Ellipse Grid.Row="0" Width="6" Height="6" VerticalAlignment="Center" Margin="{DynamicResource Spacing.Stack}">
+                                        <Ellipse.Style>
+                                            <Style TargetType="Ellipse">
+                                                <Setter Property="Fill" Value="{DynamicResource Brush.Amber}" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding SelectedBatchTask.CreatedAtText}" Value=""><Setter Property="Fill" Value="{DynamicResource Brush.BorderStrong}" /></DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Ellipse.Style>
+                                    </Ellipse>
                                     <TextBlock Grid.Row="0" Grid.Column="1" Text="创建任务" Style="{StaticResource CaptionStyle}" Margin="{DynamicResource Spacing.Stack}" />
-                                    <TextBlock Grid.Row="0" Grid.Column="2" Text="{Binding SelectedBatchTask.CreatedAtText}" Margin="{DynamicResource Spacing.Stack}" />
-                                    <Ellipse Grid.Row="1" Width="6" Height="6" VerticalAlignment="Center"
-                                             Fill="{DynamicResource Brush.BorderStrong}" Margin="{DynamicResource Spacing.Stack}" />
+                                    <TextBlock Grid.Row="0" Grid.Column="2" Text="{Binding SelectedBatchTask.CreatedAtText}" FontFamily="{DynamicResource FontFamily.Mono}" FontSize="{DynamicResource FontSize.Secondary}" Margin="{DynamicResource Spacing.Stack}" />
+                                    <Ellipse Grid.Row="1" Width="6" Height="6" VerticalAlignment="Center" Margin="{DynamicResource Spacing.Stack}">
+                                        <Ellipse.Style>
+                                            <Style TargetType="Ellipse">
+                                                <Setter Property="Fill" Value="{DynamicResource Brush.Amber}" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding SelectedBatchTask.StartedAtText}" Value=""><Setter Property="Fill" Value="{DynamicResource Brush.BorderStrong}" /></DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Ellipse.Style>
+                                    </Ellipse>
                                     <TextBlock Grid.Row="1" Grid.Column="1" Text="开始翻译" Style="{StaticResource CaptionStyle}" Margin="{DynamicResource Spacing.Stack}" />
-                                    <TextBlock Grid.Row="1" Grid.Column="2" Text="{Binding SelectedBatchTask.StartedAtText}" Margin="{DynamicResource Spacing.Stack}" />
-                                    <Ellipse Grid.Row="2" Width="6" Height="6" VerticalAlignment="Center"
-                                             Fill="{DynamicResource Brush.BorderStrong}" Margin="{DynamicResource Spacing.Stack}" />
+                                    <TextBlock Grid.Row="1" Grid.Column="2" Text="{Binding SelectedBatchTask.StartedAtText}" FontFamily="{DynamicResource FontFamily.Mono}" FontSize="{DynamicResource FontSize.Secondary}" Margin="{DynamicResource Spacing.Stack}" />
+                                    <Ellipse Grid.Row="2" Width="6" Height="6" VerticalAlignment="Center" Margin="{DynamicResource Spacing.Stack}">
+                                        <Ellipse.Style>
+                                            <Style TargetType="Ellipse">
+                                                <Setter Property="Fill" Value="{DynamicResource Brush.Amber}" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding SelectedBatchTask.TranslationCompletedAtText}" Value=""><Setter Property="Fill" Value="{DynamicResource Brush.BorderStrong}" /></DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Ellipse.Style>
+                                    </Ellipse>
                                     <TextBlock Grid.Row="2" Grid.Column="1" Text="翻译完成" Style="{StaticResource CaptionStyle}" Margin="{DynamicResource Spacing.Stack}" />
-                                    <TextBlock Grid.Row="2" Grid.Column="2" Text="{Binding SelectedBatchTask.TranslationCompletedAtText}" Margin="{DynamicResource Spacing.Stack}" />
-                                    <Ellipse Grid.Row="3" Width="6" Height="6" VerticalAlignment="Center"
-                                             Fill="{DynamicResource Brush.BorderStrong}" Margin="{DynamicResource Spacing.Stack}" />
+                                    <TextBlock Grid.Row="2" Grid.Column="2" Text="{Binding SelectedBatchTask.TranslationCompletedAtText}" FontFamily="{DynamicResource FontFamily.Mono}" FontSize="{DynamicResource FontSize.Secondary}" Margin="{DynamicResource Spacing.Stack}" />
+                                    <Ellipse Grid.Row="3" Width="6" Height="6" VerticalAlignment="Center" Margin="{DynamicResource Spacing.Stack}">
+                                        <Ellipse.Style>
+                                            <Style TargetType="Ellipse">
+                                                <Setter Property="Fill" Value="{DynamicResource Brush.Amber}" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding SelectedBatchTask.ReviewCompletedAtText}" Value=""><Setter Property="Fill" Value="{DynamicResource Brush.BorderStrong}" /></DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Ellipse.Style>
+                                    </Ellipse>
                                     <TextBlock Grid.Row="3" Grid.Column="1" Text="校对完成" Style="{StaticResource CaptionStyle}" Margin="{DynamicResource Spacing.Stack}" />
-                                    <TextBlock Grid.Row="3" Grid.Column="2" Text="{Binding SelectedBatchTask.ReviewCompletedAtText}" Margin="{DynamicResource Spacing.Stack}" />
-                                    <Ellipse Grid.Row="4" Width="6" Height="6" VerticalAlignment="Center"
-                                             Fill="{DynamicResource Brush.BorderStrong}" Margin="{DynamicResource Spacing.Stack}" />
+                                    <TextBlock Grid.Row="3" Grid.Column="2" Text="{Binding SelectedBatchTask.ReviewCompletedAtText}" FontFamily="{DynamicResource FontFamily.Mono}" FontSize="{DynamicResource FontSize.Secondary}" Margin="{DynamicResource Spacing.Stack}" />
+                                    <Ellipse Grid.Row="4" Width="6" Height="6" VerticalAlignment="Center" Margin="{DynamicResource Spacing.Stack}">
+                                        <Ellipse.Style>
+                                            <Style TargetType="Ellipse">
+                                                <Setter Property="Fill" Value="{DynamicResource Brush.Amber}" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding SelectedBatchTask.LastExportedAtText}" Value=""><Setter Property="Fill" Value="{DynamicResource Brush.BorderStrong}" /></DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Ellipse.Style>
+                                    </Ellipse>
                                     <TextBlock Grid.Row="4" Grid.Column="1" Text="最近导出" Style="{StaticResource CaptionStyle}" Margin="{DynamicResource Spacing.Stack}" />
-                                    <TextBlock Grid.Row="4" Grid.Column="2" Text="{Binding SelectedBatchTask.LastExportedAtText}" Margin="{DynamicResource Spacing.Stack}" />
+                                    <TextBlock Grid.Row="4" Grid.Column="2" Text="{Binding SelectedBatchTask.LastExportedAtText}" FontFamily="{DynamicResource FontFamily.Mono}" FontSize="{DynamicResource FontSize.Secondary}" Margin="{DynamicResource Spacing.Stack}" />
                                 </Grid>
                             </StackPanel>
                         </Border>

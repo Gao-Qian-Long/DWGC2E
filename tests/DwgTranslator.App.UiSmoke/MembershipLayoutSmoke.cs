@@ -63,7 +63,7 @@ public sealed partial class SmokeApp
             Check(details.ActualWidth < 760 || Grid.GetColumn(devices) == 1, "wide membership uses two organized columns");
 
             vm.CurrentPage = MainViewModel.PageSettings; vm.SettingsSection = 5;
-            await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+            await NavIdleAsync();
             var settings = FindVisual<SettingsPage>(window)!;
             var scroll = (ScrollViewer)settings.FindName("SettingsScroll");
             var originalOffset = scroll.VerticalOffset;
@@ -75,17 +75,17 @@ public sealed partial class SmokeApp
             Capture(help, "help-window");
             help.Close();
             vm.SettingsSection = 2;
-            await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+            await NavIdleAsync();
             Check(scroll.VerticalOffset == 0, "switch settings resets previous scroll");
             vm.SettingsSection = 5;
-            await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);            Capture(window, "about-redesign");
+            await NavIdleAsync();            Capture(window, "about-redesign");
         }
         finally
         {
             details.Width = double.NaN;
             vm.OnlineSubscription = subscription; vm.OnlineUsage = usage;
             vm.CurrentPage = MainViewModel.PageAccount;
-            await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+            await NavIdleAsync();
         }
     }
 }

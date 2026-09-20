@@ -1,0 +1,188 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=System.Runtime">
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         暖色手作杂志风 · 装饰资产层（2026-09-19 新增）
+         品牌宪法要求的四类手作元素，全部矢量、无位图依赖：
+           波浪下划线 Icon.Deco.Wave      八芒星火花 Icon.Deco.Spark
+           虚线圆环   Deco.DashedRing     票据标签   Ticket.Tag
+         另有：编号角章 Number.Chip（杂志编号卡片）、报纸双线 Rule.Double、
+         印刷小标 Kicker（等宽琥珀标签，压在衬线大标题上方）。
+         装饰只允许用 Brush.Amber / Brush.BrandAccent / Brush.TextDisabled，
+         不得占用状态色。
+         ═══════════════════════════════════════════════════════════════════ -->
+
+    <!-- ══ 纸纹噪点：128×128 平铺（内嵌 Resource，单文件发布可用）。
+         铺在纸色底上、内容之下，弱化屏幕冰冷感；透明度已烘焙进 PNG（α 6-20）。 ══ -->
+    <ImageBrush x:Key="Brush.PaperNoise"
+                ImageSource="pack://application:,,,/DwgTranslator;component/Assets/paper-noise.png"
+                TileMode="Tile" Viewport="0,0,128,128" ViewportUnits="Absolute" />
+
+    <!-- ── 八芒星火花：14x14 盒，外锋 r6.6 / 内谷 r2.4，手绘星芒 ── -->
+    <PathGeometry x:Key="Icon.Deco.Spark" Figures="M 7,0.4 L 7.92,4.78 L 11.67,2.33 L 9.22,6.08 L 13.6,7 L 9.22,7.92 L 11.67,11.67 L 7.92,9.22 L 7,13.6 L 6.08,9.22 L 2.33,11.67 L 4.78,7.92 L 0.4,7 L 4.78,6.08 L 2.33,2.33 L 6.08,4.78 Z" />
+    <!-- 小火花（角缀用）：8x8 盒，四芒 -->
+    <PathGeometry x:Key="Icon.Deco.SparkSmall" Figures="M 4,0.4 L 4.7,3.3 L 7.6,4 L 4.7,4.7 L 4,7.6 L 3.3,4.7 L 0.4,4 L 3.3,3.3 Z" />
+
+    <!-- ── 波浪下划线：28x5 盒，两段完整波，可平铺；Path 用 Stroke 渲染 ── -->
+    <PathGeometry x:Key="Icon.Deco.Wave" Figures="M 0,3.1 C 2.3,1.1 4.7,1.1 7,3.1 C 9.3,5.1 11.7,5.1 14,3.1 C 16.3,1.1 18.7,1.1 21,3.1 C 23.3,5.1 25.7,5.1 28,3.1" />
+
+    <!-- ── 页面变体波形（2026-10-02 用户反馈：五个页头共用同一条波浪，没有页面区分度）。
+         同一 28×5 盒、同一琥珀描边规格，只换节奏；由 PageHeader.WaveVariant(1-5) 选择：
+         1 图纸翻译=Icon.Deco.Wave（标准正弦）  2 任务中心=密集小涟漪  3 术语库=手绘心电线
+         4 会员中心=长缓弧  5 设置=电路折线 ── -->
+    <PathGeometry x:Key="Icon.Deco.Wave2" Figures="M 0,3 C 1.15,1.5 2.35,1.5 3.5,3 C 4.65,4.5 5.85,4.5 7,3 C 8.15,1.5 9.35,1.5 10.5,3 C 11.65,4.5 12.85,4.5 14,3 C 15.15,1.5 16.35,1.5 17.5,3 C 18.65,4.5 19.85,4.5 21,3 C 22.15,1.5 23.35,1.5 24.5,3 C 25.65,4.5 26.85,4.5 28,3" />
+    <PathGeometry x:Key="Icon.Deco.Wave3" Figures="M 0,3.2 L 6,3.2 L 8.5,1 L 11,4.6 L 13.5,3.2 L 20,3.2 L 22.5,1.6 L 25,3.2 L 28,3.2" />
+    <PathGeometry x:Key="Icon.Deco.Wave4" Figures="M 0,4.3 C 5,4.3 7.5,0.9 14,0.9 C 20.5,0.9 23,4.3 28,4.3" />
+    <PathGeometry x:Key="Icon.Deco.Wave5" Figures="M 0,4.2 L 3,4.2 L 5,1.2 L 9,1.2 L 11,4.2 L 17,4.2 L 19,1.2 L 23,1.2 L 25,4.2 L 28,4.2" />
+
+    <!-- ── 手绘短下划弧：标题/选中态下的收笔线，32x6 盒 ── -->
+    <PathGeometry x:Key="Icon.Deco.Underline" Figures="M 1,4.4 C 8,2 22,1.4 31,2.8" />
+
+    <!-- ── 小菱形符：列表/票据分隔的手作弹头，8x8 盒 ── -->
+    <PathGeometry x:Key="Icon.Deco.Diamond" Figures="M 4,0.8 L 7.2,4 L 4,7.2 L 0.8,4 Z" />
+
+    <!-- ── 角括弧：印刷裁切标记，用于「编号卡片」四角，10x10 盒 ── -->
+    <PathGeometry x:Key="Icon.Deco.CornerTL" Figures="M 0.8,9.2 L 0.8,0.8 L 9.2,0.8" />
+    <PathGeometry x:Key="Icon.Deco.CornerBR" Figures="M 9.2,0.8 L 9.2,9.2 L 0.8,9.2" />
+
+    <!-- ══ 虚线圆环（空状态/额度环外围的手作圈）══
+         用法：<Ellipse Style="{StaticResource Deco.DashedRing}" Width="64" Height="64"/> -->
+    <Style x:Key="Deco.DashedRing" TargetType="Ellipse">
+        <Setter Property="Stroke" Value="{DynamicResource Brush.BorderStrong}" />
+        <Setter Property="StrokeThickness" Value="1.5" />
+        <Setter Property="StrokeDashArray" Value="4 3" />
+        <Setter Property="StrokeDashCap" Value="Round" />
+        <Setter Property="Fill" Value="Transparent" />
+        <Setter Property="SnapsToDevicePixels" Value="True" />
+    </Style>
+    <!-- 琥珀变体：强调用（空状态图标外圈、会员装饰） -->
+    <Style x:Key="Deco.DashedRing.Amber" TargetType="Ellipse" BasedOn="{StaticResource Deco.DashedRing}">
+        <Setter Property="Stroke" Value="{DynamicResource Brush.Amber}" />
+    </Style>
+
+    <!-- ══ 波浪下划线（Path 包装样式）══
+         用法：<Path Style="{StaticResource Deco.WaveRule}" Width="120"/>
+         Width 任意拉伸，Viewbox 不平铺而是拉宽波形——宽度建议 56 的倍数。 -->
+    <Style x:Key="Deco.WaveRule" TargetType="Path">
+        <Setter Property="Data" Value="{StaticResource Icon.Deco.Wave}" />
+        <Setter Property="Stretch" Value="Fill" />
+        <Setter Property="Height" Value="5" />
+        <Setter Property="Stroke" Value="{DynamicResource Brush.Amber}" />
+        <Setter Property="StrokeThickness" Value="1.6" />
+        <Setter Property="StrokeStartLineCap" Value="Round" />
+        <Setter Property="StrokeEndLineCap" Value="Round" />
+        <Setter Property="VerticalAlignment" Value="Top" />
+        <Setter Property="HorizontalAlignment" Value="Left" />
+    </Style>
+
+    <!-- ══ 八芒星火花（Path 样式）══
+         用法：<Path Style="{StaticResource Deco.Spark}" Width="14" Height="14"/> -->
+    <Style x:Key="Deco.Spark" TargetType="Path">
+        <Setter Property="Data" Value="{StaticResource Icon.Deco.Spark}" />
+        <Setter Property="Stretch" Value="Uniform" />
+        <Setter Property="Fill" Value="{DynamicResource Brush.Amber}" />
+        <Setter Property="Width" Value="14" />
+        <Setter Property="Height" Value="14" />
+    </Style>
+    <Style x:Key="Deco.Spark.Small" TargetType="Path" BasedOn="{StaticResource Deco.Spark}">
+        <Setter Property="Data" Value="{StaticResource Icon.Deco.SparkSmall}" />
+        <Setter Property="Width" Value="8" />
+        <Setter Property="Height" Value="8" />
+    </Style>
+
+    <!-- ══ 印刷小标 Kicker：等宽琥珀小标签，压在衬线大标题上方 ══
+         杂志排版的「栏目眉」，如 WORKSPACE / 01 · 常规 -->
+    <Style x:Key="Kicker" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{DynamicResource FontFamily.Mono}" />
+        <Setter Property="FontSize" Value="11" />
+        <Setter Property="Foreground" Value="{DynamicResource Brush.Primary}" />
+        <Setter Property="Margin" Value="0,0,0,4" />
+        <Setter Property="TextTrimming" Value="None" />
+    </Style>
+    <!-- 墨底反白版 -->
+    <Style x:Key="Kicker.OnInk" TargetType="TextBlock" BasedOn="{StaticResource Kicker}">
+        <Setter Property="Foreground" Value="{DynamicResource Brush.OnInkAccent}" />
+    </Style>
+
+    <!-- ══ 报纸双线分割：FAQ/分区之间用 2px+1px 双细线替代卡片 ══
+         用法：<ContentControl Style="{StaticResource Rule.Double}"/> 单独放一行 -->
+    <Style x:Key="Rule.Double" TargetType="ContentControl">
+        <Setter Property="Height" Value="4" />
+        <Setter Property="Margin" Value="0,10" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ContentControl">
+                    <Grid SnapsToDevicePixels="True">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="2" />
+                            <RowDefinition Height="1" />
+                            <RowDefinition Height="1" />
+                        </Grid.RowDefinitions>
+                        <Border Grid.Row="0" Height="2" Background="{DynamicResource Brush.Border}" />
+                        <Border Grid.Row="2" Height="1" Background="{DynamicResource Brush.BorderLight}" />
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ══ 编号角章 Number.Chip：墨底等宽编号（01/02/…），杂志编号卡片的核心符号 ══
+         用法：<Border Style="{StaticResource Number.Chip}"><TextBlock Style="{StaticResource Number.Chip.Text}" Text="01"/></Border> -->
+    <Style x:Key="Number.Chip" TargetType="Border">
+        <Setter Property="Width" Value="24" />
+        <Setter Property="Height" Value="24" />
+        <Setter Property="CornerRadius" Value="2" />
+        <Setter Property="Background" Value="{DynamicResource Brush.Ink}" />
+        <Setter Property="VerticalAlignment" Value="Top" />
+        <Setter Property="HorizontalAlignment" Value="Left" />
+    </Style>
+    <Style x:Key="Number.Chip.Text" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{DynamicResource FontFamily.Mono}" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="Foreground" Value="{DynamicResource Brush.OnInk}" />
+        <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <!-- 琥珀变体：当前选中区块的编号 -->
+    <Style x:Key="Number.Chip.Amber" TargetType="Border" BasedOn="{StaticResource Number.Chip}">
+        <Setter Property="Background" Value="{DynamicResource Brush.Amber}" />
+    </Style>
+
+    <!-- ══ 票据标签 Ticket.Tag：琥珀浅底 + 两侧打孔的收据式小标签 ══
+         用法：<ContentControl Style="{StaticResource Ticket.Tag}"><TextBlock .../></ContentControl>
+         打孔圆点颜色 = Brush.Surface，放在卡片纸面上时与底色融合。 -->
+    <Style x:Key="Ticket.Tag" TargetType="ContentControl">
+        <Setter Property="Padding" Value="12,3" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="HorizontalAlignment" Value="Left" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ContentControl">
+                    <Grid SnapsToDevicePixels="True">
+                        <Border x:Name="Body" Background="{DynamicResource Brush.AmberSoft}"
+                                BorderBrush="{DynamicResource Brush.Amber}" BorderThickness="1"
+                                CornerRadius="2" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter VerticalAlignment="Center" />
+                        </Border>
+                        <!-- 左右打孔 -->
+                        <Ellipse Width="5" Height="5" HorizontalAlignment="Left" VerticalAlignment="Center"
+                                 Margin="-2.5,0,0,0" Fill="{DynamicResource Brush.Surface}"
+                                 Stroke="{DynamicResource Brush.Amber}" StrokeThickness="0.8" />
+                        <Ellipse Width="5" Height="5" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                 Margin="0,0,-2.5,0" Fill="{DynamicResource Brush.Surface}"
+                                 Stroke="{DynamicResource Brush.Amber}" StrokeThickness="0.8" />
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    <!-- 票据内的等宽小字 -->
+    <Style x:Key="Ticket.Tag.Text" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{DynamicResource FontFamily.Mono}" />
+        <Setter Property="FontSize" Value="11.5" />
+        <Setter Property="Foreground" Value="{DynamicResource Brush.Primary}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+</ResourceDictionary>

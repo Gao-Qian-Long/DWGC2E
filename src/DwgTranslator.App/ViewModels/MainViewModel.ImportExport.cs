@@ -271,10 +271,11 @@ public partial class MainViewModel
             return;
         }
 
-        // 默认输出目录落在源图纸旁边（<源目录>\<DefaultOutputFolderName>），不再默认写进
-        // AppData/安装目录下的 exports；只有用户在设置里显式选过的目录才会覆盖这个默认值。
+        // 默认输出目录 = <安装目录>\exports（2026-10-02 用户决定）；安装区不可写时退回
+        // 源图纸旁边（<源目录>\<DefaultOutputFolderName>）。只有用户在设置里显式选过的
+        // 目录才会覆盖这个默认值。
         var targetFolder = AccountWorkspace.OutputDirectoryFor(
-            _config, App.AppDataDir, Path.GetDirectoryName(targets[0]), DefaultOutputFolderName);
+            _config, App.AppDataDir, Path.GetDirectoryName(targets[0]), DefaultOutputFolderName, App.InstallDir);
         if (string.IsNullOrWhiteSpace(targetFolder) || !Path.IsPathFullyQualified(targetFolder))
         {
             // 只有算不出源目录时才回到"让用户选一次"，并且选完就固化成本账号的默认目录。
