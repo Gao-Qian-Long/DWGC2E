@@ -152,9 +152,23 @@ public partial class MainViewModel
     /// <see cref="RefreshAccountAsync"/> 的受保护入口：账户区刷新是 fire-and-forget 调用点最多的
     /// 异步操作，异常必须有人观察——否则失败只会变成"界面停在旧状态，没有任何提示"。
     /// </summary>
-    private async Task SafeRefreshAccountAsync()
+    /// <param name="userInitiated">
+    /// 本次刷新是否由用户主动触发（点「刷新权益」/「重新验证会话」/「恢复已保存会话」/ 登录成功）。
+    /// 默认 false 是有意的 fail-safe 方向：本入口的三个调用点全部是自动触发——导航进会员中心
+    /// （MainViewModel.Navigation.cs:52）、启动（MainViewModel.cs:210）、后台会话清理重试
+    /// （MainViewModel.SessionCleanup.cs:19）。自动同步属后台维护、用户并未请求，故不弹成功提示。
+    /// §A3 补完（t7）：此前无判据，每次打开会员中心都弹「账户信息已同步」，叠加
+    /// Views\Controls\ToastHost.xaml.cs:44 对同文案重复 Show() 会重置 Remaining=4s，
+    /// 冒烟实测轮询 ≈14.6s 仍 visible=1 永不过期，且盖住会员页 C6 第 3 块磁贴右下角。
+    /// 这与 MembershipLayoutSmoke.cs:53-54 早已确立的约定（自动刷新 stays silent、不改写
+    /// AccountFeedback）一致——本改动把同一约定补到成功 toast 这条通道上。
+    /// 只 gate ToastService.Success 一个通道：AccountFeedback 状态栏文本、A3 的按钮 busy 态
+    /// （「刷新权益」→「同步中…」+ 禁用 + MinWidth=104，MembershipLayoutSmoke.cs:36/44 有断言）、
+    /// 以及失败/告警 toast 全部不变——失败必须继续出声。
+    /// </param>
+    private async Task SafeRefreshAccountAsync(bool userInitiated = false)
     {
-        try { await RefreshAccountAsync().ConfigureAwait(true); }
+        try { await RefreshAccountCoreAsync(userInitiated).ConfigureAwait(true); }
         catch (Exception ex)
         {
             Log.Error(ex, "账户刷新失败");
@@ -163,8 +177,19 @@ public partial class MainViewModel
         }
     }
 
+    /// <summary>
+    /// 命令入口（源生成 <c>RefreshAccountCommand</c>）：走到这里的一定是用户主动动作——
+    /// AccountPage.xaml:162「刷新权益」、:163 上下文菜单「重新验证会话」、:314「恢复已保存会话」，
+    /// 以及本文件 :339 登录成功后的立即同步，故 userInitiated 恒为 true、成功 toast 属预期反馈。
+    /// 必须保持无参：AccountPage.xaml 三处 Command 绑定都不传 CommandParameter，tests\ 另有 5 处
+    /// vm.RefreshAccountCommand.ExecuteAsync(null)（Program.cs:514/670/672、
+    /// ExpiredProofreadingSmoke.cs:34/68）。给它加参数会让源生成器产出 RelayCommand&lt;T&gt;，
+    /// 这些绑定与调用点全部退化为传 null，因此把可变的 userInitiated 下移到 Core 方法。
+    /// </summary>
     [RelayCommand]
-    private async Task RefreshAccountAsync()
+    private Task RefreshAccountAsync() => RefreshAccountCoreAsync(userInitiated: true);
+
+    private async Task RefreshAccountCoreAsync(bool userInitiated)
     {
         if (IsAccountRefreshing)
         {
@@ -216,7 +241,10 @@ public partial class MainViewModel
             OnPropertyChanged(nameof(OnlinePlanText));
             OnPropertyChanged(nameof(OnlineQuotaText));
             OnPropertyChanged(nameof(DeviceCountText));
-            if (AccountFeedback == "账户信息已同步。" && CurrentPage == PageAccount) ToastService.Success("账户信息已同步");
+            // §A3 补完（t7）：成功 toast 只在用户主动刷新时弹。自动同步（导航进会员中心 / 启动 /
+            // 后台重试）不出声——用户没请求它，且 ToastHost.xaml.cs:44 对同文案重复 Show() 会重置
+            // 4s 倒计时导致永不过期、盖住 C6 第 3 块磁贴。AccountFeedback 与失败告警通道均不受影响。
+            if (userInitiated && AccountFeedback == "账户信息已同步。" && CurrentPage == PageAccount) ToastService.Success("账户信息已同步");
         }
         catch (ApiAuthenticationException ex)
         {

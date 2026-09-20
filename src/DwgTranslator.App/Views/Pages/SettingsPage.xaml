@@ -8,10 +8,12 @@
                 </Trigger>
             </Style.Triggers>
         </Style>
-        <!-- 分区区块（替代原来的 168 DIP 左侧导航列）：双排 3×2，选中态沿用 Primary/PrimaryLight 配色。 -->
+        <!-- 分区导航格：竖排列表项（G 组由双排 3×2 区块改回左卡竖排），选中态沿用 Primary/PrimaryLight 配色 + 琥珀编号角章。
+             水平内边距由 14 收到 12：列宽 168 - 卡内边距 10×2 - 卡边框 2 - 格外边距 4×2 - 格边框 2 - 格内边距 12×2 = 112，
+             而最长标题「CAD 与环境」= 编号角章 20 + 9 间距 + 文字约 72 ≈ 101，留 11 DIP 余量；沿用 14 只剩 7，太贴边。 -->
         <Style x:Key="Settings.SectionTile" TargetType="ListBoxItem">
             <Setter Property="MinHeight" Value="{DynamicResource Size.NavItem}" />
-            <Setter Property="Padding" Value="14,10" />
+            <Setter Property="Padding" Value="12,10" />
             <Setter Property="Margin" Value="{DynamicResource Spacing.4}" />
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
             <Setter Property="VerticalContentAlignment" Value="Center" />
@@ -79,20 +81,37 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 <controls:PageHeader x:Name="WorkspaceHeader" Header="设置" Description="常用选项集中在这一页；按分区调整后统一保存。" WaveVariant="5" />
+        <!-- G 主从双卡片（用户确认方案：设置页 = 左右主从双卡片）。
+             本 Grid 由「三行单列」改为「三行 × 三列」：
+               列 0 = 左卡（01-06 竖排分区导航），宽度用 Metrics.xaml 既有的 Size.SettingsNav(168) 令牌；
+               列 1 = 槽列，用 f1 为 §C6 新增的 Size.CardGutter(16)——两卡之间只靠这一个槽分隔，不必再动 Metrics.xaml；
+               列 2 = 右卡（分区内容）与其下的操作条。
+             行 0 = 右列上方的分区选择/生效提示条；行 1 = 两张卡（左卡 Stretch 到行高、右卡 MinHeight 绑视口高，
+             于是两卡恒等高、顶底齐平，任何分区都不会出现一侧留白）；行 2 = 操作条。
+             历史沿革：这里最早就是 168 DIP 左侧竖排导航列 → 上一批改成页内双排 3×2 区块（理由"页面只保留设置
+             这一个一级入口"）→ 本批按用户确认改回左右主从。Size.SettingsNav 令牌当时并未删除，正好复用。
+             窄窗降级见 SettingsPage.xaml.cs UpdateLayoutMode()：左卡与槽列一起收为 0，右卡独占整行。 -->
         <Grid x:Name="SettingsBody" Grid.Row="1">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
-            <StackPanel Grid.Row="0">
-                <!-- 分区切换条：从左侧竖排导航列改为页内双排区块，页面只保留"设置"这一个一级入口。 -->
-                <ListBox x:Name="SettingsNav" AutomationProperties.Name="设置分区" SelectedIndex="{Binding SettingsSection}" SelectionChanged="SettingsSection_Changed" BorderThickness="0" Background="Transparent" Margin="{DynamicResource Spacing.Stack}" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Disabled">
-                    <ListBox.ItemsPanel>
-                        <ItemsPanelTemplate>
-                            <UniformGrid Rows="2" Columns="3" />
-                        </ItemsPanelTemplate>
-                    </ListBox.ItemsPanel>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition x:Name="SettingsNavColumn" Width="{DynamicResource Size.SettingsNav}" />
+                <ColumnDefinition x:Name="SettingsNavGutter" Width="{DynamicResource Size.CardGutter}" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- 左卡：分区导航。Padding 用 10 而非 Section.Surface 默认的 Spacing.Card(20)——
+                 168 的列宽扣掉 20 内边距、再扣格子自身的边距与内边距后放不下最长的「CAD 与环境」。
+                 整卡与右卡同源 Section.Surface，H 组柔化阴影后两卡自动一致。 -->
+            <Border x:Name="SettingsNavCard" Grid.Row="1" Grid.Column="0"
+                    Style="{StaticResource Section.Surface}" Padding="10" VerticalAlignment="Stretch">
+                <!-- 竖排列表：去掉原先的 UniformGrid Rows=2 Columns=3 面板，回到 ListBox 默认纵向堆叠。
+                     6 个固定项总高约 300 DIP，在全部受支持窗口高度下都放得下，故纵向滚动条保持 Disabled
+                     （改 Auto 会在极端矮窗多出 10 DIP 滚动条、把最长标题挤成省略号）。 -->
+                <ListBox x:Name="SettingsNav" AutomationProperties.Name="设置分区" SelectedIndex="{Binding SettingsSection}" SelectionChanged="SettingsSection_Changed" BorderThickness="0" Background="Transparent" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Disabled">
                     <ListBoxItem Style="{StaticResource Settings.SectionTile}" AutomationProperties.Name="常规">
                         <StackPanel Orientation="Horizontal"><Border Style="{StaticResource Settings.NumberChip}"><TextBlock Text="01" Style="{StaticResource Settings.NumberChip.Text}" /></Border><TextBlock Text="常规" VerticalAlignment="Center" /></StackPanel>
                     </ListBoxItem>
@@ -112,11 +131,21 @@
                         <StackPanel Orientation="Horizontal"><Border Style="{StaticResource Settings.NumberChip}"><TextBlock Text="06" Style="{StaticResource Settings.NumberChip.Text}" /></Border><TextBlock Text="关于与帮助" VerticalAlignment="Center" /></StackPanel>
                     </ListBoxItem>
                 </ListBox>
+            </Border>
+
+            <!-- 分区选择条 + 生效时机提示，放在右卡上方（行 0 / 列 2）。
+                 CompactSections 必须留在这一列、不能塞进左卡：RefinementSmoke.cs:34 与 :385 断言它的 IsVisible
+                 必须严格等于 compact，而窄窗时左卡整张 Collapsed，下拉若在卡内会被连带隐藏而踩红。 -->
+            <StackPanel Grid.Row="0" Grid.Column="2" Margin="{DynamicResource Spacing.Stack}">
                 <ComboBox x:Name="CompactSections" Visibility="Collapsed" SelectedIndex="{Binding SettingsSection}" SelectionChanged="SettingsSection_Changed" Margin="{DynamicResource Spacing.StackWide}" AutomationProperties.Name="设置分类"><ComboBoxItem Content="常规"/><ComboBoxItem Content="翻译与保护"/><ComboBoxItem Content="文件与输出"/><ComboBoxItem Content="CAD 与环境"/><ComboBoxItem Content="日志"/><ComboBoxItem Content="关于与帮助"/></ComboBox>
                 <TextBlock Text="{Binding SettingsSectionApplyHint}" Style="{StaticResource CaptionStyle}" />
             </StackPanel>
-            <ScrollViewer x:Name="SettingsScroll" Grid.Row="1" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" HorizontalContentAlignment="Stretch" controls:ResponsiveLayout.HandoffMouseWheelAtBoundary="True">
-                <Border x:Name="SettingsContent" HorizontalAlignment="Stretch"><Border.Style><Style TargetType="Border" BasedOn="{StaticResource Section.Surface}"><Setter Property="MaxWidth" Value="1080"/></Style></Border.Style>
+            <!-- 右卡。MinHeight 绑到外层 ScrollViewer 的 ViewportHeight：分区内容比视口矮时卡片仍铺满，
+                 与左卡（Stretch 到同一行高）恒等高，不会出现"左卡长右卡短"的缺口。该绑定不会自激振荡——
+                 ViewportHeight 不受纵向滚动条影响、横向滚动条已 Disabled（与 TranslatePage 右栏 E10 同一手法）。
+                 MaxWidth 1080 必须保留：UI 冒烟 Program.cs:636 断言 SettingsContent.ActualWidth 落在 (400, 1080]。 -->
+            <ScrollViewer x:Name="SettingsScroll" Grid.Row="1" Grid.Column="2" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" HorizontalContentAlignment="Stretch" controls:ResponsiveLayout.HandoffMouseWheelAtBoundary="True">
+                <Border x:Name="SettingsContent" HorizontalAlignment="Stretch" MinHeight="{Binding ViewportHeight, RelativeSource={RelativeSource AncestorType=ScrollViewer}}"><Border.Style><Style TargetType="Border" BasedOn="{StaticResource Section.Surface}"><Setter Property="MaxWidth" Value="1080"/></Style></Border.Style>
                     <StackPanel>
                         <!-- 每个分区块内部是同一套两列表单骨架：20 DIP 中缝把 * / * 两列分开，左右两列各自独立堆叠，
                              行数不等也不会留空洞，且不覆盖 SettingsRow 自带的行距；需要整行宽度的路径输入跨三列。 -->
@@ -194,7 +223,11 @@
                                 <controls:SettingsRow Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="3">
                                     <StackPanel>
                                         <TextBlock Text="输出目录" Style="{StaticResource FormRowLabel}" />
-                                        <TextBlock Text="可暂时留空并在首次导出时选择；填写时必须是可写的绝对目录。" Style="{StaticResource FormRowDescription}" />
+                                        <!-- M13 改写（队长批准）：原文案「可暂时留空并在首次导出时选择」与实现相反——
+                                             MainViewModel.ImportExport.cs:277 直接取 ResolveExportDirectory()/OutputDirectoryFor 的
+                                             结果、首次导出并不弹目录选择框。改为与已交付行为一致的表述：
+                                             留空 = <安装目录>\exports，安装区不可写才退回源图纸旁（AccountWorkspace.cs:29-48 的回退顺序）。 -->
+                                        <TextBlock Text="留空则默认输出到 &lt;安装目录&gt;\exports（安装区不可写时退回源图纸旁的输出目录）；填写时必须是可写的绝对目录。" Style="{StaticResource FormRowDescription}" />
                                     </StackPanel>
                                     <DockPanel><Button DockPanel.Dock="Right" Content="浏览" Click="BrowseOutput_Click" Style="{StaticResource Button.Secondary}" Margin="{DynamicResource Spacing.LeftGap}"/><TextBox x:Name="ExportDirectoryInput" Style="{StaticResource Settings.ValidatedInput}" MinHeight="{DynamicResource Size.Control}" Padding="8,4" ToolTip="{Binding SettingsDraft.ExportDirectory}"><TextBox.Text><Binding Path="SettingsDraft.ExportDirectory" UpdateSourceTrigger="PropertyChanged"><Binding.ValidationRules><controls:AbsoluteDirectoryValidationRule/></Binding.ValidationRules></Binding></TextBox.Text></TextBox></DockPanel>
                                 </controls:SettingsRow>
@@ -444,8 +477,11 @@
                 </Border>
             </ScrollViewer>
             <!-- 操作条：草稿状态徽标 + 说明文字与按钮同排，提示不再单独漂浮在页面中部。
-                 与居中的表单同宽居中，避免宽屏下表单居中而操作条贴左的错位。 -->
-            <DockPanel x:Name="SettingsSaveBar" Grid.Row="2" HorizontalAlignment="Center" Width="{Binding ActualWidth, ElementName=SettingsContent}" MaxWidth="1080" Margin="{DynamicResource Spacing.BlockTopWide}" MinHeight="48" Background="{DynamicResource Brush.SurfaceAlt}"><DockPanel.Style><Style TargetType="DockPanel"><Style.Triggers><DataTrigger Binding="{Binding SettingsSection}" Value="5"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></DockPanel.Style>
+                 必须与右卡同列（Grid.Column=2）：Width 绑 SettingsContent.ActualWidth + HorizontalAlignment=Center
+                 只保证"同宽且居中"，而居中的参照是**所在列**——若让它跨三列，它会按整页宽度居中，
+                 与只占列 2 的表单错开 (168+16)/2 = 92 DIP，直接踩红 UI 冒烟 Program.cs:640
+                 「settings footer aligns with form」（断言两者 ActualWidth 差 < 2）。 -->
+            <DockPanel x:Name="SettingsSaveBar" Grid.Row="2" Grid.Column="2" HorizontalAlignment="Center" Width="{Binding ActualWidth, ElementName=SettingsContent}" MaxWidth="1080" Margin="{DynamicResource Spacing.BlockTopWide}" MinHeight="48" Background="{DynamicResource Brush.SurfaceAlt}"><DockPanel.Style><Style TargetType="DockPanel"><Style.Triggers><DataTrigger Binding="{Binding SettingsSection}" Value="5"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></DockPanel.Style>
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                     <Button x:Name="RestoreSettingsButton" Content="恢复本节推荐值" Command="{Binding RestoreSettingsSectionDefaultsCommand}" Style="{StaticResource Button.Tertiary}" Margin="{DynamicResource Spacing.Inline}" />
                     <Button x:Name="DiscardSettingsButton" Content="放弃更改" Command="{Binding DiscardSettingsChangesCommand}" IsEnabled="{Binding CanDiscardSettings}" Style="{StaticResource Button.Secondary}" Margin="{DynamicResource Spacing.Inline}" />

@@ -49,7 +49,7 @@ public partial class MainViewModel
         OnPropertyChanged(nameof(IsGlossaryPage));
         OnPropertyChanged(nameof(IsAccountPage));
         RefreshPageStatistics();
-        if (CurrentPage == PageAccount) _ = SafeRefreshAccountAsync();
+        if (CurrentPage == PageAccount) _ = SafeRefreshAccountAsync(userInitiated: false); // 自动同步：导航进会员中心的后台刷新，不弹成功 toast（§A3 补完 t7）
         if (CurrentPage == PageGlossary) LoadTermEditor();
     }
 

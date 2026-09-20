@@ -207,7 +207,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         ReportStartupDegradation(degraded);
 
         // 账户同步不再是 fire-and-forget：这一步失败只影响账户区，但异常必须有出口。
-        await SafeRefreshAccountAsync();
+        await SafeRefreshAccountAsync(userInitiated: false); // 自动同步：启动时的后台刷新，不弹成功 toast（§A3 补完 t7）
     }
 
     /// <summary>

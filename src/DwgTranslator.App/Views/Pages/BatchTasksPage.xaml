@@ -21,7 +21,7 @@
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
-            <!-- 任务详情抽屉是覆盖层而不是布局列：本表最小列宽合计 992 DIP（240+116+260+128+142+106），
+            <!-- 任务详情抽屉是覆盖层而不是布局列：本表最小列宽合计 990 DIP（240+104+254+122+152+118），
                  1366 下让位 400 后只剩 702，操作列会被裁掉，且本表明确要求不依赖横向滚动。
                  但统计条与筛选卡片没有任何理由被盖住——抽屉打开时这一格撑到抽屉宽度，
                  让上面两行主动让位；表格行 Grid 跨两列，宽度不受影响（列 1 宽 0 时布局与原来一致）。 -->
@@ -184,17 +184,58 @@
                 </Grid>
             </Border>
 
-            <Grid Grid.Row="2" Grid.ColumnSpan="2">
+            <!-- F11a/f 列表装进与上方统计条(:42)、筛选卡(:78)完全同一套 Section.Surface 语言的白卡：
+                 Brush.Surface 白底 + 1px Brush.Border 浅棕细边框 + CornerRadius.Medium 圆角令牌 + Shadow.Hard，
+                 四边外框闭合，底边与右侧不再悬空 —— 用户批注「这个列表的样式很奇怪啊，不能统一一下吗？」。
+                 F11b 表头其实早就有底色与字重区分（DataGridHeaderStyle，MainWindowStyles.xaml:304-315：
+                 Brush.DataGridHeader #F7F5F0 + FontFamily.Mono + SemiBold + FontSize.TableHeader +
+                 底部 1px Brush.Border 分隔线）；缺的不是表头样式，而是这张白卡 —— 装上卡之后表头底色
+                 才第一次落在白底之上，读出「表头」而不是「一条悬空的灰带」。
+                 Padding 必须显式归零：Section.Surface 默认 Padding=Spacing.Card(20)，两侧就吃掉 40 DIP；
+                 本表最小列宽合计 990 DIP，而 1280 宽下可用只有 1004 DIP
+                 （1280 - 侧栏 200 - Spacing.Page 左右 64 - 卡片边框 2 - 纵向滚动条 10，
+                 滚动条宽 10 见 MainWindowStyles.xaml:668），星号列会跌破 MinWidth 240、操作列被挤出表外，
+                 直接踩红 RefinementSmoke.cs:206（操作表头右缘必须落在表宽内）。
+                 Border 不会把子元素裁成圆角，但半径只有 2 DIP；TranslatePage 左侧队列卡(:172)
+                 早已是「Section.Surface + Padding=0 包 DataGrid」的同款做法。
+                 EmptyState 一并留在卡内：空态与列表共用同一张白卡，风格不再割裂。 -->
+            <Border Grid.Row="2" Grid.ColumnSpan="2" Style="{StaticResource Section.Surface}" Padding="0">
+            <Grid>
+                <!-- F11c 行高：原先 RowHeight 锁死 Size.TableRow(40)，行内只有单行文本，比上方筛选卡
+                 （Padding 16,10 + 36 高控件）紧一档，这也是「列表和上面不像一套」的一部分。
+                 改成 MinRowHeight=48：给下限而不锁死，内容更高时（结果列长文本、36 高按钮）行自然长高、
+                 不裁切；与本页 :358 校对表已在用的 MinRowHeight 写法同构。
+                 48 没有对应的 Double 令牌（Metrics.xaml 只有 Size.TableRow=40；Spacing.48 是 Thickness，
+                 不能赋给 RowHeight/MinRowHeight），而 Metrics.xaml 不在本任务允许改动的文件清单内，
+                 故此处用字面量并在此说明理由；日后若要令牌化，建议加 Size.TableRowComfortable=48 再替换本值。 -->
                 <DataGrid x:Name="TaskTable" ItemsSource="{Binding BatchView}" SelectedItem="{Binding SelectedBatchTask}"
                           SelectionMode="Single" AutoGenerateColumns="False" CanUserAddRows="False"
                           CanUserResizeColumns="False" CanUserReorderColumns="False" CanUserSortColumns="True"
                           IsReadOnly="True" BorderThickness="0" HeadersVisibility="Column"
-                          RowHeight="{DynamicResource Size.TableRow}" ColumnHeaderStyle="{StaticResource DataGridHeaderStyle}"
+                          MinRowHeight="48" ColumnHeaderStyle="{StaticResource DataGridHeaderStyle}"
                           CellStyle="{StaticResource DataGridCellStyle}" EnableRowVirtualization="True"
                           EnableColumnVirtualization="True" VirtualizingPanel.VirtualizationMode="Recycling"
                           ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                           ScrollViewer.CanContentScroll="True" AutomationProperties.Name="任务列表">
                     <DataGrid.Columns>
+                        <!-- F11d 列宽重分配。用户批注：「任务/图纸」过宽、「最近更新」过窄导致时间被截成 2026-09-20 14:2…。
+                     像素取证（用户截图 1950x1119 @150%，1 DIP=1.5px；比例由「查看详情」按钮实测 112px
+                     = Button.Compact.Secondary 的 4×13+Padding 10×2+边框 2 = 74 DIP 反推确认）：
+                     最近更新列的内容框 = x 1548..1725，日期文本暗像素实测跨 x 1552..1721 ——
+                     只剩 4px(2.7 DIP) 余量；字形分组数 10 + 空格 + 5 恰好等于完整的 "2026-09-20 14:25"，
+                     说明这张截图上尚未真截断，但已经贴边：窗口再窄一点、字体回退或系统字号放大就会裁掉末位。
+                     故 142→152（内容框 128 DIP=192px，对 170px 文本留 22px 余量）。
+                     「阶段」116→104：最长文案 4 个汉字（DrawingFileItem.cs:124 WorkflowStatusText 可返回
+                     「导入失败」「部分失败」，其回落的 StatusText 另有「提取文本」「排版优化」），
+                     4×14 + 状态点 7 + Spacing.Inline 8 + 单元格内边距 24 = 95，104 留 9 DIP；
+                     TranslatePage.xaml:261 同一绑定、同一单元格结构早已用 104 且冒烟常绿，是现成先例。
+                     「进度」128→122：内容框 98 = 进度条 60 + 文本列 38（等宽 12px "100%"≈29 + LeftGap 8）。
+                     「操作」106→118：F11e 换成 Button.Secondary 后需 4×14 + Padding 16×2 + 边框 2 = 90，
+                     加单元格内边距 24 = 114，118 留 4 DIP。
+                     「结果」260→254：:229 记录最坏文案实测 226，加内边距 24 = 250，254 留 4 DIP，
+                     且该列本就有 CharacterEllipsis + ToolTip 兜底。
+                     固定列合计 752→750，比改前小 2；表最小总宽 992→990，星号列在 1280 下反而多 2 DIP 余量，
+                     RefinementSmoke.cs:206 的安全边际只增不减。 -->
                         <DataGridTemplateColumn Header="任务 / 图纸" Width="*" MinWidth="240" SortMemberPath="FileName">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
@@ -203,7 +244,7 @@
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
-                        <DataGridTemplateColumn Header="阶段" Width="116" SortMemberPath="WorkflowStatusText">
+                        <DataGridTemplateColumn Header="阶段" Width="104" SortMemberPath="WorkflowStatusText">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
@@ -227,7 +268,7 @@
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
                         <!-- §L3 "已译 1,234/5,678 · 失败 12" 实测约 226px，原 168 会把失败段静默裁掉 -->
-                        <DataGridTextColumn Header="结果" Binding="{Binding BatchResultText}" Width="260">
+                        <DataGridTextColumn Header="结果" Binding="{Binding BatchResultText}" Width="254">
                             <DataGridTextColumn.ElementStyle>
                                 <Style TargetType="TextBlock">
                                     <Setter Property="VerticalAlignment" Value="Center" />
@@ -236,7 +277,7 @@
                                 </Style>
                             </DataGridTextColumn.ElementStyle>
                         </DataGridTextColumn>
-                        <DataGridTemplateColumn Header="进度" Width="128" SortMemberPath="ProgressPercent">
+                        <DataGridTemplateColumn Header="进度" Width="122" SortMemberPath="ProgressPercent">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <Grid VerticalAlignment="Center">
@@ -254,11 +295,28 @@
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
-                        <DataGridTextColumn Header="最近更新" Binding="{Binding LastUpdatedText}" Width="142" />
-                        <DataGridTemplateColumn Header="操作" Width="106">
+                        <!-- F11d 152 宽完整显示 yyyy-MM-dd HH:mm（DrawingFileItem.cs:304-307 的格式串本来就是 16 字符，
+                             只是列宽不够）。F11 样式统一：本列原先是全表唯一没有 ElementStyle 的文本列，
+                             于是既不垂直居中、也没有省略号与 ToolTip，和「结果」列明显是两套；补齐成同款。 -->
+                        <DataGridTextColumn Header="最近更新" Binding="{Binding LastUpdatedText}" Width="152">
+                            <DataGridTextColumn.ElementStyle>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="VerticalAlignment" Value="Center" />
+                                    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+                                    <Setter Property="ToolTip" Value="{Binding LastUpdatedText}" />
+                                </Style>
+                            </DataGridTextColumn.ElementStyle>
+                        </DataGridTextColumn>
+                        <DataGridTemplateColumn Header="操作" Width="118">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
-                                    <Button Content="查看详情" Style="{StaticResource Button.Compact.Secondary}"
+                                    <!-- F11e 与「重试失败」(:118) 等全局按钮统一：Compact.Secondary（32 高 / FontSize.Secondary 13 /
+                             Padding 10）→ Button.Secondary（Size.Button 36 高 / FontSize.Body 14 / Padding 16），
+                             与上方筛选卡里的次按钮同高、同字号、同内边距，不再像另一套控件。
+                             Content 必须保持纯字符串 "查看详情"：RefinementSmoke.cs:307 用
+                             FindVisuals<Button>(failedRow).Single(x => Equals(x.Content, "查看详情")) 取它，
+                             塞图标面板会立刻失配。 -->
+                                    <Button Content="查看详情" Style="{StaticResource Button.Secondary}"
                                             HorizontalAlignment="Center" AutomationProperties.Name="查看任务详情"
                                             Command="{Binding DataContext.ShowTaskDetailCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
                                             CommandParameter="{Binding}" />
@@ -291,6 +349,7 @@
                     </StackPanel>
                 </controls:EmptyState>
             </Grid>
+            </Border>
         </Grid>
 
         <Grid Grid.Row="1" Visibility="{Binding IsProofreading, Converter={StaticResource BoolToVis}}">

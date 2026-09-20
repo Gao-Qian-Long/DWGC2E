@@ -20,6 +20,51 @@
             <Setter Property="Padding" Value="{DynamicResource Spacing.16}"/>
             <Setter Property="Effect" Value="{StaticResource Shadow.HardPrimary}"/>
         </Style>
+        <!-- §B4 深色横幅上的按钮（用户批注「这两个按钮的样式很奇怪」）：
+             「刷新权益」原用 Button.Secondary —— 奶白底 + 浅边框 + 深灰字，压在墨色横幅上就是一颗
+             系统默认白按钮；「账号操作」原用 Button.Tertiary —— 无边框裸文字。两者风格割裂，
+             也都游离于暖色手作杂志风之外。统一改成墨底上的描边 ghost 按钮：琥珀描边 + 琥珀文字
+             （Brush.OnInkAccent #E8933F，即色板中专用于墨底的琥珀），次操作沿用同一形状但降到
+             Brush.OnInkMuted / Brush.InkBorder，于是"同一风格、主次分明"；圆角走 CornerRadius.Medium
+             令牌，两者同高（Size.ButtonCompact）同 MinWidth，热区一致。
+             模板刻意不含 RenderTransform 与 BorderThickness 触发器 —— Button.Base 的悬停抬升(Y=-2)
+             与聚焦描边加粗(0→2)会改变按钮几何，正是 §A2 要根除的跳动源。 -->
+        <Style x:Key="Account.InkButton" TargetType="Button">
+            <Setter Property="Height" Value="{DynamicResource Size.ButtonCompact}"/>
+            <Setter Property="MinHeight" Value="{DynamicResource Size.ButtonCompact}"/>
+            <!-- 文案在「刷新权益」与「同步中…」之间切换（§A3 原地 loading 态）：钉住 MinWidth
+                 后两种文案等宽，按钮尺寸不变，不会把同一行里的相邻元素推走。 -->
+            <Setter Property="MinWidth" Value="104"/>
+            <Setter Property="Padding" Value="14,0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{DynamicResource Brush.OnInkAccent}"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource Brush.OnInkAccent}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
+            <Setter Property="FocusVisualStyle" Value="{DynamicResource Focus.Outline}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="InkBd" CornerRadius="{DynamicResource CornerRadius.Medium}" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" Padding="{TemplateBinding Padding}" SnapsToDevicePixels="True">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" RecognizesAccessKey="True"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="InkBd" Property="Background" Value="{DynamicResource Brush.OnInkTrack}"/></Trigger>
+                            <Trigger Property="IsPressed" Value="True"><Setter TargetName="InkBd" Property="Opacity" Value="0.8"/></Trigger>
+                            <Trigger Property="IsEnabled" Value="False"><Setter TargetName="InkBd" Property="Opacity" Value="0.45"/><Setter Property="Cursor" Value="Arrow"/></Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <!-- 次操作变体：同一形状、同一热区、同一圆角，只把琥珀降到墨底上的弱化灰米色 -->
+        <Style x:Key="Account.InkButton.Quiet" TargetType="Button" BasedOn="{StaticResource Account.InkButton}">
+            <Setter Property="FontWeight" Value="Medium"/>
+            <Setter Property="Foreground" Value="{DynamicResource Brush.OnInkMuted}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource Brush.InkBorder}"/>
+        </Style>
         <!-- 用户反馈「更换布局思路」：常用入口由一行裸文字按钮改成一整块可点的导航磁贴
              （圆形图标 + 标题 + 一行说明 + 悬停反馈），三块等宽成组，读起来是导航而不是残留按钮。
              颜色一律沿用现有 Brush.* 令牌，不新增色值。 -->
@@ -52,40 +97,8 @@
         <Grid Grid.Row="1">
         <ScrollViewer x:Name="AccountScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
         <StackPanel MaxWidth="1200" Width="{Binding ViewportWidth, RelativeSource={RelativeSource AncestorType=ScrollViewer}}" HorizontalAlignment="Left">
-            <Border Style="{StaticResource Section.Surface}" HorizontalAlignment="Left" Width="560" MaxWidth="560" Visibility="{Binding IsAccountLoggedIn, Converter={StaticResource BoolToVis}, ConverterParameter=false}">
-                <StackPanel>
-                    <TextBlock Text="登录账号" FontFamily="{DynamicResource FontFamily.Display}" FontSize="16" FontWeight="SemiBold" Margin="{DynamicResource Spacing.Stack}" />
-                    <TextBlock Text="可以先浏览软件；云端翻译需要登录。" TextWrapping="Wrap" Margin="{DynamicResource Spacing.StackSection}" />
-                    <TextBlock Text="账号" Margin="{DynamicResource Spacing.StackTight}" />
-                    <TextBox x:Name="AccountInput" Text="{Binding LoginName, UpdateSourceTrigger=PropertyChanged}" MinHeight="{DynamicResource Size.Control}" AutomationProperties.Name="登录账号" />
-                    <TextBlock Text="密码" Margin="{DynamicResource Spacing.RowInset}" />
-                    <PasswordBox x:Name="PasswordInput" MinHeight="{DynamicResource Size.Control}" Padding="8" KeyDown="Password_KeyDown" AutomationProperties.Name="登录密码" />
-                    <Button x:Name="LoginButton" Content="登录" Margin="{DynamicResource Spacing.BlockTopSection}" Click="Login_Click">
-                        <Button.Style>
-                            <Style TargetType="Button" BasedOn="{StaticResource Button.Primary}">
-                                <Setter Property="IsEnabled" Value="True" />
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding IsLoggingIn}" Value="True"><Setter Property="IsEnabled" Value="False" /></DataTrigger>
-                                    <DataTrigger Binding="{Binding IsAccountRefreshing}" Value="True"><Setter Property="IsEnabled" Value="False" /></DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </Button.Style>
-                    </Button>
-                    <Border Margin="{DynamicResource Spacing.BlockTopLoose}" Padding="12,8" Background="{DynamicResource Brush.InfoLight}" BorderBrush="{DynamicResource Brush.BorderLight}" BorderThickness="1" CornerRadius="{DynamicResource CornerRadius.Small}">
-                        <Border.Style>
-                            <Style TargetType="Border">
-                                <Setter Property="Visibility" Value="Visible" />
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding AccountFeedback}" Value=""><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
-                                    <DataTrigger Binding="{Binding AccountFeedback}" Value="账户信息已同步。"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </Border.Style>
-                        <TextBlock Text="{Binding AccountFeedback}" TextWrapping="Wrap" Foreground="{DynamicResource Brush.TextSecondary}" AutomationProperties.LiveSetting="Polite" />
-                    </Border>
-                    <Button x:Name="SavedSessionRecoveryButton" Content="{Binding SavedSessionRecoveryButtonText}" Command="{Binding RefreshAccountCommand}" Style="{StaticResource Button.Tertiary}" HorizontalAlignment="Left" Margin="{DynamicResource Spacing.BlockTop}" IsEnabled="{Binding IsAccountRefreshing, Converter={StaticResource InverseBoolConverter}}" Visibility="{Binding HasSavedAccountSession, Converter={StaticResource BoolToVis}}" />
-                </StackPanel>
-            </Border>
+            <!-- §D7 未登录的登录卡已移到 ScrollViewer 的同级覆盖层「登录舞台」里，
+                 在那里做上下左右居中并铺杂志风背景；已登录内容从这里开始。 -->
             <StackPanel Visibility="{Binding IsAccountLoggedIn, Converter={StaticResource BoolToVis}}">
                 <!-- 身份 + 权益卡（用户标注：三项权益显示在账户卡上）：
                      上行 = 头像 + 名称 + 邮箱 + 账号操作；下行 = 三项权益明细（原三张指标卡） + 额度环形用量图。
@@ -93,11 +106,17 @@
                 <Border Style="{StaticResource Account.InkCard}" Margin="{DynamicResource Spacing.StackWide}">
                     <Grid>
                         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                        <!-- 外网格：左列放「身份 + 三项权益」，右列放环形用量图（跨两行）。
-                             环 136 DIP 高于左侧两行之和的一半，跨行后卡片总高由 232.7 降到 170。 -->
+                        <!-- 外网格：左列放「身份 + 三项权益」，右列放「操作按钮 + 环形用量图」竖排。
+                             §B5 用户批注按钮"内缩、没和卡片右缘对齐"：按钮原先是左列的第 3 个 Auto 列，
+                             右缘只到左列边界，而右列（环 136 + Spacing.InlineLeading 的 20 右外边距）
+                             整个横在按钮右侧 —— 按钮因此离卡片右缘差出一大截（截图实测约 78 DIP）。
+                             把按钮移到右列顶端、右列整体右对齐并去掉那 20 DIP 右外边距后，
+                             按钮右缘 = 卡片内边距右缘，与上方卡片同一条右边界。
+                             代价：右列由 136 变 32+12+136=180，卡片内容高 170→180（+10 DIP），
+                             整页约 512→522，1366×768 的可用体高 554 仍不出现纵向滚动。 -->
                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                         <Grid Grid.Column="0">
-                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                             <!-- 头像：琥珀圆底 + 墨色衬线首字母（墨底横幅上的品牌高光） -->
                             <Grid Width="46" Height="46" Margin="{DynamicResource Spacing.InlineLoose}">
                                 <Ellipse Fill="{DynamicResource Brush.Amber}"/>
@@ -107,10 +126,7 @@
                                 <TextBlock Text="{Binding AccountDisplayNameText}" FontFamily="{DynamicResource FontFamily.Display}" Foreground="{DynamicResource Brush.OnInk}" FontSize="{DynamicResource FontSize.SectionTitle}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding AccountDisplayNameText}"/>
                                 <TextBlock Text="{Binding AccountEmailText}" FontFamily="{DynamicResource FontFamily.Mono}" FontSize="{DynamicResource FontSize.Secondary}" Foreground="{DynamicResource Brush.OnInkMuted}" TextTrimming="CharacterEllipsis" ToolTip="{Binding AccountEmailText}" Margin="{DynamicResource Spacing.BlockTopTight}"/>
                             </StackPanel>
-                            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                                <Button Content="{Binding RefreshAccountButtonText}" Command="{Binding RefreshAccountCommand}" IsEnabled="{Binding IsAccountRefreshing, Converter={StaticResource InverseBoolConverter}}" Style="{StaticResource Button.Secondary}" Margin="{DynamicResource Spacing.Inline}"/>
-                                <Button Content="账号操作" ToolTip="重新验证会话或退出登录" Click="AccountMenu_Click" Style="{StaticResource Button.Tertiary}" Foreground="{DynamicResource Brush.OnInkMuted}"><Button.ContextMenu><ContextMenu><MenuItem Header="重新验证会话" Command="{Binding RefreshAccountCommand}"/><MenuItem Header="退出登录" Command="{Binding LogoutAccountCommand}"/></ContextMenu></Button.ContextMenu></Button>
-                            </StackPanel>
+                            <!-- §B5 两个操作按钮已移到卡片右列顶端（右缘与卡片对齐），此处不再占第 3 列 -->
                         </Grid>
                         <Grid Grid.Row="1" Grid.Column="0" Margin="{DynamicResource Spacing.BlockTopWide}">
                             <!-- 三项权益：标签固定列宽，数值列吃掉剩余宽度；超额时省略号 + ToolTip 兜底 -->
@@ -132,9 +148,23 @@
                                 <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding OnlineMembershipExpiryText}" FontFamily="{DynamicResource FontFamily.Mono}" Foreground="{DynamicResource Brush.OnInk}" FontSize="{DynamicResource FontSize.Body}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="购买后刷新，可同步最新权益" VerticalAlignment="Center"/>
                             </Grid>
                         </Grid>
-                        <!-- 额度环形用量图（已用占比）：跨卡片两行，与左侧「身份 + 三项权益」共享垂直空间。
-                             额度未知（OnlineUsage 为空或额度为 0）时整块收起。 -->
-                        <Grid x:Name="QuotaRingPanel" Grid.Column="1" Grid.RowSpan="2" Margin="{DynamicResource Spacing.InlineLeading}" VerticalAlignment="Center">
+                        <!-- §B4/§B5 卡片右列：操作按钮在上、环形用量图在下，整列右对齐。
+                             按钮的 Content 必须保持纯字符串绑定（RefreshAccountButtonText）——
+                             冒烟用 Equals(b.Content,"刷新权益") / "同步中…" 断言，塞进图标面板会失配；
+                             同理这里不加旋转 spinner：本文件下方已记录 Forever 动画被孤儿化后
+                             永久 tick、饿死 ApplicationIdle 的事故，busy 态改由"文案切换 + 禁用降透明
+                             + MinWidth 锁定尺寸"表达，全程零动画。 -->
+                        <StackPanel Grid.Column="1" Grid.RowSpan="2" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="{DynamicResource Spacing.LeftGap}">
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                <!-- 手作装饰：八芒星火花从卡片右上角移进操作行当引导符
+                                     （原位置 Grid.Column=1 Right/Top 现在被按钮占用，留着会叠在一起） -->
+                                <Path Data="{StaticResource Icon.Deco.Spark}" Width="12" Height="12" Stretch="Uniform" Fill="{DynamicResource Brush.OnInkAccent}" Opacity="0.85" VerticalAlignment="Center" Margin="{DynamicResource Spacing.Inline}" IsHitTestVisible="False"/>
+                                <Button Content="{Binding RefreshAccountButtonText}" Command="{Binding RefreshAccountCommand}" IsEnabled="{Binding IsAccountRefreshing, Converter={StaticResource InverseBoolConverter}}" Style="{StaticResource Account.InkButton}" ToolTip="重新同步账户、会员与额度"/>
+                                <Button Content="账号操作" ToolTip="重新验证会话或退出登录" Click="AccountMenu_Click" Style="{StaticResource Account.InkButton.Quiet}" Margin="{DynamicResource Spacing.LeftGap}"><Button.ContextMenu><ContextMenu><MenuItem Header="重新验证会话" Command="{Binding RefreshAccountCommand}"/><MenuItem Header="退出登录" Command="{Binding LogoutAccountCommand}"/></ContextMenu></Button.ContextMenu></Button>
+                            </StackPanel>
+                        <!-- 额度环形用量图（已用占比）：额度未知（OnlineUsage 为空或额度为 0）时整块收起，
+                             收起时它的上外边距一并消失，按钮行直接贴到列底，不留空洞。 -->
+                        <Grid x:Name="QuotaRingPanel" HorizontalAlignment="Center" Margin="{DynamicResource Spacing.BlockTopWide}" VerticalAlignment="Center">
                             <Grid.Style>
                                 <Style TargetType="Grid">
                                     <Style.Triggers>
@@ -149,8 +179,7 @@
                                 <TextBlock Text="额度已用" FontSize="{DynamicResource FontSize.KpiLabel}" Foreground="{DynamicResource Brush.OnInkMuted}" HorizontalAlignment="Center"/>
                             </StackPanel>
                         </Grid>
-                        <!-- 手作装饰：横幅右上角的八芒星火花 -->
-                        <Path Data="{StaticResource Icon.Deco.Spark}" Width="12" Height="12" Stretch="Uniform" Fill="{DynamicResource Brush.OnInkAccent}" Opacity="0.85" Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,0,2,0" IsHitTestVisible="False"/>
+                        </StackPanel>
                     </Grid>
                 </Border>
                 <Grid x:Name="MembershipDetails" SizeChanged="MembershipDetails_SizeChanged">
@@ -199,22 +228,27 @@
                         </ScrollViewer>
                     </StackPanel></Border>
                 </Grid>
-                <!-- 导航磁贴：三块等宽，整块可点，圆形图标 + 一行职责说明（Command / CommandParameter 与原按钮完全一致）。 -->
+                <!-- 导航磁贴：三块等宽，整块可点，圆形图标 + 一行职责说明（Command / CommandParameter 与原按钮完全一致）。
+                     §C6 用户批注三块磁贴的右缘比上方「登录设备」卡内缩、没填满：原来三块都挂着
+                     Spacing.InlineLoose(0,0,16,0)，而外边距在列内部，于是第 3 块右缘少 16 DIP，
+                     并且三块并不真的等宽（第 3 块比前两块宽 16）。改成 * / 槽 / * / 槽 / * 五列、
+                     磁贴放 0/2/4 列且不带任何外边距 —— 三等分真正相等，左右两端都与上方卡片齐平，
+                     槽宽 Size.CardGutter=16 与 MembershipDetails 两卡之间的列距一致。 -->
                 <Grid>
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                    <Button Style="{StaticResource Account.NavTile}" Command="{Binding NavigateToCommand}" CommandParameter="translate" Margin="{DynamicResource Spacing.InlineLoose}" ToolTip="打开图纸翻译">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="{StaticResource Size.CardGutter}"/><ColumnDefinition Width="*"/><ColumnDefinition Width="{StaticResource Size.CardGutter}"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <Button Style="{StaticResource Account.NavTile}" Command="{Binding NavigateToCommand}" CommandParameter="translate" ToolTip="打开图纸翻译">
                         <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                             <Grid Width="36" Height="36" Margin="{DynamicResource Spacing.InlineWide}" VerticalAlignment="Center"><Ellipse Fill="{DynamicResource Brush.PrimaryLight}"/><Path Data="{StaticResource Icon.NavTranslate}" Width="{DynamicResource Size.IconInline}" Height="{DynamicResource Size.IconInline}" Stretch="Uniform" Fill="Transparent" Stroke="{DynamicResource Brush.Primary}" StrokeThickness="{DynamicResource Size.Stroke}" HorizontalAlignment="Center" VerticalAlignment="Center"/></Grid>
                             <StackPanel Grid.Column="1" VerticalAlignment="Center"><TextBlock Text="图纸翻译" FontWeight="SemiBold"/><TextBlock Text="导入图纸 · 翻译 · 写回" Style="{StaticResource CaptionStyle}" Margin="{DynamicResource Spacing.BlockTopTight}"/></StackPanel>
                         </Grid>
                     </Button>
-                    <Button Grid.Column="1" Style="{StaticResource Account.NavTile}" Command="{Binding NavigateToCommand}" CommandParameter="glossary" Margin="{DynamicResource Spacing.InlineLoose}" ToolTip="打开术语库">
+                    <Button Grid.Column="2" Style="{StaticResource Account.NavTile}" Command="{Binding NavigateToCommand}" CommandParameter="glossary" ToolTip="打开术语库">
                         <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                             <Grid Width="36" Height="36" Margin="{DynamicResource Spacing.InlineWide}" VerticalAlignment="Center"><Ellipse Fill="{DynamicResource Brush.PrimaryLight}"/><Path Data="{StaticResource Icon.NavGlossary}" Width="{DynamicResource Size.IconInline}" Height="{DynamicResource Size.IconInline}" Stretch="Uniform" Fill="Transparent" Stroke="{DynamicResource Brush.Primary}" StrokeThickness="{DynamicResource Size.Stroke}" HorizontalAlignment="Center" VerticalAlignment="Center"/></Grid>
                             <StackPanel Grid.Column="1" VerticalAlignment="Center"><TextBlock Text="管理术语" FontWeight="SemiBold"/><TextBlock Text="术语库、分类与云端核对" Style="{StaticResource CaptionStyle}" Margin="{DynamicResource Spacing.BlockTopTight}"/></StackPanel>
                         </Grid>
                     </Button>
-                    <Button Grid.Column="2" Style="{StaticResource Account.NavTile}" Command="{Binding NavigateToCommand}" CommandParameter="output-settings" Margin="{DynamicResource Spacing.InlineLoose}" ToolTip="打开输出设置">
+                    <Button Grid.Column="4" Style="{StaticResource Account.NavTile}" Command="{Binding NavigateToCommand}" CommandParameter="output-settings" ToolTip="打开输出设置">
                         <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                             <Grid Width="36" Height="36" Margin="{DynamicResource Spacing.InlineWide}" VerticalAlignment="Center"><Ellipse Fill="{DynamicResource Brush.PrimaryLight}"/><Path Data="{StaticResource Icon.NavSettings}" Width="{DynamicResource Size.IconInline}" Height="{DynamicResource Size.IconInline}" Stretch="Uniform" Fill="Transparent" Stroke="{DynamicResource Brush.Primary}" StrokeThickness="{DynamicResource Size.Stroke}" HorizontalAlignment="Center" VerticalAlignment="Center"/></Grid>
                             <StackPanel Grid.Column="1" VerticalAlignment="Center"><TextBlock Text="输出设置" FontWeight="SemiBold"/><TextBlock Text="导出模式与文件命名" Style="{StaticResource CaptionStyle}" Margin="{DynamicResource Spacing.BlockTopTight}"/></StackPanel>
@@ -224,9 +258,75 @@
             </StackPanel>
         </StackPanel>
         </ScrollViewer>
-        <!-- 刷新指示器是覆盖层：与 ScrollViewer 同级、贴顶 4 DIP，不占布局高度
-             （冒烟断言要求刷新前后内容高度差 < 0.5） -->
-        <Border x:Name="AccountRefreshIndicator" Panel.ZIndex="10" HorizontalAlignment="Stretch" VerticalAlignment="Top" Height="4" Background="{DynamicResource Brush.SurfaceAlt}" IsHitTestVisible="False" Visibility="{Binding IsAccountRefreshing, Converter={StaticResource BoolToVis}}">
+        <!-- §D7 未登录「登录舞台」（用户批注「这个登录页面也是太偏左了，不能居中吗？上下居中，
+             左右居中，可以做一个好看的登录背景，和当前APP搭配一点 不要太突兀」）。
+             做成 AccountScroll 的同级覆盖层：铺满 Grid.Row=1 的整块可用区，登录卡在水平与垂直两个
+             方向都居中（原来它是左对齐 StackPanel 的第一个子元素，只能贴在左上角）。
+             已登录时整层 Collapsed，对 ScrollViewer 的内容高度零影响
+             （冒烟断言刷新前后 content.ActualHeight 差 < 0.5）。
+             背景刻意不重复铺纸纹：Brush.PaperNoise 与 Brush.WarmGlow 已由 MainWindow 铺在整个内容列上，
+             再叠一层会让 α 翻倍、把奶白底压脏。这里只补一层更明显的暖光晕（复用同一个
+             Brush.WarmGlow 径向渐变令牌）与既有 Deco.* 手作装饰：虚线圈、波浪线、八芒星、
+             柔琥珀色块 —— 全部是现成资源与 Brush.* 令牌，不新增任何色值，也不引入位图。
+             装饰一律 IsHitTestVisible=False，不挡表单输入；卡片本身沿用既有 Section.Surface
+             卡片语言（奶白面 + 1px 边框 + 硬偏移阴影），控件、绑定、事件处理器与 x:Name 原样搬移，
+             仍在同一个 XAML 名字作用域里，冒烟 FindName("PasswordInput"/"LoginButton") 照常取到。 -->
+        <Grid Visibility="{Binding IsAccountLoggedIn, Converter={StaticResource BoolToVis}, ConverterParameter=false}">
+            <Border Background="{DynamicResource Brush.WarmGlow}" IsHitTestVisible="False"/>
+            <Ellipse Width="520" Height="520" HorizontalAlignment="Left" VerticalAlignment="Bottom" Fill="{DynamicResource Brush.AmberSoft}" Opacity="0.45" IsHitTestVisible="False"/>
+            <Ellipse Width="300" Height="300" HorizontalAlignment="Right" VerticalAlignment="Top" Fill="{DynamicResource Brush.AmberSoft}" Opacity="0.28" IsHitTestVisible="False"/>
+            <Ellipse Style="{StaticResource Deco.DashedRing.Amber}" Width="200" Height="200" HorizontalAlignment="Left" VerticalAlignment="Top" Opacity="0.45" IsHitTestVisible="False"/>
+            <Ellipse Style="{StaticResource Deco.DashedRing}" Width="128" Height="128" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="{DynamicResource Spacing.48}" Opacity="0.7" IsHitTestVisible="False"/>
+            <Path Style="{StaticResource Deco.WaveRule}" Width="224" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="{DynamicResource Spacing.48}" Opacity="0.5" IsHitTestVisible="False"/>
+            <Path Style="{StaticResource Deco.Spark}" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="{DynamicResource Spacing.40}" Opacity="0.55" IsHitTestVisible="False"/>
+            <Path Style="{StaticResource Deco.Spark.Small}" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="{DynamicResource Spacing.20}" Opacity="0.6" IsHitTestVisible="False"/>
+            <Border Style="{StaticResource Section.Surface}" Width="560" MaxWidth="560" HorizontalAlignment="Center" VerticalAlignment="Center">
+                <StackPanel>
+                    <TextBlock Text="登录账号" FontFamily="{DynamicResource FontFamily.Display}" FontSize="16" FontWeight="SemiBold" Margin="{DynamicResource Spacing.Stack}" />
+                    <TextBlock Text="可以先浏览软件；云端翻译需要登录。" TextWrapping="Wrap" Margin="{DynamicResource Spacing.StackSection}" />
+                    <TextBlock Text="账号" Margin="{DynamicResource Spacing.StackTight}" />
+                    <TextBox x:Name="AccountInput" Text="{Binding LoginName, UpdateSourceTrigger=PropertyChanged}" MinHeight="{DynamicResource Size.Control}" AutomationProperties.Name="登录账号" />
+                    <TextBlock Text="密码" Margin="{DynamicResource Spacing.RowInset}" />
+                    <PasswordBox x:Name="PasswordInput" MinHeight="{DynamicResource Size.Control}" Padding="8" KeyDown="Password_KeyDown" AutomationProperties.Name="登录密码" />
+                    <Button x:Name="LoginButton" Content="登录" Margin="{DynamicResource Spacing.BlockTopSection}" Click="Login_Click">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource Button.Primary}">
+                                <Setter Property="IsEnabled" Value="True" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsLoggingIn}" Value="True"><Setter Property="IsEnabled" Value="False" /></DataTrigger>
+                                    <DataTrigger Binding="{Binding IsAccountRefreshing}" Value="True"><Setter Property="IsEnabled" Value="False" /></DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+                    <Border Margin="{DynamicResource Spacing.BlockTopLoose}" Padding="12,8" Background="{DynamicResource Brush.InfoLight}" BorderBrush="{DynamicResource Brush.BorderLight}" BorderThickness="1" CornerRadius="{DynamicResource CornerRadius.Small}">
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Setter Property="Visibility" Value="Visible" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding AccountFeedback}" Value=""><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
+                                    <DataTrigger Binding="{Binding AccountFeedback}" Value="账户信息已同步。"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+                        <TextBlock Text="{Binding AccountFeedback}" TextWrapping="Wrap" Foreground="{DynamicResource Brush.TextSecondary}" AutomationProperties.LiveSetting="Polite" />
+                    </Border>
+                    <Button x:Name="SavedSessionRecoveryButton" Content="{Binding SavedSessionRecoveryButtonText}" Command="{Binding RefreshAccountCommand}" Style="{StaticResource Button.Tertiary}" HorizontalAlignment="Left" Margin="{DynamicResource Spacing.BlockTop}" IsEnabled="{Binding IsAccountRefreshing, Converter={StaticResource InverseBoolConverter}}" Visibility="{Binding HasSavedAccountSession, Converter={StaticResource BoolToVis}}" />
+                </StackPanel>
+            </Border>
+        </Grid>
+        <!-- 刷新指示器是覆盖层：与 ScrollViewer 同级、贴顶，不占布局高度
+             （冒烟断言要求刷新前后内容高度差 < 0.5）。
+             §A3 用户批注「不能在别的提示吗？这里会改变软件布局骨架」：这条 4 DIP 的琥珀带
+             加奶白底衬，出现在页面顶端时读起来像"插进来一条横条"。现在压成 2 DIP 的琥珀细线
+             并去掉底衬（Background=Transparent），只剩一道发丝级的进度提示；
+             过程语义改由两处承担 —— ①横幅内按钮原地变「同步中…」并禁用降透明，MinWidth 锁定
+             尺寸所以不挤动任何元素；②右下角 toast（MainWindow 的 Toasts 是 Grid.Row=1/Column=1
+             的 Bottom-Right 覆盖层，本身不占布局行），成功时的「账户信息已同步」与失败告警
+             走的就是这条既有通道。x:Name / Visibility 绑定 / IsHitTestVisible 全部保留，
+             冒烟对 refreshIndicator.IsVisible 的两条断言不受影响。
+             顶栏（MainWindow.xaml）未增删任何元素。 -->
+        <Border x:Name="AccountRefreshIndicator" Panel.ZIndex="10" HorizontalAlignment="Stretch" VerticalAlignment="Top" Height="2" Background="Transparent" IsHitTestVisible="False" Visibility="{Binding IsAccountRefreshing, Converter={StaticResource BoolToVis}}">
             <!-- 刻意不使用 indeterminate ProgressBar：它的 Forever 动画——全局模板的 LoadingPulse
                  （DoubleAnimation）与默认 Aero 模板的 DoubleAnimationUsingKeyFrames——会在视觉树被
                  重新挂载（如冒烟 CaptureLayout 把内容摘到游离 Border 里渲染）或模板切换时被孤儿化泄漏。

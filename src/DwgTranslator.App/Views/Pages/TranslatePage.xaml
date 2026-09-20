@@ -140,9 +140,21 @@
                                    FontSize="{DynamicResource FontSize.Secondary}" VerticalAlignment="Center"
                                    TextTrimming="CharacterEllipsis" ToolTip="{Binding WorkspaceNextStepText}" />
                     </Border>
+                    <!-- M14 弱字摘要「光学偏高 ~3px」根因：CaptionStyle(Metrics.xaml:116) 给 13px 文本挂了
+                         LineHeight=22，默认 LineStackingStrategy=MaxHeight 把多出的 4.7 DIP 行距全部加在基线
+                         **下方**，于是字形中心比行框中心高约 2.4 DIP（150% 缩放下≈3.5px）；本元素又是
+                         VerticalAlignment=Center 紧贴琥珀胶囊排的，这点偏差直接可见。
+                         修法：只在本元素覆盖 LineHeight=17（LicenseDialog.xaml:66 已有同值同法先例），
+                         max(17, 自然行高 17.3) = 17.3 → 行框收回自然高度，字形回到正中。
+                         刻意不动 CaptionStyle 本体：CardHeader(Metrics.xaml:136) / FormRowDescription(:187) /
+                         PageSubtitleStyle / BodyStyle(:111) 全都 BasedOn 它，改本体等于全局回归。
+                         顺带补 TextWrapping=NoWrap：CaptionStyle 的 Wrap 会让本行已经声明的
+                         TextTrimming=CharacterEllipsis 永不生效（Wrap 先折行、只裁最后一行），
+                         与紧邻胶囊「单行 + 省略号 + ToolTip」的既定语义相矛盾。 -->
                     <TextBlock x:Name="OutputDirectoryTextBlock" Grid.Column="1" Text="{Binding WorkspaceActionHintText}"
                                Style="{StaticResource CaptionStyle}" Foreground="{DynamicResource Brush.TextMuted}"
                                TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
+                               LineHeight="17" TextWrapping="NoWrap"
                                ToolTip="{Binding WorkspaceOutputLocationText}" />
                 </Grid>
 
@@ -331,22 +343,44 @@
                 </Grid>
             </Border>
 
-            <!-- 用户标注「左右侧分区不明显啊」：两栏原来只靠单侧留白分隔——左栏有 Margin，右栏是裸
-                 ScrollViewer 没有——间隔只有一侧的 16px，底色又相同，于是看上去连成一片。
-                 给右栏补上同样的外边距让间隔翻倍；这比插入一条占宽的竖线更好，因为不占用列宽，
-                 最小窗口下不会横向溢出。 -->
-            <ScrollViewer Grid.Column="1" Margin="{DynamicResource Spacing.InlineWide}"
+            <!-- E8 右缘对齐（用户批注「卡片右边没对齐」，红圈圈在操作条的「开始翻译」上）。
+                 本元素原先挂 Margin=Spacing.InlineWide(0,0,12,0) 再加 Padding 右 2，旧注释说这是为了
+                 「给右栏补上同样的外边距让间隔翻倍」——那是误用：栏间距由左栏卡片自己的**右**外边距(12)
+                 产生，给右栏再加一个**右**外边距对间距毫无影响，只把整列从页面右缘往里推了 14 DIP。
+                 于是上方操作条 TranslationActionBar 的 Margin=Spacing.Vertical 没有右外边距、右缘落在
+                 页面内容右缘，而下方右栏卡片内缩 14 DIP，两者对不齐。
+                 像素取证（用户截图 1882x1112 @150%，1 DIP=1.5px；该比例由「开始翻译」按钮实测 168px
+                 = MinWidth 112 DIP 反推确认）：操作条外右缘 x=1843、开始翻译按钮右缘 x=1824、
+                 翻译设置卡外右缘 x=1823 —— 差 20px≈14 DIP，与代码算得的 12+2 完全吻合。
+                 修法：右栏不再带任何右向外边距/内边距，外右缘与操作条齐平。栏间距仍是 12（左栏右外边距），
+                 与本次修改前的**实际渲染值**一致，所以「左右分区不明显」那条历史修复并未回退。
+                 Padding 右 2 原意是给纵向滚动条留位，但本项目 ScrollBar 宽仅 10 DIP
+                 (MainWindowStyles.xaml:668)，且本栏在 1280x720 以上都不出滚动条，留 2 反而让右缘永久差
+                 2 DIP —— 归零才是精确对齐。 -->
+            <ScrollViewer Grid.Column="1"
                           VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
-                          CanContentScroll="True" Padding="0,0,2,0"
+                          CanContentScroll="True"
                           controls:ResponsiveLayout.HandoffMouseWheelAtBoundary="True">
-                <Grid x:Name="TranslationSettingsColumn">
+                <!-- E10 右栏底部大片留白（用户批注：右栏底部比左侧「文件队列」卡高 150-200px，头重脚轻）
+                     根因：下面三行原本全是 Auto，Grid 在 ScrollViewer 里按内容高测量后顶端对齐，而左栏卡片
+                     (:172) 是 VerticalAlignment=Stretch 铺满整行 —— 于是右栏底边悬在半空。
+                     两步修：① 本 Grid 的 MinHeight 绑到外层 ScrollViewer 的 ViewportHeight，至少铺满视口
+                     （该绑定不会自激振荡：ViewportHeight 不受纵向滚动条影响；内容高于视口时 MinHeight 小于
+                     自然高，Grid 取自然高并出现滚动条，视口高不变 → 收敛）；
+                     ② 第 3 行（运行日志）由 Auto 改 *，把剩余高度全部交给它 —— 正是用户批注给出的方向
+                     「如运行日志区吸收剩余高度」。左栏高度不变，两栏底边从此齐平。
+                     UI 冒烟 Program.cs:298-300 断言 TranslationSettingsSection 与 OutputSection 必须同为
+                     TranslationSettingsColumn 的直接子元素、且分别落在 Row 0 / Row 1 —— 该结构不能动。 -->
+                <Grid x:Name="TranslationSettingsColumn"
+                      MinHeight="{Binding ViewportHeight, RelativeSource={RelativeSource AncestorType=ScrollViewer}}">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
+                    <!-- E9 下内边距由 0 补到 16，完整根因见下方 OutputSection 的注释。 -->
                     <Border x:Name="TranslationSettingsSection" Grid.Row="0"
-                            Style="{StaticResource Section.Surface}" Padding="16,14,16,0">
+                            Style="{StaticResource Section.Surface}" Padding="16,14,16,16">
                         <Grid>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />
@@ -393,8 +427,15 @@
                         </Grid>
                     </Border>
 
+                    <!-- E9 输出卡片按钮「下半被截断、底部圆角失效」根因：Padding 原为 "16,14,16,0"，
+                         **下内边距是 0**。Button.Secondary 的底色就是 Brush.Surface(#FFFCF5)，与卡片底色
+                         完全同色，按钮全靠 1px 的 Brush.Border 描边才成形；下内边距为 0 时按钮下边框距卡片
+                         下边框只剩 ~1px，两条浅棕线几乎重合，肉眼就读成「按钮被卡片底边切掉一截」。
+                         （像素取证：卡片下边框 y≈932，按钮白体止于 y≈925，中间仅 ~4px。）
+                         补回 16 的对称下内边距后按钮完整落在卡内，圆角与 Shadow.Hard 都有了落点。
+                         同样的 0 下内边距也在翻译设置卡与运行日志卡上，一并补齐。 -->
                     <Border x:Name="OutputSection" Grid.Row="1" Style="{StaticResource Section.Surface}"
-                            Margin="{DynamicResource Spacing.BlockTop}" Padding="16,14,16,0">
+                            Margin="{DynamicResource Spacing.BlockTop}" Padding="16,14,16,16">
                         <Grid>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />
@@ -409,11 +450,19 @@
                                     <RowDefinition Height="Auto" />
                                     <RowDefinition Height="Auto" />
                                 </Grid.RowDefinitions>
-                                <!-- 未导出过时给出明确规则，而不是留一格空白：默认落在源图纸旁边的
-                                     "<图纸名>_translated" 目录，AppData 下不再有任何默认输出。 -->
+                                <!-- 未导出过时给出明确规则，而不是留一格空白。路径文本一律由 WorkspaceOutputLocationText 绑定给出，
+                                     不在 XAML 里写死。M13 更正陈旧注释：本处原先断言默认落在源图纸旁边的
+                                     "<图纸名>_translated" 目录、AppData 下不再有任何默认输出 —— 那是 2026-10-02 之前的旧规则，与现行实现相反。
+                                     现行规则见 MainViewModel.Config.cs:133-139 ResolveExportDirectory()：
+                                     没有历史选择时默认落到 <安装目录>\exports（发布即生效、无需重装）；
+                                     安装区不可写才退回源图纸旁的 DefaultOutputFolderName；
+                                     用户显式选过的目录（AccountOutputDirectories）始终优先。
+                                     设置页的同一句说明已在 SettingsPage.xaml:197 同步补齐。 -->
                                 <TextBlock Text="{Binding WorkspaceOutputLocationText}" FontFamily="{DynamicResource FontFamily.Mono}" FontSize="{DynamicResource FontSize.Secondary}" TextTrimming="CharacterEllipsis"
                                            ToolTip="{Binding WorkspaceOutputLocationText}" VerticalAlignment="Center" />
-                                <Grid Grid.Row="1" Margin="{DynamicResource Spacing.BlockTop}">
+                                <!-- E9 输出路径文字与按钮间距过近（用户批注 <8px）：BlockTop(8) 在 13px 等宽字下留白不足，
+                                     提到 BlockTopWide(12) —— 与卡片内其它块级间距同档，仍走既有令牌。 -->
+                                <Grid Grid.Row="1" Margin="{DynamicResource Spacing.BlockTopWide}">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="*" />
@@ -428,11 +477,16 @@
                         </Grid>
                     </Border>
 
-                    <Border Grid.Row="2" Style="{StaticResource Section.Surface}" Margin="{DynamicResource Spacing.BlockTop}" Padding="16,14,16,0">
+                    <Border Grid.Row="2" Style="{StaticResource Section.Surface}" Margin="{DynamicResource Spacing.BlockTop}" Padding="16,14,16,16">
                         <Expander x:Name="WorkspaceLogLauncher" Header="运行日志"
                                   AutomationProperties.Name="打开运行日志">
-                        <!-- §L11 日志区不再锁死 160 DIP：给下限并允许长到 320，右侧栏高时日志能显示更多行 -->
-                        <Grid MinHeight="160" MaxHeight="320" Background="{DynamicResource Brush.BackgroundAlt}" DataContext="{Binding LogViewModel}">
+                        <!-- E10 运行日志卡吃掉右栏剩余高度（上面第 3 行已由 Auto 改 *）。折叠时 Expander 模板里承载内容的
+                             那一行是 * 行，卡片照样铺满、底边与左侧「文件队列」卡齐平，不再留大片页面底色；
+                             展开时日志区跟着长高 —— 这正是 §L11 原本想要的「右侧栏高时日志能显示更多行」，
+                             所以去掉把内容钉死在 320 的 MaxHeight，只保留 MinHeight 下限。
+                             x:Name="WorkspaceLogLauncher" 被 UI 冒烟按 FindName 取用（Program.cs:303），
+                             不要改名或删除。 -->
+                        <Grid MinHeight="160" Background="{DynamicResource Brush.BackgroundAlt}" DataContext="{Binding LogViewModel}">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="*" />

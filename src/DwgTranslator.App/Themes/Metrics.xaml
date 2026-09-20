@@ -338,7 +338,12 @@
     <Thickness x:Key="Spacing.32">32</Thickness>
     <Thickness x:Key="Spacing.40">40</Thickness>
     <Thickness x:Key="Spacing.48">48</Thickness>
-<GridLength x:Key="Size.Sidebar">200</GridLength><sys:Double x:Key="Size.PageHeader">86</sys:Double><GridLength x:Key="Size.SettingsNav">168</GridLength>
+<!-- §C6 卡片/磁贴之间的标准槽宽（GridLength，可直接给 ColumnDefinition.Width）。
+         会员中心底部三块导航磁贴原先靠各自的 Spacing.InlineLoose 右外边距制造间距，
+         外边距在列内部，于是末块右缘内缩 16 且三块并不等宽；改用"槽列"表达间距后，
+         三块真正三等分、两端与父容器齐平。与 MembershipDetails 两卡之间 16 的列距同值。 -->
+    <GridLength x:Key="Size.CardGutter">16</GridLength>
+    <GridLength x:Key="Size.Sidebar">200</GridLength><sys:Double x:Key="Size.PageHeader">86</sys:Double><GridLength x:Key="Size.SettingsNav">168</GridLength>
     <sys:Double x:Key="Size.Drawer">400</sys:Double>
     <sys:Double x:Key="Size.FormMax">800</sys:Double>
     <sys:Double x:Key="Size.WorkspaceMax">1600</sys:Double>

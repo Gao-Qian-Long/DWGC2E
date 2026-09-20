@@ -522,6 +522,73 @@ public sealed partial class SmokeApp : App
             vm.CurrentPage = MainViewModel.PageSettings;
             await Task.Delay(4200);
             for (var section = 0; section < 6; section++) { vm.SettingsSection = section; await NavIdleAsync(); Capture(window, "settings-" + section); var currentSettingsPage=FindVisual<DwgTranslator.App.Views.Pages.SettingsPage>(window); Check(((FrameworkElement)currentSettingsPage.FindName("SettingsSaveBar")).IsVisible == (section!=5), "save bar only on editable settings " + section); if(section==1) Check(FindVisuals<System.Windows.Controls.TextBox>(currentSettingsPage).Where(t=>t.IsVisible).All(t=>t.ActualWidth<=160),"compact numeric settings inputs"); }
+            // ── §G「设置页左右主从双卡片」导航链路守护（本批新增，只加强、不改动任何既有断言）──────
+            // 为什么必须加：f3 把分区导航从"页内 2×3 UniformGrid 区块"改回"左卡内竖排 ListBox"
+            // （SettingsPage.xaml:109-134 SettingsNavCard > SettingsNav，删掉了 UniformGrid ItemsPanel）。
+            // 而上面 :524 的分区循环与下面的保存链全部直接写 vm.SettingsSection，走的是 ViewModel 通道，
+            // 从不经过左卡 UI。新布局若把 ListBoxItem 压成 0 尺寸、被卡片 Padding(10) 裁掉、或
+            // SelectedIndex 双向绑定断开，旧断言一条都不会红 —— 重构后守护强度实际是下降的。
+            // 这里补回等价链路"点左卡导航 → 右卡换出对应分区内容"：
+            //   a) 非 compact 下左卡与导航列表可见，且两个列宽严格等于共享令牌（从 Resources 读，不写死数字，
+            //      令牌被改小/改没都会红）；
+            //   b) 6 个 ListBoxItem 全部可见、可命中、有实际尺寸，且完整落在左卡边界内（不被裁）；
+            //   c) 走 ListBoxItemAutomationPeer 的 ISelectionItemProvider.Select() —— 与 :261 对按钮用
+            //      IInvokeProvider 属同一自动化层，是 UI 选择通道而非直接改 ViewModel —— 断言
+            //      vm.SettingsSection 跟随变化、右卡内"有且仅有"对应那一个分区面板可见、面板真的有高度、
+            //      且操作条可见性仍守 section!=5 的旧规则。
+            {
+                var navSettingsPage = FindVisual<DwgTranslator.App.Views.Pages.SettingsPage>(window);
+                var navCard = (Border)navSettingsPage.FindName("SettingsNavCard");
+                var navList = (ListBox)navSettingsPage.FindName("SettingsNav");
+                var navColumn = (ColumnDefinition)navSettingsPage.FindName("SettingsNavColumn");
+                var navGutter = (ColumnDefinition)navSettingsPage.FindName("SettingsNavGutter");
+                Check(navCard.IsVisible && navList.IsVisible && !DwgTranslator.App.Views.Controls.ResponsiveLayout.GetIsCompact(window),
+                    "master-detail settings exposes the left navigation card at full width");
+                var expectedNavWidth = ((GridLength)Resources["Size.SettingsNav"]).Value;
+                var expectedGutterWidth = ((GridLength)Resources["Size.CardGutter"]).Value;
+                Check(Math.Abs(navColumn.Width.Value - expectedNavWidth) < 0.1 && Math.Abs(navGutter.Width.Value - expectedGutterWidth) < 0.1,
+                    $"settings nav columns keep the shared width tokens (nav={navColumn.Width.Value:F1}/{expectedNavWidth:F1}, gutter={navGutter.Width.Value:F1}/{expectedGutterWidth:F1})");
+                var navTiles = FindVisuals<ListBoxItem>(navList).ToList();
+                Check(navTiles.Count == 6, "settings navigation lists all six sections, actual=" + navTiles.Count);
+                foreach (var tile in navTiles)
+                {
+                    Check(tile.IsVisible && tile.IsHitTestVisible && tile.ActualWidth > 40 && tile.ActualHeight >= 24,
+                        $"settings nav tile stays clickable ({tile.ActualWidth:F1}x{tile.ActualHeight:F1})");
+                    var inCard = tile.TransformToVisual(navCard).TransformBounds(new Rect(0, 0, tile.ActualWidth, tile.ActualHeight));
+                    Check(inCard.Left >= -0.5 && inCard.Top >= -0.5 && inCard.Right <= navCard.ActualWidth + 0.5 && inCard.Bottom <= navCard.ActualHeight + 0.5,
+                        $"settings nav tile is not clipped by the card (tile={inCard}, card={navCard.ActualWidth:F1}x{navCard.ActualHeight:F1})");
+                }
+                var sectionHost = (StackPanel)((Border)navSettingsPage.FindName("SettingsContent")).Child;
+                Check(sectionHost.Children.Count == 6, "settings right card hosts exactly six section panels, actual=" + sectionHost.Children.Count);
+                var navSaveBar = (FrameworkElement)navSettingsPage.FindName("SettingsSaveBar");
+                for (var target = 0; target < 6; target++)
+                {
+                    var tile = navTiles[target];
+                    // 走 UI 元素的选择通道，不是 ViewModel 通道：ListBoxItem.IsSelected 正是鼠标点击最终
+                    // 落到的那个属性，赋值后由 ListBoxItem → Selector 选中机制 → SelectedIndex 的
+                    // **双向**绑定 → vm.SettingsSection → IndexToVis 驱动右卡分区可见性。这条链上任何一环
+                    // 被 §G 重构弄断（ItemsPanel 改回默认纵向堆叠、ListBox 挪进左卡 Border、绑定退化成
+                    // OneWay），下面 4 条断言都会红。
+                    // 为什么不用 ISelectionItemProvider.Select()（与 :261 对按钮用 IInvokeProvider 同层）：
+                    // UIElementAutomationPeer.CreatePeerForElement(tile) 在本场景直接抛 NullReferenceException
+                    // ——这些 ListBoxItem 是 XAML 里显式声明的元素、自身即容器，其 peer 建立需要父级
+                    // SelectorAutomationPeer 链，而冒烟进程里没有任何自动化客户端去创建过该链。
+                    // 也不合成 MouseButton 事件：ListBoxItem 的选中在内部把该事件标记为已处理，
+                    // RaiseEvent 的结果取决于路由细节，不确定；IsSelected 赋值是同一终态且确定。
+                    // "可被点击"这一半由上面单独的 IsHitTestVisible + 实际尺寸 + 不被左卡裁切三条守住。
+                    tile.IsSelected = true;
+                    await NavIdleAsync();
+                    Check(vm.SettingsSection == target, $"selecting the left nav tile switches to section {target}, actual={vm.SettingsSection}");
+                    Check(navList.SelectedIndex == target && ReferenceEquals(navList.SelectedItem, tile), "left nav selection tracks the chosen section " + target);
+                    var visiblePanels = sectionHost.Children.OfType<FrameworkElement>().Where(p => p.Visibility == Visibility.Visible).ToList();
+                    Check(visiblePanels.Count == 1 && ReferenceEquals(visiblePanels[0], sectionHost.Children[target]),
+                        $"right card shows only section {target}, visible={visiblePanels.Count}");
+                    Check(visiblePanels[0].ActualHeight > 0 && visiblePanels[0].ActualWidth > 0,
+                        $"section {target} content is really laid out inside the right card ({visiblePanels[0].ActualWidth:F1}x{visiblePanels[0].ActualHeight:F1})");
+                    Check(navSaveBar.IsVisible == (target != 5), "nav-selected section still drives the save bar " + target);
+                    Capture(window, "settings-nav-" + target);
+                }
+            }
             vm.SettingsSection = 1;
             await NavIdleAsync();
             var settingsPage = FindVisual<DwgTranslator.App.Views.Pages.SettingsPage>(window);
@@ -557,6 +624,33 @@ public sealed partial class SmokeApp : App
             Check(vm.CurrentPage == MainViewModel.PageTranslate, "login returns without starting translation");
             Check(!vm.IsProcessing && api.TranslationCalls == 0, "no quota-consuming action");
             vm.CurrentPage = MainViewModel.PageAccount; await NavIdleAsync(); Capture(window, "account-simulated-login");
+            // ── §B/§C 复审取证：等 fixture toast 自然过期后再拍一张干净的会员中心整页 ──────────────
+            // 会员中心的既有截图（account-simulated-login、membership-redesign-*）全都紧跟在登出/过期/
+            // 保存失败这些 fixture 之后，ToastHost 里必然还挂着提示；而 Toasts 是 MainWindow.xaml:392 的
+            // Grid.Row=1/Column=1 右下覆盖层，正好压在第 3 块导航磁贴的右下角——membership-redesign-max
+            // 实测 toast 红点 bbox x:1042..1048 / y:693..697，而磁贴卡面实测 y=600..719（x=1300 列扫描
+            // 出 (255,252,245) 卡面、584..598 与 720..733 为边框+阴影）。t5 要判断的恰是"三块磁贴是否
+            // 填满、右缘是否齐平"，被 toast 盖住的角落会被误读成裁切，所以补一张干净整页。
+            // 不去改 toast 状态：ToastItem.Remaining 是 internal、ToastHost._items 是 private，硬清属侵入。
+            // 改为等它按自身 4 秒寿命过期（ToastHost.xaml.cs:13）。MaximumVisible=1 时 pending 会在可见项
+            // 过期后被提升，故 VisibleCount 与 PendingCount 必须同时归零。
+            // 刻意不用 WaitUntil：它超时会抛 TimeoutException，取证代码不该有让整轮变红的能力；
+            // 这里用既有 :523/:603 的固定 Task.Delay idiom + 有界非抛出轮询，最坏情况只是这张图仍带 toast，
+            // 由下面的 INFO 行如实记录。NavIdleAsync(:100-103) 一字未动。
+            {
+                var evidenceToasts = (DwgTranslator.App.Views.Controls.ToastHost)window.FindName("Toasts");
+                await Task.Delay(4600);
+                var drained = 0;
+                for (; drained < 200 && (evidenceToasts.VisibleCount > 0 || evidenceToasts.PendingCount > 0); drained++)
+                {
+                    await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+                    await Task.Delay(50);
+                }
+                Console.WriteLine($"INFO evidence toast drain: visible={evidenceToasts.VisibleCount} pending={evidenceToasts.PendingCount} polls={drained}");
+                vm.CurrentPage = MainViewModel.PageAccount;
+                await NavIdleAsync();
+                Capture(window, "evidence-account-clean");
+            }
             await VerifyMembershipLayoutAsync(window, vm, loginPage);
             var quota = (System.Windows.Controls.ProgressBar)loginPage.FindName("QuotaProgress");
             var usageBefore = vm.OnlineUsage;
@@ -644,6 +738,35 @@ public sealed partial class SmokeApp : App
                         }
                     }
                 }
+            // ── §G aboutStack 阈值在 1280 这一档的实拍证据（本批新增）──────────────────────────
+            // f3 把「关于与帮助」分区两张卡的并排/堆叠分界从"仅 compact"放宽为
+            // SettingsPage.xaml.cs:94 `var aboutStack = compact || ActualWidth < 1200;`
+            // （换算窗口宽 < 1464，因为 ActualWidth = 窗口宽 - 侧栏 200 - Spacing.Page 左右 64）。
+            // matrix 清单是 1366/1920/1920@1.25/2560@1.5：1366 覆盖了堆叠态，但 1280 这一档没有，
+            // 而 1280 恰是右卡可用宽最小、说明文字最容易被 CharacterEllipsis 截断的一档。
+            // 这里补一条真实断言 + 一张真窗口实拍。刻意不用 CaptureLayout 做 detached 取证、也不把
+            // 1280 加进 matrix 清单：那会把 matrix 的整片几何断言覆盖面悄悄扩大到 1280（5 页 × 6 分区），
+            // 属另一件事，需要单独立项评估，不该混在证据补充里。
+            // 注意 matrix 循环在 :619 把 content.Width/Height 钉死成最后一档的 DIP 值且不会自行复位，
+            // 所以这里先存后还，保证下游（:647 起的对话框与放弃更改测试）行为与改动前逐字一致。
+            {
+                var evidenceContent = (FrameworkElement)window.Content;
+                var savedContentWidth = evidenceContent.Width;
+                var savedContentHeight = evidenceContent.Height;
+                window.Width = 1280; window.Height = 720;
+                evidenceContent.Width = 1280; evidenceContent.Height = 720;
+                vm.CurrentPage = MainViewModel.PageSettings;
+                await WaitForStableAsync(() => window.ActualWidth, "evidence window 1280x720");
+                var narrowSettings = FindVisual<DwgTranslator.App.Views.Pages.SettingsPage>(window);
+                await WaitForStableAsync(() => narrowSettings.ActualWidth, "settings canvas 1280x720");
+                vm.SettingsSection = 5;
+                await NavIdleAsync();
+                var aboutDetailsCard = (FrameworkElement)narrowSettings.FindName("AboutDetailsCard");
+                Check(System.Windows.Controls.Grid.GetRow(aboutDetailsCard) == 1 && System.Windows.Controls.Grid.GetColumn(aboutDetailsCard) == 0,
+                    $"narrow settings about section stacks instead of clipping (row={System.Windows.Controls.Grid.GetRow(aboutDetailsCard)}, column={System.Windows.Controls.Grid.GetColumn(aboutDetailsCard)}, pageWidth={narrowSettings.ActualWidth:F1})");
+                Capture(window, "settings-about-stacked-1280");
+                evidenceContent.Width = savedContentWidth; evidenceContent.Height = savedContentHeight;
+            }
             window.Width = 1366; window.Height = 768;
             await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
             var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(100) };

@@ -71,9 +71,33 @@
     <DropShadowEffect x:Key="CardShadow" BlurRadius="10" ShadowDepth="2" Opacity="0.10" Color="#0F1F3A" />
     <!-- 网站的立体感来自硬边偏移阴影（css/theme.css 的 box-shadow:3px 3px 0），而不是模糊柔影。
          卡片与控件用沙色，主按钮用墨色，与 .btn / .btn-primary 对应。
-         CardShadow 以上那一个留给浮层（ToolTip / ContextMenu / Toast）——那里柔影才是对的。 -->
-    <DropShadowEffect x:Key="Shadow.Hard" BlurRadius="0" ShadowDepth="3" Direction="315" Color="#DED2BC" Opacity="1" />
-    <DropShadowEffect x:Key="Shadow.HardPrimary" BlurRadius="0" ShadowDepth="4" Direction="315" Color="#262521" Opacity="1" />
+         CardShadow 以上那一个留给浮层（ToolTip / ContextMenu / Toast）——那里柔影才是对的。
+
+         §H 全局柔化（用户批注：「这种立体式卡片的效果好像并不好，能全局优化下吗？」）。
+         审计用 before / after（只动这两个令牌即全局生效：Shadow.Hard 被 Card / CardNoPad /
+         Section.Surface / AccountPage.xaml:13 Account.Card 使用；Shadow.HardPrimary 被
+         Button.Primary 与 AccountPage.xaml:21 Account.InkCard 使用）：
+           Shadow.Hard         before BlurRadius 0 / ShadowDepth 3 / Direction 315 / #DED2BC / Opacity 1
+           Shadow.Hard         after  BlurRadius 0 / ShadowDepth 2 / Direction 315 / #DED2BC / Opacity 0.55
+           Shadow.HardPrimary  before BlurRadius 0 / ShadowDepth 4 / Direction 315 / #262521 / Opacity 1
+           Shadow.HardPrimary  after  BlurRadius 0 / ShadowDepth 2 / Direction 315 / #262521 / Opacity 0.55
+           CardShadow          不动（10 / 2 / 0.10 / #0F1F3A，在档约定只留给浮层）
+         三个取舍理由：
+         ① 保留 BlurRadius=0 —— 硬边偏移是本项目"印刷卡片"的身份语言（对齐网站 box-shadow:3px 3px 0）。
+            加模糊会把身份从硬边印刷换成 Material 柔影，那是比用户诉求大得多的一次改版，且模糊会让阴影
+            向四周扩散、反而增加被容器裁掉的风险。用户嫌的是"厚重"，不是"硬"。
+         ② 只降 ShadowDepth 与 Opacity —— 变近 + 变浅。沙色影在页面底 #F5F1E8 上由实色 #DED2BC
+            降到混合后约 #E8E0D0，墨色影由近黑降到约 #93918B；两者都仍清晰可见（没有变纯平），
+            但视觉重量约减半，主次层级也保留（墨色影仍强于沙色影）。
+         ③ 不叠加细边框 —— 四个 Shadow.Hard 使用点本来就都有 1px Brush.Border，柔化后卡片轮廓不丢；
+            两个 Shadow.HardPrimary 使用点是 BorderThickness=0 的实心色块（Primary / Ink），
+            给它们加边框会让 Button.Base 的 IsKeyboardFocused 触发器从 0→2 变成 1→2、并让按钮实宽 +2，
+            波及所有按 MinWidth 排布的工具栏与 ActualWidth 断言，代价远大于收益。
+         Effect 不参与布局，故 ActualWidth / ActualHeight / TranslatePoint 一律不变，
+         冒烟的几何断言不受影响；ShadowDepth 由 3/4 降到 2 还让 :259 提到的右下溢出余量需求变小。
+         回退方式：把上面 after 的两个值改回 before 即可，无其它连带改动。 -->
+    <DropShadowEffect x:Key="Shadow.Hard" BlurRadius="0" ShadowDepth="2" Direction="315" Color="#DED2BC" Opacity="0.55" />
+    <DropShadowEffect x:Key="Shadow.HardPrimary" BlurRadius="0" ShadowDepth="2" Direction="315" Color="#262521" Opacity="0.55" />
     <!-- ───────────────────────── 按钮 ───────────────────────── -->
     <Style x:Key="Button.Base" TargetType="Button">
         <Setter Property="Height" Value="{DynamicResource Size.Button}" />
@@ -256,7 +280,7 @@
     <Style x:Key="RibbonDivider" TargetType="Border" BasedOn="{StaticResource Divider.Vertical}" />
     <!-- ───────────────────────── 卡片 ───────────────────────── -->
     <!-- 标准卡片：白底 + 1px 浅边框 + 硬边偏移阴影（对齐网站的印刷卡片观感）。
-         阴影不参与布局，但会向右下溢出 3 DIP，容器要给卡片留出这点余量否则会被裁掉。 -->
+         阴影不参与布局，但会向右下溢出 2 DIP（§H 柔化前是 3），容器要给卡片留出这点余量否则会被裁掉。 -->
     <Style x:Key="Card" TargetType="Border">
         <Setter Property="Background" Value="{DynamicResource Brush.Surface}" />
         <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border}" />

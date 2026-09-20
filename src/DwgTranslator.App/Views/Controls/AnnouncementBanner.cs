@@ -35,12 +35,28 @@ public sealed class AnnouncementBanner : Border
     public AnnouncementBanner()
     {
         // §L20 顶栏列宽 1120 起可收缩：公告条由固定 220 改为 160..320 弹性宽度
-        Height = 32; MinWidth = 160; MaxWidth = 320; Background = Brushes.Transparent;
-        _button = new Button { Width = double.NaN, Height = 32, Padding = new Thickness(6, 0, 6, 0), VerticalContentAlignment = VerticalAlignment.Center, HorizontalContentAlignment = HorizontalAlignment.Stretch, HorizontalAlignment = HorizontalAlignment.Stretch, ToolTip = "查看公告" };
-        _button.SetResourceReference(StyleProperty, "Button.Icon");
+        // §A1 文字下缘被切平（用户批注「文字下面被截断了」）的根因是高度约束打架：
+        //     Button.Base 用样式设了 MinHeight=36，而尺寸约束永远压过本地 Height，
+        //     所以本地 Height=32 无效——按钮实际 36 高，从 32 高的容器里溢出 4 DIP，
+        //     居中的文字被推到容器下缘之外。现在容器/按钮/行网格取同一个确定高度 34，
+        //     并给按钮同时钉死 MinHeight 与 MaxHeight（只钉 Height 仍会被样式里的 MinHeight=36 顶掉），
+        //     12px 字形在 34 的行里上下各有约 8 DIP 余量，字体回退（Inter 缺失→Microsoft YaHei，
+        //     行盒更高）也不会再切到下缘。34 仍在 44 的标题栏行内居中（y=5..39），
+        //     冒烟的 HTCLIENT/HTCAPTION 命中点（banner 本地 16,16 与窗口 240/350 列）不受影响。
+        Height = 34; MinWidth = 160; MaxWidth = 320; Background = Brushes.Transparent;
+        _button = new Button { Width = double.NaN, Height = 34, MinHeight = 34, MaxHeight = 34, Padding = new Thickness(6, 0, 6, 0), VerticalContentAlignment = VerticalAlignment.Center, HorizontalContentAlignment = HorizontalAlignment.Stretch, HorizontalAlignment = HorizontalAlignment.Stretch, ToolTip = "查看公告" };
+        // §A2 悬停/聚焦跳动：Button.Icon 继承 Button.Base 的模板，IsMouseOver 给模板里的 Bd 挂
+        //     TranslateTransform Y=-2（整块抬起 2 DIP，就是用户看到的"跳一下"），IsKeyboardFocused
+        //     还把 BorderThickness 从 0 改成 2 —— 那是真实的尺寸变化，点过一次后文字永久内缩。
+        //     Button.TitleBarIcon 的模板只改背景色与透明度，不动任何几何属性，天然满足
+        //     "MouseOver 触发器不得改变自身/父容器尺寸"。
+        //     另外：悬停浮层本来就是不占布局槽位的 ToolTip（WPF ToolTip 即 Popup，
+        //     _ticker.ToolTip 承载公告全文），不需要再改成手写 Popup。
+        _button.SetResourceReference(StyleProperty, "Button.TitleBarIcon");
         // §L21 对齐：行网格与两个子元素都显式垂直居中——铃铛(列0)与文字(列1)共用同一条中线，
         // 不再依赖 ContentPresenter 对 Canvas 自然高度的隐式排布。
-        var row = new Grid { MinWidth = 140, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Stretch };
+        // §A1 行网格也给确定高度：文字所在单元格恒为 34，不再依赖"内容自然高度刚好塞得下"。
+        var row = new Grid { MinWidth = 140, Height = 34, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Stretch };
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(24) }); row.ColumnDefinitions.Add(new ColumnDefinition());
         var icon = new Grid { Width = 20, Height = 22, VerticalAlignment = VerticalAlignment.Center };
         var bell = new System.Windows.Shapes.Path

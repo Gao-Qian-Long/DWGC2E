@@ -16,7 +16,7 @@ public partial class MainViewModel
         {
             if (!HasSavedAccountSession) return;
             // Reuse the established expiry path so unsaved proofreading, terms and settings survive.
-            _ = SafeRefreshAccountAsync();
+            _ = SafeRefreshAccountAsync(userInitiated: false); // 自动同步：后台会话被拒后的清理重试，不弹成功 toast（§A3 补完 t7）
         });
     }
 

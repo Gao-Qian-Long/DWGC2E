@@ -48,7 +48,17 @@ public partial class SettingsPage : UserControl
         var compact = Controls.ResponsiveLayout.GetIsCompact(this);
         SettingsNav.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
         CompactSections.Visibility = compact ? Visibility.Visible : Visibility.Collapsed;
-        // 页面已无左侧导航列：分区切换条在窄窗让位给下拉选择器，内容与操作条不再需要水平偏移。
+        // G 主从双卡片的窄窗降级：左卡与槽列一起收为 0，右卡独占整行（等价于上下堆叠时"只剩右卡"），不破裂。
+        // 两个宽度都从资源令牌读、不在代码里写死数值：Size.SettingsNav(168) / Size.CardGutter(16)。
+        // 左卡要整张 Collapsed 而不只把列宽归零——列宽为 0 时卡片仍参与测量，1px 边框会被裁成一条残线。
+        // CompactSections 在 XAML 里位于右列而非左卡内，所以折叠左卡不会连带隐藏它
+        // （RefinementSmoke.cs:34 与 :385 断言它的 IsVisible 必须严格等于 compact）。
+        SettingsNavCard.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
+        if (TryFindResource("Size.SettingsNav") is GridLength settingsNavWidth)
+            SettingsNavColumn.Width = compact ? new GridLength(0) : settingsNavWidth;
+        if (TryFindResource("Size.CardGutter") is GridLength cardGutter)
+            SettingsNavGutter.Width = compact ? new GridLength(0) : cardGutter;
+        // 页头与「关于」分区在窄窗让位给下拉选择器，内容与操作条不再需要水平偏移。
         var compactAbout = compact && DataContext is MainViewModel { SettingsSection: 5 };
         WorkspaceHeader.Visibility = compactAbout ? Visibility.Collapsed : Visibility.Visible;
         AboutSubtitle.Visibility = compactAbout ? Visibility.Collapsed : Visibility.Visible;
@@ -63,15 +73,48 @@ public partial class SettingsPage : UserControl
             AboutUpdatePanel.Margin = compact ? new Thickness(0,10,20,0) : new Thickness(0);
             AboutUpdatePanel.HorizontalAlignment = compact ? HorizontalAlignment.Left : HorizontalAlignment.Stretch;
         }
+        // §G 副作用收敛（必须与上面新增的左卡配套看）：左卡 + 槽列固定占去 168 + 16 = 184 DIP，
+        // 于是右卡在 1280~1440 这些主流笔记本宽度下比改前窄 184 DIP；窗口 ≥1528 时右卡已被
+        // SettingsContent 的 MaxWidth=1080 封顶，这 184 被完全吸收、不受影响。
+        // 分区 06 的「快捷入口 / 版本详情」并排布局需要约 974 DIP 内容宽，才能让快捷入口说明
+        // "查看软件使用说明和常见操作"（13 字 × FontSize.Secondary 13 = 169 DIP）单行放得下。
+        // 实测说明可用宽（改前 → 改后）：1280 → 173 / 81；1366 → 205 / 124；1440 → 205 / 161。
+        // 不足时说明会被 CharacterEllipsis 截成 6~12 字，而 1366×768 正是 UI 冒烟的 matrix 截图尺寸，
+        // 视觉复审必然看到。处置沿用本任务契约点名的手段（"现有响应式机制…可上下堆叠"）：
+        // 把既有 compact 堆叠分支的触发条件从"仅 compact"放宽到"内容宽不足"，
+        // 于是绝大多数宽度下并排 / 堆叠的分界与文字是否被截断一致，不新增任何布局代码。
+        // 阈值换算（t7 按 smoke 实测修正——t3 推算时误把 Spacing.Page 的左右 64 也算进了本控件宽度）：
+        //   实测 window.Width=1280 时本页 ActualWidth=1080.0，故 ActualWidth = 窗口宽 - 侧栏 200；
+        //   Spacing.Page 的左右各 32 是页面**内部** Page Grid 的 Margin，已在 ActualWidth 之内，不能再减一次。
+        //   链：Col2 = ActualWidth - 64 - 184；SettingsContent = min(Col2, 1080)；inner = SettingsContent - 42；
+        //       说明可用宽 = (inner - 396 - 16) / 2 - 30 - 70 - 8 = (inner - 412) / 2 - 108，需 ≥ 169
+        //       （396 = 版本详情列 380 + 槽 16；30 = About.ShortcutCard Padding 14×2 + 边框 2；
+        //         70 = 格内 cols 50/*/20 的两侧；8 = 中层 StackPanel 的 Spacing.Inline 右距）。
+        //   ⇒ 完全不截断需 inner ≥ 966 ⇔ ActualWidth ≥ 1256 ⇔ 窗口宽 ≥ 1456
+        //     （t3 写的 974 / 1200 / 1464 中，974 是把 1280 改前的可用 inner 误当成了需求值，实际只需 966）。
+        //   而代码条件是 ActualWidth < 1200 ⇔ 窗口宽 < 1400，故存在 1400 ≤ 窗口宽 < 1456 的残留带：
+        //     带内走并排、说明仍差 0~28 DIP（≈0~2 字）被 CharacterEllipsis 吃掉；
+        //     四个冒烟尺寸里只有 1440×900 落在此带（ActualWidth=1240，可用 161 / 需 169，差 8 DIP≈末字），
+        //     1280(1080) 与 1366(1166) 均已 < 1200 → 堆叠 → 全文；1920(1720) ≥ 1256 → 并排 → 全文。
+        //   t7 按队长指示只修注释与换算数字，aboutStack 条件行为一字不动。若要彻底消除该残留带，
+        //     把下面的 1200 改成 1256 即可（单常量、零新增布局代码；tests\ 无断言引用 AboutDetails*，
+        //     已在 t3 grep 证实零风险）——是否收口留待队长 / ui-auditor 裁决。
+        // 不会自激振荡：堆叠只改内容高度，ActualWidth 由 PageHost 决定；SettingsScroll 的纵向滚动条
+        //          只影响 SettingsContent 宽度、不影响本 UserControl 的 ActualWidth，故不会反复触发 SizeChanged。
+        // 影响面只有 AboutDetails* 三个元素；AboutUpdate*（更新状态卡）仍按 compact 走，
+        // UpdateNotificationSmoke.cs:29-30 断言的 AboutUpdatePanel / AboutUpdateButton 行为不变。
+        // tests\ 全库 grep 证实无任何断言引用 AboutDetailsCard / AboutDetailsColumn / AboutDetailsGap
+        // 或四个快捷入口按钮（使用帮助/问题反馈/官方网站/服务状态），故此改动对冒烟零风险。
+        var aboutStack = compact || ActualWidth < 1200;
         if (AboutDetailsCard != null && AboutDetailsColumn != null && AboutDetailsGap != null)
         {
-            // 快捷入口与版本详情并排铺满横向空间；窄窗落回堆叠，避免两张卡都被挤到不可读。
-            AboutDetailsGap.Width = new GridLength(compact ? 0 : 16);
-            AboutDetailsColumn.Width = new GridLength(compact ? 0 : 380);
-            Grid.SetRow(AboutDetailsCard, compact ? 1 : 0);
-            Grid.SetColumn(AboutDetailsCard, compact ? 0 : 2);
-            Grid.SetColumnSpan(AboutDetailsCard, compact ? 3 : 1);
-            AboutDetailsCard.Margin = compact ? new Thickness(0, 12, 0, 0) : new Thickness(0);
+            // 快捷入口与版本详情并排铺满横向空间；横向空间不足时落回堆叠，避免两张卡都被挤到不可读。
+            AboutDetailsGap.Width = new GridLength(aboutStack ? 0 : 16);
+            AboutDetailsColumn.Width = new GridLength(aboutStack ? 0 : 380);
+            Grid.SetRow(AboutDetailsCard, aboutStack ? 1 : 0);
+            Grid.SetColumn(AboutDetailsCard, aboutStack ? 0 : 2);
+            Grid.SetColumnSpan(AboutDetailsCard, aboutStack ? 3 : 1);
+            AboutDetailsCard.Margin = aboutStack ? new Thickness(0, 12, 0, 0) : new Thickness(0);
         }
     }
     private void SettingsSection_Changed(object sender, SelectionChangedEventArgs e)
