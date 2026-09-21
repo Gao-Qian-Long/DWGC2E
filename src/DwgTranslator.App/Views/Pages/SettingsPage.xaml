@@ -146,29 +146,7 @@
                  必须严格等于 compact，而窄窗时左卡整张 Collapsed，下拉若在卡内会被连带隐藏而踩红。 -->
             <StackPanel Grid.Row="0" Grid.Column="2" Margin="{DynamicResource Spacing.Stack}">
                 <ComboBox x:Name="CompactSections" Visibility="Collapsed" SelectedIndex="{Binding SettingsSection}" SelectionChanged="SettingsSection_Changed" Margin="{DynamicResource Spacing.StackWide}" AutomationProperties.Name="设置分类"><ComboBoxItem Content="常规"/><ComboBoxItem Content="翻译与保护"/><ComboBoxItem Content="文件与输出"/><ComboBoxItem Content="CAD 与环境"/><ComboBoxItem Content="日志"/><ComboBoxItem Content="关于与帮助"/></ComboBox>
-                <!-- S5 · D10：常规分区的提示已是空串，但**空 TextBlock 仍会占一行行盒**——
-                     实测（matrix-settings-section-0-1920-1.25.png）删字前该行有文字、删字后
-                     下方首张卡的顶边仍在同一像素 y=203，即"文字没了、位置还留着"；改为 Collapsed 后
-                     该顶边上移到 y=181，即回收了 22 px = **22 DIP** 的空白行盒。
-                     px/DIP 比为 1:1：抓图走 Program.cs:193 的 RenderTargetBitmap(w, h, 96, 96, Pbgra32)，
-                     96 DPI 下 1 DIP = 1 px，与显示器缩放无关；文件名里的 1.25 只表示该档对应 125%
-                     缩放的逻辑分辨率，不改变 px/DIP 比。实证：同一 168 DIP 宽的导航卡在 -1 与 -1.25
-                     两图中边框列都落在 x=232/399、宽 168 px。（早先按「×1.25」算出的 27.5 DIP 是错的：
-                     既误设了缩放比，方向也反了——应为 22 ÷ 1.25 = 17.6 而非 22 × 1.25。）
-                     无关与帮助分区（原就是空串）同样如此。这里让空串直接 Collapsed，
-                     文字与占位一起消失。 -->
-                <TextBlock Text="{Binding SettingsSectionApplyHint}">
-                    <TextBlock.Style>
-                        <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionStyle}">
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding SettingsSectionApplyHint}" Value="">
-                                    <Setter Property="Visibility" Value="Collapsed" />
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </TextBlock.Style>
-                </TextBlock>
-            </StackPanel>
+                            </StackPanel>
             <!-- 右卡。MinHeight 绑到外层 ScrollViewer 的 ViewportHeight：分区内容比视口矮时卡片仍铺满，
                  与左卡（Stretch 到同一行高）恒等高，不会出现"左卡长右卡短"的缺口。该绑定不会自激振荡——
                  ViewportHeight 不受纵向滚动条影响、横向滚动条已 Disabled（与 TranslatePage 右栏 E10 同一手法）。
@@ -181,8 +159,8 @@
                         <StackPanel Visibility="{Binding SettingsSection, Converter={StaticResource IndexToVis}, ConverterParameter=0}">
                             <TextBlock Text="SECTION 01 · GENERAL" Style="{StaticResource Kicker}" Margin="0,0,0,2" />
                             <TextBlock Text="常规" Style="{StaticResource SectionTitleStyle}" Margin="{DynamicResource Spacing.StackLoose}" />
-                            <Grid>
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="20"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                            <Grid HorizontalAlignment="Left">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="20"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                 <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                                 <StackPanel Grid.Row="0" Grid.Column="0">
                                     <!-- 常规：原「界面语言」与「应用行为」两张宽窄不一的卡片合并成同一张表单，统一 220 DIP 标签列。 -->
@@ -216,13 +194,13 @@
                                     </controls:SettingsRow>
                                 </StackPanel>
                             </Grid>
-                            <!-- 生效时机由页头 SettingsSectionApplyHint 统一说明，这里不再重复一遍。 -->
+                            <!-- 2026-09-21 用户批注：各分区上方的生效时机说明整行不要（含同级子分区的同类说明），已连同 SettingsSectionApplyHint 属性一并删除。 -->
                         </StackPanel>
                         <StackPanel Visibility="{Binding SettingsSection, Converter={StaticResource IndexToVis}, ConverterParameter=1}">
                             <TextBlock Text="SECTION 02 · TRANSLATION" Style="{StaticResource Kicker}" Margin="0,0,0,2" />
                             <TextBlock Text="翻译与保护" Style="{StaticResource SectionTitleStyle}" Margin="{DynamicResource Spacing.StackLoose}" />
-                            <Grid>
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="20"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                            <Grid HorizontalAlignment="Left">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="20"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                 <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                                 <StackPanel Grid.Row="0" Grid.Column="0">
                                     <TextBlock Text="图纸保护" Style="{StaticResource FormRowLabel}" Margin="{DynamicResource Spacing.Stack}" />
@@ -245,8 +223,8 @@
                         <StackPanel Visibility="{Binding SettingsSection, Converter={StaticResource IndexToVis}, ConverterParameter=2}">
                             <TextBlock Text="SECTION 03 · FILES &amp; OUTPUT" Style="{StaticResource Kicker}" Margin="0,0,0,2" />
                             <TextBlock Text="文件与输出" Style="{StaticResource SectionTitleStyle}" Margin="{DynamicResource Spacing.StackLoose}" />
-                            <Grid>
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="20"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                            <Grid HorizontalAlignment="Left">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="20"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                 <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                                 <!-- 输出目录是用户会填长路径的输入框，跨三列保留整行宽度。 -->
                                 <controls:SettingsRow Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="3">
@@ -298,8 +276,8 @@
                         <StackPanel Visibility="{Binding SettingsSection, Converter={StaticResource IndexToVis}, ConverterParameter=3}">
                             <TextBlock Text="SECTION 04 · CAD &amp; ENV" Style="{StaticResource Kicker}" Margin="0,0,0,2" />
                             <TextBlock Text="CAD 与环境" Style="{StaticResource SectionTitleStyle}" Margin="{DynamicResource Spacing.StackLoose}" />
-                            <Grid>
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="20"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                            <Grid HorizontalAlignment="Left">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="20"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                 <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                                 <StackPanel Grid.Row="0" Grid.Column="0">
                                     <controls:SettingsRow>
@@ -328,8 +306,8 @@
                         </StackPanel>
                         <StackPanel Visibility="{Binding SettingsSection, Converter={StaticResource IndexToVis}, ConverterParameter=4}">
                             <TextBlock Text="日志" Style="{StaticResource SectionTitleStyle}" Margin="{DynamicResource Spacing.StackLoose}" />
-                            <Grid>
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="20"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                            <Grid HorizontalAlignment="Left">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="20"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                 <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                                 <StackPanel Grid.Row="0" Grid.Column="0">
                                     <controls:SettingsRow>
@@ -397,7 +375,6 @@
                             </StackPanel.Resources>
                             <TextBlock Text="SECTION 06 · ABOUT" Style="{StaticResource Kicker}" Margin="0,0,0,2" />
                             <TextBlock Text="关于与帮助" Style="{StaticResource SectionTitleStyle}" />
-                            <TextBlock x:Name="AboutSubtitle" Text="查看版本、软件更新、使用帮助与服务状态" Style="{StaticResource PageSubtitleStyle}" />
 
                             <!-- S5 · D7/D8 拆卡（用户截图 06 红字「这个分成两个独立的卡片不要放在一张卡片上」/「放到右边去」）：
                                  改前身份信息（图标 + DWGC2E + 版本号）与更新状态块同处同一张 Border 卡内。
@@ -481,28 +458,28 @@
                                         <Button Grid.Row="0" Grid.Column="0" Command="{Binding OpenHelpCommand}" Style="{StaticResource About.ShortcutCard}" AutomationProperties.Name="使用帮助">
                                             <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="{DynamicResource Size.ShortcutIconColumn}"/><ColumnDefinition Width="*"/><ColumnDefinition Width="{DynamicResource Size.ShortcutChevronColumn}"/></Grid.ColumnDefinitions>
                                                 <Border Width="{DynamicResource Size.ShortcutIconBox}" Height="{DynamicResource Size.ShortcutIconBox}" CornerRadius="2" Background="{DynamicResource Brush.PrimaryLight}" HorizontalAlignment="Left"><Path Data="{DynamicResource Icon.HelpRing}" Stroke="{DynamicResource Brush.Primary}" StrokeThickness="1.4" Width="{DynamicResource Size.ShortcutIconGlyph}" Height="{DynamicResource Size.ShortcutIconGlyph}" Stretch="Uniform"/></Border>
-                                                <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="{DynamicResource Spacing.Inline}"><TextBlock Text="使用帮助" Style="{StaticResource CardTitleStyle}"/><TextBlock Text="查看软件使用说明和常见操作" Style="{StaticResource CaptionStyle}" TextTrimming="CharacterEllipsis" Margin="{DynamicResource Spacing.BlockTopTight}"/></StackPanel>
+                                                <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="{DynamicResource Spacing.Inline}"><TextBlock Text="使用帮助" Style="{StaticResource CardTitleStyle}"/><TextBlock Text="查看软件使用说明和常见操作" Style="{StaticResource CaptionStyle}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" Margin="{DynamicResource Spacing.BlockTopTight}"/></StackPanel>
                                                 <TextBlock Grid.Column="2" Text="›" FontSize="22" Foreground="{DynamicResource Brush.TextMuted}" VerticalAlignment="Center" HorizontalAlignment="Right"/>
                                             </Grid>
                                         </Button>
                                         <Button Grid.Row="0" Grid.Column="2" Command="{Binding OpenFeedbackCommand}" Style="{StaticResource About.ShortcutCard}" AutomationProperties.Name="问题反馈">
                                             <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="{DynamicResource Size.ShortcutIconColumn}"/><ColumnDefinition Width="*"/><ColumnDefinition Width="{DynamicResource Size.ShortcutChevronColumn}"/></Grid.ColumnDefinitions>
                                                 <Border Width="{DynamicResource Size.ShortcutIconBox}" Height="{DynamicResource Size.ShortcutIconBox}" CornerRadius="2" Background="{DynamicResource Brush.PrimaryLight}" HorizontalAlignment="Left"><Path Data="{DynamicResource Icon.HelpMark}" Stroke="{DynamicResource Brush.Primary}" StrokeThickness="1.4" Width="{DynamicResource Size.ShortcutIconGlyph}" Height="{DynamicResource Size.ShortcutIconGlyph}" Stretch="Uniform"/></Border>
-                                                <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="{DynamicResource Spacing.Inline}"><TextBlock Text="问题反馈" Style="{StaticResource CardTitleStyle}"/><TextBlock Text="提交问题、建议或错误信息" Style="{StaticResource CaptionStyle}" TextTrimming="CharacterEllipsis" Margin="{DynamicResource Spacing.BlockTopTight}"/></StackPanel>
+                                                <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="{DynamicResource Spacing.Inline}"><TextBlock Text="问题反馈" Style="{StaticResource CardTitleStyle}"/><TextBlock Text="提交问题、建议或错误信息" Style="{StaticResource CaptionStyle}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" Margin="{DynamicResource Spacing.BlockTopTight}"/></StackPanel>
                                                 <TextBlock Grid.Column="2" Text="›" FontSize="22" Foreground="{DynamicResource Brush.TextMuted}" VerticalAlignment="Center" HorizontalAlignment="Right"/>
                                             </Grid>
                                         </Button>
                                         <Button Grid.Row="2" Grid.Column="0" Command="{Binding OpenWebsiteCommand}" Style="{StaticResource About.ShortcutCard}" AutomationProperties.Name="官方网站">
                                             <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="{DynamicResource Size.ShortcutIconColumn}"/><ColumnDefinition Width="*"/><ColumnDefinition Width="{DynamicResource Size.ShortcutChevronColumn}"/></Grid.ColumnDefinitions>
                                                 <Border Width="{DynamicResource Size.ShortcutIconBox}" Height="{DynamicResource Size.ShortcutIconBox}" CornerRadius="2" Background="{DynamicResource Brush.PrimaryLight}" HorizontalAlignment="Left"><Path Data="{DynamicResource Icon.Monitor}" Stroke="{DynamicResource Brush.Primary}" StrokeThickness="1.4" Width="{DynamicResource Size.ShortcutIconGlyph}" Height="{DynamicResource Size.ShortcutIconGlyph}" Stretch="Uniform"/></Border>
-                                                <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="{DynamicResource Spacing.Inline}"><TextBlock Text="官方网站" Style="{StaticResource CardTitleStyle}"/><TextBlock Text="查看公告和产品信息" Style="{StaticResource CaptionStyle}" TextTrimming="CharacterEllipsis" Margin="{DynamicResource Spacing.BlockTopTight}"/></StackPanel>
+                                                <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="{DynamicResource Spacing.Inline}"><TextBlock Text="官方网站" Style="{StaticResource CardTitleStyle}"/><TextBlock Text="查看公告和产品信息" Style="{StaticResource CaptionStyle}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" Margin="{DynamicResource Spacing.BlockTopTight}"/></StackPanel>
                                                 <TextBlock Grid.Column="2" Text="›" FontSize="22" Foreground="{DynamicResource Brush.TextMuted}" VerticalAlignment="Center" HorizontalAlignment="Right"/>
                                             </Grid>
                                         </Button>
                                         <Button Grid.Row="2" Grid.Column="2" Command="{Binding CheckServiceCommand}" IsEnabled="{Binding IsCheckingService, Converter={StaticResource InverseBoolConverter}}" Style="{StaticResource About.ShortcutCard}" AutomationProperties.Name="服务状态">
                                             <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="{DynamicResource Size.ShortcutIconColumn}"/><ColumnDefinition Width="*"/><ColumnDefinition Width="{DynamicResource Size.ShortcutChevronColumn}"/></Grid.ColumnDefinitions>
                                                 <Border Width="{DynamicResource Size.ShortcutIconBox}" Height="{DynamicResource Size.ShortcutIconBox}" CornerRadius="2" Background="{DynamicResource Brush.PrimaryLight}" HorizontalAlignment="Left"><Path Data="{DynamicResource Icon.Refresh}" Stroke="{DynamicResource Brush.Primary}" StrokeThickness="1.4" Width="{DynamicResource Size.ShortcutIconGlyph}" Height="{DynamicResource Size.ShortcutIconGlyph}" Stretch="Uniform"/></Border>
-                                                <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="{DynamicResource Spacing.Inline}"><TextBlock Text="服务状态" Style="{StaticResource CardTitleStyle}"/><TextBlock Text="检测后台服务连接状态" Style="{StaticResource CaptionStyle}" TextTrimming="CharacterEllipsis" Margin="{DynamicResource Spacing.BlockTopTight}"/></StackPanel>
+                                                <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="{DynamicResource Spacing.Inline}"><TextBlock Text="服务状态" Style="{StaticResource CardTitleStyle}"/><TextBlock Text="检测后台服务连接状态" Style="{StaticResource CaptionStyle}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" Margin="{DynamicResource Spacing.BlockTopTight}"/></StackPanel>
                                                 <TextBlock Grid.Column="2" Text="›" FontSize="22" Foreground="{DynamicResource Brush.TextMuted}" VerticalAlignment="Center" HorizontalAlignment="Right"/>
                                             </Grid>
                                         </Button>

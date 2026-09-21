@@ -61,7 +61,6 @@ public partial class SettingsPage : UserControl
         // 页头与「关于」分区在窄窗让位给下拉选择器，内容与操作条不再需要水平偏移。
         var compactAbout = compact && DataContext is MainViewModel { SettingsSection: 5 };
         WorkspaceHeader.Visibility = compactAbout ? Visibility.Collapsed : Visibility.Visible;
-        AboutSubtitle.Visibility = compactAbout ? Visibility.Collapsed : Visibility.Visible;
         if (AboutUpdateColumn != null && AboutUpdatePanel != null && AboutUpdateCard != null)
         {
             // S5 · D7/D8：更新状态块已从身份卡内部移到独立的 AboutUpdateCard（Grid 列 2，槽列 1 为 Size.CardGutter）。

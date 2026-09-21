@@ -120,20 +120,6 @@ public partial class MainViewModel
                 : _settingsRestartRequired
                     ? "已保存 · 重启后完成应用"
                     : "已应用";
-    public string SettingsSectionApplyHint => SettingsSection switch
-    {
-        // S5 · D10：用户截图 07 用红框圈出常规分区的这行说明「应用行为保存后立即生效；界面语言在下次启动时生效。」
-        // 并批注「不需要这些文字」。该文本的载体是**本属性**（页头 TextBlock SettingsPage.xaml:149 绑定它），
-        // 不是 XAML 字面量——所以修复落在这里：常规分区（0）不再产出任何生效时机提示。
-        // 界面语言 ComboBox 的 ToolTip="界面语言在下次启动时生效。"（SettingsPage.xaml:170）是悬停辅助信息、
-        // 不在用户圈选范围内，按"只删圈中的正文"保留。其余分区提示未在截图中被圈，一律不动。
-        0 => string.Empty,
-        1 => "空闲时保存后立即生效；任务执行中会在当前任务结束后统一应用。",
-        2 => "保存后用于后续导出，不会移动或改写已经生成的文件。",
-        3 => "保存后用于下一次环境检查、CAD 读取和写回。",
-        4 => "保存后立即调整新产生的日志；已有日志不会被删除。",
-        _ => string.Empty
-    };
     private AppConfig BeginSettingsEdit()
     {
         var c = SettingsStore.Read(_settingsPath ?? Path.Combine(App.AppDataDir, "settings.json"));
@@ -147,7 +133,6 @@ public partial class MainViewModel
     public Func<bool>? ValidateSettingsInputs { get; set; }
     public bool HasUnsavedSettings => _settingsDraft != null && _settingsBaseline != null && EditableSettings.Any(n => !Equals(typeof(AppConfig).GetProperty(n)!.GetValue(_settingsDraft), typeof(AppConfig).GetProperty(n)!.GetValue(_settingsBaseline)));
 
-    partial void OnSettingsSectionChanged(int value) => OnPropertyChanged(nameof(SettingsSectionApplyHint));
 
     public void NotifySettingsDraftState(bool inputsValid)
     {

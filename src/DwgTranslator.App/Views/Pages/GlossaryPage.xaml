@@ -67,14 +67,15 @@
         批量操作条常驻且不再插入/移除（表格位置因此固定）；本次又按「移到上面去啊」
         把它提到工具区首行，常规工具条顺次下移一行。两条工具条的置灰都由各自 Style 决定。 -->
    <Grid x:Name="NormalToolbar" Grid.Row="2" Margin="{DynamicResource Spacing.BlockTop}" Style="{StaticResource WorkspaceToolbarState}">
-    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
     <Button Grid.Column="0" Content="导入" Command="{Binding ImportGlossaryCommand}" Style="{StaticResource Button.Secondary}" Margin="{DynamicResource Spacing.Inline}"/>
     <Button Grid.Column="1" Content="导出" Click="Export_Click" Style="{StaticResource Button.Secondary}" Margin="{DynamicResource Spacing.Inline}"/>
     <!-- §L12 工具栏按钮补显式样式，避免落到隐式兜底 Button.Tertiary -->
     <Button Grid.Column="2" Content="分类管理" Click="Categories_Click" Style="{StaticResource Button.Secondary}" Margin="{DynamicResource Spacing.Inline}"/>
     <!-- 用户反馈「右上控件被裁」：视图选项（列显示）从筛选行移入工具区，筛选行只留筛选条件。 -->
     <CheckBox x:Name="DetailColumns" Grid.Column="3" Content="详细列" VerticalAlignment="Center" Checked="DetailColumns_Changed" Unchecked="DetailColumns_Changed"/>
-    <Button Grid.Column="5" x:Name="CloudSyncMenu" Content="云端管理" Command="{Binding DownloadTermsCommand}" Style="{StaticResource Button.Secondary}"/>
+    <!-- 用户批注「没对齐」（2026-09-21 截图）：云端管理原悬在工具区最右一列，与上方筛选行右缘、下方状态标签行都不对齐；并入左侧按钮簇，与其余工具按钮同一节奏。 -->
+    <Button Grid.Column="4" x:Name="CloudSyncMenu" Content="云端管理" Command="{Binding DownloadTermsCommand}" Style="{StaticResource Button.Secondary}" Margin="{DynamicResource Spacing.Inline}"/>
    </Grid>
 
    <Grid Grid.Row="3" Margin="{DynamicResource Spacing.BlockTop}">
