@@ -100,3 +100,92 @@ test('M-W4 losing duplicate settlement records a duplicate_payment event',async 
  assert.equal(x.db.prepare('SELECT expires_at FROM subscriptions').get().expires_at,before.expires_at);
  assert.equal(x.db.prepare("SELECT COUNT(*) n FROM payment_events WHERE event_type='duplicate_payment'").get().n,2);
 });
+
+
+test('confirm on QR-window-lapsed pending order re-issues a fresh QR on the SAME order',async t=>{
+ const x=setup(t);await x.checkout();const o=x.rows()[0];
+ const originalQr=o.qr_code,originalTrade=o.provider_trade_no;
+ x.db.exec("UPDATE orders SET expires_at='2000-01-01'");
+ const before=(await(await x.route('/v1/billing/orders/'+o.order_no)).json());
+ assert.equal(before.allowedActions.pay,false);assert.equal(before.qrCode,null);   // window lapsed
+ const callsBefore=x.calls();
+ const reply=await x.route('/v1/billing/orders/'+o.order_no+'/confirm',{method:'POST'});
+ assert.equal(reply.status,200);
+ const d=await reply.json();
+ assert.equal(d.orderNo,o.order_no);                       // same order, never a second one
+ assert.equal(x.rows().length,1);
+ assert.equal(d.allowedActions.pay,true);                  // payable again
+ assert.ok(d.qrCode&&d.qrCode!==originalQr);               // fresh QR content
+ assert.ok(Date.parse(d.expiresAt)>Date.now());           // window pushed forward
+ assert.equal(x.calls(),callsBefore+1);                   // one upstream create call
+ assert.equal(x.db.prepare("SELECT COUNT(*) n FROM payment_events WHERE event_type='payment_qr_reissued'").get().n,1);
+ // The reissued order still settles through the trusted callback.
+ assert.equal(await(await x.callback(x.rows()[0])).text(),'success');
+ assert.equal(x.rows()[0].status,'paid');
+});
+
+test('confirm does NOT re-issue while the QR window is still open (no duplicate create)',async t=>{
+ const x=setup(t);await x.checkout();const o=x.rows()[0];const callsBefore=x.calls();
+ const d=await(await x.route('/v1/billing/orders/'+o.order_no+'/confirm',{method:'POST'})).json();
+ assert.equal(d.qrCode,o.qr_code);                 // original QR untouched
+ assert.equal(d.expiresAt,o.expires_at);          // window not extended
+ assert.equal(x.calls(),callsBefore);              // no provider call at all
+});
+
+test('confirm reissue is owner-scoped and never re-issues a paid order',async t=>{
+ const x=setup(t);await x.checkout();const o=x.rows()[0];x.db.exec("UPDATE orders SET expires_at='2000-01-01'");
+ assert.equal((await x.route('/v1/billing/orders/'+o.order_no+'/confirm',{method:'POST'},{user_id:'other'})).status,404);
+ await x.callback(o);                               // pay it while lapsed
+ const callsBefore=x.calls();
+ const d=await(await x.route('/v1/billing/orders/'+o.order_no+'/confirm',{method:'POST'})).json();
+ assert.equal(d.status,'paid');assert.equal(d.qrCode,null);
+ assert.equal(x.calls(),callsBefore);              // no reissue for a paid order
+});
+
+test('amount-mismatch-blocked order never gets a reissued QR',async t=>{
+ const x=setup(t);await x.checkout();const o=x.rows()[0];
+ x.db.prepare('UPDATE orders SET qr_code=? WHERE order_no=?').run('https://code.ymyu.cn/url.php?price=0.22',o.order_no);
+ x.db.exec("UPDATE orders SET expires_at='2000-01-01'");
+ const callsBefore=x.calls();
+ const d=await(await x.route('/v1/billing/orders/'+o.order_no+'/confirm',{method:'POST'})).json();
+ assert.equal(d.errorCode,'provider_amount_mismatch');assert.equal(d.allowedActions.pay,false);assert.equal(d.qrCode,null);
+ assert.equal(x.calls(),callsBefore);              // blocked: no provider call, no window push
+});
+
+test('dismiss is owner-only, paid orders are never deletable, and the order stays listed after payment',async t=>{
+ const x=setup(t);await x.checkout();const o=x.rows()[0];const path='/v1/billing/orders/'+o.order_no+'/hide';
+ assert.equal((await x.route(path,{method:'POST'},{user_id:'other'})).status,404);       // owner only
+ await x.callback(o);assert.equal(x.rows()[0].status,'paid');
+ assert.equal((await x.route(path,{method:'POST'})).status,409);                          // paid not deletable
+ assert.equal(x.db.prepare('SELECT COUNT(*) n FROM payment_order_hidden').get().n,0);   // nothing hidden
+ assert.equal((await(await x.route('/v1/billing/orders')).json()).orders.length,1);       // still listed
+});
+
+test('double payment stays blocked after dismiss: same pending order returned, callback still settles',async t=>{
+ const x=setup(t);await x.checkout();const o=x.rows()[0];const callsBefore=x.calls();
+ assert.equal((await x.route('/v1/billing/orders/'+o.order_no+'/hide',{method:'POST'})).status,200);
+ assert.equal(x.db.prepare('SELECT COUNT(*) n FROM payment_order_hidden').get().n,1);
+ // A fresh checkout must NOT create a second order while the dismissed one is still pending.
+ const again=await(await x.checkout('after-dismiss-0001')).json();
+ assert.equal(again.order.orderNo,o.order_no);assert.equal(x.rows().length,1);assert.equal(x.calls(),callsBefore);
+ // The hidden pending order is out of the list but still visible by id, and still settleable.
+ assert.equal((await(await x.route('/v1/billing/orders')).json()).orders.length,0);
+ assert.equal((await(await x.route('/v1/billing/orders/'+o.order_no)).json()).hidden,true);
+ assert.equal(await(await x.callback(x.rows()[0])).text(),'success');
+ assert.equal(x.rows()[0].status,'paid');
+ // Now paid: it reappears in the list (paid history is undeletable), and hide must 409.
+ assert.equal((await(await x.route('/v1/billing/orders')).json()).orders.length,1);
+ assert.equal((await x.route('/v1/billing/orders/'+o.order_no+'/hide',{method:'POST'})).status,409);
+});
+
+test('QR reissue failure degrades to the plain confirm reply; order untouched',async t=>{
+ const x=setup(t);await x.checkout();const o=x.rows()[0];x.db.exec("UPDATE orders SET expires_at='2000-01-01'");
+ t.mock.method(globalThis,'fetch',async()=>new Response('bad json'));
+ const reply=await x.route('/v1/billing/orders/'+o.order_no+'/confirm',{method:'POST'});
+ assert.equal(reply.status,200);
+ const d=await reply.json();
+ assert.equal(d.orderNo,o.order_no);assert.equal(d.status,'pending');assert.equal(d.allowedActions.pay,false);
+ assert.equal(x.db.prepare("SELECT COUNT(*) n FROM payment_events WHERE event_type='payment_qr_reissue_failed'").get().n,1);
+ // The lapsed order keeps its recovery semantics: a later trusted callback still settles.
+ assert.equal(await(await x.callback(x.rows()[0])).text(),'success');
+});

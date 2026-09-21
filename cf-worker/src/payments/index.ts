@@ -15,6 +15,10 @@ export interface PaymentProvider { createPayment(e:PaymentEnv,o:Order,diagnostic
 const diagnosticCodes=new Set(['payment_config','provider_http','provider_response','provider_rejected','provider_signature_rejected','provider_channel_unavailable','provider_amount_rejected','provider_merchant_rejected','provider_mismatch','provider_trade_missing','provider_amount_mismatch','invalid_money','invalid_qr','invalid_qr_image','provider_qr_missing','provider_timeout','provider_prepare','provider_network','provider_redirect','provider_read','provider_parse','provider_business','provider_validation','provider_persist','provider_audit','provider_query','provider_query_http','provider_query_redirect','provider_query_response','provider_query_rejected']);
 /** Below this amount a sale is certainly a configuration mistake, not a price. */
 const MIN_CHARGE_CENTS=100;
+/** How long a payment QR stays scannable. The provider order outlives this window:
+ *  confirm on a pending unpaid order re-issues a fresh QR and pushes the window forward,
+ *  so expiry is a display boundary, never a dead end. */
+export const QR_DISPLAY_WINDOW_MS=30*60000;
 type CreateStage='prepare'|'request'|'read'|'parse'|'business'|'validate'|'persist'|'audit'|'query';
 type FieldSummary={type:string;present:boolean;length?:number};
 class CreateDiagnostic {
@@ -198,6 +202,30 @@ export async function billingRoute(r:Request,e:PaymentEnv,user:User,origin:strin
  if(!o)return error('order_not_found','订单不存在',404);
  if(!await confirmationLimit(e,user.user_id))return error('rate_limited','请稍后再确认',429);
  await e.DB.prepare("UPDATE payment_recovery SET next_attempt_at=MIN(next_attempt_at,?),updated_at=? WHERE order_no=? AND state IN ('queued','waiting_callback')").bind(stamp(),stamp(),no).run();
+ // The QR window is a display boundary, not a dead end: on a pending unpaid order whose
+ // window has lapsed, re-issue a fresh QR for the SAME order via the provider and push
+ // expires_at forward. Never a second order, never for blocked or non-pending orders,
+ // and any provider failure keeps the original confirm reply intact.
+ const blockedByMismatch=o.status!=='paid'&&(qrAmountMismatch(o.qr_code,o.payable_cents)||qrAmountMismatch(o.qr_image_url,o.payable_cents));
+ if(o.status==='pending'&&!blockedByMismatch&&Date.parse(o.expires_at)<=Date.now()){
+  const diagnostic=new CreateDiagnostic();
+  try{
+   configured(e);
+   const result=await new EzfpyProvider().createPayment(e,o,diagnostic);
+   diagnostic.stage='persist';
+   const window=new Date(Date.now()+QR_DISPLAY_WINDOW_MS).toISOString();
+   // Atomic predicate: only a still-pending unpaid order of this owner is touched.
+   const saved=await e.DB.prepare("UPDATE orders SET provider_trade_no=?,qr_code=?,qr_image_url=?,create_state='ready',last_error_code=NULL,expires_at=? WHERE order_no=? AND user_id=? AND status='pending' AND paid_at IS NULL").bind(result.providerTradeNo,result.qrCode,result.qrImageUrl,window,no,user.user_id).run();
+   if(saved.meta.changes===1){
+    diagnostic.saved=true;diagnostic.stage='audit';await recordCreateDiagnostic(e,no,'payment_qr_reissued',diagnostic,'ok');
+    const fresh=await e.DB.prepare('SELECT * FROM orders WHERE order_no=?').bind(no).first<Order>();
+    if(fresh)return reply(publicOrder(fresh));
+   }
+  }catch(err){
+   const code=diagnosticCode(err,diagnostic.stage);
+   await recordCreateDiagnostic(e,no,'payment_qr_reissue_failed',diagnostic,code).catch(()=>{});
+  }
+ }
  return reply(publicOrder(o));
  }
  if(path==='/v1/billing/plans'&&r.method==='GET'){
@@ -266,7 +294,7 @@ export async function billingRoute(r:Request,e:PaymentEnv,user:User,origin:strin
   catch{/* The configuration error is the outcome; a failed audit write must not hide it. */}
   return error('plan_price_invalid','套餐价格配置异常，请联系客服',503);
  }
- const no='DW'+crypto.randomUUID().replaceAll('-',''),created=stamp(),expiry=new Date(Date.now()+15*60000).toISOString();
+ const no='DW'+crypto.randomUUID().replaceAll('-',''),created=stamp(),expiry=new Date(Date.now()+QR_DISPLAY_WINDOW_MS).toISOString();
  try { await e.DB.prepare("INSERT INTO orders(order_no,user_id,plan_id,plan_name,duration_days,membership_level,amount_cents,payable_cents,channel,idempotency_key,created_at,expires_at) SELECT ?,?,?,?,?,?,?,?,?,?,?,? WHERE NOT EXISTS (SELECT 1 FROM orders WHERE user_id=? AND status='pending' AND (expires_at>? OR create_state IN ('creating','unknown'))) ON CONFLICT(user_id,idempotency_key) DO NOTHING").bind(no,user.user_id,plan.id,plan.name,plan.duration_days,plan.membership_level,plan.price_cents,plan.price_cents,body.channel,key,created,expiry,user.user_id,created).run(); } catch(errorValue) {if(String(errorValue).includes('plan_conflict'))return error('plan_conflict','套餐配置已更新，请刷新后重试',409);throw errorValue;}
  const order=await existing();if(!order){const winner=await active();return winner?reuse(winner):error('checkout_retry','购买状态已变化，请重试原请求。',409);}if(order.order_no!==no)return replay(order);
  const diagnostic=new CreateDiagnostic();
