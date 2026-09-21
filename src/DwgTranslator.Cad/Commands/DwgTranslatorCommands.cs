@@ -41,6 +41,40 @@ public class DwgTranslatorCommands
 {
     private static AppConfig? _config;
     private static readonly Dictionary<string, List<TextEntity>> _extractedEntitiesByDoc = new();
+    private static bool _documentCleanupHooked;
+
+    /// <summary>
+    /// Removes cached extraction results when a document closes so the static
+    /// dictionary cannot grow without bound over a long CAD session.
+    /// </summary>
+    private static void EnsureDocumentCleanupHooked()
+    {
+        if (_documentCleanupHooked) return;
+        _documentCleanupHooked = true;
+        Application.DocumentManager.DocumentDestroyed += (sender, e) =>
+        {
+            try
+            {
+                // DocumentDestroyed fires after the collection changes; drop every
+                // key no longer backed by an open document.
+                var openKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (Document d in Application.DocumentManager)
+                {
+                    var key = d.Database.Filename ?? d.Name ?? "default";
+                    openKeys.Add(key);
+                }
+                foreach (var key in _extractedEntitiesByDoc.Keys.ToList())
+                {
+                    if (!openKeys.Contains(key))
+                        _extractedEntitiesByDoc.Remove(key);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "Failed to clean extracted entities after document close");
+            }
+        };
+    }
 
     /// <summary>
     /// TESTCMD - Verify CAD API connectivity.
@@ -67,6 +101,7 @@ public class DwgTranslatorCommands
         var editor = doc.Editor;
         try
         {
+            EnsureDocumentCleanupHooked();
             LoadConfig();
 
             editor.WriteMessage("\n[DwgTranslator] Starting text extraction...\n");
@@ -76,14 +111,15 @@ public class DwgTranslatorCommands
             var docKey = doc.Database.Filename ?? doc.Name ?? "default";
             _extractedEntitiesByDoc[docKey] = extractedEntities;
 
-            // Export to Excel
+            // Export to Excel (offloaded: Excel I/O must not run on the host UI thread)
             var config = GetConfig();
             var exportPath = Path.Combine(
                 config.ExportDirectory,
                 $"translations_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx");
 
             var excelService = new ExcelService();
-            excelService.ExportToExcelAsync(extractedEntities, exportPath).GetAwaiter().GetResult();
+            Task.Run(() => excelService.ExportToExcelAsync(extractedEntities, exportPath))
+                .GetAwaiter().GetResult();
 
             editor.WriteMessage($"\n[DwgTranslator] Extracted {extractedEntities.Count} text entities");
             editor.WriteMessage($"\n[DwgTranslator] Exported to: {exportPath}");
@@ -116,6 +152,7 @@ public class DwgTranslatorCommands
 
         try
         {
+            EnsureDocumentCleanupHooked();
             var config = GetConfig();
             editor.WriteMessage("\n[DwgTranslator] Starting translation...\n");
 
@@ -125,7 +162,7 @@ public class DwgTranslatorCommands
                 config.SourceLanguage, config.TargetLanguage);
             var glossaryPath = string.Equals(Path.GetFileName(config.GlossaryPath), expectedGlossary,
                 StringComparison.OrdinalIgnoreCase) ? config.GlossaryPath : string.Empty;
-            glossaryService.LoadGlossaryAsync(glossaryPath).GetAwaiter().GetResult();
+            Task.Run(() => glossaryService.LoadGlossaryAsync(glossaryPath)).GetAwaiter().GetResult();
 
             var dataDirectory = ProductDataDirectory.Initialize(AppDomain.CurrentDomain.BaseDirectory);
             var encryptedToken = config.AuthTokenEncrypted;
@@ -146,10 +183,11 @@ public class DwgTranslatorCommands
                 .Where(e => !e.IsXref)
                 .ToList();
 
-            var results = translationService.TranslateBatchAsync(
+            // Network translation runs on the thread pool; the host UI thread only waits.
+            var results = Task.Run(() => translationService.TranslateBatchAsync(
                 entitiesToTranslate,
                 config.SourceLanguage,
-                config.TargetLanguage).GetAwaiter().GetResult();
+                config.TargetLanguage)).GetAwaiter().GetResult();
 
             // Update entities with translations
             foreach (var result in results)
@@ -169,7 +207,8 @@ public class DwgTranslatorCommands
                 $"translations_{DateTime.Now:yyyyMMdd_HHmmss}_translated.xlsx");
 
             var excelService = new ExcelService();
-            excelService.ExportToExcelAsync(extractedEntities, exportPath).GetAwaiter().GetResult();
+            Task.Run(() => excelService.ExportToExcelAsync(extractedEntities, exportPath))
+                .GetAwaiter().GetResult();
 
             var successCount = results.Count(r => r.Status == TranslationStatus.Translated);
             editor.WriteMessage($"\n[DwgTranslator] Translated {successCount}/{results.Count} entities");
@@ -196,6 +235,7 @@ public class DwgTranslatorCommands
 
         try
         {
+            EnsureDocumentCleanupHooked();
             LoadConfig();
             var config = GetConfig();
 
@@ -211,9 +251,10 @@ public class DwgTranslatorCommands
                 return;
             }
 
-            // Import reviewed translations
+            // Import reviewed translations (Excel I/O offloaded from the host UI thread)
             var excelService = new ExcelService();
-            var entities = excelService.ImportFromExcelAsync(filePath).GetAwaiter().GetResult();
+            var entities = Task.Run(() => excelService.ImportFromExcelAsync(filePath))
+                .GetAwaiter().GetResult();
 
             // Write back
             var replacer = new TextReplacer(targetIsCjk: TranslationLanguages.IsCjk(config.TargetLanguage));

@@ -48,7 +48,12 @@ internal static class AcadFontApplier
             dim.TextStyleId = styleId.Value;
     }
 
-    private static ObjectId? ResolveStyleId(Database? db, string originalStyleName, bool targetIsCjk, Transaction tr)
+    /// <summary>
+    /// Resolves (or creates) a standalone text style whose font matches the mapped
+    /// target font for <paramref name="originalStyleName"/>. The shared source style
+    /// record is never modified — callers assign the returned id to a single entity.
+    /// </summary>
+    public static ObjectId? ResolveStyleId(Database? db, string originalStyleName, bool targetIsCjk, Transaction tr)
     {
         try
         {

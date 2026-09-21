@@ -78,6 +78,15 @@ public class TextReplacer
             result.Errors.Add($"Transaction failed: {ex.Message}");
             RestoreBackup(db, backupPath);
         }
+        catch (Exception ex)
+        {
+            // Unexpected failure (IO, mapping, host API): never leave the drawing
+            // half-written or the transaction dangling. Abort, record, restore.
+            Log.Error(ex, "Writeback failed with unexpected error, rolling back");
+            transaction.Abort();
+            result.Errors.Add($"Transaction failed: {ex.Message}");
+            RestoreBackup(db, backupPath);
+        }
 
         return result;
     }
@@ -98,10 +107,10 @@ public class TextReplacer
 
             return dbObject switch
             {
-                DBText dbText => ReplaceDBText(dbText, entity, db, owningBtr),
-                MText mText => ReplaceMText(mText, entity, db, owningBtr),
+                DBText dbText => ReplaceDBText(dbText, entity, db, tr, owningBtr),
+                MText mText => ReplaceMText(mText, entity, db, tr, owningBtr),
                 Dimension dim => ReplaceDimension(dim, entity, owningBtr),
-                MLeader mLeader => ReplaceMLeader(mLeader, entity, db, owningBtr),
+                MLeader mLeader => ReplaceMLeader(mLeader, entity, db, tr, owningBtr),
                 _ => new EntityReplaceResult { Success = false, Error = "Unsupported entity type" }
             };
         }
@@ -111,11 +120,11 @@ public class TextReplacer
         }
     }
 
-    private EntityReplaceResult ReplaceDBText(DBText dbText, TextEntity entity, Database db, BlockTableRecord? owningBtr)
+    private EntityReplaceResult ReplaceDBText(DBText dbText, TextEntity entity, Database db, Transaction tr, BlockTableRecord? owningBtr)
     {
         var originalHeight = dbText.Height;
         dbText.TextString = entity.TranslatedText;
-        MapTextStyle(dbText.TextStyleId, db);
+        AssignMappedTextStyle(dbText, entity.TextStyleName, db, tr);
         return new EntityReplaceResult
         {
             Success = true, ModifiedEntity = dbText, OwningBlock = owningBtr,
@@ -123,7 +132,7 @@ public class TextReplacer
         };
     }
 
-    private EntityReplaceResult ReplaceMText(MText mText, TextEntity entity, Database db, BlockTableRecord? owningBtr)
+    private EntityReplaceResult ReplaceMText(MText mText, TextEntity entity, Database db, Transaction tr, BlockTableRecord? owningBtr)
     {
         var originalHeight = mText.TextHeight;
 
@@ -132,12 +141,12 @@ public class TextReplacer
         if (entity.MTextLineSpacingStyle > 0)
             mText.LineSpacingStyle = (LineSpacingStyle)entity.MTextLineSpacingStyle;
 
-        mText.Contents = entity.TranslatedText
+        mText.Contents = FontMapper.MapInlineFonts(entity.TranslatedText, _targetIsCjk)
             .Replace("\r\n", "\\P").Replace("\n", "\\P").Replace("\r", "\\P");
 
         mText.ColumnType = ColumnType.NoColumns;
 
-        MapTextStyle(mText.TextStyleId, db);
+        AssignMappedTextStyle(mText, entity.TextStyleName, db, tr);
         mText.RecordGraphicsModified(true);
 
         return new EntityReplaceResult
@@ -156,21 +165,25 @@ public class TextReplacer
         };
     }
 
-    private EntityReplaceResult ReplaceMLeader(MLeader mLeader, TextEntity entity, Database db, BlockTableRecord? owningBtr)
+    private EntityReplaceResult ReplaceMLeader(MLeader mLeader, TextEntity entity, Database db, Transaction tr, BlockTableRecord? owningBtr)
     {
-        var originalHeight = mLeader.MText?.TextHeight ?? DefaultTextHeight;
-        if (mLeader.MText != null)
-        {
-            mLeader.MText.Contents = entity.TranslatedText
-                .Replace("\r\n", "\\P")
-                .Replace("\n", "\\P")
-                .Replace("\r", "\\P");
-            MapTextStyle(mLeader.MText.TextStyleId, db);
+        // MText is a detached copy in the host API. Mutate one copy, assign it
+        // back to the leader, then dispose it — mutating the getter is a no-op.
+        using var leaderText = mLeader.MText;
+        if (leaderText == null)
+            return new EntityReplaceResult { Success = false, Error = "MLeader has no MText content", OwningBlock = owningBtr };
 
-        }
+        var originalHeight = leaderText.TextHeight;
+        leaderText.Contents = FontMapper.MapInlineFonts(entity.TranslatedText, _targetIsCjk)
+            .Replace("\r\n", "\\P")
+            .Replace("\n", "\\P")
+            .Replace("\r", "\\P");
+        AssignMappedTextStyle(leaderText, entity.TextStyleName, db, tr);
+        mLeader.MText = leaderText;
+
         return new EntityReplaceResult
         {
-            Success = true, ModifiedEntity = mLeader.MText, OwningBlock = owningBtr, OriginalHeight = originalHeight
+            Success = true, ModifiedEntity = mLeader, OwningBlock = owningBtr, OriginalHeight = originalHeight
         };
     }
 
@@ -214,6 +227,8 @@ public class TextReplacer
         var tableHandle = new Handle(Convert.ToInt64(parts[0], 16));
         var row = int.Parse(parts[1]);
         var col = int.Parse(parts[2]);
+        if (row < 0 || col < 0)
+            return new EntityReplaceResult { Success = false, Error = $"Invalid table cell index (row={row}, col={col})" };
 
         var objectId = db.GetObjectId(false, tableHandle, 0);
         var table = (Table)tr.GetObject(objectId, OpenMode.ForWrite);
@@ -242,33 +257,28 @@ public class TextReplacer
         catch { return null; }
     }
 
-    private void MapTextStyle(ObjectId styleId, Database db)
+    /// <summary>
+    /// Assigns a mapped, standalone text style to a single entity. The style is
+    /// resolved (or created) by <see cref="AcadFontApplier.ResolveStyleId"/> from the
+    /// entity's original style name; the shared source style record is never mutated,
+    /// so other entities using the same style are unaffected.
+    /// </summary>
+    private void AssignMappedTextStyle(Entity target, string originalStyleName, Database db, Transaction tr)
     {
-        if (!styleId.IsValid) return;
-
         try
         {
-            var style = (TextStyleTableRecord)styleId.GetObject(OpenMode.ForWrite);
-            var mappedFontName = FontMapper.MapFontName(style.Name, _targetIsCjk);
-            if (string.IsNullOrEmpty(mappedFontName)) return;
+            var styleId = AcadFontApplier.ResolveStyleId(db, originalStyleName, _targetIsCjk, tr);
+            if (!styleId.HasValue || !styleId.Value.IsValid) return;
 
-            bool isShx = mappedFontName!.EndsWith(".shx", StringComparison.OrdinalIgnoreCase);
-            if (isShx)
+            switch (target)
             {
-                style.FileName = mappedFontName;
-                style.BigFontFileName = string.Empty;
-            }
-            else
-            {
-                var currentFont = style.Font;
-                var newFont = new FontDescriptor(
-                    mappedFontName, currentFont.Bold, currentFont.Italic, 0, 0);
-                style.Font = newFont;
+                case DBText dbText: dbText.TextStyleId = styleId.Value; break;
+                case MText mText: mText.TextStyleId = styleId.Value; break;
             }
         }
         catch (Exception ex)
         {
-            Log.Warning(ex, "Font mapping failed for style {Id}", styleId.Handle);
+            Log.Warning(ex, "Font mapping failed for style {Style}", originalStyleName);
         }
     }
 
@@ -278,8 +288,19 @@ public class TextReplacer
         var backupPath = Path.ChangeExtension(originalPath, ".bak");
         try
         {
-            if (File.Exists(backupPath)) File.Delete(backupPath);
-            File.Copy(originalPath, backupPath);
+            // Overwrite in place via a temp copy so a crash mid-copy cannot
+            // destroy the previous rollback point.
+            if (File.Exists(backupPath))
+            {
+                var tempPath = backupPath + ".tmp";
+                File.Copy(originalPath, tempPath, overwrite: true);
+                File.Copy(tempPath, backupPath, overwrite: true);
+                File.Delete(tempPath);
+            }
+            else
+            {
+                File.Copy(originalPath, backupPath);
+            }
         }
         catch (Exception ex)
         {
