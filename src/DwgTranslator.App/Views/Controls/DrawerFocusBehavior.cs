@@ -76,6 +76,8 @@ public static class DrawerFocusBehavior
         if (focused is not null && (focused is not DependencyObject dependencyObject || !IsDescendantOf(dependencyObject, drawer)))
             drawer.SetValue(PreviousFocusProperty, focused);
 
+        SlideIn(drawer);
+
         drawer.Dispatcher.BeginInvoke(DispatcherPriority.Input, new Action(() =>
         {
             if (!drawer.IsVisible || !drawer.IsEnabled) return;
@@ -84,8 +86,33 @@ public static class DrawerFocusBehavior
         }));
     }
 
+    /// <summary>
+    /// 用户批注（2026-09-21）：「从右到左弹出来就行了」——抽屉打开时从右侧滑入。
+    /// RenderTransform 不参与布局，ActualWidth/ActualHeight/焦点命中全部不变，冒烟几何断言不受影响。
+    /// 动画时长 220ms + EaseOut（快进缓停），短于冒烟 WaitUntil 的轮询粒度，不会让断言等到中间帧；
+    /// 幂等：重复可见（如 1280 冒烟里 IsTaskDetailOpen 重开）会先停掉旧动画再放新的。
+    /// 滑入只作用于挂了本行为的抽屉（任务详情/术语编辑），MergeDrawer 等无行为挂载的不动。
+    /// </summary>
+    private static void SlideIn(FrameworkElement drawer)
+    {
+        // 必须在测量之后取 ActualWidth：可见性刚翻转时 ActualWidth 可能还是 0（首次打开）。
+        drawer.UpdateLayout();
+        var translate = new System.Windows.Media.TranslateTransform(drawer.ActualWidth, 0);
+        drawer.RenderTransform = translate;
+        var animation = new System.Windows.Media.Animation.DoubleAnimation(
+            drawer.ActualWidth, 0, new System.Windows.Duration(TimeSpan.FromMilliseconds(220)))
+        {
+            EasingFunction = new System.Windows.Media.Animation.QuadraticEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut },
+            FillBehavior = System.Windows.Media.Animation.FillBehavior.Stop
+        };
+        // FillBehavior.Stop + 动画结束后清 RenderTransform：transform 归零后不再持有偏移，
+        // 后续 RenderTransform 变更（如未来加关闭动画）不会叠加。
+        translate.BeginAnimation(System.Windows.Media.TranslateTransform.XProperty, animation);
+    }
+
     private static void CloseDrawer(FrameworkElement drawer)
     {
+        drawer.RenderTransform = null;
         var previous = (IInputElement?)drawer.GetValue(PreviousFocusProperty);
         drawer.ClearValue(PreviousFocusProperty);
         var fallback = GetRestoreFocusFallback(drawer);

@@ -762,7 +762,7 @@ public sealed partial class SmokeApp : App
                 vm.SettingsSection = 5;
                 await NavIdleAsync();
                 var aboutDetailsCard = (FrameworkElement)narrowSettings.FindName("AboutDetailsCard");
-                Check(System.Windows.Controls.Grid.GetRow(aboutDetailsCard) == 1 && System.Windows.Controls.Grid.GetColumn(aboutDetailsCard) == 0,
+                Check(System.Windows.Controls.Grid.GetRow(aboutDetailsCard) == 2 && System.Windows.Controls.Grid.GetColumn(aboutDetailsCard) == 0,
                     $"narrow settings about section stacks instead of clipping (row={System.Windows.Controls.Grid.GetRow(aboutDetailsCard)}, column={System.Windows.Controls.Grid.GetColumn(aboutDetailsCard)}, pageWidth={narrowSettings.ActualWidth:F1})");
                 Capture(window, "settings-about-stacked-1280");
                 evidenceContent.Width = savedContentWidth; evidenceContent.Height = savedContentHeight;

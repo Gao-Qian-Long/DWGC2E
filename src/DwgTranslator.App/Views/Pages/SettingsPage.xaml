@@ -449,10 +449,11 @@
                                     <ColumnDefinition x:Name="AboutDetailsGap" Width="{DynamicResource Size.CardGutter}" />
                                     <ColumnDefinition x:Name="AboutDetailsColumn" Width="{DynamicResource Size.AboutDetailsColumn}" />
                                 </Grid.ColumnDefinitions>
-                                <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
-                                <StackPanel Grid.Row="0" Grid.Column="0">
-                                    <TextBlock Text="快捷入口" Style="{StaticResource FormRowLabel}" Margin="{DynamicResource Spacing.StackTight}" />
-                                    <Grid>
+                                <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                                <!-- 底排三行：row0=快捷入口标签（仅左列）、row1=四张快捷卡（左）与版本详情卡（右，同顶同底）、row2=窄窗堆叠槽。
+                                     版本详情卡与四卡同一行同一高度带，消除改前“右卡顶边高出标签/小卡 33px、底部悬空”的错位。 -->
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="快捷入口" Style="{StaticResource FormRowLabel}" Margin="{DynamicResource Spacing.StackTight}" />
+                                <Grid Grid.Row="1" Grid.Column="0">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="{DynamicResource Size.CardGutter}" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                                         <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="{DynamicResource Size.CardGutter}" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
                                         <Button Grid.Row="0" Grid.Column="0" Command="{Binding OpenHelpCommand}" Style="{StaticResource About.ShortcutCard}" AutomationProperties.Name="使用帮助">
@@ -484,12 +485,11 @@
                                             </Grid>
                                         </Button>
                                     </Grid>
-                                </StackPanel>
 
-                                <Border x:Name="AboutDetailsCard" Grid.Row="0" Grid.Column="2" Background="{DynamicResource Brush.SurfaceAlt}" BorderBrush="{DynamicResource Brush.BorderLight}" BorderThickness="1" CornerRadius="{DynamicResource CornerRadius.Medium}" Padding="16">
+                                <Border x:Name="AboutDetailsCard" Grid.Row="1" Grid.Column="2" Background="{DynamicResource Brush.SurfaceAlt}" BorderBrush="{DynamicResource Brush.BorderLight}" BorderThickness="1" CornerRadius="{DynamicResource CornerRadius.Medium}" Padding="16">
                                     <Grid>
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-                                        <StackPanel Margin="{DynamicResource Spacing.InlineLoose}">
+                                        <StackPanel Margin="{DynamicResource Spacing.InlineLoose}" VerticalAlignment="Center">
                                             <TextBlock Text="版本详情" Style="{StaticResource CardTitleStyle}" />
                                             <TextBlock Text="{Binding AppBuildText, StringFormat=构建：{0}}" Style="{StaticResource CaptionStyle}" Margin="{DynamicResource Spacing.BlockTopTight}" />
                                             <TextBlock Text="{Binding AppBuildDateText, StringFormat=构建时间：{0}}" Style="{StaticResource CaptionStyle}" />

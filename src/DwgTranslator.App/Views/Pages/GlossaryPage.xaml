@@ -28,8 +28,12 @@
   <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
   <controls:PageHeader x:Name="WorkspaceHeader" Header="术语库" WaveVariant="3" Description="管理工程术语、翻译规则及启用状态"><Button Content="＋ 添加术语" Command="{Binding AddTermCommand}" Style="{StaticResource Button.Primary}" ToolTip="新增术语 (Ctrl+N)"/></controls:PageHeader>
 
-  <!-- Fixed grid rows replace business-level WrapPanels. Normal desktop widths keep every control visible. -->
-  <Grid Grid.Row="1" Grid.RowSpan="3" Margin="{DynamicResource Spacing.BlockTopTight}">
+  <!-- Fixed grid rows replace business-level WrapPanels. Normal desktop widths keep every control visible.
+       用户批注（2026-09-21）「这里布局是不是太丑了！」：三行工具区（批量/筛选/常规）裸排在页面上，
+       与任务中心「统计条、筛选卡各自成卡」的语言不一致。整体装进一张 Section.Surface 白卡；
+       状态标签行（全部/已启用/…）一并入卡，作为工具区的收尾行。 -->
+  <Border Grid.Row="1" Grid.RowSpan="3" Style="{StaticResource Section.Surface}" Padding="16,12,16,14" Margin="{DynamicResource Spacing.BlockTopTight}">
+   <Grid>
    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
    <!-- 用户反馈「移到上面去啊」：批量操作条常驻工具区首行（原先排在常规工具条之下），
         整条不再插入/移除；无选中项或忙时仍由 SelectionToolbarState 统一置灰。 -->
@@ -67,15 +71,17 @@
         批量操作条常驻且不再插入/移除（表格位置因此固定）；本次又按「移到上面去啊」
         把它提到工具区首行，常规工具条顺次下移一行。两条工具条的置灰都由各自 Style 决定。 -->
    <Grid x:Name="NormalToolbar" Grid.Row="2" Margin="{DynamicResource Spacing.BlockTop}" Style="{StaticResource WorkspaceToolbarState}">
-    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
     <Button Grid.Column="0" Content="导入" Command="{Binding ImportGlossaryCommand}" Style="{StaticResource Button.Secondary}" Margin="{DynamicResource Spacing.Inline}"/>
     <Button Grid.Column="1" Content="导出" Click="Export_Click" Style="{StaticResource Button.Secondary}" Margin="{DynamicResource Spacing.Inline}"/>
     <!-- §L12 工具栏按钮补显式样式，避免落到隐式兜底 Button.Tertiary -->
     <Button Grid.Column="2" Content="分类管理" Click="Categories_Click" Style="{StaticResource Button.Secondary}" Margin="{DynamicResource Spacing.Inline}"/>
-    <!-- 用户反馈「右上控件被裁」：视图选项（列显示）从筛选行移入工具区，筛选行只留筛选条件。 -->
-    <CheckBox x:Name="DetailColumns" Grid.Column="3" Content="详细列" VerticalAlignment="Center" Checked="DetailColumns_Changed" Unchecked="DetailColumns_Changed"/>
     <!-- 用户批注「没对齐」（2026-09-21 截图）：云端管理原悬在工具区最右一列，与上方筛选行右缘、下方状态标签行都不对齐；并入左侧按钮簇，与其余工具按钮同一节奏。 -->
-    <Button Grid.Column="4" x:Name="CloudSyncMenu" Content="云端管理" Command="{Binding DownloadTermsCommand}" Style="{StaticResource Button.Secondary}" Margin="{DynamicResource Spacing.Inline}"/>
+    <Button Grid.Column="3" x:Name="CloudSyncMenu" Content="云端管理" Command="{Binding DownloadTermsCommand}" Style="{StaticResource Button.Secondary}" Margin="{DynamicResource Spacing.Inline}"/>
+    <!-- 用户批注「这里布局是不是太丑了」（2026-09-21 截图）：视图选项「详细列」是低频开关，
+         从按钮簇里挪到本行最右（* 列右对齐）——左=操作簇、右=视图选项，一行两端各有归属，
+         不再五个控件挤成一团。冒烟若按名取用 DetailColumns 不受影响（只动 Grid.Column）。 -->
+    <CheckBox x:Name="DetailColumns" Grid.Column="4" Content="详细列" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="{DynamicResource Spacing.Inline}" Checked="DetailColumns_Changed" Unchecked="DetailColumns_Changed"/>
    </Grid>
 
    <Grid Grid.Row="3" Margin="{DynamicResource Spacing.BlockTop}">
@@ -86,6 +92,7 @@
     <Button Grid.Column="3" Content="{Binding ConflictTermsLabel}" Tag="Conflict" Click="Status_Click" Margin="{DynamicResource Spacing.InlineLoose}"><Button.Style><Style TargetType="Button" BasedOn="{StaticResource Button.Secondary}"><Style.Triggers><DataTrigger Binding="{Binding TermStatusFilter}" Value="Conflict"><Setter Property="Background" Value="{DynamicResource Brush.PrimarySoft}"/><Setter Property="Foreground" Value="{DynamicResource Brush.Primary}"/><Setter Property="BorderBrush" Value="{DynamicResource Brush.Primary}"/></DataTrigger></Style.Triggers></Style></Button.Style></Button>
    </Grid>
   </Grid>
+  </Border>
   <Grid Grid.Row="4">
    <!-- 表格「自适应视图宽度」的真实症结不是列太宽，而是星号列与纵向滚动条的测量竞态：
         DataGrid 先按「还没有纵向滚动条」的整宽（1102）把原文/译文算好，滚动条随后出现，

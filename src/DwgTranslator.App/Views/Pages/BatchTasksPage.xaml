@@ -17,28 +17,10 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
-            <!-- 任务详情抽屉是覆盖层而不是布局列：本表最小列宽合计 990 DIP（240+104+254+122+152+118），
-                 1366 下让位 400 后只剩 702，操作列会被裁掉，且本表明确要求不依赖横向滚动。
-                 但统计条与筛选卡片没有任何理由被盖住——抽屉打开时这一格撑到抽屉宽度，
-                 让上面两行主动让位；表格行 Grid 跨两列，宽度不受影响（列 1 宽 0 时布局与原来一致）。 -->
-            <Border Grid.Column="1" Grid.Row="0" Grid.RowSpan="2" IsHitTestVisible="False">
-                <Border.Style>
-                    <Style TargetType="Border">
-                        <Setter Property="Width" Value="0" />
-                        <Style.Triggers>
-                            <DataTrigger Binding="{Binding IsTaskDetailOpen}" Value="True">
-                                <Setter Property="Width" Value="{DynamicResource Size.Drawer}" />
-                                <Setter Property="Margin" Value="{DynamicResource Spacing.LeftGap}" />
-                            </DataTrigger>
-                        </Style.Triggers>
-                    </Style>
-                </Border.Style>
-            </Border>
-
+            <!-- 用户批注（2026-09-21）：「不要改变左边的布局 从右到左弹出来就行了」——抽屉改为纯覆盖层，
+                 不再保留任何让位列：左侧统计条/筛选卡/表格在抽屉打开时宽度、位置一律不变，
+                 抽屉以 Panel.ZIndex=10 悬浮于页面之上（DrawerFocusBehavior 负责焦点圈定）。
+                 原让位 Border（宽度 0↔Size.Drawer 的占位格）已整体删除。 -->
             <Border Grid.Row="0" x:Name="BatchSummaryBar" Style="{StaticResource Section.Surface}"
                     Margin="{DynamicResource Spacing.Stack}" Padding="14,10" AutomationProperties.Name="任务阶段摘要">
                 <!-- 每格内容居中：用户标了「都没居中」「没对齐」。UniformGrid 已经把七格等分，
@@ -199,7 +181,7 @@
                  Border 不会把子元素裁成圆角，但半径只有 2 DIP；TranslatePage 左侧队列卡(:172)
                  早已是「Section.Surface + Padding=0 包 DataGrid」的同款做法。
                  EmptyState 一并留在卡内：空态与列表共用同一张白卡，风格不再割裂。 -->
-            <Border Grid.Row="2" Grid.ColumnSpan="2" Style="{StaticResource Section.Surface}" Padding="0">
+            <Border Grid.Row="2" Style="{StaticResource Section.Surface}" Padding="0">
             <Grid>
                 <!-- F11c 行高：原先 RowHeight 锁死 Size.TableRow(40)，行内只有单行文本，比上方筛选卡
                  （Padding 16,10 + 36 高控件）紧一档，这也是「列表和上面不像一套」的一部分。

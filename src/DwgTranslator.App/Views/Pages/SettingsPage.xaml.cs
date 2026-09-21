@@ -116,7 +116,7 @@ public partial class SettingsPage : UserControl
         // **更正（S5 实测，替换改前此处的一句错误陈述）**：改前注释称"tests\ 全库 grep 证实无任何断言
         // 引用 AboutDetailsCard / AboutDetailsColumn / AboutDetailsGap"，该陈述**为假**——
         // tests\DwgTranslator.App.UiSmoke\Program.cs:764-766 明确按 x:Name 取用 AboutDetailsCard，
-        // 并断言其在 1280 窄窗下 Grid.GetRow==1 && Grid.GetColumn==0。四个快捷入口按钮确实无断言引用。
+        // 并断言其在 1280 窄窗下 Grid.GetRow==2 && Grid.GetColumn==0（堆叠槽 row2）。四个快捷入口按钮确实无断言引用。
         // 因此 AboutDetailsCard 的 x:Name 与本分支的行/列归属都是**被冒烟守住的契约**，不可删改。
         // （该错误陈述经 git show HEAD: 溯源，来自上一批的提交 c334969，非本批引入。）
         var aboutStack = compact || ActualWidth < 1200;
@@ -128,7 +128,7 @@ public partial class SettingsPage : UserControl
             var detailsColumn = TryFindResource("Size.AboutDetailsColumn") as GridLength? ?? new GridLength(380);
             AboutDetailsGap.Width = aboutStack ? new GridLength(0) : detailsGap;
             AboutDetailsColumn.Width = aboutStack ? new GridLength(0) : detailsColumn;
-            Grid.SetRow(AboutDetailsCard, aboutStack ? 1 : 0);
+            Grid.SetRow(AboutDetailsCard, aboutStack ? 2 : 1);
             Grid.SetColumn(AboutDetailsCard, aboutStack ? 0 : 2);
             Grid.SetColumnSpan(AboutDetailsCard, aboutStack ? 3 : 1);
             AboutDetailsCard.Margin = aboutStack ? new Thickness(0, 12, 0, 0) : new Thickness(0);

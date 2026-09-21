@@ -69,6 +69,11 @@
     <conv:IndexToVisibilityConverter x:Key="IndexToVis" />
     <conv:StatusToBrushConverter x:Key="StatusBrush" />
     <DropShadowEffect x:Key="CardShadow" BlurRadius="10" ShadowDepth="2" Opacity="0.10" Color="#0F1F3A" />
+    <!-- 覆盖式抽屉的页面级阴影（2026-09-21「没有层次感」）：比 CardShadow 更大半径 + 更深偏移，
+         让悬浮抽屉与底下内容拉开一个层级；柔影而非硬边——硬边是"印刷卡片"的身份，
+         悬浮层（ToolTip/Toast/抽屉）在本项目约定里一直用柔影。方向 270°=朝左投影，
+         与"从右滑入、停在右侧"的抽屉方位一致。 -->
+    <DropShadowEffect x:Key="DrawerShadow" BlurRadius="28" ShadowDepth="8" Direction="270" Opacity="0.22" Color="#0F1F3A" />
     <!-- 网站的立体感来自硬边偏移阴影（css/theme.css 的 box-shadow:3px 3px 0），而不是模糊柔影。
          卡片与控件用沙色，主按钮用墨色，与 .btn / .btn-primary 对应。
          CardShadow 以上那一个留给浮层（ToolTip / ContextMenu / Toast）——那里柔影才是对的。
@@ -761,6 +766,10 @@
         <Setter Property="Background" Value="{DynamicResource Brush.Surface}" />
         <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border}" />
         <Setter Property="BorderThickness" Value="1,0,0,0" />
+        <!-- 用户批注（2026-09-21 抽屉「没有层次感」）：覆盖式抽屉悬浮在页面内容之上，
+             用大半径柔影与内容拉开层次；CardShadow(Blur 10/Depth 2) 是卡片级，
+             抽屉是页面级表面，阴影强度介于 CardShadow 与全屏遮罩之间。 -->
+        <Setter Property="Effect" Value="{StaticResource DrawerShadow}" />
         <Setter Property="Padding" Value="24" />
         <Setter Property="HorizontalAlignment" Value="Right" />
         <Setter Property="Width" Value="{DynamicResource Size.Drawer}" />

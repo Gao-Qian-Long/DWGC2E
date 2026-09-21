@@ -30,6 +30,10 @@ public sealed class AnnouncementWindow : Window
         SizeToContent = SizeToContent.Height;
         MinWidth = 320; MinHeight = 240; ShowInTaskbar = false;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        // §闪烁修复（用户批注「开始出来会闪烁一下」）：SizeToContent + CenterOwner 的经典闪跳——
+        // 窗口先按默认高度渲染一帧，排完内容后再缩放并二次居中，肉眼看到尺寸/位置各跳一次。
+        // 先整窗透明，等 OnContentRendered（此时已按内容定尺）手动按 owner 居中，再一次显形。
+        Opacity = 0;
         SetResourceReference(BackgroundProperty, "Brush.Surface");
         SetResourceReference(ForegroundProperty, "Brush.TextPrimary");
         FontFamily = owner?.FontFamily ?? new System.Windows.Media.FontFamily("Microsoft YaHei UI");
@@ -59,6 +63,20 @@ public sealed class AnnouncementWindow : Window
         DialogShell.Constrain(this);
         // 必须在 Constrain 之后：它把 MaxHeight 抬到整个工作区，否则长公告会撑到满屏。
         MaxHeight = Math.Min(SystemParameters.WorkArea.Height * 0.75, 720);
+    }
+
+    protected override void OnContentRendered(EventArgs e)
+    {
+        base.OnContentRendered(e);
+        if (Opacity >= 1) return;
+        // 此时 SizeToContent 已把窗口缩到内容高度；CenterOwner 是在 Show 时按改前尺寸定位的，
+        // 需要按最终尺寸重新居中，否则窗口会偏下偏右一截（与闪烁同一根因的两个表现）。
+        if (Owner != null)
+        {
+            Left = Owner.Left + (Owner.Width - ActualWidth) / 2;
+            Top = Math.Max(Owner.Top, Owner.Top + (Owner.Height - ActualHeight) / 2);
+        }
+        Opacity = 1;
     }
 
     private static StackPanel BuildDirectedItem(DirectedNotification item)
