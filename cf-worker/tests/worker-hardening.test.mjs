@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {setup} from './helpers/worker.mjs';
-import worker from '../src/index.ts';
+import worker,{runRetentionCleanup} from '../src/index.ts';
 import {captchaBinding,captchaHash,consumeCaptcha,issueCaptcha,renderCaptchaSvg} from '../src/captcha.ts';
 import {allowedProviderSecrets,providerEndpoint,routeCompletion} from '../src/ai-router.ts';
 import {adminAiRoute} from '../src/admin/ai.ts';
@@ -10,7 +10,8 @@ import {entitlementSnapshot} from '../src/entitlements.ts';
 const adminKey='hardening-admin-key-'.repeat(3);
 const json=(path,body,extra={})=>new Request('https://local.test'+path,{method:'POST',headers:{'content-type':'application/json',...extra},body:JSON.stringify(body)});
 async function seedCode(db,email,purpose='register',code='123456'){
- const hash=Buffer.from(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(code+'|'+email+'|'+purpose))).toString('hex');
+ // H-W1: peppered code hash, matching the worker's digest formula.
+ const hash=Buffer.from(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(code+'|'+email+'|'+purpose+'|test-only'))).toString('hex');
  db.prepare('INSERT INTO email_verification_codes(id,email,purpose,code_hash,expires_at,created_at) VALUES(?,?,?,?,?,?)')
   .run(crypto.randomUUID(),email,purpose,hash,new Date(Date.now()+600000).toISOString(),new Date().toISOString());
 }
@@ -225,4 +226,97 @@ test('P3-10 registration enforces the profile display-name limit',async t=>{
  assert.equal(x.db.prepare('SELECT COUNT(*) n FROM users').get().n,2);
  assert.equal((await register('Normal Name')).status,201);
  assert.equal(x.db.prepare("SELECT display_name FROM users WHERE email='new@example.com'").get().display_name,'Normal Name');
+});
+
+// H-W1: the stored code hash is peppered; a leaked code table without PASSWORD_PEPPER is inert.
+test('H-W1 verification codes are hashed with PASSWORD_PEPPER and verify against the peppered digest',async t=>{
+ const x=setup(t);
+ const issued=await x.request('/v1/auth/register/request-code',{method:'POST',body:{email:'fresh@example.com',captcha_id:'ignored',captcha_code:'ignored'}});
+ assert.equal(issued.status,400,'request-code still requires a solved captcha');
+ // Seed a peppered code the way sendCode now stores it and verify the full reset path accepts it.
+ const email='alice@example.com',code='654321',id=crypto.randomUUID();
+ const peppered=Buffer.from(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(code+'|'+email+'|password_reset|test-only'))).toString('hex');
+ x.db.prepare('INSERT INTO email_verification_codes(id,email,purpose,code_hash,expires_at,created_at) VALUES(?,?,?,?,?,?)')
+  .run(id,email,'password_reset',peppered,new Date(Date.now()+600000).toISOString(),new Date().toISOString());
+ const reset=await x.request('/v1/auth/password/reset',{method:'POST',body:{email,code,new_password:'PepperedPass1!'}});
+ assert.equal(reset.status,200);
+ assert.equal(x.db.prepare('SELECT used_at IS NOT NULL consumed FROM email_verification_codes WHERE id=?').get(id).consumed,1);
+ // The legacy pepperless digest must no longer verify.
+ const legacy=Buffer.from(await crypto.subtle.digest('SHA-256',new TextEncoder().encode('111111|bob@example.com|password_reset'))).toString('hex');
+ x.db.prepare('INSERT INTO email_verification_codes(id,email,purpose,code_hash,expires_at,created_at) VALUES(?,?,?,?,?,?)')
+  .run(crypto.randomUUID(),'bob@example.com','password_reset',legacy,new Date(Date.now()+600000).toISOString(),new Date().toISOString());
+ assert.equal((await x.request('/v1/auth/password/reset',{method:'POST',body:{email:'bob@example.com',code:'111111',new_password:'PepperedPass2!'}})).status,400);
+});
+
+// L7: registration and reset cap the password at 128 like the change-password endpoint.
+test('L7 passwords above 128 characters are rejected on register and reset',async t=>{
+ const x=setup(t);
+ await seedCode(x.db,'new@example.com');
+ const long='P'.repeat(129)+'a1!';
+ assert.equal((await x.request('/v1/auth/register',{method:'POST',body:{email:'new@example.com',account:'new-account',password:long,verification_code:'123456'}})).status,400);
+ assert.equal(x.db.prepare('SELECT used_at FROM email_verification_codes WHERE email=?').get('new@example.com').used_at,null);
+ const reset=await x.request('/v1/auth/password/reset',{method:'POST',body:{email:'alice@example.com',code:'000000',new_password:long}});
+ assert.equal(reset.status,400);
+ assert.equal((await reset.json()).error_code,'invalid_request');
+ // 128 exactly is accepted on reset (wrong code path would give invalid_code, not invalid_request).
+ const boundary=await x.request('/v1/auth/password/reset',{method:'POST',body:{email:'alice@example.com',code:'000000',new_password:'P'.repeat(126)+'a1'}});
+ assert.equal((await boundary.json()).error_code,'invalid_code');
+});
+
+// M-W1: the cron sweep removes expired retention rows and never touches live ones.
+test('M-W1 scheduled cleanup deletes expired sessions, codes and rate-limit windows',async t=>{
+ const x=setup(t);
+ const stale=new Date(Date.now()-7200000).toISOString(),fresh=new Date(Date.now()+600000).toISOString();
+ x.db.prepare("INSERT INTO sessions(id,user_id,token_hash,device_id,expires_at,created_at) VALUES('s-old','alice','old','d','2000-01-01T00:00:00Z','2000-01-01T00:00:00Z')").run();
+ x.db.prepare("INSERT INTO sessions(id,user_id,token_hash,device_id,expires_at,created_at,revoked_at) VALUES('s-revoked','alice','revoked','d',?,'2000-01-01T00:00:00Z',?)").run(fresh,new Date(Date.now()-90000000).toISOString());
+ x.db.prepare("INSERT INTO sessions(id,user_id,token_hash,device_id,expires_at,created_at) VALUES('s-live','alice','live','d',?,'2000-01-01T00:00:00Z')").run(fresh);
+ x.db.prepare("INSERT INTO session_contexts(session_id,client_kind) VALUES('s-live','app')").run();
+ x.db.prepare("INSERT INTO email_verification_codes(id,email,purpose,code_hash,expires_at,created_at) VALUES('c-old','old@example.com','register','h','2000-01-01T00:00:00Z','2000-01-01T00:00:00Z')").run();
+ x.db.prepare("INSERT INTO email_verification_codes(id,email,purpose,code_hash,expires_at,created_at,used_at) VALUES('c-used','used@example.com','register','h',?,'2000-01-01T00:00:00Z',?)").run(fresh,new Date(Date.now()-90000000).toISOString());
+ x.db.prepare("INSERT INTO email_verification_codes(id,email,purpose,code_hash,expires_at,created_at) VALUES('c-live','live@example.com','register','h',?,'2000-01-01T00:00:00Z')").run(fresh);
+ x.db.prepare('INSERT INTO request_limits(key,window_start,count) VALUES(?,1,1)').run('stale-key');
+ x.db.prepare('INSERT INTO request_limits(key,window_start,count) VALUES(?,?,1)').run('live-key',Math.floor(Date.now()/1000));
+ await runRetentionCleanup(x.env);
+ assert.equal(x.db.prepare('SELECT COUNT(*) n FROM sessions').get().n,1);
+ assert.equal(x.db.prepare('SELECT id FROM sessions').get().id,'s-live');
+ assert.equal(x.db.prepare('SELECT COUNT(*) n FROM email_verification_codes').get().n,1);
+ assert.equal(x.db.prepare('SELECT id FROM email_verification_codes').get().id,'c-live');
+ assert.equal(x.db.prepare('SELECT COUNT(*) n FROM request_limits').get().n,1);
+ assert.equal(x.db.prepare('SELECT key FROM request_limits').get().key,'live-key');
+ // The scheduled entrypoint stays runnable (recovery + sampled cleanup) without throwing.
+ const waiters=[];
+ await worker.scheduled({scheduledTime:Date.now()},x.env,{waitUntil:p=>waiters.push(p)});
+ await Promise.all(waiters);
+});
+
+// L4: a missing proxy identity key degrades to the edge address and warns exactly once per isolate.
+test('L4 missing WEB_PROXY_IDENTITY_KEY warns once and falls back to the edge address',async t=>{
+ const {clientAddress,__resetProxyKeyWarningForTests}=await import('../src/client-address.ts');
+ __resetProxyKeyWarningForTests();
+ const logs=[];
+ t.mock.method(console,'error',m=>logs.push(String(m)));
+ const req=()=>new Request('https://local.test/',{headers:{'cf-connecting-ip':'203.0.113.5'}});
+ const env={};
+ assert.equal(await clientAddress(req(),env),'203.0.113.5');
+ assert.equal(await clientAddress(req(),env),'203.0.113.5');
+ assert.equal(await clientAddress(req(),env),'203.0.113.5');
+ const warnings=logs.filter(l=>l.includes('proxy_identity_key_missing'));
+ assert.equal(warnings.length,1,'exactly one warning per isolate, not one per request');
+ // A configured key silences the warning path entirely.
+ const logs2=[];
+ t.mock.method(console,'error',m=>logs2.push(String(m)));
+ assert.equal(await clientAddress(req(),{WEB_PROXY_IDENTITY_KEY:'k'.repeat(32)}),'203.0.113.5');
+ assert.equal(logs2.filter(l=>l.includes('proxy_identity_key_missing')).length,0);
+});
+
+// L2: the audit actor is derived from the authenticated credential, never from a client header.
+test('L2 auditActor ignores a client-supplied x-admin-actor header',async t=>{
+ const {auditActor}=await import('../src/admin/session.ts');
+ const x=setup(t);x.env.ADMIN_API_KEY=adminKey;
+ const spoofed=new Request('https://local.test/v1/admin/plans',{headers:{authorization:'Bearer '+adminKey,'x-admin-actor':'key:deadbeefdeadbeef'}});
+ const keyedActor=await auditActor(spoofed,x.env);
+ assert.match(keyedActor,/^key:[a-f0-9]{16}$/);
+ assert.notEqual(keyedActor,'key:deadbeefdeadbeef','a keyed caller cannot forge another actor');
+ const anonymous=new Request('https://local.test/v1/admin/plans',{headers:{'x-admin-actor':'key:deadbeefdeadbeef'}});
+ assert.equal(await auditActor(anonymous,x.env),'unknown');
 });

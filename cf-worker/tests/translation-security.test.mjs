@@ -70,3 +70,23 @@ test('ambiguous glossary rejected before quota reservation or upstream call',asy
  const x=await setup(t,[]);x.payload.glossary=[{source:'法兰',target:'Flange'},{source:'法兰',target:'Different'}];
  assert.equal((await x.post()).status,400);assert.equal(x.calls.length,0);assert.equal(x.db.prepare('SELECT COUNT(*) AS n FROM translation_requests').get().n,0);
 });
+
+test('L6 missing idempotency key is rejected instead of silently randomized',async t=>{
+ const x=await setup(t,[{id:0,translated_text:'Flange'}]);
+ const bare=()=>worker.fetch(new Request('https://test/v1/translate',{method:'POST',headers:{authorization:'Bearer token','content-type':'application/json'},body:JSON.stringify(x.payload)}),x.env);
+ const r=await bare();
+ assert.equal(r.status,400);
+ assert.equal((await r.json()).error_code,'invalid_request_id');
+ assert.equal(x.calls.length,0,'no upstream call without a request id');
+ assert.equal(x.db.prepare('SELECT COUNT(*) n FROM translation_requests').get().n,0,'no reservation without a request id');
+});
+
+test('L7 non-numeric limit bindings fall back to defaults instead of disabling the guard',async t=>{
+ const x=await setup(t,[{id:0,translated_text:'Flange'}]);
+ x.env.MAX_TEXT_LENGTH='not-a-number';
+ x.env.MAX_TRANSLATE_ITEMS='not-a-number';
+ x.payload.items=[{id:0,text:'X'.repeat(2001)}];
+ assert.equal((await x.post()).status,400,'NaN env must not disable the text limit');
+ x.payload.items=[{id:0,text:'法兰'},{id:1,text:'管道'},{id:2,text:'阀门'},{id:3,text:'螺栓'},{id:4,text:'垫片'},...Array.from({length:96},(_,i)=>({id:i+5,text:'件'+i}))];
+ assert.equal((await x.post()).status,400,'NaN env must not disable the item-count limit');
+});

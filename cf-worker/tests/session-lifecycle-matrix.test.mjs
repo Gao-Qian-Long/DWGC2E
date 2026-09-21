@@ -34,7 +34,7 @@ for(const [name,sql] of [
 
 async function seedCode(x,{expired=false,purpose='password_reset'}={}) {
  const email='alice@example.com',code='123456',id=crypto.randomUUID();
- const hash=Buffer.from(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(`${code}|${email}|${purpose}`))).toString('hex');
+ const hash=Buffer.from(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(`${code}|${email}|${purpose}|test-only`))).toString('hex'); // H-W1: peppered code hash
  x.db.prepare('INSERT INTO email_verification_codes(id,email,purpose,code_hash,expires_at,created_at) VALUES(?,?,?,?,?,?)')
   .run(id,email,purpose,hash,new Date(Date.now()+(expired?-600000:600000)).toISOString(),new Date().toISOString());
  return {id,email,code,new_password:'ResetPassword123!'};

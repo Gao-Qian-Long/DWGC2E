@@ -30,7 +30,7 @@ test('real workerd/D1: logout, device revoke/rebind and password-reset transacti
  await status(app,401);await status(web,200);await status(bob,200);
  const rebound=await login();await status(rebound,200);await status(app,401);
  const id=crypto.randomUUID(),verification='123456';
- const codeHash=createHash('sha256').update(verification+'|alice@example.com|password_reset').digest('hex');
+ const codeHash=createHash('sha256').update(verification+'|alice@example.com|password_reset|test-only').digest('hex');
  await DB.prepare('INSERT INTO email_verification_codes(id,email,purpose,code_hash,expires_at,created_at) VALUES(?,?,?,?,?,?)').bind(id,'alice@example.com','password_reset',codeHash,new Date(Date.now()+600000).toISOString(),new Date().toISOString()).run();
  const reset=(new_password)=>request('/v1/auth/password/reset',{method:'POST',body:{email:'alice@example.com',code:verification,new_password}});
  await DB.prepare("CREATE TRIGGER fail_session_revoke BEFORE UPDATE OF revoked_at ON sessions BEGIN SELECT RAISE(ABORT,'controlled failure'); END").run();

@@ -42,7 +42,8 @@ function user(db,email='existing@example.com',account='existing',active=1) {
   db.prepare('INSERT INTO users(id,account,password_hash,email,created_at,is_active) VALUES(?,?,?,?,?,?)').run(crypto.randomUUID(),account,'untouched-password',email,new Date().toISOString(),active);
 }
 async function code(db,email,purpose='register',value='123456') {
-  const hash=Buffer.from(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value+'|'+email+'|'+purpose))).toString('hex');
+  // H-W1: code hashes are peppered with PASSWORD_PEPPER (same digest formula as the worker).
+  const hash=Buffer.from(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value+'|'+email+'|'+purpose+'|test-only'))).toString('hex');
   const id=crypto.randomUUID();
   db.prepare('INSERT INTO email_verification_codes(id,email,purpose,code_hash,expires_at,created_at) VALUES(?,?,?,?,?,?)').run(id,email,purpose,hash,new Date(Date.now()+600000).toISOString(),new Date().toISOString());
   return id;

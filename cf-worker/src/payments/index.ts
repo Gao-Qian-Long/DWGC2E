@@ -148,7 +148,13 @@ export async function settlePayment(e:PaymentEnv,o:Order,trade:string,amount:num
  }
  if(!['pending','expired'].includes(o.status))fail('payment_not_ready');
  // The trigger performs order + subscription + quota + audit in the SAME transaction.
- await e.DB.prepare('INSERT INTO payment_settlements(order_no,provider_trade_no,amount_cents,settled_at) VALUES(?,?,?,?) ON CONFLICT(order_no) DO NOTHING').bind(o.order_no,trade,amount,stamp()).run();
+ const settled=await e.DB.prepare('INSERT INTO payment_settlements(order_no,provider_trade_no,amount_cents,settled_at) VALUES(?,?,?,?) ON CONFLICT(order_no) DO NOTHING').bind(o.order_no,trade,amount,stamp()).run();
+ // M-W4: a losing duplicate callback used to vanish silently. Record it for the operator
+ // (same masked-category pattern as callback_rejected) and still ack success to the provider.
+ if(!settled.meta.changes){
+  const reason=JSON.stringify({code:'duplicate_payment',trade_no:trade,amount_cents:amount});
+  try{await e.DB.prepare("INSERT INTO payment_events(order_no,event_type,reason,created_at) VALUES(?,'duplicate_payment',?,?)").bind(o.order_no,reason,stamp()).run();}catch{/* Audit storage must not break the provider ack. */}
+ }
 }
 export async function notifyPayment(r:Request,e:PaymentEnv):Promise<Response>{
  const ack=(ok:boolean,status=200)=>new Response(ok?'success':'error',{status,headers:{'content-type':'text/plain; charset=utf-8','cache-control':'no-store'}});

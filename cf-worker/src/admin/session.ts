@@ -19,11 +19,21 @@ export async function adminSessionAuthorized(r:Request,e:Env){
  return !!row&&row.key_fingerprint===await digest(e.ADMIN_API_KEY);
 }
 export async function adminRequestAuthorized(r:Request,e:Env){return validAdminKey(r,e)||await adminSessionAuthorized(r,e);}
-/** The gate records which credential authenticated the request; an arbitrary client value is ignored. */
+/** The gate records which credential authenticated the request; an arbitrary client value is ignored.
+ * L2: x-admin-actor is only trusted when the request itself carries a valid admin credential — the
+ * gateway (index.ts) always overwrites the header after authenticating the session, and a client
+ * cannot forge the Bearer admin key. Unauthenticated callers always resolve to 'unknown'. */
 export async function auditActor(r:Request,e:Env){
- const provided=(r.headers.get('x-admin-actor')||'').match(/^(?:key|session):[a-f0-9]{16}$/);
- if(provided)return provided[0];
- return validAdminKey(r,e)&&e.ADMIN_API_KEY?'key:'+(await digest(e.ADMIN_API_KEY)).slice(0,16):'unknown';
+ // The gateway's session path (index.ts) authenticates the cookie, then injects BOTH the Bearer
+ // key and the authoritative x-admin-actor. A request that carries the admin session cookie is
+ // therefore a gateway-relayed session call: trust the injected session actor only then.
+ const injected=(r.headers.get('x-admin-actor')||'').match(/^session:[a-f0-9]{16}$/);
+ if(injected&&token(r)&&await adminSessionAuthorized(r,e))return injected[0];
+ // A keyed request is always audited as the key, whatever header the caller sent (the gateway's
+ // key path injects exactly this value).
+ if(validAdminKey(r,e)&&e.ADMIN_API_KEY)return 'key:'+(await digest(e.ADMIN_API_KEY)).slice(0,16);
+ const value=token(r);
+ return /^[a-f0-9]{64}$/.test(value) ? 'session:'+(await digest(value)).slice(0,16) : 'unknown';
 }
 /** Administrator sign-in is the only credential ceremony on the Worker: count every attempt per
  * address so a lost or rotated key cannot be guessed at line speed. Returns false when over budget. */

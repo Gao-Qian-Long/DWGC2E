@@ -70,15 +70,26 @@ async function digest(s: string) {
     .map((x) => x.toString(16).padStart(2, "0"))
     .join("");
 }
+// TODO(v1-salt-migration): the "dwgc2e-password-v1" fallback uses a fixed salt, so identical
+// passwords share a digest. Rehashing to v2 needs a login-time migration policy (out of scope
+// here); do not remove the fallback until every stored hash has been migrated.
 async function pass(p: string, pepper: string, salt = random()) {
   const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(p + "\\0" + pepper), "PBKDF2", false, ["deriveBits"]);
   const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", salt: new TextEncoder().encode(salt), iterations: 100000, hash: "SHA-256" }, key, 256);
   const hex = [...new Uint8Array(bits)].map(x => x.toString(16).padStart(2,"0")).join("");
   return salt === "dwgc2e-password-v1" ? hex + ":pbkdf2" : "v2:" + salt + ":" + hex;
 }
+// M-W3: digests are compared in constant time so a leaked hash table cannot be probed by
+// response timing; the pattern matches payments/sign.ts and admin/session.ts.
+function timingSafeEqualHex(expected: string, actual: string) {
+  if (expected.length !== actual.length) return false;
+  let diff = 0;
+  for (let i = 0; i < expected.length; i++) diff |= expected.charCodeAt(i) ^ actual.charCodeAt(i);
+  return diff === 0;
+}
 async function passwordMatches(password: string, pepper: string, stored: string) {
   const salt = stored.startsWith("v2:") ? stored.split(":")[1] : "dwgc2e-password-v1";
-  return (await pass(password, pepper, salt)) === stored;
+  return timingSafeEqualHex(await pass(password, pepper, salt), stored);
 }
 async function takeLimit(e: Env, key: string, seconds: number, max: number) {
   const timestamp = Math.floor(Date.now()/1000);
@@ -164,7 +175,10 @@ async function sendCode(email: string, purpose: string, e: Env) {
       id,
       email,
       purpose,
-      await digest(code + "|" + email + "|" + purpose),
+      // H-W1: the hash is peppered like every other credential digest; a leaked code table
+      // without PASSWORD_PEPPER cannot be verified offline. Rotating the pepper invalidates
+      // only the outstanding 10-minute codes.
+      await digest(code + "|" + email + "|" + purpose + "|" + e.PASSWORD_PEPPER),
       expires,
       ts,
     )]);
@@ -249,8 +263,10 @@ async function verifyCode(
     new Date(row.expires_at) <= new Date()
   )
     return false;
-  const ok =
-    (await digest(code + "|" + email + "|" + purpose)) === row.code_hash;
+  const ok = timingSafeEqualHex(
+    await digest(code + "|" + email + "|" + purpose + "|" + e.PASSWORD_PEPPER),
+    row.code_hash,
+  );
   if (!ok) {
     await e.DB.prepare(
       "UPDATE email_verification_codes SET attempts=attempts+1 WHERE id=? AND used_at IS NULL AND attempts<5",
@@ -266,12 +282,12 @@ async function resetPassword(r: Request, e: Env) {
     email = normalizeEmail(b?.email),
     code = String(b?.code || b?.verification_code || ""),
     password = String(b?.new_password || b?.password || "");
-  if (password.length < 8)
+  if (password.length < 8 || password.length > 128)
     return json(
       {
         success: false,
         error_code: "invalid_request",
-        message: "新密码至少 8 位",
+        message: "新密码需为 8–128 位",
       },
       400,
       cors(e),
@@ -316,12 +332,12 @@ async function register(r: Request, e: Env) {
   const displayName = requestedDisplayName === undefined || requestedDisplayName === null || requestedDisplayName === ""
     ? account
     : typeof requestedDisplayName === "string" ? requestedDisplayName.trim() : "";
-  if (account.length < 3 || password.length < 8 || !email || !code || !displayName || displayName.length > 80)
+  if (account.length < 3 || password.length < 8 || password.length > 128 || !email || !code || !displayName || displayName.length > 80)
     return json(
       {
         success: false,
         error_code: "invalid_request",
-        message: "账号至少 3 位，密码至少 8 位，显示名称需为 1–80 个字符",
+        message: "账号至少 3 位，密码需为 8–128 位，显示名称需为 1–80 个字符",
       },
       400,
       cors(e),
@@ -428,10 +444,13 @@ async function effectiveQuota(e: Env, userId: string) { return (await entitlemen
 async function translate(r: Request, e: Env, user: J) {
   const b = await text(r);
   const items = Array.isArray(b?.items) ? b.items : [];
-  if (!b || !items.length || items.length > Number(e.MAX_TRANSLATE_ITEMS || 100))
+  // L7: a non-numeric binding made Number() yield NaN and silently disabled the limit.
+  const maxItems = Number.isFinite(Number(e.MAX_TRANSLATE_ITEMS)) ? Number(e.MAX_TRANSLATE_ITEMS) : 100;
+  const maxTextLength = Number.isFinite(Number(e.MAX_TEXT_LENGTH)) ? Number(e.MAX_TEXT_LENGTH) : 2000;
+  if (!b || !items.length || items.length > maxItems)
     return json({success:false,error_code:"invalid_request",message:"翻译条目数量无效"},400,cors(e));
   const clean = items.map(x => ({id: x?.id, text: x?.text, context: typeof x?.context === "string" ? x.context.slice(0,500) : ""}));
-  if (clean.some(x => !Number.isSafeInteger(x.id) || typeof x.text !== "string" || !x.text.trim() || x.text.length > Number(e.MAX_TEXT_LENGTH || 2000)) || new Set(clean.map(x=>x.id)).size !== clean.length)
+  if (clean.some(x => !Number.isSafeInteger(x.id) || typeof x.text !== "string" || !x.text.trim() || x.text.length > maxTextLength) || new Set(clean.map(x=>x.id)).size !== clean.length)
     return json({success:false,error_code:"invalid_text",message:"文本为空、过长或标识无效"},400,cors(e));
   const languages = /^[a-zA-Z]{2,8}(?:-[a-zA-Z]{2,8})?$/;
   if (!languages.test(b.source_lang) || !languages.test(b.target_lang)) return json({success:false,error_code:"invalid_language",message:"语言代码无效"},400,cors(e));
@@ -449,7 +468,10 @@ async function translate(r: Request, e: Env, user: J) {
   try { protectedItems = clean.map(item => protectGlossary(item.text, glossary)); }
   catch { return json({success:false,error_code:'glossary_conflict',message:'同一原文存在不同术语译法，请先解决冲突'},400,cors(e)); }
   const hash = await digest(JSON.stringify(payload));
-  const requestId = r.headers.get("Idempotency-Key") || random();
+  // L6: the idempotency key is part of the billing contract; a server-side random fallback
+  // silently disabled replay protection for clients that omit the header.
+  const requestId = r.headers.get("Idempotency-Key");
+  if (!requestId) return json({success:false,error_code:"invalid_request_id",message:"缺少请求标识，请携带 Idempotency-Key 请求头"},400,cors(e));
   if (!/^[a-zA-Z0-9_-]{8,128}$/.test(requestId)) return json({success:false,error_code:"invalid_request_id",message:"请求标识无效"},400,cors(e));
   const timestamp = Math.floor(Date.now()/1000), ym=now().slice(0,7);
   const expired = JSON.stringify({success:false,error_code:"request_expired",message:"请求已超时，预留额度已退还"});
@@ -468,7 +490,11 @@ async function translate(r: Request, e: Env, user: J) {
   await e.DB.prepare("INSERT INTO usage_monthly(user_id,year_month,chars_used,chars_quota,task_count) VALUES(?,?,0,?,0) ON CONFLICT(user_id,year_month) DO UPDATE SET chars_quota=excluded.chars_quota").bind(user.user_id,ym,quotaValue).run();
   const chars=clean.reduce((n,x)=>n+x.text.length,0);
   try {
-    const inserted=await e.DB.prepare("INSERT OR IGNORE INTO translation_requests(user_id,request_id,payload_hash,year_month,reserved,expires_at,source_language,target_language,started_at,billing_task_id) VALUES(?,?,?,?,?,?,?,?,?,?)").bind(user.user_id,requestId,hash,ym,Math.ceil(chars*percent/100),timestamp+180,b.source_lang,b.target_lang,now(),taskId).run();
+    // M-W2: the reservation must outlive the worst upstream path. ai-router.ts:288 allows a
+    // 120s per-provider timeout and routeCompletion may retry across providers, so 300s is the
+    // budget; anything shorter risked settling the reservation (504 refund) while the upstream
+    // call was still in flight.
+    const inserted=await e.DB.prepare("INSERT OR IGNORE INTO translation_requests(user_id,request_id,payload_hash,year_month,reserved,expires_at,source_language,target_language,started_at,billing_task_id) VALUES(?,?,?,?,?,?,?,?,?,?)").bind(user.user_id,requestId,hash,ym,Math.ceil(chars*percent/100),timestamp+300,b.source_lang,b.target_lang,now(),taskId).run();
     if (!inserted.meta.changes) return replay((await e.DB.prepare("SELECT * FROM translation_requests WHERE user_id=? AND request_id=?").bind(user.user_id,requestId).first<J>())!);
   } catch(error) {
     if (String(error).includes("quota_exceeded")) return json({success:false,error_code:"quota_exceeded",message:"本月翻译额度不足"},402,cors(e));
@@ -519,6 +545,18 @@ async function translate(r: Request, e: Env, user: J) {
   const saved=(await e.DB.prepare("SELECT * FROM translation_requests WHERE user_id=? AND request_id=?").bind(user.user_id,requestId).first<J>())!;
   return replay(saved);
 }
+// M-W1: request_limits / sessions / email_verification_codes have no other cleanup path.
+// Exported for deterministic testing; scheduled() samples it (~every 10 minutes) because the
+// cron fires every minute and a full sweep each tick is needless write load.
+export async function runRetentionCleanup(e: Env) {
+  const cutoff = new Date(Date.now() - 86400000).toISOString();
+  const windowCutoff = Math.floor(Date.now()/1000) - 600;
+  await e.DB.batch([
+    e.DB.prepare("DELETE FROM request_limits WHERE window_start < ?").bind(windowCutoff),
+    e.DB.prepare("DELETE FROM email_verification_codes WHERE expires_at < ? OR (used_at IS NOT NULL AND used_at < ?)").bind(cutoff,cutoff),
+    e.DB.prepare("DELETE FROM sessions WHERE expires_at < ? OR (revoked_at IS NOT NULL AND revoked_at < ?)").bind(cutoff,cutoff)
+  ]);
+}
 export default {
   async scheduled(event:ScheduledController,e:Env,ctx:ExecutionContext){
     const runId=crypto.randomUUID(),started=Date.now();
@@ -530,6 +568,11 @@ export default {
       console.error(JSON.stringify({event:'payment_recovery_failed',runId,durationMs:Date.now()-started}));
       throw new Error('payment_recovery_failed');
     }));
+    // A cleanup failure must never disturb payment recovery, hence the swallow-and-log.
+    if (Math.random() < 0.1) {
+      try { await runRetentionCleanup(e); }
+      catch { console.error(JSON.stringify({event:'retention_cleanup_failed',runId})); }
+    }
   },
   async fetch(r: Request, e: Env) {
     try { return await route(await guardRequestBody(r),e); } catch(error) {

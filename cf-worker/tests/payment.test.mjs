@@ -77,3 +77,26 @@ test('new keys reuse pending order; plan or channel switch cannot create another
 test('unknown expired creation remains recoverable but never resubmitted',async t=>{const x=setup(t);t.mock.method(globalThis,'fetch',async()=>{throw Error('mock timeout');});await x.checkout();x.db.exec("UPDATE orders SET expires_at='2000-01-01'");const first=x.rows()[0];const again=await(await x.checkout('unknown-retry-00001')).json();assert.equal(again.order.orderNo,first.order_no);assert.equal(again.order.createState,'unknown');assert.equal(x.rows().length,1);});
 test('simultaneous distinct purchase intents send exactly one upstream request',async t=>{const x=setup(t);const results=await Promise.all(Array.from({length:4},(_,i)=>x.checkout('concurrent-key-0000'+i)));const bodies=await Promise.all(results.map(r=>r.json()));assert.equal(new Set(bodies.map(o=>o.orderNo||o.order?.orderNo)).size,1);assert.equal(x.calls(),1);assert.equal(x.rows().length,1);});
 test('hidden pending order still prevents a fresh purchase',async t=>{const x=setup(t);await x.checkout();const o=x.rows()[0];assert.equal((await x.route('/v1/billing/orders/'+o.order_no+'/hide',{method:'POST'})).status,200);assert.equal((await(await x.checkout('after-hide-00000001')).json()).order.orderNo,o.order_no);assert.equal(x.calls(),1);});
+
+test('M-W4 losing duplicate settlement records a duplicate_payment event',async t=>{
+ const x=setup(t);await x.checkout();const o=x.rows()[0];
+ const winner=await(await x.callback(o)).text();
+ assert.equal(winner,'success');
+ assert.equal(x.db.prepare("SELECT COUNT(*) n FROM payment_events WHERE event_type='duplicate_payment'").get().n,0);
+ // The concurrent-callback race: the winner's settlement has committed (the trigger already
+ // marked the order paid), while the loser still holds its pre-commit snapshot (status pending).
+ // settlePayment must detect the conflict, audit it, and never double-grant.
+ const stale={...o,status:'pending'};
+ await settlePayment(x.e,stale,o.provider_trade_no,o.payable_cents);
+ const rows=x.db.prepare("SELECT event_type,reason FROM payment_events WHERE event_type='duplicate_payment'").all();
+ assert.equal(rows.length,1);
+ const reason=JSON.parse(rows[0].reason);
+ assert.equal(reason.code,'duplicate_payment');
+ assert.equal(reason.trade_no,o.provider_trade_no);
+ assert.equal(reason.amount_cents,o.payable_cents);
+ // No double grant: subscription expires_at unchanged by the losing settlement.
+ const before=x.db.prepare('SELECT expires_at FROM subscriptions').get();
+ await settlePayment(x.e,stale,o.provider_trade_no,o.payable_cents);
+ assert.equal(x.db.prepare('SELECT expires_at FROM subscriptions').get().expires_at,before.expires_at);
+ assert.equal(x.db.prepare("SELECT COUNT(*) n FROM payment_events WHERE event_type='duplicate_payment'").get().n,2);
+});
