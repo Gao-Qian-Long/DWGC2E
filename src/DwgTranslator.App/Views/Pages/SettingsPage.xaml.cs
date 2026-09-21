@@ -62,12 +62,21 @@ public partial class SettingsPage : UserControl
         var compactAbout = compact && DataContext is MainViewModel { SettingsSection: 5 };
         WorkspaceHeader.Visibility = compactAbout ? Visibility.Collapsed : Visibility.Visible;
         AboutSubtitle.Visibility = compactAbout ? Visibility.Collapsed : Visibility.Visible;
-        if (AboutUpdateColumn != null && AboutUpdatePanel != null)
+        if (AboutUpdateColumn != null && AboutUpdatePanel != null && AboutUpdateCard != null)
         {
-            AboutUpdateColumn.Width = new GridLength(compact ? 0 : 236);
-            Grid.SetColumn(AboutUpdatePanel, compact ? 1 : 2);
-            Grid.SetRow(AboutUpdatePanel, compact ? 1 : 0);
-            Grid.SetRowSpan(AboutUpdatePanel, compact ? 1 : 2);
+            // S5 · D7/D8：更新状态块已从身份卡内部移到独立的 AboutUpdateCard（Grid 列 2，槽列 1 为 Size.CardGutter）。
+            // 因此行/列归属改设在**卡片**上——AboutUpdatePanel 现在是卡片内的 StackPanel，
+            // 对它调用 Grid.SetColumn 已无意义（不再是 Grid 的直接子元素）。
+            // 窄窗（compact）把右列收为 0、整卡落到身份卡下方独占整行，回到"上下堆叠"。
+            var aboutUpdateWidth = TryFindResource("Size.AboutUpdateColumn") as GridLength? ?? new GridLength(236);
+            AboutUpdateColumn.Width = compact ? new GridLength(0) : aboutUpdateWidth;
+            Grid.SetColumn(AboutUpdateCard, compact ? 0 : 2);
+            Grid.SetColumnSpan(AboutUpdateCard, compact ? 3 : 1);
+            Grid.SetRow(AboutUpdateCard, compact ? 1 : 0);
+            AboutUpdateCard.Margin = compact ? new Thickness(0, 12, 0, 0) : new Thickness(0);
+            // 堆叠时身份卡也跨满 3 列、槽列收 0，否则右边会留一条 16 DIP 的空槽（两卡宽度不一致）。
+            if (AboutIdentityCard != null) Grid.SetColumnSpan(AboutIdentityCard, compact ? 3 : 1);
+            if (AboutIdentityGutter != null) AboutIdentityGutter.Width = compact ? new GridLength(0) : (TryFindResource("Size.CardGutter") as GridLength? ?? new GridLength(16));
             AboutUpdatePanel.Orientation = compact ? Orientation.Horizontal : Orientation.Vertical;
             AboutStatusPanel.Margin = compact ? new Thickness(0,0,14,0) : new Thickness(0,0,0,10);
             AboutUpdatePanel.Margin = compact ? new Thickness(0,10,20,0) : new Thickness(0);
@@ -97,20 +106,29 @@ public partial class SettingsPage : UserControl
         //     四个冒烟尺寸里只有 1440×900 落在此带（ActualWidth=1240，可用 161 / 需 169，差 8 DIP≈末字），
         //     1280(1080) 与 1366(1166) 均已 < 1200 → 堆叠 → 全文；1920(1720) ≥ 1256 → 并排 → 全文。
         //   t7 按队长指示只修注释与换算数字，aboutStack 条件行为一字不动。若要彻底消除该残留带，
-        //     把下面的 1200 改成 1256 即可（单常量、零新增布局代码；tests\ 无断言引用 AboutDetails*，
-        //     已在 t3 grep 证实零风险）——是否收口留待队长 / ui-auditor 裁决。
+        //     把下面的 1200 改成 1256 即可（单常量、零新增布局代码）——是否收口留待队长 / ui-auditor 裁决。
+        //     S5 复核：用户要求的 D7/D8「拆成两张卡 + 更新块放到右边」改动**没有**改变本段的横向算术，
+        //     故残留带不自解——快捷入口列宽链（396 = 版本详情列 380 + 槽 16）与改前逐字节相同，
+        //     1440×900 仍差约 8 DIP。按队长「不得顺手改」，1200 保持原值，仅在此记录结论。
         // 不会自激振荡：堆叠只改内容高度，ActualWidth 由 PageHost 决定；SettingsScroll 的纵向滚动条
         //          只影响 SettingsContent 宽度、不影响本 UserControl 的 ActualWidth，故不会反复触发 SizeChanged。
         // 影响面只有 AboutDetails* 三个元素；AboutUpdate*（更新状态卡）仍按 compact 走，
         // UpdateNotificationSmoke.cs:29-30 断言的 AboutUpdatePanel / AboutUpdateButton 行为不变。
-        // tests\ 全库 grep 证实无任何断言引用 AboutDetailsCard / AboutDetailsColumn / AboutDetailsGap
-        // 或四个快捷入口按钮（使用帮助/问题反馈/官方网站/服务状态），故此改动对冒烟零风险。
+        // **更正（S5 实测，替换改前此处的一句错误陈述）**：改前注释称"tests\ 全库 grep 证实无任何断言
+        // 引用 AboutDetailsCard / AboutDetailsColumn / AboutDetailsGap"，该陈述**为假**——
+        // tests\DwgTranslator.App.UiSmoke\Program.cs:764-766 明确按 x:Name 取用 AboutDetailsCard，
+        // 并断言其在 1280 窄窗下 Grid.GetRow==1 && Grid.GetColumn==0。四个快捷入口按钮确实无断言引用。
+        // 因此 AboutDetailsCard 的 x:Name 与本分支的行/列归属都是**被冒烟守住的契约**，不可删改。
+        // （该错误陈述经 git show HEAD: 溯源，来自上一批的提交 c334969，非本批引入。）
         var aboutStack = compact || ActualWidth < 1200;
         if (AboutDetailsCard != null && AboutDetailsColumn != null && AboutDetailsGap != null)
         {
             // 快捷入口与版本详情并排铺满横向空间；横向空间不足时落回堆叠，避免两张卡都被挤到不可读。
-            AboutDetailsGap.Width = new GridLength(aboutStack ? 0 : 16);
-            AboutDetailsColumn.Width = new GridLength(aboutStack ? 0 : 380);
+            // 数值一律从资源令牌读（Size.CardGutter / Size.AboutDetailsColumn），不再在代码里写第二份字面量。
+            var detailsGap = TryFindResource("Size.CardGutter") as GridLength? ?? new GridLength(16);
+            var detailsColumn = TryFindResource("Size.AboutDetailsColumn") as GridLength? ?? new GridLength(380);
+            AboutDetailsGap.Width = aboutStack ? new GridLength(0) : detailsGap;
+            AboutDetailsColumn.Width = aboutStack ? new GridLength(0) : detailsColumn;
             Grid.SetRow(AboutDetailsCard, aboutStack ? 1 : 0);
             Grid.SetColumn(AboutDetailsCard, aboutStack ? 0 : 2);
             Grid.SetColumnSpan(AboutDetailsCard, aboutStack ? 3 : 1);

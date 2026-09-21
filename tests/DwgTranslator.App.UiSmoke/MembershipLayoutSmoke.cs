@@ -32,16 +32,27 @@ public sealed partial class SmokeApp
                 Capture(window, "membership-redesign-" + tier);
             }
             var accountScroll = (ScrollViewer)page.FindName("AccountScroll");
-            var refreshIndicator = (Border)page.FindName("AccountRefreshIndicator");
+            // §D11 用户要求「不要这个加载条」：AccountRefreshIndicator 整条已从 AccountPage.xaml 删除，
+            // 因此这里不能再 FindName 取它（会拿到 null 并 NRE），改为断言该元素确实不存在。
+            var refreshIndicator = page.FindName("AccountRefreshIndicator");
             var refreshButton = FindVisuals<Button>(page).Single(b => Equals(b.Content, "刷新权益"));
             await Dispatcher.InvokeAsync(() => { page.UpdateLayout(); accountScroll.UpdateLayout(); }, DispatcherPriority.ApplicationIdle);
             var content = (FrameworkElement)accountScroll.Content;
             var contentHeight = content.ActualHeight;
             vm.IsAccountRefreshing = true;
             await Dispatcher.InvokeAsync(() => { page.UpdateLayout(); accountScroll.UpdateLayout(); }, DispatcherPriority.ApplicationIdle);
-            Check(refreshIndicator.IsVisible, "account refresh indicator overlays without disappearing");
+            Check(refreshIndicator == null, "account refresh strip is removed from the page entirely");
+            // 负向有效性护栏：证明上面的 null 是"元素不存在"而不是"FindName 名字查不动"。
+            // 同一次 FindName 调用对仍然存在的同级元素必须返回非 null —— 否则该断言恒真、无意义。
+            Check(page.FindName("AccountScroll") != null && page.FindName("QuotaRingChart") != null,
+                "name lookup still resolves surviving account elements (removal check is not vacuous)");
             Check(Math.Abs(content.ActualHeight - contentHeight) < 0.5, "account refresh does not change content layout height");
             Check(Equals(refreshButton.Content, "同步中…") && !refreshButton.IsEnabled, "account refresh button exposes busy state");
+            // §D11 负向证据：用户报的是「刷新时页面顶端那条琥珀加载条」。只有把刷新态渲染出来截图，
+            // 「没有这条」才是有意义的读数（不刷新时它本来就不显示，扫不到等于没验证）。
+            // 该截图供像素复核：期望整幅图内不存在横跨内容视口宽度的 #D97728 实心带。
+            Check(vm.IsAccountRefreshing, "capture is taken while the busy state is genuinely active (negative evidence is not vacuous)");
+            Capture(window, "account-refreshing-no-strip");
             vm.IsAccountRefreshing = false;
             await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
 
@@ -50,7 +61,7 @@ public sealed partial class SmokeApp
                 .SetValue(vm, DateTime.MinValue);
             await vm.RefreshMembershipOnActivationAsync();
             await Dispatcher.InvokeAsync(() => { page.UpdateLayout(); accountScroll.UpdateLayout(); }, DispatcherPriority.ApplicationIdle);
-            Check(!vm.IsAccountRefreshing && !refreshIndicator.IsVisible, "automatic membership refresh stays silent without showing the busy strip");
+            Check(!vm.IsAccountRefreshing && page.FindName("AccountRefreshIndicator") == null, "automatic membership refresh stays silent without a busy strip to show");
             Check(vm.AccountFeedback == feedback, "automatic membership refresh does not replace user-facing account feedback");
 
             details.Width = 700;

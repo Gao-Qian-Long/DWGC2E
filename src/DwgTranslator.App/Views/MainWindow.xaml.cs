@@ -1,9 +1,11 @@
 using System.ComponentModel;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Media3D;
 using DwgTranslator.App.ViewModels;
@@ -24,6 +26,59 @@ public partial class MainWindow : Window
     private const double CompactEnterWidth = 1120;
     /// <summary>§L5 迟滞上限：已进入 compact 后放宽到 1136，避免侧栏在边界上反复收放。</summary>
     private const double CompactLeaveWidth = 1136;
+
+    // ── §D5 最大化必须贴合"工作区"而不是"整块屏幕" ──────────────────────────────
+    // WindowStyle=None + WindowChrome 的窗口没有系统非客户区，WPF 自带的 WindowChromeWorker
+    // 只负责命中测试与调整边框，它不处理 WM_GETMINMAXINFO；于是 DefWindowProc 基于
+    // rcMonitor（监视器全高）计算最大化矩形，底部 30 DIP 状态栏被任务栏盖住。
+    // 修法：在 SourceInitialized 挂 HwndSourceHook，把 ptMaxPosition/ptMaxSize 改写成 rcWork。
+    // 机制已用独立探针复核（不靠推断）：WPF 的 WindowChromeWorker 不会把该消息 handled 置真，
+    // 因此后加的钩子确实能收到并生效 —— 未挂钩时最大化到 (-11,-11)+2582x1622（底部溢出 81 px），
+    // 挂钩后为 (0,0)+2560x1530，与 rcWork 完全一致、四边偏差均为 0。
+    private const int WM_GETMINMAXINFO = 0x0024;
+    private const uint MONITOR_DEFAULTTONEAREST = 0x00000002;
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativePoint
+    {
+        public int X;
+        public int Y;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativeRect
+    {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MinMaxInfo
+    {
+        public NativePoint ptReserved;
+        public NativePoint ptMaxSize;
+        public NativePoint ptMaxPosition;
+        public NativePoint ptMinTrackSize;
+        public NativePoint ptMaxTrackSize;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MonitorInfo
+    {
+        public int cbSize;
+        public NativeRect rcMonitor;
+        public NativeRect rcWork;
+        public uint dwFlags;
+    }
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint flags);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetMonitorInfo(IntPtr monitor, ref MonitorInfo info);
 
     // The viewport is measured in DIP. No fixed minimum canvas and no global scale transform.
     private void PageViewport_SizeChanged(object sender, SizeChangedEventArgs e)
@@ -93,6 +148,17 @@ public partial class MainWindow : Window
         Width = Math.Min(Math.Max(Width, MinWidth), area.Width);
         Height = Math.Min(Math.Max(Height, MinHeight), area.Height);
 
+        // §D5 上面的 SystemParameters.WorkArea 只反映主显示器，且发生在句柄创建之前。
+        // 把最大化真正约束到"窗口所在显示器的工作区"必须在 SourceInitialized 里做，共两步：
+        // ① 按窗口实际所在显示器把 MinWidth/MinHeight 收敛进工作区 —— 否则窗口下限会盖过
+        //    ptMaxSize：探针实测在本机（175% 缩放，rcWork 高 874.3 DIP）把 MinHeight 设为
+        //    900 DIP 时，钩子写入的 ptMaxSize 被 WPF 自身下限覆盖，底部仍溢出 45 px；
+        //    把 MinHeight 放宽到工作区高度以内后溢出回到 0.0（探针 variant E）。
+        //    注意 ctor 里的 area.Height - 20 兜底在 1366×768@175% 下仍会得到 560 > 530 DIP，
+        //    所以这一收敛必须按显示器重做。
+        // ② 挂 WM_GETMINMAXINFO 钩子把最大化矩形改写成 rcWork。
+        SourceInitialized += OnSourceInitialized;
+
         // Resolve ViewModel from DI container (falls back to parameterless ctor if DI not ready)
         // 依赖全部由 DI 装配（MainViewModel 只有这一个构造函数）：容器没起来就是致命错误，
         // 不能悄悄退回"半装配"的另一套实例——那样界面会看不到任务层，翻译按钮会静默失效。
@@ -115,6 +181,57 @@ public partial class MainWindow : Window
     private void ViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(MainViewModel.CurrentPage)) ShowActivePage();
+    }
+
+    // §D5 工作区收敛 + 最大化矩形钩子（见 ctor 顶部注释的两步说明）。
+    private void OnSourceInitialized(object? sender, EventArgs e)
+    {
+        var handle = new WindowInteropHelper(this).Handle;
+        if (handle == IntPtr.Zero) return;
+
+        if (TryGetWorkArea(handle, out var work))
+        {
+            // rcWork 是物理像素，MinWidth/MinHeight 是 DIP，必须换算后再比较。
+            var source = HwndSource.FromHwnd(handle);
+            var scaleX = source?.CompositionTarget?.TransformToDevice.M11 ?? 1.0;
+            var scaleY = source?.CompositionTarget?.TransformToDevice.M22 ?? 1.0;
+            if (scaleX > 0 && scaleY > 0)
+            {
+                var workWidthDip = (work.Right - work.Left) / scaleX;
+                var workHeightDip = (work.Bottom - work.Top) / scaleY;
+                // 只在工作区装不下当前下限时才收敛，正常显示器上是空操作（不动 1120×640 契约）。
+                if (workWidthDip < MinWidth) MinWidth = Math.Max(640, workWidthDip);
+                if (workHeightDip < MinHeight) MinHeight = Math.Max(480, workHeightDip);
+            }
+        }
+
+        HwndSource.FromHwnd(handle)?.AddHook(WindowMessageHook);
+    }
+
+    private static bool TryGetWorkArea(IntPtr handle, out NativeRect work)
+    {
+        work = default;
+        var monitor = MonitorFromWindow(handle, MONITOR_DEFAULTTONEAREST);
+        if (monitor == IntPtr.Zero) return false;
+        var info = new MonitorInfo { cbSize = Marshal.SizeOf<MonitorInfo>() };
+        if (!GetMonitorInfo(monitor, ref info)) return false;
+        work = info.rcWork;
+        return true;
+    }
+
+    private IntPtr WindowMessageHook(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        if (msg != WM_GETMINMAXINFO) return IntPtr.Zero;
+        if (!TryGetWorkArea(hwnd, out var work)) return IntPtr.Zero;
+
+        var info = Marshal.PtrToStructure<MinMaxInfo>(lParam);
+        info.ptMaxPosition.X = work.Left;
+        info.ptMaxPosition.Y = work.Top;
+        info.ptMaxSize.X = work.Right - work.Left;
+        info.ptMaxSize.Y = work.Bottom - work.Top;
+        Marshal.StructureToPtr(info, lParam, false);
+        handled = true;
+        return IntPtr.Zero;
     }
 
     private void ShowActivePage()

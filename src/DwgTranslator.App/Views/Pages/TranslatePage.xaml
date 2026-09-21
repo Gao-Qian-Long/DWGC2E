@@ -191,9 +191,16 @@
                          断言语义不变（Program.cs:281 "empty drop zone capped at 360 DIP"）。
                          重构后这个 * 行更高了（页头 102 + 统计条 64 + 操作条 60 之后仍有约 382），
                          没有上限时它会把整行吃掉。 -->
+                    <!-- §W1-D2 用户批注：「没必要有这个小框吧，外面的大框就够了」。
+                         原先这层 Border 自带 Background=Brush.Surface + 1px Brush.Border，
+                         于是空态在外层 Section.Surface 卡片里又画了一个同色同边的小方框（双层框）。
+                         这里只去掉它的可视框（背景转透明、边框归零），**元素本身保留**：
+                         x:Name/Visibility/MinHeight/MaxHeight 与 4 行 Grid 结构一字未动，
+                         因此 Program.cs:294-297 的居中、:301 可见、:314 ActualHeight<=360、:329 收起
+                         四条断言语义全部不变。MinHeight=180/MaxHeight=360 的产品意图（空队列拖放入口
+                         不在宽屏上无限拉伸）继续由本元素承担。 -->
                     <Border x:Name="EmptyDropZone" MinHeight="180" MaxHeight="360"
-                            Background="{DynamicResource Brush.Surface}" BorderBrush="{DynamicResource Brush.Border}"
-                            BorderThickness="1"
+                            Background="Transparent" BorderThickness="0"
                             Visibility="{Binding HasDrawingFiles, Converter={StaticResource BoolToVis}, ConverterParameter=false}">
                         <Grid x:Name="DropZoneCenter" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="440">
                             <Grid.RowDefinitions>

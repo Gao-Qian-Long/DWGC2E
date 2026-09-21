@@ -351,4 +351,26 @@
     <!-- §L18 状态栏文本上限：1120 宽 + 224 侧栏时仍给进度条留下保底宽度 -->
     <sys:Double x:Key="Size.StatusTextMax">420</sys:Double>
     <sys:Double x:Key="Size.ProgressTextMax">260</sys:Double>
+    <!-- §S5 D6：设置页「关于与帮助」分区原先散落 Width="380"/"236"/"72"/"56"/"36"/"8"、
+         Width="50"/"34"/"20"/"18" 等字面量（用户截图 06 红字「不要用绝对像素布局，用相对的！」）。
+         这些数值本身是既定的版面参数，本批只把它们从页面字面量提升为共享令牌：每个令牌的取值
+         都与原字面量一字不差，所以 D6 不改变任何尺寸。布局层面的位移来自 D7/D8（拆卡 + 更新块右移），
+         与这些令牌的引入无关，两者的证据分开记在 S5-report.md。
+         注意类型：凡是喂给 ColumnDefinition.Width 的一律声明为 GridLength（DynamicResource 不做
+         隐式类型转换），喂给 Width/Height/MinWidth 等 double 属性的才用 sys:Double。
+         Size.AboutDetailsColumn / Size.AboutUpdateColumn 是 GridLength，
+         同时被 SettingsPage.xaml.cs 的窄窗降级（TryFindResource）复用，避免"XAML 与代码各写一份数值"的漂移。 -->
+    <GridLength x:Key="Size.AboutDetailsColumn">380</GridLength>
+    <GridLength x:Key="Size.AboutUpdateColumn">236</GridLength>
+    <GridLength x:Key="Size.AboutLogoColumn">72</GridLength>
+    <sys:Double x:Key="Size.AboutIconBox">56</sys:Double>
+    <sys:Double x:Key="Size.AboutIconGlyph">36</sys:Double>
+    <sys:Double x:Key="Size.AboutUpdateMinHeight">64</sys:Double>
+    <sys:Double x:Key="Size.AboutStatusDot">8</sys:Double>
+    <sys:Double x:Key="Size.AboutStatusTextMax">220</sys:Double>
+    <sys:Double x:Key="Size.AboutUpdateButtonMin">112</sys:Double>
+    <GridLength x:Key="Size.ShortcutIconColumn">50</GridLength>
+    <sys:Double x:Key="Size.ShortcutIconBox">34</sys:Double>
+    <sys:Double x:Key="Size.ShortcutIconGlyph">18</sys:Double>
+    <GridLength x:Key="Size.ShortcutChevronColumn">20</GridLength>
 </ResourceDictionary>

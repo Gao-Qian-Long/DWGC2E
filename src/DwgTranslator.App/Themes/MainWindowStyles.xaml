@@ -240,23 +240,32 @@
         <Setter Property="Margin" Value="0" />
     </Style>
     <!-- 表格行内 / 卡片角落的小按钮 -->
+    <!-- MinHeight 必须与 Height 一起覆写：Button.Base 设了 MinHeight=36（字面量），
+         而 MinHeight 在 WPF 里胜于 Height —— 只覆写 Height=Size.ButtonCompact(32) 时
+         实测 ActualHeight 仍是 36（W1 运行时取证），于是 36 高按钮塞进 40 高表格行
+         （单元格内边距 12,4）正好顶到行底缘，下边框被裁 —— 这就是用户报的
+         「校对 / 查看详情 下部分被截断」。四个 Compact 样式统一补齐 MinHeight 令牌。 -->
     <Style x:Key="Button.Compact.Secondary" TargetType="Button" BasedOn="{StaticResource Button.Secondary}">
         <Setter Property="Height" Value="{DynamicResource Size.ButtonCompact}" />
+        <Setter Property="MinHeight" Value="{DynamicResource Size.ButtonCompact}" />
         <Setter Property="Padding" Value="10,0" />
         <Setter Property="FontSize" Value="{DynamicResource FontSize.Secondary}" />
     </Style>
     <Style x:Key="Button.Compact.Primary" TargetType="Button" BasedOn="{StaticResource Button.Primary}">
         <Setter Property="Height" Value="{DynamicResource Size.ButtonCompact}" />
+        <Setter Property="MinHeight" Value="{DynamicResource Size.ButtonCompact}" />
         <Setter Property="Padding" Value="10,0" />
         <Setter Property="FontSize" Value="{DynamicResource FontSize.Secondary}" />
     </Style>
     <Style x:Key="Button.Compact.Tertiary" TargetType="Button" BasedOn="{StaticResource Button.Tertiary}">
         <Setter Property="Height" Value="{DynamicResource Size.ButtonCompact}" />
+        <Setter Property="MinHeight" Value="{DynamicResource Size.ButtonCompact}" />
         <Setter Property="Padding" Value="8,0" />
         <Setter Property="FontSize" Value="{DynamicResource FontSize.Secondary}" />
     </Style>
     <Style x:Key="Button.Compact.Danger" TargetType="Button" BasedOn="{StaticResource Button.Danger}">
         <Setter Property="Height" Value="{DynamicResource Size.ButtonCompact}" />
+        <Setter Property="MinHeight" Value="{DynamicResource Size.ButtonCompact}" />
         <Setter Property="Padding" Value="10,0" />
         <Setter Property="FontSize" Value="{DynamicResource FontSize.Secondary}" />
     </Style>

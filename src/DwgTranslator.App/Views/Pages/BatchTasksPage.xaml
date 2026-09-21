@@ -203,20 +203,45 @@
             <Grid>
                 <!-- F11c 行高：原先 RowHeight 锁死 Size.TableRow(40)，行内只有单行文本，比上方筛选卡
                  （Padding 16,10 + 36 高控件）紧一档，这也是「列表和上面不像一套」的一部分。
-                 改成 MinRowHeight=48：给下限而不锁死，内容更高时（结果列长文本、36 高按钮）行自然长高、
-                 不裁切；与本页 :358 校对表已在用的 MinRowHeight 写法同构。
+                 §W1-D3 修正（运行时取证推翻只写 MinRowHeight 的做法）：
+                 本表 DataGrid 从 MainWindowStyles.xaml:398-401 的隐式 DataGrid 样式继承
+                 RowHeight=Size.TableRow(40)。WPF 里显式 RowHeight 一旦有值就定死行高，
+                 此时再设 MinRowHeight=48 只会抬高**单元格**，行本身仍是 40 ——
+                 实测 DataGridRow=40.0/DataGridCell=48.0/查看详情按钮=36.0 且按钮纵向跨
+                 y 402.3..438.3 而行底在 437.1，按钮下缘越出行界约 1.1 DIP，
+                 被后绘制的下一行覆盖（row.ClipToBounds=False，不是被自身裁剪）——
+                 这就是用户批注的「下部分被截断了」。
+                 改法：RowHeight="NaN" 让行高回到「由内容决定」（DataGrid.RowHeight 是 double，
+                 其默认值 NaN 即自动；不能写 "Auto"——那是 GridLength 的语法，会抛
+                 ArgumentException: Auto is not a valid value for Double），MinRowHeight=48 继续给下限，
+                 二者都保留原注释「给下限而不锁死」的意图；此时行会按内容撑满，
+                 36 高按钮 + 单元格内边距 12,4 完全落在行内。
                  48 没有对应的 Double 令牌（Metrics.xaml 只有 Size.TableRow=40；Spacing.48 是 Thickness，
                  不能赋给 RowHeight/MinRowHeight），而 Metrics.xaml 不在本任务允许改动的文件清单内，
-                 故此处用字面量并在此说明理由；日后若要令牌化，建议加 Size.TableRowComfortable=48 再替换本值。 -->
+                 故此处继续用字面量；日后若要令牌化，建议加 Size.TableRowComfortable=48 再替换本值。 -->
                 <DataGrid x:Name="TaskTable" ItemsSource="{Binding BatchView}" SelectedItem="{Binding SelectedBatchTask}"
                           SelectionMode="Single" AutoGenerateColumns="False" CanUserAddRows="False"
                           CanUserResizeColumns="False" CanUserReorderColumns="False" CanUserSortColumns="True"
                           IsReadOnly="True" BorderThickness="0" HeadersVisibility="Column"
-                          MinRowHeight="48" ColumnHeaderStyle="{StaticResource DataGridHeaderStyle}"
+                          RowHeight="NaN" MinRowHeight="48" ColumnHeaderStyle="{StaticResource DataGridHeaderStyle}"
                           CellStyle="{StaticResource DataGridCellStyle}" EnableRowVirtualization="True"
                           EnableColumnVirtualization="True" VirtualizingPanel.VirtualizationMode="Recycling"
                           ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                           ScrollViewer.CanContentScroll="True" AutomationProperties.Name="任务列表">
+                    <!-- §W1-D3 真正的行高杠杆：本表从 MainWindowStyles.xaml:419 继承 RowStyle=TranslationRowStyle，
+                         而该样式 :381 自己写了 Setter Height=Size.TableRow(40)。行样式上的显式 Height 优先于
+                         DataGrid.RowHeight / MinRowHeight —— 实测把 grid.RowHeight 设 48、把 MinRowHeight 设 90，
+                         行仍恒为 40.0（row MinHeight 始终 0.0），但单元格已被抬到 48.0，
+                         于是 36 高的「查看详情」按钮(纵向 y 402.3..438.3)下缘越出行底(437.1)约 1.1 DIP，
+                         被后绘制的下一行盖住 —— 用户看到的「下部分被截断了」。
+                         故只在本页把行样式派生一份：Height=NaN(自动) + MinHeight=48，
+                         与其它表格共用 TranslationRowStyle 的配色/字号不变，影响范围仅限任务中心这张表。 -->
+                    <DataGrid.RowStyle>
+                        <Style TargetType="DataGridRow" BasedOn="{StaticResource TranslationRowStyle}">
+                            <Setter Property="Height" Value="NaN" />
+                            <Setter Property="MinHeight" Value="48" />
+                        </Style>
+                    </DataGrid.RowStyle>
                     <DataGrid.Columns>
                         <!-- F11d 列宽重分配。用户批注：「任务/图纸」过宽、「最近更新」过窄导致时间被截成 2026-09-20 14:2…。
                      像素取证（用户截图 1950x1119 @150%，1 DIP=1.5px；比例由「查看详情」按钮实测 112px

@@ -589,3 +589,54 @@ CREATE TABLE IF NOT EXISTS ai_config_changes (
  created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_ai_config_changes_time ON ai_config_changes(created_at DESC,id DESC);
+-- Directed user notifications (migration 0023_user_notifications.sql). Kept out of
+-- operation_settings: the `content` section is a strict equality whitelist and a per-user
+-- directed message has different semantics from the fleet-wide announcement.
+CREATE TABLE IF NOT EXISTS notifications (
+ id TEXT PRIMARY KEY,
+ request_id TEXT NOT NULL UNIQUE,
+ title TEXT NOT NULL CHECK(length(title) BETWEEN 1 AND 120),
+ body TEXT NOT NULL CHECK(length(body) BETWEEN 1 AND 2000),
+ actor TEXT NOT NULL,
+ reason TEXT NOT NULL CHECK(length(reason) BETWEEN 1 AND 500),
+ created_at TEXT NOT NULL,
+ updated_at TEXT NOT NULL,
+ expires_at TEXT,
+ withdrawn_at TEXT,
+ withdrawn_actor TEXT,
+ revision INTEGER NOT NULL DEFAULT 1 CHECK(revision > 0)
+);
+CREATE INDEX IF NOT EXISTS idx_notifications_feed ON notifications(created_at DESC,id DESC);
+CREATE TABLE IF NOT EXISTS notification_recipients (
+ notification_id TEXT NOT NULL REFERENCES notifications(id) ON DELETE CASCADE,
+ user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ read_at TEXT,
+ created_at TEXT NOT NULL,
+ PRIMARY KEY(notification_id,user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_notification_recipients_user ON notification_recipients(user_id,read_at,notification_id);
+CREATE TABLE IF NOT EXISTS notification_changes (
+ id TEXT PRIMARY KEY,
+ notification_id TEXT NOT NULL REFERENCES notifications(id) ON DELETE CASCADE,
+ actor TEXT NOT NULL,
+ action TEXT NOT NULL CHECK(action IN ('edit','withdraw')),
+ before_revision INTEGER NOT NULL CHECK(before_revision > 0),
+ before_snapshot TEXT NOT NULL CHECK(json_valid(before_snapshot)),
+ after_value TEXT NOT NULL CHECK(json_valid(after_value)),
+ reason TEXT NOT NULL CHECK(length(reason) BETWEEN 1 AND 500),
+ created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_notification_changes_target ON notification_changes(notification_id,created_at DESC,id DESC);
+CREATE TRIGGER IF NOT EXISTS notification_change_guard BEFORE INSERT ON notification_changes BEGIN
+ SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM notifications n WHERE n.id=NEW.notification_id AND n.revision=NEW.before_revision
+  AND NEW.before_snapshot=json_object('title',n.title,'body',n.body,'expires_at',n.expires_at,'withdrawn_at',n.withdrawn_at))
+ THEN RAISE(ABORT,'notification_conflict') END;
+END;
+CREATE TRIGGER IF NOT EXISTS notification_change_apply AFTER INSERT ON notification_changes BEGIN
+ UPDATE notifications SET title=json_extract(NEW.after_value,'$.title'),
+  body=json_extract(NEW.after_value,'$.body'),
+  expires_at=json_extract(NEW.after_value,'$.expires_at'),
+  withdrawn_at=json_extract(NEW.after_value,'$.withdrawn_at'),
+  withdrawn_actor=CASE WHEN json_extract(NEW.after_value,'$.withdrawn_at') IS NULL THEN withdrawn_actor ELSE NEW.actor END,
+  updated_at=NEW.created_at,revision=revision+1 WHERE id=NEW.notification_id;
+END;

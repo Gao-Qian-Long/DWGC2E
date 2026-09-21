@@ -96,7 +96,7 @@
              1366×768（约 554）都不出现纵向滚动。 -->
         <Grid Grid.Row="1">
         <ScrollViewer x:Name="AccountScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-        <StackPanel MaxWidth="1200" Width="{Binding ViewportWidth, RelativeSource={RelativeSource AncestorType=ScrollViewer}}" HorizontalAlignment="Left">
+        <StackPanel MaxWidth="1200" Width="{Binding ViewportWidth, RelativeSource={RelativeSource AncestorType=ScrollViewer}}" HorizontalAlignment="Center">
             <!-- §D7 未登录的登录卡已移到 ScrollViewer 的同级覆盖层「登录舞台」里，
                  在那里做上下左右居中并铺杂志风背景；已登录内容从这里开始。 -->
             <StackPanel Visibility="{Binding IsAccountLoggedIn, Converter={StaticResource BoolToVis}}">
@@ -315,28 +315,17 @@
                 </StackPanel>
             </Border>
         </Grid>
-        <!-- 刷新指示器是覆盖层：与 ScrollViewer 同级、贴顶，不占布局高度
-             （冒烟断言要求刷新前后内容高度差 < 0.5）。
-             §A3 用户批注「不能在别的提示吗？这里会改变软件布局骨架」：这条 4 DIP 的琥珀带
-             加奶白底衬，出现在页面顶端时读起来像"插进来一条横条"。现在压成 2 DIP 的琥珀细线
-             并去掉底衬（Background=Transparent），只剩一道发丝级的进度提示；
-             过程语义改由两处承担 —— ①横幅内按钮原地变「同步中…」并禁用降透明，MinWidth 锁定
-             尺寸所以不挤动任何元素；②右下角 toast（MainWindow 的 Toasts 是 Grid.Row=1/Column=1
-             的 Bottom-Right 覆盖层，本身不占布局行），成功时的「账户信息已同步」与失败告警
-             走的就是这条既有通道。x:Name / Visibility 绑定 / IsHitTestVisible 全部保留，
-             冒烟对 refreshIndicator.IsVisible 的两条断言不受影响。
+        <!-- §D11 用户批注「不要这个加载条」：原先这里有一条 x:Name="AccountRefreshIndicator"
+             的 2 DIP 琥珀细线（内层 4 DIP 琥珀 Border + 外层透明底衬），作为刷新覆盖层贴顶显示。
+             它虽然不占布局高度，但在页面顶端读起来就是"插进来一条横条"——
+             截图实测 150% 缩放下为 #D97728（= Brush.Amber）的 3 px 实心带，
+             横跨整个内容视口（x=48..2231），比身份卡（x=48..1840）还宽，非常显眼。
+             整条指示器已删除。过程语义改由既有的两处承担，不再新增任何元素：
+             ① 横幅内按钮原地变「同步中…」并禁用（见下方 RefreshAccountButtonText 绑定，
+                MinWidth 锁定尺寸所以不挤动任何元素）；
+             ② 右下角 toast（MainWindow 的 Toasts 是 Grid.Row=1/Column=1 的 Bottom-Right
+                覆盖层，本身不占布局行），成功时的「账户信息已同步」与失败告警走的就是这条通道。
              顶栏（MainWindow.xaml）未增删任何元素。 -->
-        <Border x:Name="AccountRefreshIndicator" Panel.ZIndex="10" HorizontalAlignment="Stretch" VerticalAlignment="Top" Height="2" Background="Transparent" IsHitTestVisible="False" Visibility="{Binding IsAccountRefreshing, Converter={StaticResource BoolToVis}}">
-            <!-- 刻意不使用 indeterminate ProgressBar：它的 Forever 动画——全局模板的 LoadingPulse
-                 （DoubleAnimation）与默认 Aero 模板的 DoubleAnimationUsingKeyFrames——会在视觉树被
-                 重新挂载（如冒烟 CaptureLayout 把内容摘到游离 Border 里渲染）或模板切换时被孤儿化泄漏。
-                 即便 IsAccountRefreshing 随后回到 false，这些时钟也已无法被 ExitActions/RemoveStoryboard
-                 移除，永久 tick：WPF TimeManager 因活跃时钟每帧请求合成，渲染线程空转、ApplicationIdle
-                 永久饿死（UI 冒烟卡在 account 页、生产环境隐藏进度条白烧 CPU 的根因）。
-                 静态琥珀条靠外层 Border 的 Visibility=IsAccountRefreshing 显隐即可传达"刷新中"，
-                 零动画泄漏风险；⑩ 的过程动画由状态栏 StatusPulse/ActivityDots 承担，与此无关。 -->
-            <Border Height="4" Background="{DynamicResource Brush.Amber}" />
-        </Border>
         </Grid>
     </Grid>
 </UserControl>

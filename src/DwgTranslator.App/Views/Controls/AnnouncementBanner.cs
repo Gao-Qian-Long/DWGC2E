@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -87,32 +89,67 @@ public sealed class AnnouncementBanner : Border
             _owner = null; _request?.Cancel(); _dialog?.Close();
         };
         DataContextChanged += async (_, _) => { if (IsLoaded) await RefreshAsync(); };
-        _refresh.Tick += async (_, _) => await RefreshAsync();
+        // Only the timer is "automatic"; it is the one that honours the directed back-off.
+        _refresh.Tick += async (_, _) => await RefreshAsync(automatic: true);
     }
     private void OpenAnnouncement()
     {
         if (_dialog != null) { _dialog.Activate(); return; }
-        _dialog = new AnnouncementWindow(Window.GetWindow(this), _content.Length > 0 ? _content : DisplayText);
+        var vm = DataContext as MainViewModel;
+        // Directed notifications are part of the same center (用户已确认不新做消息中心), so the window
+        // receives both channels and marks both read on open (CONTRACT-notifications.md §8).
+        _dialog = new AnnouncementWindow(Window.GetWindow(this), _content.Length > 0 ? _content : DisplayText, vm?.DirectedNotifications);
         _dialog.Closed += (_, _) => { _dialog = null; _button.Focus(); };
         _dialog.Show();
-        if (DataContext is MainViewModel vm && _content.Length > 0)
-        { vm.MarkAnnouncementRead(_content); _dot.Visibility = Visibility.Collapsed; UpdateTicker(); UpdateAccessibleName(); }
+        if (vm == null) return;
+
+        var unreadIds = vm.DirectedNotifications.Where(x => x.IsUnread).Select(x => x.Id).ToList();
+        if (unreadIds.Count > 0)
+        {
+            // Fired and observed, never awaited: the window is already visible, and the ViewModel queues a
+            // failed report for replay on the next refresh, so a dead backend cannot block or disturb the UI.
+            _ = ReportDirectedReadAsync(vm, unreadIds);
+        }
+        if (_content.Length > 0) vm.MarkAnnouncementRead(_content);
+
+        UpdateUnreadState(vm); UpdateTicker(); UpdateAccessibleName();
     }
+
+    private async Task ReportDirectedReadAsync(MainViewModel vm, IReadOnlyList<string> ids)
+    {
+        try { await vm.MarkDirectedNotificationsReadAsync(ids); }
+        catch (Exception ex) { Log.Debug("定向通知已读回传异常：{ErrorType}", ex.GetType().Name); }
+    }
+
     private async void OwnerActivated(object? sender, EventArgs e)
     { if (DateTime.UtcNow - _lastAttempt > TimeSpan.FromSeconds(15)) await RefreshAsync(); }
-    public async Task RefreshAsync()
+
+    public async Task RefreshAsync() => await RefreshAsync(automatic: false);
+
+    /// <param name="automatic">
+    /// True for the one-minute timer. Only the timer honours the directed-notification back-off: an
+    /// explicit refresh (window activated, account changed, test) always asks, so a backend that came
+    /// back is picked up immediately instead of waiting out the remaining back-off.
+    /// </param>
+    public async Task RefreshAsync(bool automatic)
     {
         if (!IsLoaded || DataContext is not MainViewModel vm) return;
         _request?.Cancel();
         using var request = new CancellationTokenSource();
         _request = request; _lastAttempt = DateTime.UtcNow;
+
+        // Directed notifications first: they ride the account session through vm->_apiClient and must
+        // never go out on the anonymous site client below. A failure is folded into a status by the
+        // ViewModel, so the site-wide refresh still runs and the bell keeps its public caption.
+        await RefreshDirectedAsync(vm, request.Token, automatic);
+
         try
         {
             var value = await vm.ReadSiteAnnouncementAsync(request.Token);
             if (!request.IsCancellationRequested)
             {
                 _content = value;
-                _dot.Visibility = vm.IsAnnouncementUnread(value) ? Visibility.Visible : Visibility.Collapsed;
+                UpdateUnreadState(vm);
                 ShowMessage(string.IsNullOrWhiteSpace(value) ? "暂无公告" : value);
             }
         }
@@ -121,12 +158,43 @@ public sealed class AnnouncementBanner : Border
         {
             if (!request.IsCancellationRequested)
             {
-                _content = ""; _dot.Visibility = Visibility.Collapsed;
+                // Only the site-wide channel is cleared: directed notifications are still valid content
+                // from a different endpoint and must survive a public-endpoint outage.
+                _content = ""; UpdateUnreadState(vm);
                 ShowMessage("公告暂时无法加载，稍后自动重试");
                 Log.Debug("公告加载失败：{ErrorType}", ex.GetType().Name);
             }
         }
         finally { if (ReferenceEquals(_request, request)) _request = null; }
+    }
+
+    /// <summary>
+    /// Pulls the signed-in user's directed notifications into the single red dot. Never throws: the
+    /// ViewModel returns a status instead of an exception, and every non-success status leaves the
+    /// previous snapshot (or emptiness) untouched.
+    /// </summary>
+    private async Task RefreshDirectedAsync(MainViewModel vm, CancellationToken cancellationToken, bool automatic)
+    {
+        try
+        {
+            if (automatic && !vm.ShouldPollDirectedNotifications) return;
+            await vm.RefreshDirectedNotificationsAsync(cancellationToken);
+            UpdateUnreadState(vm);
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            // Belt and braces: the ViewModel already converts every failure into a status, but the title
+            // bar must not be the component that introduces an unhandled exception.
+            Log.Debug("定向通知刷新异常：{ErrorType}", ex.GetType().Name);
+        }
+    }
+
+    /// <summary>The red dot reflects either channel: directed unread state or the site-wide notice.</summary>
+    private void UpdateUnreadState(MainViewModel vm)
+    {
+        var unread = vm.HasUnreadDirectedNotifications || (_content.Length > 0 && vm.IsAnnouncementUnread(_content));
+        _dot.Visibility = unread ? Visibility.Visible : Visibility.Collapsed;
     }
     private void ShowMessage(string value)
     {
@@ -136,9 +204,12 @@ public sealed class AnnouncementBanner : Border
     }
     // 标题栏只放短状态文案：未读→"有新公告"；已读且有内容→短公告原文或"查看公告"；
     // 无内容（暂无公告/正在读取/加载失败）→ DisplayText 本身。全文放 ToolTip 兜底。
+    // 站点公告为空但有定向通知时，标题栏必须仍有可读文案，否则"未读红点"旁边是一片空白。
     private void UpdateTicker()
     {
-        _ticker.Text = HasUnread && _content.Length > 0 ? "有新公告"
+        _ticker.Text = string.IsNullOrWhiteSpace(_content) && DataContext is MainViewModel { HasUnreadDirectedNotifications: true }
+            ? "有新通知"
+            : HasUnread && _content.Length > 0 ? "有新公告"
             : string.IsNullOrWhiteSpace(_content) ? DisplayText
             : DisplayText.Length <= 20 ? DisplayText : "查看公告";
         _ticker.ToolTip = DisplayText;

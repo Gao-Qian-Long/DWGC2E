@@ -10,6 +10,8 @@ import { clientAddress } from './client-address.ts';
 import { guardRequestBody, RequestBodyError } from './request-body.ts';
 import { glossaryRoute } from './account/glossary.ts';
 import { adminUsersRoute } from './admin/users.ts';
+import { adminNotificationsRoute } from './admin/notifications.ts';
+import { notificationsRoute } from './notifications/index.ts';
 import {runPaymentRecovery,recoveryAdmin} from './payments/recovery.ts';
 import { accountDataRoute } from './account/data.ts';
 import { authenticate, issueSession, logout } from './auth/sessions.ts';
@@ -557,6 +559,10 @@ async function route(r: Request,e: Env) {
     if (p.startsWith('/v1/admin/ai/')) return adminAiRoute(r,e);
     if (p === '/v1/admin/plans' || p.startsWith('/v1/admin/plans/')) return adminPlansRoute(r,e);
     if (p === '/v1/admin/users' || p.startsWith('/v1/admin/users/')) return adminUsersRoute(r,e);
+    // Directed notifications are an independent route module: operation_settings `content` is a
+    // strict equality whitelist and must not absorb per-user messages. The /v1/admin/* gate above
+    // has already authenticated the caller and injected x-admin-actor.
+    if (p === '/v1/admin/notifications' || p.startsWith('/v1/admin/notifications/')) return adminNotificationsRoute(r,e,text);
     if (p === "/v1/feedback" || p === "/v1/health" || p.startsWith("/v1/admin/feedback")) return feedbackRoute(r,e);
     if (p === "/" && r.method === "GET")
       return json(
@@ -601,6 +607,7 @@ async function route(r: Request,e: Env) {
     }
     const accountData = await accountDataRoute(r,e,user,origin,text);
     if(accountData) return accountData;
+    if (p === '/v1/notifications' || p === '/v1/notifications/read') return notificationsRoute(r,e,user,origin,text);
     if (p.startsWith("/v1/billing/")) return billingRoute(r, e, { user_id: String(user.user_id), email: String(user.email || "") }, origin);
     if (p === '/v1/profile' && r.method === 'PATCH') {
       const body = await text(r);

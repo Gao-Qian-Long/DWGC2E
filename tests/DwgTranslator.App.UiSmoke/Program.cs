@@ -787,6 +787,16 @@ public sealed partial class SmokeApp : App
             await VerifyBilling(window);
             await VerifyBillingPersistence(window);
             await VerifyBillingCatalog(window);
+            // ── W3：最大化（全屏）布局插桩 ──────────────────────────────────────────────
+            // 全仓此前无任何测试进入最大化态（grep WindowState 全仓零命中最大化；
+            // grep WM_GETMINMAXINFO/HwndSource/MonitorFromWindow/SourceInitialized 在 src\ 下零命中），
+            // 所以上面的 185 张截图矩阵与全部断言都是窗口模式几何，覆盖不到用户报的
+            // D1（顶栏上下不居中）/D5（被任务栏盖住）/D12（会员中心不居中）——这三条只在最大化态出现。
+            // 本用例插在最后一批既有断言（VerifyBilling*，它们依赖"已登出"状态）之后：
+            // 它需要重新登录才能让顶栏三个元素同时在场，插在前面会让下游断言观察到不同会话。
+            // 放在这里后窗口随即在下一行关闭，无下游观察者；用例自身在 finally 里还原
+            // WindowState/窗口尺寸/内容尺寸/CurrentPage/额度快照。
+            await VerifyMaximizedLayoutAsync(window, vm);
             Console.WriteLine("UI_SMOKE=PASS (controlled API; rendered screenshots, not physical DPI validation)");
             window.Close(); Shutdown(0);
         }
