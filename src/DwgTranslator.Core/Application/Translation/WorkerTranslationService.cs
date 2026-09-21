@@ -220,11 +220,19 @@ public sealed class WorkerTranslationService : ITranslationService, IWritebackGl
         return response;
     }
 
-    /// <summary>限流的 Retry-After 优先于本地退避；两种都夹在单次等待上限内。</summary>
+    /// <summary>
+    /// 限流（429）时优先采用服务端 Retry-After 的原始值（尊重服务端的节奏控制，不再夹到 8 秒），
+    /// 仅受 <see cref="RetryBudget"/> 总预算约束；其余可恢复错误仍用本地指数退避并夹在单次上限内。
+    /// </summary>
     private static TimeSpan RetryDelay(TranslationBatchResult response, int attempt)
     {
-        var requested = response.RetryAfterSeconds is { } seconds && seconds > 0
-            ? TimeSpan.FromSeconds(seconds)
+        if (response.ErrorCode == "rate_limited" &&
+            response.RetryAfterSeconds is { } seconds && seconds > 0)
+        {
+            return TimeSpan.FromSeconds(seconds);
+        }
+        var requested = response.RetryAfterSeconds is { } fallbackSeconds && fallbackSeconds > 0
+            ? TimeSpan.FromSeconds(fallbackSeconds)
             : TimeSpan.FromSeconds(1 << Math.Min(attempt, 4));
         return requested > MaxSingleRetryDelay ? MaxSingleRetryDelay : requested;
     }

@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using ACadSharp.Entities;
 using CSMath;
 using DwgTranslator.Core.Models;
@@ -24,6 +25,24 @@ namespace DwgTranslator.Core.Services;
 /// </summary>
 internal static class DwgCollisionDetector
 {
+    // Bounds memoization: ResolveCollisions is invoked per text entity and scans the
+    // full entity list each time (O(N²) overall). An entity's estimated bounds only
+    // change when that entity itself is mutated (as the current target), so caching
+    // per reference and invalidating the target after resolution keeps results
+    // identical while turning repeated scans into O(1) lookups.
+    private static readonly ConditionalWeakTable<CadEntity, StrongBox<(double minX, double minY, double maxX, double maxY)>> BoundsCache = new();
+
+    private static (double minX, double minY, double maxX, double maxY)? GetEntityBoundsCached(CadEntity entity)
+    {
+        if (BoundsCache.TryGetValue(entity, out var box)) return box.Value;
+        var bounds = GetEntityBounds(entity);
+        if (bounds.HasValue)
+            BoundsCache.AddOrUpdate(entity, new StrongBox<(double, double, double, double)>(bounds.Value));
+        return bounds;
+    }
+
+    private static void InvalidateBoundsCache(CadEntity entity) => BoundsCache.Remove(entity);
+
     public static (double minX, double minY, double maxX, double maxY)? GetEntityBounds(CadEntity entity, int depth = 0)
     {
         return entity switch
@@ -114,58 +133,66 @@ internal static class DwgCollisionDetector
         var others = BuildNearbyBounds(targetEntity, allEntities, originalHeight);
         if (others.Count == 0) return;
 
-        double margin = originalHeight * WritebackConstants.CollisionMarginRatio;
-
-        // Snapshot original geometry so we can restore on total failure paths.
-        var snapshot = Snapshot(targetEntity);
-
-        if (!HasCollision(targetEntity, others, margin))
-            return;
-
-        Log.Debug("Offline collision: {Type} {Handle} resolving (origH={H:F2})",
-            targetEntity.GetType().Name, targetEntity.Handle, originalHeight);
-
-        // Strategy 1: keep height, try wrap / width constraint (MText only)
-        if (targetEntity is CadMText mtext)
+        try
         {
-            if (TryWrapMText(mtext, originalHeight, ourEntity, others, margin))
+            double margin = originalHeight * WritebackConstants.CollisionMarginRatio;
+
+            // Snapshot original geometry so we can restore on total failure paths.
+            var snapshot = Snapshot(targetEntity);
+
+            if (!HasCollision(targetEntity, others, margin))
+                return;
+
+            Log.Debug("Offline collision: {Type} {Handle} resolving (origH={H:F2})",
+                targetEntity.GetType().Name, targetEntity.Handle, originalHeight);
+
+            // Strategy 1: keep height, try wrap / width constraint (MText only)
+            if (targetEntity is CadMText mtext)
             {
-                Log.Debug("Offline collision: {Handle} resolved by wrap", mtext.Handle);
+                if (TryWrapMText(mtext, originalHeight, ourEntity, others, margin))
+                {
+                    Log.Debug("Offline collision: {Handle} resolved by wrap", mtext.Handle);
+                    return;
+                }
+            }
+
+            // Strategy 2: micro-nudge position while keeping height
+            if (TryNudge(targetEntity, originalHeight, others, margin))
+            {
+                Log.Debug("Offline collision: {Handle} resolved by nudge", targetEntity.Handle);
                 return;
             }
+
+            // Strategy 3: for DBText that is much wider, try converting layout via hard breaks on MText only;
+            // DBText cannot wrap, so skip to scale.
+
+            // Strategy 4: binary-search height reduction (last resort)
+            if (TryScaleHeight(targetEntity, originalHeight, others, margin))
+            {
+                Log.Debug("Offline collision: {Handle} resolved by scale H={H:F2}",
+                    targetEntity.Handle, GetHeight(targetEntity));
+                return;
+            }
+
+            // Residual overlap remains. Keep the least-bad state from scaling (already applied),
+            // but never below hard min height.
+            double hardMin = originalHeight * WritebackConstants.HardMinHeightRatio;
+            if (GetHeight(targetEntity) < hardMin)
+                SetHeight(targetEntity, hardMin);
+
+            // If still worse than starting height-only change with original position, prefer
+            // original position + min height rather than a large nudge that still collides.
+            if (HasCollision(targetEntity, others, margin))
+            {
+                // Keep height as is (already scaled), restore position only.
+                RestorePosition(targetEntity, snapshot);
+                Log.Debug("Offline collision: {Handle} residual overlap after all strategies", targetEntity.Handle);
+            }
         }
-
-        // Strategy 2: micro-nudge position while keeping height
-        if (TryNudge(targetEntity, originalHeight, others, margin))
+        finally
         {
-            Log.Debug("Offline collision: {Handle} resolved by nudge", targetEntity.Handle);
-            return;
-        }
-
-        // Strategy 3: for DBText that is much wider, try converting layout via hard breaks on MText only;
-        // DBText cannot wrap, so skip to scale.
-
-        // Strategy 4: binary-search height reduction (last resort)
-        if (TryScaleHeight(targetEntity, originalHeight, others, margin))
-        {
-            Log.Debug("Offline collision: {Handle} resolved by scale H={H:F2}",
-                targetEntity.Handle, GetHeight(targetEntity));
-            return;
-        }
-
-        // Residual overlap remains. Keep the least-bad state from scaling (already applied),
-        // but never below hard min height.
-        double hardMin = originalHeight * WritebackConstants.HardMinHeightRatio;
-        if (GetHeight(targetEntity) < hardMin)
-            SetHeight(targetEntity, hardMin);
-
-        // If still worse than starting height-only change with original position, prefer
-        // original position + min height rather than a large nudge that still collides.
-        if (HasCollision(targetEntity, others, margin))
-        {
-            // Keep height as is (already scaled), restore position only.
-            RestorePosition(targetEntity, snapshot);
-            Log.Debug("Offline collision: {Handle} residual overlap after all strategies", targetEntity.Handle);
+            // The target was mutated during resolution; its cached bounds are stale.
+            InvalidateBoundsCache(targetEntity);
         }
     }
 
@@ -202,7 +229,9 @@ internal static class DwgCollisionDetector
             if (other == null || ReferenceEquals(other, targetEntity)) continue;
 
             // Skip pure text entities that are far away; still include geometry.
-            var b = GetEntityBounds(other);
+            // Cached: other entities are not mutated while resolving this target,
+            // so their bounds computed once are reused across all targets.
+            var b = GetEntityBoundsCached(other);
             if (!b.HasValue) continue;
             if (!HasBoundsOverlap(search, b.Value, 0)) continue;
 

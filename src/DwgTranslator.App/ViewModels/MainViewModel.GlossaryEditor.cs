@@ -136,8 +136,9 @@ public partial class MainViewModel
 
     /// <summary>
     /// Synchronous twin, kept only for callers that structurally cannot await — the window-closing
-    /// prompt and the atomic <see cref="CommitWorkspaceChange"/> helpers. It blocks the UI thread on
-    /// the glossary reload, so every caller that can await must use <see cref="SaveTermEditorAsync"/>.
+    /// prompt and the atomic <see cref="CommitWorkspaceChange"/> helpers. The glossary reload runs on
+    /// a worker thread (Task.Run) so the UI thread only blocks on its completion, not on the file IO
+    /// itself; every caller that can await must use <see cref="SaveTermEditorAsync"/>.
     /// </summary>
     public bool SaveTermEditor()
     {
@@ -147,7 +148,9 @@ public partial class MainViewModel
         {
             PersistWorkspace(entries);
             committed = true;
-            _glossaryService.LoadGlossaryAsync(path).GetAwaiter().GetResult();
+            // The glossary service must see the new file before anyone translates with these terms.
+            // Reload happens on a worker thread to avoid a UI-thread deadlock / long freeze on slow disks.
+            Task.Run(() => _glossaryService.LoadGlossaryAsync(path)).GetAwaiter().GetResult();
             return CompleteTermSave(entries);
         }
         catch (Exception ex) { return FailTermSave(committed, ex); }
@@ -162,6 +165,18 @@ public partial class MainViewModel
         var answer = Views.PromptDialog.Show("术语尚未保存。是否保存后继续？", "未保存的术语", MessageBoxButton.YesNoCancel);
         if (answer == MessageBoxResult.Cancel) return false;
         if (answer == MessageBoxResult.Yes) return SaveTermEditor();
+        DiscardTerms(); return true;
+    }
+
+    /// <summary>异步版离开确认：能 await 的调用方（账号/云端/导入流程）用它，保存走 SaveTermEditorAsync。</summary>
+    public async Task<bool> ConfirmLeaveGlossaryAsync()
+    {
+        if (IsWorkspaceSaving) { TermFeedback = "正在保存本机术语，请稍候再离开。"; return false; }
+        if (IsCloudGlossarySyncing) { TermFeedback = "正在同步云端，请稍候再离开或切换语言。"; return false; }
+        if (!HasUnsavedTerms) { if (IsTermDrawerOpen) CloseTermDrawer(); return true; }
+        var answer = Views.PromptDialog.Show("术语尚未保存。是否保存后继续？", "未保存的术语", MessageBoxButton.YesNoCancel);
+        if (answer == MessageBoxResult.Cancel) return false;
+        if (answer == MessageBoxResult.Yes) return await SaveTermEditorAsync();
         DiscardTerms(); return true;
     }
     [RelayCommand] private void ExportTerms()

@@ -42,7 +42,6 @@ public class AutoCadInteropService : IAutoCadInteropService, IDisposable
         PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase
     };
 
-    private readonly List<object?> _comObjects = [];
     private bool _disposed;
 
     public bool IsAutoCADAvailable(AppConfig config)
@@ -102,15 +101,30 @@ public class AutoCadInteropService : IAutoCadInteropService, IDisposable
             if (File.Exists(candidateLease))
             {
                 // A late completion can release an old lease; absence of a signal is not success.
-                var previous = System.Text.Json.JsonSerializer.Deserialize<PendingCadSession>(File.ReadAllText(candidateLease));
-                var sessionRoot = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "DwgTranslator")) + Path.DirectorySeparatorChar;
-                if (previous == null || !Path.GetFullPath(previous.DonePath).StartsWith(sessionRoot, StringComparison.OrdinalIgnoreCase)
-                    || !File.Exists(previous.DonePath))
-                    throw new IOException("该输出仍有未确认的 CAD 写回会话；请先在 CAD 中确认旧命令已结束。记录：" + candidateLease);
-                var oldResult = new CadWriteResult();
-                if (ProcessDoneSignal(previous.DonePath, previous.SessionId, entities.Count, oldResult) == DoneSignalOutcome.Stale)
-                    throw new IOException("CAD 完成信号与未决会话不匹配。");
-                File.Delete(candidateLease);
+                PendingCadSession? previous;
+                try
+                {
+                    previous = System.Text.Json.JsonSerializer.Deserialize<PendingCadSession>(File.ReadAllText(candidateLease));
+                }
+                catch (Exception ex)
+                {
+                    // A corrupt lease (crash mid-write) must not wedge every future
+                    // writeback of this output. Delete it and start a fresh session.
+                    Log.Warning(ex, "Corrupt pending CAD lease at {Path}; deleting and recreating", candidateLease);
+                    File.Delete(candidateLease);
+                    previous = null;
+                }
+                if (previous != null)
+                {
+                    var sessionRoot = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "DwgTranslator")) + Path.DirectorySeparatorChar;
+                    if (!Path.GetFullPath(previous.DonePath).StartsWith(sessionRoot, StringComparison.OrdinalIgnoreCase)
+                        || !File.Exists(previous.DonePath))
+                        throw new IOException("该输出仍有未确认的 CAD 写回会话；请先在 CAD 中确认旧命令已结束。记录：" + candidateLease);
+                    var oldResult = new CadWriteResult();
+                    if (ProcessDoneSignal(previous.DonePath, previous.SessionId, entities.Count, oldResult) == DoneSignalOutcome.Stale)
+                        throw new IOException("CAD 完成信号与未决会话不匹配。");
+                    File.Delete(candidateLease);
+                }
             }
             using (var lease = new FileStream(candidateLease, FileMode.CreateNew, FileAccess.Write, FileShare.None))
                 System.Text.Json.JsonSerializer.Serialize(lease, new PendingCadSession { SessionId = sessionId, DonePath = doneSignalPath });
@@ -458,8 +472,9 @@ DwgTranslator: done."")
     /// Copies the source drawing out of harm's way before CAD may write it. Called only once the
     /// writeback path is dispatchable: taking it earlier leaves a full copy of the drawing behind
     /// for every attempt that never reached CAD (missing plugin, incompatible install, no
-    /// automation server, no active document). The planned path is collision-free by construction,
-    /// so CreateNew fails closed instead of overwriting an earlier backup of the same session.
+    /// automation server, no active document). If a backup from a previous timed-out attempt
+    /// already exists, it is reused only when it matches the current source length; any other
+    /// leftover fails closed instead of being silently overwritten.
     /// </summary>
     private static void EnsureSourceBackup(string sourceFilePath, string? plannedBackupPath)
     {
@@ -469,6 +484,19 @@ DwgTranslator: done."")
         if (string.Equals(Path.GetFullPath(sourceFilePath), backupPath, StringComparison.OrdinalIgnoreCase))
             throw new IOException("Backup path must not be the source drawing.");
         Directory.CreateDirectory(Path.GetDirectoryName(backupPath)!);
+
+        if (File.Exists(backupPath))
+        {
+            var sourceLength = new FileInfo(sourceFilePath).Length;
+            var existingLength = new FileInfo(backupPath).Length;
+            if (existingLength == sourceLength && sourceLength > 0)
+            {
+                Log.Information("Reusing existing CAD source backup {Path} ({Length} bytes)", backupPath, sourceLength);
+                return;
+            }
+            throw new IOException($"备份文件已存在且与当前图纸不一致，拒绝覆盖：{backupPath}");
+        }
+
         using var source = new FileStream(sourceFilePath, FileMode.Open, FileAccess.Read, FileShare.Read);
         using var backup = new FileStream(backupPath, FileMode.CreateNew, FileAccess.Write, FileShare.None);
         source.CopyTo(backup);
@@ -801,13 +829,6 @@ DwgTranslator: done."")
     protected virtual void Dispose(bool disposing)
     {
         if (_disposed) return;
-
-        if (disposing)
-        {
-            ReleaseComObjects(_comObjects);
-            _comObjects.Clear();
-        }
-
         _disposed = true;
     }
 

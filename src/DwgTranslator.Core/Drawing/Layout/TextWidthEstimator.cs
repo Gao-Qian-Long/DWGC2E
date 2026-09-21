@@ -15,9 +15,35 @@ public static class TextWidthEstimator
     /// — the estimator under-estimates SHX by up to 29%. When the text style is known
     /// to be SHX, callers should adjust accordingly.
     /// </summary>
+    // Memoization for the pure (text, height) -> width function. Collision resolution
+    // re-estimates the same strings many times (binary search re-measures the target,
+    // nearby-entity scans repeat across targets), so caching cuts repeated char loops.
+    private static readonly object WidthCacheLock = new();
+    private static readonly Dictionary<(string, double), double> WidthCache = new();
+    private const int MaxWidthCacheEntries = 8192;
+
     public static double EstimateTextWidth(string text, double height)
     {
         if (string.IsNullOrEmpty(text) || height <= 0) return 0;
+
+        var key = (text, height);
+        lock (WidthCacheLock)
+        {
+            if (WidthCache.TryGetValue(key, out var cached)) return cached;
+        }
+
+        double width = ComputeTextWidth(text, height);
+
+        lock (WidthCacheLock)
+        {
+            if (WidthCache.Count >= MaxWidthCacheEntries) WidthCache.Clear();
+            WidthCache[key] = width;
+        }
+        return width;
+    }
+
+    private static double ComputeTextWidth(string text, double height)
+    {
         double width = 0;
         foreach (char c in text)
         {

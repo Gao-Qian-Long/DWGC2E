@@ -12,8 +12,12 @@ public sealed partial class WorkerApiClient
 {
     // Remember rejected credentials for this client lifetime without retaining plaintext tokens.
     // A locked settings file must not cause a known-invalid bearer to be sent repeatedly.
+    // The cache is bounded (32, FIFO): a long-lived client that rejects many sessions must not grow
+    // without limit, and the oldest fingerprint is the least likely to be retried.
+    private const int MaxRejectedSessions = 32;
     private readonly object _rejectedSessionsGate = new();
     private readonly HashSet<string> _rejectedSessions = new(StringComparer.Ordinal);
+    private readonly Queue<string> _rejectedSessionsOrder = new();
 
     public event Action<ApiAuthenticationException>? AuthenticationRejected;
 
@@ -26,7 +30,21 @@ public sealed partial class WorkerApiClient
     private bool RejectSession(string? token)
     {
         if (string.IsNullOrEmpty(token)) return false;
-        lock (_rejectedSessionsGate) return _rejectedSessions.Add(SessionFingerprint(token));
+        lock (_rejectedSessionsGate)
+        {
+            var fingerprint = SessionFingerprint(token);
+            if (_rejectedSessions.Add(fingerprint))
+            {
+                _rejectedSessionsOrder.Enqueue(fingerprint);
+                while (_rejectedSessionsOrder.Count > MaxRejectedSessions)
+                {
+                    var oldest = _rejectedSessionsOrder.Dequeue();
+                    _rejectedSessions.Remove(oldest);
+                }
+                return true;
+            }
+            return false;
+        }
     }
 
     private bool IsRejectedSession(string? token)

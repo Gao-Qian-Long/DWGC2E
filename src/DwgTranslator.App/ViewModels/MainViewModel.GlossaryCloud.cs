@@ -67,7 +67,7 @@ public partial class MainViewModel
     }
     public async Task OpenCloudWorkspaceAsync()
     {
-        if(!CanEditWorkspace || IsTermDrawerOpen || !RequireAccount() || !ConfirmLeaveGlossary())return;
+        if(!CanEditWorkspace || IsTermDrawerOpen || !RequireAccount() || !await ConfirmLeaveGlossaryAsync())return;
         if(_apiClient is not IIncrementalCloudGlossaryClient cloud) {TermFeedback="当前连接不支持增量云端管理。";return;}
         EnsureWorkspace(); var context=CloudGlossaryContext; IsCloudGlossarySyncing=true;
         try

@@ -6,7 +6,6 @@ using DwgTranslator.Core.Resources;
 using DwgTranslator.Core.Services;
 using DwgTranslator.Core.Tasks;
 using DwgTranslator.Core.Translation;
-using Microsoft.Extensions.DependencyInjection;
 using System.Collections.ObjectModel;
 using System.Reflection;
 using Serilog;
@@ -32,6 +31,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private readonly ITaskManager _taskManager;
     private readonly TaskManagerOptions _taskOptions;
     private readonly IApiClient _apiClient;
+    private readonly IDxfReaderService? _dxfReader;
+    private readonly ILogStore? _injectedLogStore;
     private AppConfig _config;
     private string? _settingsPath;
     private CancellationTokenSource? _cts;
@@ -75,7 +76,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     #endregion
 
     public LogViewModel LogViewModel => _logViewModel ??= new LogViewModel(
-        App.Services?.GetService<ILogStore>() ?? App.LogStore ?? new InMemoryLogStore());
+        _injectedLogStore ?? App.LogStore ?? new InMemoryLogStore());
 
     public ObservableCollection<TextEntity> Entities { get; } = [];
     public ObservableCollection<TextEntity> FilteredEntities { get; } = [];
@@ -157,7 +158,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
         ITranslationConsistencyService consistencyService,
         ITaskManager taskManager,
         TaskManagerOptions taskOptions,
-        IApiClient apiClient)
+        IApiClient apiClient,
+        IDxfReaderService? dxfReaderService = null,
+        ILogStore? logStore = null)
     {
         _config = new AppConfig();
         _glossaryService = glossaryService;
@@ -170,6 +173,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
         _taskManager = taskManager;
         _taskOptions = taskOptions;
         _apiClient = apiClient;
+        _dxfReader = dxfReaderService;
+        _injectedLogStore = logStore;
 
         // 任务层是主链路的执行者：界面只订阅它的事件，不再自己跑解析 / 翻译 / 写回。
         SubscribeTaskEvents();
@@ -282,6 +287,17 @@ public partial class MainViewModel : ObservableObject, IDisposable
         _cts = null;
         _exportCts = null;
         GC.SuppressFinalize(this);
+    }
+
+    /// <summary>
+    /// 主窗口关闭（应用退出前）的清理：只解除窗口级订阅与挂起的会话保存，不销毁单例 VM 本身。
+    /// CTS 取消、任务队列取消等"终结性"清理仍留在 <see cref="Dispose"/>，由容器退出时触发。
+    /// </summary>
+    public void DetachWindowScopedState()
+    {
+        _projectAutosaveCts?.Cancel();
+        _workspaceSessionSaveCts?.Cancel();
+        DetachDrawingFileObservers();
     }
 }
 

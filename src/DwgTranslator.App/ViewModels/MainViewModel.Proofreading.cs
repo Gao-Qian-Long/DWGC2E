@@ -1,6 +1,5 @@
 using DwgTranslator.Core.Models;
 using DwgTranslator.Core.Services;
-using Microsoft.Extensions.DependencyInjection;
 using Serilog;
 using System.IO;
 
@@ -127,7 +126,7 @@ public partial class MainViewModel
         var version = _sessionVersion;
         var workspaceVersion = ++_proofreadingWorkspaceVersion;
         var store = ProofreadingStore;
-        var dxfReader = App.Services?.GetService<IDxfReaderService>();
+        var dxfReader = _dxfReader;
         try
         {
             var restored = await Task.Run(() => store.Restore(path =>

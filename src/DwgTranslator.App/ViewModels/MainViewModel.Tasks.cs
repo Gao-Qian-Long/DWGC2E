@@ -36,8 +36,8 @@ public partial class MainViewModel
 
     #region 事件订阅
 
-    // The task manager is a singleton while MainViewModel is transient, so every handler must be
-    // stored and detached again — otherwise each MainWindow keeps a disposed ViewModel alive.
+    // The task manager and MainViewModel are both singletons now, but the handlers are still stored
+    // and detached on window close so a disposed/recreated UI never keeps stale subscriptions alive.
     private EventHandler<TranslationTask>? _taskUpdatedHandler;
     private EventHandler<string>? _taskProgressHandler;
     private EventHandler<double>? _taskOverallProgressHandler;
@@ -85,10 +85,16 @@ public partial class MainViewModel
             HasMultipleDrawingFiles = DrawingFiles.Count > 1;
         }
 
-        row.AttachTask(task);
+        // AttachTask 会刷新约 20 个绑定属性；按行 100ms 节流，终态（IsFinished）立即刷新不节流。
+        var nowUtc = DateTime.UtcNow;
+        if (task.IsFinished || nowUtc - _lastRowAttachUtc.GetValueOrDefault(row, DateTime.MinValue) >= TimeSpan.FromMilliseconds(100))
+        {
+            _lastRowAttachUtc[row] = nowUtc;
+            row.AttachTask(task);
+        }
 
         // 状态栏不必每条进度都改（一张图纸上千条），500ms 一次既跟得上又不刷屏。
-        if (DateTime.UtcNow - _lastTaskStatusUtc < TimeSpan.FromMilliseconds(500)) return;
+        if (!task.IsFinished && DateTime.UtcNow - _lastTaskStatusUtc < TimeSpan.FromMilliseconds(500)) return;
         _lastTaskStatusUtc = DateTime.UtcNow;
         StatusMessage = task.IsFinished
             ? $"{task.FileName}：{task.StatusText}" + (string.IsNullOrWhiteSpace(task.Error) ? string.Empty : $" —— {task.Error}")
@@ -96,6 +102,9 @@ public partial class MainViewModel
     }
 
     private DateTime _lastTaskStatusUtc = DateTime.MinValue;
+
+    /// <summary>每行的上次 AttachTask 时间（UI 侧节流）。</summary>
+    private readonly Dictionary<DrawingFileItem, DateTime> _lastRowAttachUtc = new();
 
     /// <summary>阶段化日志：[1/6] 总装配图.dwg 正在解析图纸……任务层已同时写进 Serilog 日志。</summary>
     private void OnTaskProgressMessage(string message)

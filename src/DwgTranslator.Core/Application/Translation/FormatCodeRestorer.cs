@@ -65,6 +65,10 @@ public sealed class FormatCodeRestorer : IFormatCodeRestorer
             }
             else
             {
+                // Line counts don't line up with the template segments. Put the full
+                // translation into the longest original segment and KEEP the other
+                // segments' original text — clearing them dropped fixed labels
+                // (units, tags) that live between format codes.
                 var longestIndex = 0;
                 var longestLength = 0;
                 for (var i = 0; i < originalSegments.Count; i++)
@@ -75,7 +79,7 @@ public sealed class FormatCodeRestorer : IFormatCodeRestorer
                 }
 
                 for (var i = 0; i < textSegmentIndexes.Count; i++)
-                    parts[textSegmentIndexes[i]] = i == longestIndex ? translated : string.Empty;
+                    parts[textSegmentIndexes[i]] = i == longestIndex ? translated : originalSegments[i];
             }
         }
 

@@ -3,7 +3,6 @@ using CommunityToolkit.Mvvm.Input;
 using DwgTranslator.Core.Models;
 using DwgTranslator.Core.Services;
 using DwgTranslator.Core.Tasks;
-using Microsoft.Extensions.DependencyInjection;
 using Serilog;
 using System.Collections.ObjectModel;
 using System.IO;
@@ -121,7 +120,7 @@ public partial class MainViewModel
                 StatusMessage = $"项目有 {invalid.Length} 张源图缺失或内容已变化，已阻止套用旧句柄。请重新定位或重新导入。";
                 return;
             }
-            var dxfReader = App.Services?.GetService<IDxfReaderService>();
+            var dxfReader = _dxfReader;
             var loaded = await Task.Run(() =>
             {
                 var result = new List<TextEntity>();

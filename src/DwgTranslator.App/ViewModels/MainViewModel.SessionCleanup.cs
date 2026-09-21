@@ -1,4 +1,4 @@
-﻿using System.Windows.Threading;
+using System.Windows.Threading;
 using DwgTranslator.Core.Services;
 using Serilog;
 
@@ -24,6 +24,7 @@ public partial class MainViewModel
     {
         _config.AuthTokenEncrypted = string.Empty;
         _sessionVersion++;
+        App.InvalidateCachedApiToken();
         StopRejectedCredentialCleanup();
         if (string.IsNullOrEmpty(encryptedToken)) return;
         _pendingRejectedCredential = encryptedToken;

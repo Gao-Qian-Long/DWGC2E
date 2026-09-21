@@ -55,11 +55,23 @@ public sealed class TaskManager : ITaskManager, ITaskRecoveryDiagnostics, IRunti
         lock (_gate)
         {
             if (_running) throw new InvalidOperationException("Cannot change configuration during a queue run.");
-            foreach (var name in new[] { "ProtectDimensions", "ProtectTolerances", "ProtectModels", "GlossaryFirst", "MaxTranslationConcurrency", "LocalWorkerCount", "AiConcurrency", "MemoryOptimization", "MaxRetryCount", "ExportDirectory", "OutputNamingPattern", "DuplicatePolicy", "BackupSourceBeforeWrite", "AutoCadInstallPath", "CadPluginPath", "OpenOutputFolderAfterExport" })
-            {
-                var property = typeof(AppConfig).GetProperty(name)!;
-                property.SetValue(_config, property.GetValue(config));
-            }
+            // 显式赋值替代反射拷贝：编译期即可发现属性改名/删除，且便于审计每个被任务管线消费的字段。
+            _config.ProtectDimensions = config.ProtectDimensions;
+            _config.ProtectTolerances = config.ProtectTolerances;
+            _config.ProtectModels = config.ProtectModels;
+            _config.GlossaryFirst = config.GlossaryFirst;
+            _config.MaxTranslationConcurrency = config.MaxTranslationConcurrency;
+            _config.LocalWorkerCount = config.LocalWorkerCount;
+            _config.AiConcurrency = config.AiConcurrency;
+            _config.MemoryOptimization = config.MemoryOptimization;
+            _config.MaxRetryCount = config.MaxRetryCount;
+            _config.ExportDirectory = config.ExportDirectory;
+            _config.OutputNamingPattern = config.OutputNamingPattern;
+            _config.DuplicatePolicy = config.DuplicatePolicy;
+            _config.BackupSourceBeforeWrite = config.BackupSourceBeforeWrite;
+            _config.AutoCadInstallPath = config.AutoCadInstallPath;
+            _config.CadPluginPath = config.CadPluginPath;
+            _config.OpenOutputFolderAfterExport = config.OpenOutputFolderAfterExport;
         }
     }
 
@@ -261,9 +273,6 @@ public sealed class TaskManager : ITaskManager, ITaskRecoveryDiagnostics, IRunti
     }
 
     /// <inheritdoc/>
-
-    /// <inheritdoc/>
-    /// <inheritdoc/>
     public void MarkReviewCompleted(string taskId)
     {
         ThrowIfDisposed();
@@ -331,6 +340,14 @@ public sealed class TaskManager : ITaskManager, ITaskRecoveryDiagnostics, IRunti
     /// <inheritdoc/>
     public TranslationTask Enqueue(string filePath, TaskPriority priority = TaskPriority.Normal)
     {
+        var task = EnqueueInternal(filePath, priority);
+        SaveNow();
+        return task;
+    }
+
+    /// <summary>入队核心逻辑；持久化由调用方决定（单张立即保存，批量入队最后统一保存一次）。</summary>
+    private TranslationTask EnqueueInternal(string filePath, TaskPriority priority)
+    {
         ThrowIfDisposed();
 
         var fullPath = NormalizePath(filePath);
@@ -356,7 +373,6 @@ public sealed class TaskManager : ITaskManager, ITaskRecoveryDiagnostics, IRunti
 
         RaiseTaskUpdated(task);
         RaiseOverallProgress();
-        SaveNow();
         Log.Information("任务入队：{File}（优先级 {Priority}，队列 {Count}）", task.FileName, task.PriorityText, Tasks.Count);
         return task;
     }
@@ -367,12 +383,14 @@ public sealed class TaskManager : ITaskManager, ITaskRecoveryDiagnostics, IRunti
         ThrowIfDisposed();
         if (filePaths == null) return;
 
+        var enqueued = false;
         foreach (var path in filePaths)
         {
             if (string.IsNullOrWhiteSpace(path)) continue;
             try
             {
-                Enqueue(path, priority);
+                EnqueueInternal(path, priority);
+                enqueued = true;
             }
             catch (Exception ex)
             {
@@ -380,6 +398,9 @@ public sealed class TaskManager : ITaskManager, ITaskRecoveryDiagnostics, IRunti
                 Log.Warning(ex, "图纸入队失败，已跳过：{Path}", path);
             }
         }
+
+        // 批量入队只落盘一次：逐张 SaveNow 会把 N 张图纸放大成 N 次全量序列化。
+        if (enqueued) SaveNow();
     }
 
     /// <inheritdoc/>
@@ -919,6 +940,7 @@ public sealed class TaskManager : ITaskManager, ITaskRecoveryDiagnostics, IRunti
     {
         int completed = 0;
         long lastMessageTicks = 0;
+        long lastRaiseTicks = 0;
 
         return new InlineProgress<TranslationPair>(pair =>
         {
@@ -943,9 +965,15 @@ public sealed class TaskManager : ITaskManager, ITaskRecoveryDiagnostics, IRunti
                     TouchTask(task);
                 }
 
-                // TaskUpdated 不节流：UI 需要连续的进度。日志行按 400ms 节流，
-                // 否则一张图纸上千条进度会把日志文件淹没。
-                RaiseTaskUpdated(task);
+                // TaskUpdated 按 100ms/任务节流，最后一条（done >= total）强制发出保证终态可见；
+                // 数据本身（计数/进度值）始终在锁内即时更新，节流只影响事件触发频率。
+                var raiseNow = DateTime.UtcNow.Ticks;
+                var lastRaise = Interlocked.Read(ref lastRaiseTicks);
+                if (done >= total || raiseNow - lastRaise >= TimeSpan.TicksPerMillisecond * 100)
+                {
+                    Interlocked.Exchange(ref lastRaiseTicks, raiseNow);
+                    RaiseTaskUpdated(task);
+                }
 
                 var now = DateTime.UtcNow.Ticks;
                 var previous = Interlocked.Read(ref lastMessageTicks);
@@ -1083,10 +1111,12 @@ public sealed class TaskManager : ITaskManager, ITaskRecoveryDiagnostics, IRunti
     /// <summary>阶段结束 / 入队出队 / 任务结束等关键点立即写盘；失败提示但不停止翻译。</summary>
     private void SaveNow()
     {
-        lock (_gate)
+        // 快照在锁内完成，文件 IO 放到锁外：序列化+写盘期间不再阻塞入队/进度回调等所有 _gate 消费者。
+        List<TranslationTask> snapshot;
+        lock (_gate) snapshot = _tasks.ToList();
         try
         {
-            _store.Save(Snapshot());
+            _store.Save(snapshot);
             ReportSaveStatus(_store is ITaskStoreDiagnostics diagnostics && diagnostics.LastSaveFailed);
             lock (_gate) _lastSaveUtc = DateTime.UtcNow;
         }

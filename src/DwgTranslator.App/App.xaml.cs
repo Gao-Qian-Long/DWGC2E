@@ -77,6 +77,7 @@ public partial class App : Application
         // 每次都为同一类瞬态故障报红，反而把真正致命的记录淹掉。
         var count = ++_unhandledUiExceptionCount;
         Log.Error(e.Exception, "Unhandled UI exception #{Count}; windowLoaded={Loaded}", count, MainWindow is { IsLoaded: true });
+        TryWriteCrashDump(e.Exception);
 
         // A startup XAML failure has no main window to close; do not leave a hidden process locking the release.
         var recovering = MainWindow is { IsLoaded: true };
@@ -158,6 +159,7 @@ public partial class App : Application
     {
         var ex = e.ExceptionObject as Exception;
         Log.Fatal(ex, "Unhandled domain exception. IsTerminating: {Terminating}", e.IsTerminating);
+        TryWriteCrashDump(ex);
         if (e.IsTerminating)
         {
             try
@@ -194,6 +196,79 @@ public partial class App : Application
         Log.Error(e.Exception, "Unobserved task exception");
         e.SetObserved();
     }
+
+    // ── 崩溃转储（H-D2）────────────────────────────────────────────────────
+    // 致命异常时写一份 minidump 到 %LOCALAPPDATA%\DwgTranslator\crash-dumps，只保留最近 3 份。
+    // 转储失败绝不能再抛：崩溃处理器里抛异常只会把原始故障吞掉。
+    private static int _crashDumpCount;
+
+    private static void TryWriteCrashDump(Exception? exception)
+    {
+        // DispatcherUnhandledException 可能对同一故障链多次进入；限制总量避免刷盘。
+        if (Interlocked.Increment(ref _crashDumpCount) > 3) return;
+        try
+        {
+            var dir = Path.Combine(AppDataDir, "crash-dumps");
+            Directory.CreateDirectory(dir);
+            var file = Path.Combine(dir, $"crash-{DateTime.Now:yyyyMMdd-HHmmss-fff}-{Environment.ProcessId}.dmp");
+            using var stream = new FileStream(file, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+            if (!WriteMinidump(stream.SafeFileHandle, exception))
+            {
+                Log.Warning("minidump 写入失败（MiniDumpWriteDump 返回 false）：{File}", file);
+                try { stream.Dispose(); File.Delete(file); } catch { }
+                return;
+            }
+            Log.Information("崩溃转储已写入：{File}", file);
+            PruneCrashDumps(dir);
+        }
+        catch (Exception ex)
+        {
+            try { Log.Warning(ex, "崩溃转储写入失败（忽略，不影响原有异常处理）"); } catch { }
+        }
+    }
+
+    private static void PruneCrashDumps(string dir)
+    {
+        try
+        {
+            var dumps = new DirectoryInfo(dir).GetFiles("*.dmp")
+                .OrderByDescending(f => f.LastWriteTimeUtc)
+                .ToList();
+            for (var i = 3; i < dumps.Count; i++)
+            {
+                try { dumps[i].Delete(); } catch { }
+            }
+        }
+        catch (Exception ex)
+        {
+            try { Log.Debug(ex, "清理旧崩溃转储失败（忽略）"); } catch { }
+        }
+    }
+
+    private static bool WriteMinidump(Microsoft.Win32.SafeHandles.SafeFileHandle fileHandle, Exception? exception)
+    {
+        // dbghelp 的 MiniDumpWriteDump：对当前进程写一份常规 minidump（含所有模块/线程）。
+        // MINIDUMP_NORMAL 不需要 ExceptionPointers；这里只求"崩溃时有一份可打开的现场"。
+        try
+        {
+            var process = System.Diagnostics.Process.GetCurrentProcess();
+            return MiniDumpWriteDump(
+                process.Handle, (uint)process.Id, fileHandle.DangerousGetHandle(), MiniDumpNormal,
+                IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
+        }
+        catch (Exception ex)
+        {
+            try { Log.Debug(ex, "MiniDumpWriteDump 调用失败"); } catch { }
+            return false;
+        }
+    }
+
+    private const int MiniDumpNormal = 0x00000000;
+
+    [System.Runtime.InteropServices.DllImport("dbghelp.dll", SetLastError = true)]
+    private static extern bool MiniDumpWriteDump(
+        IntPtr hProcess, uint processId, IntPtr hFile, int dumpType,
+        IntPtr exceptionParam, IntPtr userStreamParam, IntPtr callbackParam);
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -358,6 +433,10 @@ public partial class App : Application
 
     private static void ConfigureServices(IServiceCollection services)
     {
+        // H-D1: DI 装配阶段只读一次 settings.json；各工厂（一致性缓存 / 任务存储 / 任务参数 /
+        // 任务引擎 / API 客户端）共享同一份。启动后配置变更经 MainViewModel 写回并自行同步内存态。
+        var startupConfig = ReadAppConfig();
+
         /// <summary>读一遍 settings.json（多处需要同一份配置：任务参数 / 翻译管线 / 后端客户端）。</summary>
         static DwgTranslator.Core.Models.AppConfig ReadAppConfig()
         {
@@ -383,21 +462,14 @@ public partial class App : Application
         // Logging
         services.AddSingleton(LogStore);
 
-        // Localization — load persisted language from settings
+        // Localization — load persisted language from settings（复用启动配置，不再重复读盘）
         services.AddSingleton<ILocalizationService>(sp =>
         {
             string? persistedLanguage = null;
             try
             {
-                var settingsPath = Path.Combine(AppDataDir, "settings.json");
-                if (File.Exists(settingsPath))
-                {
-                    var json = File.ReadAllText(settingsPath);
-                    var config = System.Text.Json.JsonSerializer.Deserialize<DwgTranslator.Core.Models.AppConfig>(
-                        json, DwgTranslator.Core.Models.AppConfigJson.ReadOptions);
-                    if (config != null && !string.IsNullOrEmpty(config.Language))
-                        persistedLanguage = config.Language;
-                }
+                if (!string.IsNullOrEmpty(startupConfig.Language))
+                    persistedLanguage = startupConfig.Language;
             }
             catch (Exception ex)
             {
@@ -428,7 +500,7 @@ public partial class App : Application
         // 与任务层实际使用的缓存是两套数据（一个显示 0 命中，另一个其实没调 API）。
         services.AddSingleton<DwgTranslator.Core.Translation.ITranslationConsistencyService>(sp =>
             new DwgTranslator.Core.Translation.TranslationConsistencyService(
-                Path.Combine(AccountWorkspace.DirectoryFor(AppDataDir, ReadAppConfig().ActiveAccountId), "translation_cache.json")));
+                Path.Combine(AccountWorkspace.DirectoryFor(AppDataDir, startupConfig.ActiveAccountId), "translation_cache.json")));
 
         // 模型凭据、模型名与系统提示词仅存在于 Worker；桌面端不注册任何直连模型客户端。
 
@@ -451,26 +523,18 @@ public partial class App : Application
         // UI 通过 ITaskManager 提交/取消/重试任务并订阅事件，按钮事件里不再直接跑解析与翻译。
         // 并发参数来自用户配置：本地并发（同时处理的图纸数）与 AI 并发（单图内请求数）分开限流。
         services.AddSingleton<DwgTranslator.Core.Tasks.ITaskStore>(sp =>
-            new DwgTranslator.Core.Tasks.JsonTaskStore(Path.Combine(AccountWorkspace.DirectoryFor(AppDataDir, ReadAppConfig().ActiveAccountId), "tasks.json")));
+            new DwgTranslator.Core.Tasks.JsonTaskStore(Path.Combine(AccountWorkspace.DirectoryFor(AppDataDir, startupConfig.ActiveAccountId), "tasks.json")));
 
         services.AddSingleton<DwgTranslator.Core.Tasks.TaskManagerOptions>(sp =>
         {
             var options = new DwgTranslator.Core.Tasks.TaskManagerOptions();
             try
             {
-                var settingsPath = Path.Combine(AppDataDir, "settings.json");
-                if (File.Exists(settingsPath))
-                {
-                    var cfg = System.Text.Json.JsonSerializer.Deserialize<DwgTranslator.Core.Models.AppConfig>(
-                        File.ReadAllText(settingsPath), DwgTranslator.Core.Models.AppConfigJson.ReadOptions);
-                    if (cfg != null)
-                    {
-                        options.LocalWorkerCount = cfg.LocalWorkerCount;
-                        options.AiConcurrency = cfg.AiConcurrency;
-                        options.MaxRetryCount = cfg.MaxRetryCount;
-                        options.MemoryOptimization = cfg.MemoryOptimization;
-                    }
-                }
+                // 复用启动时读到的配置（H-D1），不再重复读盘。
+                options.LocalWorkerCount = startupConfig.LocalWorkerCount;
+                options.AiConcurrency = startupConfig.AiConcurrency;
+                options.MaxRetryCount = startupConfig.MaxRetryCount;
+                options.MemoryOptimization = startupConfig.MemoryOptimization;
             }
             catch (Exception ex) { Log.Warning(ex, "Failed to read task options; using defaults"); }
             return options;
@@ -481,7 +545,7 @@ public partial class App : Application
         {
             try
             {
-                var config = ReadAppConfig();
+                var config = startupConfig;
                 var api = sp.GetRequiredService<DwgTranslator.Core.Api.IApiClient>();
                 if (!string.Equals(api.ModeName, "worker", StringComparison.OrdinalIgnoreCase))
                     throw new InvalidOperationException("Production task engine requires the Worker API client.");
@@ -511,17 +575,82 @@ public partial class App : Application
         // 生产环境始终走 Worker；旧 apiMode=direct 配置会被工厂强制纠正。
         services.AddSingleton<DwgTranslator.Core.Api.IApiClient>(sp =>
         {
-            var config = ReadAppConfig();
+            var config = startupConfig;
             var deviceName = Environment.MachineName;
             var deviceId = GetStableDeviceId();
+            // L1: 池化连接 + 5 分钟连接寿命，避免 new HttpClient() 的端口耗尽 / DNS 不刷新问题。
+            var httpHandler = new System.Net.Http.SocketsHttpHandler
+            {
+                PooledConnectionLifetime = TimeSpan.FromMinutes(5)
+            };
+            var httpClient = new System.Net.Http.HttpClient(httpHandler);
+            // H-D1: token 走内存缓存（解密一次），登录/登出写 settings 时由 MainViewModel 调
+            // InvalidateCachedApiToken 使缓存失效，避免每个请求都读盘 + DPAPI 解密。
             return DwgTranslator.Core.Api.ApiClientFactory.Create(
-                config, new System.Net.Http.HttpClient(),
-                () => DwgTranslator.Core.Models.AppConfig.DecryptApiKey(ReadAppConfig().AuthTokenEncrypted),
+                config, httpClient,
+                GetCachedApiToken,
                 deviceId, deviceName);
         });
 
         // ViewModel
-        services.AddTransient<MainViewModel>();
+        // 单例：任务管理器等依赖本就是单例，VM 与其事件生命周期一致；窗口关闭只解除事件订阅，不再丢弃 VM。
+        services.AddSingleton<MainViewModel>();
+    }
+
+    // ── API token 内存缓存（H-D1）────────────────────────────────────────────
+    // WorkerApiClient 每个请求都会取 token；此前每次都重读 settings.json 并做 DPAPI 解密。
+    // 现在解密结果缓存在进程内，凭据写入（登录/登出/失效清理）时由 MainViewModel 调
+    // InvalidateCachedApiToken 丢弃缓存，下次取值时重新解密——热更新语义保持不变。
+    private static readonly object _tokenCacheGate = new();
+    private static string? _cachedApiToken;
+    private static bool _cachedApiTokenRead;
+
+    /// <summary>取当前 API token（带缓存）。解密失败按匿名请求处理，与原行为一致。</summary>
+    private static string? GetCachedApiToken()
+    {
+        string? encrypted;
+        lock (_tokenCacheGate)
+        {
+            if (_cachedApiTokenRead) return _cachedApiToken;
+        }
+        try
+        {
+            encrypted = DwgTranslator.Core.Models.AppConfig.DecryptApiKey(
+                ReadSettingsSnapshot().AuthTokenEncrypted);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "读取或解密 API token 失败，本次按匿名请求发送");
+            encrypted = null;
+        }
+        lock (_tokenCacheGate)
+        {
+            _cachedApiToken = encrypted;
+            _cachedApiTokenRead = true;
+            return _cachedApiToken;
+        }
+    }
+
+    /// <summary>凭据写入后调用：丢弃缓存，下一次请求重新从 settings.json 解密。</summary>
+    public static void InvalidateCachedApiToken()
+    {
+        lock (_tokenCacheGate)
+        {
+            _cachedApiToken = null;
+            _cachedApiTokenRead = false;
+        }
+    }
+
+    /// <summary>轻量读取 settings.json（仅 token 缓存失效后的重读使用）。</summary>
+    private static DwgTranslator.Core.Models.AppConfig ReadSettingsSnapshot()
+    {
+        var path = Path.Combine(AppDataDir, "settings.json");
+        if (!File.Exists(path)) return new DwgTranslator.Core.Models.AppConfig();
+        var json = File.ReadAllText(path);
+        if (string.IsNullOrWhiteSpace(json)) return new DwgTranslator.Core.Models.AppConfig();
+        return System.Text.Json.JsonSerializer.Deserialize<DwgTranslator.Core.Models.AppConfig>(
+                   json, DwgTranslator.Core.Models.AppConfigJson.ReadOptions)
+               ?? new DwgTranslator.Core.Models.AppConfig();
     }
 
     protected override void OnExit(ExitEventArgs e)

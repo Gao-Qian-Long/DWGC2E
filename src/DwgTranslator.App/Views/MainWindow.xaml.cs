@@ -174,7 +174,15 @@ public partial class MainWindow : Window
         Toasts.ShouldPause = () => _viewModel.IsTermDrawerOpen || _viewModel.IsTaskDetailOpen;
 
         Loaded += OnLoaded;
-        Closing += (s, e) => { if (!_viewModel.ConfirmLeavePage()) { e.Cancel = true; return; } _viewModel.PropertyChanged -= ViewModel_PropertyChanged; _viewModel.Dispose(); };
+        // MainViewModel 是单例（与任务管理器同生命周期）：关窗只解除本窗口的订阅并落盘工作区会话，
+        // 不再 Dispose 整个 VM——否则第二次打开窗口会拿到一个已取消 CTS、已退订事件的残废实例。
+        Closing += (s, e) =>
+        {
+            if (!_viewModel.ConfirmLeavePage()) { e.Cancel = true; return; }
+            _viewModel.PropertyChanged -= ViewModel_PropertyChanged;
+            _viewModel.SaveWorkspaceSession();
+            _viewModel.DetachWindowScopedState();
+        };
     }
 
 

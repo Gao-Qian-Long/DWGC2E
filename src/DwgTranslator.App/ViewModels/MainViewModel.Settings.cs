@@ -85,7 +85,7 @@ public partial class MainViewModel
     [RelayCommand]
     private async Task ImportGlossaryAsync()
     {
-        if (IsProcessing || !ConfirmLeaveGlossary()) return;
+        if (IsProcessing || !await ConfirmLeaveGlossaryAsync()) return;
 
         var dialog = new OpenFileDialog
         {

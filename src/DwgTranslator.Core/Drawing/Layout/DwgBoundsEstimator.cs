@@ -92,8 +92,12 @@ internal static class DwgBoundsEstimator
         }
         else
         {
-            // Free-width: estimate from content
-            string plain = mtext.Value?.Replace("\\P", " ") ?? "";
+            // Free-width: estimate from content. Format codes (\f...\;, \H2x;\, %%c, ...)
+            // are control sequences, not glyphs — strip them first or the width is
+            // systematically overestimated.
+            string plain = new DwgTranslator.Core.Translation.FormatCodeParser()
+                .StripFormatCodes(mtext.Value ?? "")
+                .Replace("\\P", " ");
             w = TextWidthEstimator.EstimateTextWidth(plain, mtext.Height);
         }
 

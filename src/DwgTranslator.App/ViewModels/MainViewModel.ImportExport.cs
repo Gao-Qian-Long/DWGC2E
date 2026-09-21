@@ -2,7 +2,6 @@ using CommunityToolkit.Mvvm.Input;
 using DwgTranslator.Core.Models;
 using DwgTranslator.Core.Resources;
 using DwgTranslator.Core.Services;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Win32;
 using System.IO;
 using System.Windows;
@@ -104,8 +103,8 @@ public partial class MainViewModel
         if (filePaths.Count == 0) return;
         _proofreadingWorkspaceVersion++;
 
-        // Resolve DXF reader before entering background thread
-        var dxfReader = App.Services?.GetService<IDxfReaderService>();
+        // Resolve DXF reader before entering background thread（构造函数注入，不再走静态服务定位）
+        var dxfReader = _dxfReader;
 
         await RunWithProgress(async () =>
         {
@@ -327,8 +326,15 @@ public partial class MainViewModel
             targetFolder = modeDialog.TemporaryDirectory;
         Directory.CreateDirectory(targetFolder);
 
-        var exportConfig = System.Text.Json.JsonSerializer.Deserialize<AppConfig>(System.Text.Json.JsonSerializer.Serialize(_config))!;
-        exportConfig.ExportDirectory = targetFolder;
+        // 导出规划只读这四个字段（OutputPathResolver / 重复策略 / 备份开关），
+        // 用浅拷贝替代整份 AppConfig 的 JSON 序列化往返。
+        var exportConfig = new AppConfig
+        {
+            OutputNamingPattern = _config.OutputNamingPattern,
+            ExportDirectory = targetFolder,
+            BackupSourceBeforeWrite = _config.BackupSourceBeforeWrite,
+            DuplicatePolicy = _config.DuplicatePolicy
+        };
         var exportPlan = BatchExportPlanner.CreateExportPlan(targets, CurrentTargetLang, exportConfig);
         var plannedBySource = exportPlan.Results.ToDictionary(
             result => NormalizeSourcePath(result.SourcePath),

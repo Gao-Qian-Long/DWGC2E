@@ -146,7 +146,7 @@ public partial class MainViewModel
     /// 落盘"上次工作区"。只在启用恢复时写；关掉恢复的用户不需要这份记录，也不该被它占磁盘。
     /// 写失败只记日志：一份便利缓存不能反过来影响用户正在做的事。
     /// </summary>
-    private void SaveWorkspaceSession()
+    public void SaveWorkspaceSession()
     {
         try
         {
