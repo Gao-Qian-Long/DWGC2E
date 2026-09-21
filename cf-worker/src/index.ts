@@ -586,7 +586,7 @@ async function route(r: Request,e: Env) {
     if (p === "/v1/auth/register" && r.method === "POST") return register(r, e);
     if (p === "/v1/auth/login" && r.method === "POST") return login(r, e);
     if (p === "/v1/auth/web/login" && r.method === "POST") return login(r, e, 'web');
-    if(p==='/v1/version'&&r.method==='GET'){const release=await settings(e,'release');return json({service:'DWGC2E API',app_version:release.latest_version||e.LATEST_VERSION||'0.0.0',worker_build_id:e.WORKER_BUILD_ID||'local',schema_version:e.WORKER_SCHEMA_VERSION||'unknown',deployed_at:e.WORKER_DEPLOYED_AT||null,ai_routing_version:e.AI_ROUTING_VERSION||'router-v1',mandatory:false,release_notes:release.release_notes||'',download_url:release.download_url||'',backup_download_url:release.backup_download_url||''},200,origin);}
+    if(p==='/v1/version'&&r.method==='GET'){const release=await settings(e,'release');const latestVersion=release.latest_version||e.LATEST_VERSION||'0.0.0';return json({service:'DWGC2E API',latest_version:latestVersion,app_version:latestVersion,worker_build_id:e.WORKER_BUILD_ID||'local',schema_version:e.WORKER_SCHEMA_VERSION||'unknown',deployed_at:e.WORKER_DEPLOYED_AT||null,ai_routing_version:e.AI_ROUTING_VERSION||'router-v1',mandatory:false,release_notes:release.release_notes||'',download_url:release.download_url||'',backup_download_url:release.backup_download_url||''},200,origin);}
     if (p==='/v1/admin/billing/recovery'||/^\/v1\/admin\/billing\/orders\/[^/]+\/review$/.test(p)) return recoveryAdmin(r,e);
     if (/^\/v1\/admin\/billing\/orders\/[^/]+\/inspect$/.test(p)) return inspectPayment(r, e);
     if (p === "/v1/billing/notify/ezfpy") return notifyPayment(r, e);
