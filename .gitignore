@@ -121,3 +121,5 @@ AGENTS.md
 tests/**/TestResults/
 *.trx
 upload/
+
+.agent-teams/
