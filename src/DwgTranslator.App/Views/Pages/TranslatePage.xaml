@@ -329,6 +329,17 @@
                                                         Visibility="{Binding HasOutput, Converter={StaticResource BoolToVis}}"
                                                         Command="{Binding DataContext.OpenDrawingOutputCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
                                                         CommandParameter="{Binding}" />
+                                                <!-- 用户批注（2026-09-22）：「校对完成之后好像没有导出按钮啊」——此前行内只有
+                                                     「校对」和（已导出后才出现的）「打开」，待导出这一行看不到任何导出动作，
+                                                     只能去用工具栏那个「导出已校对图纸」（它导出全部勾选项）。这里补上该图纸的
+                                                     单独导出：ExportSelectedDrawingCommand 会临时只勾选这一行再走同一条导出链路。
+                                                     与「打开」互斥——打开只在 HasOutput 时出现，导出只在 NeedsExport（无输出且已校对）时
+                                                     出现，所以操作列最多仍是三个按钮，164 的列宽无需再加。 -->
+                                                <Button Content="导出" Style="{StaticResource Button.Compact.Secondary}" MinWidth="44" Margin="4,0,0,0"
+                                                        Visibility="{Binding CanExport, Converter={StaticResource BoolToVis}}"
+                                                        Command="{Binding DataContext.ExportSelectedDrawingCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                                        CommandParameter="{Binding}" AutomationProperties.Name="导出该图纸"
+                                                        ToolTip="只导出这一张已校对的图纸" />
                                                 <Button Content="移除" Style="{StaticResource Button.Compact.Secondary}" MinWidth="44" Margin="4,0,0,0"
                                                         Command="{Binding DataContext.RemoveDrawingCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
                                                         CommandParameter="{Binding}" AutomationProperties.Name="把该图纸移出队列"

@@ -52,10 +52,20 @@
             <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                 <StackPanel>
                     <TextBlock Text="套餐与订单" Style="{StaticResource SectionTitleStyle}" />
-                    <TextBlock x:Name="Account" Margin="{DynamicResource Spacing.CardInset}" TextWrapping="Wrap" FontSize="{DynamicResource FontSize.Secondary}" Foreground="{DynamicResource Brush.TextMuted}" />
-                    <TextBlock x:Name="Entitlements" Margin="{DynamicResource Spacing.StackLoose}" TextWrapping="Wrap" FontWeight="SemiBold" />
-
-                    <TextBlock x:Name="Message" Text="正在加载…" TextWrapping="Wrap" Margin="{DynamicResource Spacing.Vertical}" FontWeight="SemiBold" />
+                    <!-- 用户批注（2026-09-22）「布局样式太丑了」：账号与会员/额度原本是两行裸文本直接摞在
+                         标题下面，既没有边界也没有主次，读起来像一段没排完的注释。收进一张信息卡：
+                         标签走 InfoLabel，值走正文色，与本项目其它页面的读数习惯一致。
+                         注意 x:Name="Account"/"Entitlements" 是 code-behind 写入点，必须保留。 -->
+                    <Border Background="{DynamicResource Brush.SurfaceAlt}" BorderBrush="{DynamicResource Brush.BorderLight}"
+                            BorderThickness="1" CornerRadius="{DynamicResource CornerRadius.Medium}"
+                            Padding="14,12" Margin="{DynamicResource Spacing.Stack}">
+                        <StackPanel>
+                            <TextBlock Text="购买账号" Style="{StaticResource InfoLabel}" />
+                            <TextBlock x:Name="Account" TextWrapping="Wrap" Margin="{DynamicResource Spacing.BlockTopTight}" />
+                            <TextBlock Text="当前会员" Style="{StaticResource InfoLabel}" Margin="{DynamicResource Spacing.Vertical}" />
+                            <TextBlock x:Name="Entitlements" TextWrapping="Wrap" Margin="{DynamicResource Spacing.BlockTopTight}" FontWeight="SemiBold" />
+                        </StackPanel>
+                    </Border>
 
                     <!-- 购买动作区：选套餐 → 取二维码。当前订单存在时这里不会覆盖原订单，只用于新单。
                          用户批注（2026-09-22）：「重构布局，不必要的文字不要显示」——原来这里的两段
@@ -71,6 +81,11 @@
                         <Button Style="{StaticResource Button.Primary}" x:Name="Buy" Content="确认套餐并获取二维码" Click="Buy_Click" Padding="14,0" IsEnabled="False" />
                         <Button Style="{StaticResource Button.Secondary}" Content="刷新订单与会员" Click="Refresh_Click" Padding="14,0" Margin="{DynamicResource Spacing.LeftGap}" />
                     </WrapPanel>
+                    <!-- 状态消息移到动作之后：它报告的是"上一步操作的结果"（下单、确认、删除、登录过期），
+                         摆在套餐选择器之前会先于用户的操作出现，读起来像一句无来由的提示。
+                         用户批注（2026-09-22）「布局样式太丑了」也是指这处顺序。
+                         保留 x:Name="Message"：冒烟断言直接读它的 Text。 -->
+                    <TextBlock x:Name="Message" Text="正在加载…" TextWrapping="Wrap" Margin="{DynamicResource Spacing.Vertical}" FontWeight="SemiBold" />
                     <Border x:Name="PurchaseAvailabilityPanel" Background="{DynamicResource Brush.BackgroundAlt}" Padding="12" Margin="{DynamicResource Spacing.Vertical}">
                         <TextBlock x:Name="PurchaseAvailability" Text="正在检查购买服务…" TextWrapping="Wrap" FontSize="{DynamicResource FontSize.Secondary}" />
                     </Border>
@@ -88,9 +103,14 @@
                 <!-- 用户批注（2026-09-22）：「历史订单列表滑动很难滑动，可以做成一个按钮，点开弹出历史订单
                      列表，不要占用右边的空间」——常驻表格整块移入弹层（OrdersOverlay，折叠时不占布局），
                      右栏平时只显示当前订单卡；弹层内表格加高到 420，滚动空间比原来宽裕。 -->
-                <DockPanel Grid.Row="0" Margin="0,0,0,8">
+                <!-- 用户批注（2026-09-22）「布局样式太丑了」：这里原来只有一个 Dock=Right 的子元素，
+                     而 DockPanel 默认 LastChildFill=True —— 最后一个子元素会无视 Dock 被拉伸填满整行，
+                     于是「历史订单」变成一条通栏空框，像块坏掉的标题栏。
+                     LastChildFill=False 之后它才真的按内容取宽、靠右停住。 -->
+                <DockPanel Grid.Row="0" LastChildFill="False" Margin="0,0,0,8">
                     <Button DockPanel.Dock="Right" x:Name="ToggleOrders" Content="历史订单" Click="ToggleOrders_Click"
-                            Style="{StaticResource Button.Compact.Secondary}" ToolTip="展开或收起历史订单列表" />
+                            Style="{StaticResource Button.Compact.Secondary}" MinWidth="96"
+                            AutomationProperties.Name="历史订单" ToolTip="展开或收起历史订单列表" />
                 </DockPanel>
                 <!-- 套餐不一致提示（2026-09-22 用户批注「选的套餐和右边的金额对不上啊」）：
                      右侧二维码永远属于"当前订单"，而下拉框选的是"下一次购买"；两者不同时在这里明说，

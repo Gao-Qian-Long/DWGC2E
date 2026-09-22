@@ -28,7 +28,8 @@ public partial class BillingWindow : Window
  private int _failures, _selection;
  public BillingWindow(IBillingClient client,string account,Func<bool> valid,Action<BillingEntitlements> apply)
  {
-  InitializeComponent();_client=client;_valid=valid;_apply=apply;Account.Text="购买账号："+account;
+  // 「购买账号：」这个前缀已移到 XAML 的 InfoLabel 里，这里只给值，避免同一行出现两次。
+  InitializeComponent();_client=client;_valid=valid;_apply=apply;Account.Text=account;
   Plans.SelectionChanged+=(_,_)=>UpdatePlanMismatch(_current);
   Loaded+=async(_,_)=>await InitializeAsync();
   Closed+=(_,_)=>{_expiryTimer.Stop();_timer.Stop();_life.Cancel();_life.Dispose();_pendingStore?.Dispose();};
@@ -121,7 +122,15 @@ public partial class BillingWindow : Window
   if(_pendingStore==null)throw new InvalidOperationException("购买记录尚未就绪。");
   _checkout!.SaveIntent(_pending);
  }
- private void Apply(BillingEntitlements s){if(!Valid())return;_apply(s);Entitlements.Text=$"当前会员：{s.Subscription.PlanName} · 到期：{s.Subscription.ExpiresAt?.ToLocalTime():yyyy-MM-dd HH:mm} · 已用 {s.Usage.Used:N0} / {s.Usage.MonthlyQuota:N0}";}
+ private void Apply(BillingEntitlements s)
+ {
+  if(!Valid())return;_apply(s);
+  // 用户批注（2026-09-22）「布局样式太丑了」：原来一律拼 "当前会员：… · 到期：{值} · 已用 …"，
+  // 而账号没有到期时间时（长期有效）会留下一个只有"到期："标签、后面什么都没有的空档。
+  // 标签已经由 XAML 的 InfoLabel 承担，这里只负责值，并且把无到期时间明确写成"长期有效"。
+  var expiry=s.Subscription.ExpiresAt is DateTime at ? $"到期 {at.ToLocalTime():yyyy-MM-dd HH:mm}" : "长期有效";
+  Entitlements.Text=$"{s.Subscription.PlanName} · {expiry}\n已用 {s.Usage.Used:N0} / {s.Usage.MonthlyQuota:N0}";
+ }
  private async Task Run(Func<Task> action)
  {
   if(_busy||!Valid())return;_busy=true;Buy.IsEnabled=false;

@@ -328,6 +328,15 @@ public sealed partial class SmokeApp : App
         await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
         Check(!((FrameworkElement)translate.FindName("EmptyDropZone")).IsVisible, "import releases drop zone space");
         Check(((FrameworkElement)translate.FindName("DrawingQueue")).ActualHeight >= 120, "queue remains bounded and scrollable in compact workspace");
+        // 用户批注（2026-09-22）「校对完成之后好像没有导出按钮啊」：行内导出入口按 CanExport 显隐。
+        // 此前这一列只有「校对」和（要 HasOutput 才出现的）「打开」，待导出这一行看不到任何导出动作，
+        // 用户只能去点工具栏那个会导出全部勾选项的按钮。六行里只有 index 3（Completed）该出现它。
+        // 注意表头「导出」是 DataGridColumnHeader 的 Content 而不是 Button，不会被下面的筛选命中。
+        translate.UpdateLayout();
+        var queueGrid=(System.Windows.Controls.DataGrid)translate.FindName("DrawingQueue");
+        var inRowExports=FindVisuals<System.Windows.Controls.Button>(queueGrid)
+            .Where(b=>b.IsVisible&&Equals(b.Content,"导出")).ToArray();
+        Check(inRowExports.Length==1,"exactly the pending-export row exposes an in-row export button");
         vm.ToggleLogViewerCommand.Execute(null);
         await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
         var logWindow = Application.Current.Windows.OfType<LogViewerWindow>().Single();
@@ -437,6 +446,18 @@ public sealed partial class SmokeApp : App
         var amountText=((System.Windows.Controls.TextBlock)w.FindName("OrderAmount")).Text;
         Check(amountText.StartsWith("¥")&&amountText.Contains("."),"amount is shown as the primary figure: "+amountText);
         Check(((System.Windows.Controls.Button)w.FindName("CopyOrderNo")).Tag is string copyTag&&copyTag.StartsWith("DW"),"copy action carries the current order number");
+        // 用户批注（2026-09-22）「布局样式太丑了」，两处都在这一屏：
+        // ①「历史订单」原来被 DockPanel 的 LastChildFill=True 拉伸成一条通栏空框（像坏掉的标题栏）；
+        // ②账号没有到期时间时，左栏会留下一个只有"到期："标签、后面什么都没有的空档。
+        w.UpdateLayout();
+        var toggleOrders=(System.Windows.Controls.Button)w.FindName("ToggleOrders");
+        var toggleHost=(FrameworkElement)VisualTreeHelper.GetParent(toggleOrders);
+        Check(toggleOrders.ActualWidth<=140,"history orders button keeps its natural width, actual="+toggleOrders.ActualWidth.ToString("F1"));
+        Check(Math.Abs(toggleOrders.TranslatePoint(new Point(toggleOrders.ActualWidth,0),toggleHost).X-toggleHost.ActualWidth)<=1,
+            "history orders button is right-aligned instead of spanning the column");
+        var entitlements=((System.Windows.Controls.TextBlock)w.FindName("Entitlements")).Text;
+        Check(!entitlements.Contains("到期：")&&entitlements.Contains("长期有效"),
+            "membership without an expiry reads as durable, not as an empty label: "+entitlements.Replace("\n"," / "));
         // Verify row actions fit and are centred under the header at the real minimum and the
         // default window width. These were 620/860 until BillingWindow MinWidth went to 900: both
         // were then clamped up to 900, so the two iterations silently tested the same geometry and
@@ -447,7 +468,6 @@ public sealed partial class SmokeApp : App
         // 按钮，点开弹出」）。折叠时 DataGrid 的行根本不会被实例化，下面的 FindVisuals 会得到 0 个
         // 按钮，断言就成了假红/假绿；所以这里必须先点开弹层再测量，测完收回去，免得后面几张
         // 截图（QR、到期态）被弹层盖住。
-        var toggleOrders=(System.Windows.Controls.Button)w.FindName("ToggleOrders");
         var ordersOverlay=(System.Windows.Controls.Border)w.FindName("OrdersOverlay");
         Check(ordersOverlay.Visibility==Visibility.Collapsed,"history orders start collapsed so the QR keeps the right column");
         toggleOrders.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
