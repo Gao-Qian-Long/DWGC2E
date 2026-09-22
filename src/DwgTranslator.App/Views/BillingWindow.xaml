@@ -57,22 +57,23 @@
 
                     <TextBlock x:Name="Message" Text="正在加载…" TextWrapping="Wrap" Margin="{DynamicResource Spacing.Vertical}" FontWeight="SemiBold" />
 
-                    <!-- 购买动作区：选套餐 → 取二维码。当前订单存在时这里不会覆盖原订单，只用于新单。 -->
+                    <!-- 购买动作区：选套餐 → 取二维码。当前订单存在时这里不会覆盖原订单，只用于新单。
+                         用户批注（2026-09-22）：「重构布局，不必要的文字不要显示」——原来这里的两段
+                         长说明（支付方式说明、"套餐与金额以服务器为准"）与灰色可用状态框全部删除；
+                         支付方式只留单选（微信未开通的说明挂在 ToolTip 上），服务不可用时才出现提示框。 -->
                     <TextBlock Text="选择新套餐并获取二维码" Style="{StaticResource FormRowLabel}" Margin="{DynamicResource Spacing.Stack}" />
                     <ComboBox x:Name="Plans" DisplayMemberPath="Label" Margin="{DynamicResource Spacing.StackTight}" />
-                    <TextBlock Text="新购买支付方式：目前仅支持支付宝。上方二维码属于当前显示的订单，不会因套餐选择而更换。" TextWrapping="Wrap" FontSize="{DynamicResource FontSize.Secondary}" Foreground="{DynamicResource Brush.TextMuted}" Margin="{DynamicResource Spacing.Stack}" />
                     <StackPanel x:Name="PaymentMethods" Orientation="Horizontal" Margin="{DynamicResource Spacing.Vertical}">
                         <RadioButton x:Name="Alipay" Content="支付宝" IsChecked="True" Margin="{DynamicResource Spacing.InlineLeading}" />
-                        <RadioButton x:Name="WechatPay" Content="微信支付（暂未开通）" IsEnabled="False" ToolTip="微信支付通道尚未接入，当前仅支持支付宝。" ToolTipService.ShowOnDisabled="True" />
+                        <RadioButton x:Name="WechatPay" Content="微信支付" IsEnabled="False" ToolTip="微信支付通道尚未接入，当前仅支持支付宝。" ToolTipService.ShowOnDisabled="True" />
                     </StackPanel>
                     <WrapPanel Margin="{DynamicResource Spacing.Vertical}">
                         <Button Style="{StaticResource Button.Primary}" x:Name="Buy" Content="确认套餐并获取二维码" Click="Buy_Click" Padding="14,0" IsEnabled="False" />
                         <Button Style="{StaticResource Button.Secondary}" Content="刷新订单与会员" Click="Refresh_Click" Padding="14,0" Margin="{DynamicResource Spacing.LeftGap}" />
                     </WrapPanel>
-                    <Border Background="{DynamicResource Brush.BackgroundAlt}" Padding="12" Margin="{DynamicResource Spacing.Vertical}">
+                    <Border x:Name="PurchaseAvailabilityPanel" Background="{DynamicResource Brush.BackgroundAlt}" Padding="12" Margin="{DynamicResource Spacing.Vertical}">
                         <TextBlock x:Name="PurchaseAvailability" Text="正在检查购买服务…" TextWrapping="Wrap" FontSize="{DynamicResource FontSize.Secondary}" />
                     </Border>
-                    <TextBlock Text="套餐与金额以服务器为准 · 本次购买绑定上述账号" TextWrapping="Wrap" FontSize="{DynamicResource FontSize.Secondary}" Foreground="{DynamicResource Brush.TextMuted}" />
                 </StackPanel>
             </ScrollViewer>
 
@@ -83,12 +84,25 @@
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
-                <!-- 当前订单卡放在右栏首位（2026-09-22 用户反馈「把付款二维码放到右边来」）：
-                     付款时真正要看的只有"多少钱"和"扫哪个码"。二维码过展示期后整块塌缩、不再显示，
-                     但金额与订单号保留以便核对；未付款记录可以在这里直接删除。 -->
-                <Border x:Name="CurrentOrderCard" Grid.Row="0" Visibility="Collapsed" Background="{DynamicResource Brush.Surface}" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1" CornerRadius="{DynamicResource CornerRadius.Medium}" Padding="16" Margin="{DynamicResource Spacing.CardInset}">
+                <!-- 用户批注（2026-09-22）：「历史订单列表滑动很难滑动，可以做成一个按钮，点开弹出历史订单
+                     列表，不要占用右边的空间」——常驻表格整块移入弹层（OrdersOverlay，折叠时不占布局），
+                     右栏平时只显示当前订单卡；弹层内表格加高到 420，滚动空间比原来宽裕。 -->
+                <DockPanel Grid.Row="0" Margin="0,0,0,8">
+                    <Button DockPanel.Dock="Right" x:Name="ToggleOrders" Content="历史订单" Click="ToggleOrders_Click"
+                            Style="{StaticResource Button.Compact.Secondary}" ToolTip="展开或收起历史订单列表" />
+                </DockPanel>
+                <!-- 套餐不一致提示（2026-09-22 用户批注「选的套餐和右边的金额对不上啊」）：
+                     右侧二维码永远属于"当前订单"，而下拉框选的是"下一次购买"；两者不同时在这里明说，
+                     不再藏在 Message 里。由 code-behind 的 UpdatePlanMismatch 控制。 -->
+                <Border x:Name="PlanMismatchBar" Grid.Row="1" Visibility="Collapsed"
+                        Background="{DynamicResource Brush.WarningLight}" BorderBrush="{DynamicResource Brush.Warning}"
+                        BorderThickness="1" CornerRadius="{DynamicResource CornerRadius.Small}" Padding="10" Margin="{DynamicResource Spacing.CardInset}">
+                    <TextBlock x:Name="PlanMismatchText" TextWrapping="Wrap" FontSize="{DynamicResource FontSize.Secondary}" Foreground="{DynamicResource Brush.Warning}" />
+                </Border>
+                <!-- 当前订单卡：付款时真正要看的只有"多少钱"和"扫哪个码"。二维码过展示期后整块塌缩、
+                     不再显示，但金额与订单号保留以便核对；未付款记录可以在这里直接删除。 -->
+                <Border x:Name="CurrentOrderCard" Grid.Row="2" Visibility="Collapsed" Background="{DynamicResource Brush.Surface}" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1" CornerRadius="{DynamicResource CornerRadius.Medium}" Padding="16" Margin="{DynamicResource Spacing.CardInset}">
                     <StackPanel>
                         <TextBlock x:Name="OrderPlanName" TextWrapping="Wrap" FontSize="15" FontWeight="SemiBold" />
                         <TextBlock x:Name="OrderAmount" FontSize="32" FontWeight="SemiBold" Foreground="{DynamicResource Brush.Primary}" Margin="{DynamicResource Spacing.BlockTopTight}" />
@@ -107,31 +121,46 @@
                         </Border>
                     </StackPanel>
                 </Border>
-                <TextBlock Grid.Row="1" Text="历史订单（选择可查看）" FontSize="{DynamicResource FontSize.SectionTitle}" FontWeight="SemiBold" />
-                <Grid Grid.Row="2" Margin="{DynamicResource Spacing.Stack}">
-                    <DataGrid x:Name="Orders" SelectionMode="Single" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" SelectionChanged="Orders_SelectionChanged" MaxHeight="360" VerticalAlignment="Top">
-                        <DataGrid.Columns>
-                            <DataGridTextColumn Header="订单" Binding="{Binding OrderNo, Converter={StaticResource BillingDisplay}, ConverterParameter=Order}" Width="*" MinWidth="80" ElementStyle="{StaticResource OrderNoCellText}" />
-                            <DataGridTextColumn Header="套餐" Binding="{Binding PlanName}" Width="1.4*" MinWidth="112" ElementStyle="{StaticResource PlanCellText}" />
-                            <DataGridTextColumn Header="状态" Binding="{Binding DisplayState, Converter={StaticResource BillingDisplay}}" Width="Auto" ElementStyle="{StaticResource StateCellText}" />
-                            <DataGridTextColumn Header="金额" Binding="{Binding PayableCents, Converter={StaticResource BillingDisplay}, ConverterParameter=Amount}" Width="Auto" ElementStyle="{StaticResource AmountCellText}" />
-                            <!-- 操作列 76 = 46 按钮 + 单元格 6×2 内边距（余 18）。复制按钮已移除：订单号在
-                                 左栏当前订单卡内有明确语境（"复制订单号"），表格里逐行复制没有用途。 -->
-                            <DataGridTemplateColumn Header="操作" Width="76" MinWidth="76" HeaderStyle="{StaticResource OrderActionHeader}" CellStyle="{StaticResource OrderActionCell}">
-                                <DataGridTemplateColumn.CellTemplate>
-                                    <DataTemplate>
-                                        <!-- 仅未付款记录可移除；已付款订单必须留在列表里作为到账凭证（服务端同样拒绝）。 -->
-                                        <Button Content="删除" AutomationProperties.Name="删除订单记录" ToolTip="仅从列表移除记录，不会取消支付平台订单，请勿再支付旧二维码" Click="HideOrder_Click" Tag="{Binding OrderNo}"
-                                                Visibility="{Binding CanHide, Converter={StaticResource BoolToVis}}"
-                                                Style="{StaticResource Button.Compact.Tertiary}" Width="46" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                    </DataTemplate>
-                                </DataGridTemplateColumn.CellTemplate>
-                            </DataGridTemplateColumn>
-                        </DataGrid.Columns>
-                    </DataGrid>
-                    <controls:EmptyState x:Name="EmptyOrders" Header="暂无订单" Description="当前账号尚无历史订单。" Visibility="Collapsed"/>
-                </Grid>
-                <Button Style="{StaticResource Button.Tertiary}" x:Name="More" Grid.Row="3" Content="更多订单" Click="More_Click" HorizontalAlignment="Left" Padding="12,0" IsEnabled="False" />
+
+                <!-- 历史订单弹层：覆盖右栏（ZIndex=6），折叠时不占任何布局空间。 -->
+                <Border x:Name="OrdersOverlay" Grid.Row="0" Grid.RowSpan="3" Panel.ZIndex="6" Visibility="Collapsed"
+                        Background="{DynamicResource Brush.Surface}" BorderBrush="{DynamicResource Brush.Border}"
+                        BorderThickness="1" CornerRadius="{DynamicResource CornerRadius.Medium}" Padding="12" Margin="{DynamicResource Spacing.CardInset}">
+                    <DockPanel>
+                        <Grid DockPanel.Dock="Top" Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="历史订单（选择可查看）" FontSize="{DynamicResource FontSize.SectionTitle}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                            <Button Grid.Column="1" Content="关闭" Click="ToggleOrders_Click" Style="{StaticResource Button.Compact.Tertiary}" MinWidth="64" />
+                        </Grid>
+                        <Button DockPanel.Dock="Bottom" x:Name="More" Content="更多订单" Click="More_Click" HorizontalAlignment="Left" Padding="12,0" IsEnabled="False" Margin="0,8,0,0" Style="{StaticResource Button.Tertiary}" />
+                        <Grid>
+                            <DataGrid x:Name="Orders" SelectionMode="Single" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" SelectionChanged="Orders_SelectionChanged" MaxHeight="420" VerticalAlignment="Top">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="订单" Binding="{Binding OrderNo, Converter={StaticResource BillingDisplay}, ConverterParameter=Order}" Width="*" MinWidth="80" ElementStyle="{StaticResource OrderNoCellText}" />
+                                    <DataGridTextColumn Header="套餐" Binding="{Binding PlanName}" Width="1.4*" MinWidth="112" ElementStyle="{StaticResource PlanCellText}" />
+                                    <DataGridTextColumn Header="状态" Binding="{Binding DisplayState, Converter={StaticResource BillingDisplay}}" Width="Auto" ElementStyle="{StaticResource StateCellText}" />
+                                    <DataGridTextColumn Header="金额" Binding="{Binding PayableCents, Converter={StaticResource BillingDisplay}, ConverterParameter=Amount}" Width="Auto" ElementStyle="{StaticResource AmountCellText}" />
+                                    <!-- 操作列 76 = 46 按钮 + 单元格 6×2 内边距（余 18）。复制按钮已移除：订单号在
+                                         左栏当前订单卡内有明确语境（"复制订单号"），表格里逐行复制没有用途。 -->
+                                    <DataGridTemplateColumn Header="操作" Width="76" MinWidth="76" HeaderStyle="{StaticResource OrderActionHeader}" CellStyle="{StaticResource OrderActionCell}">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <!-- 仅未付款记录可移除；已付款订单必须留在列表里作为到账凭证（服务端同样拒绝）。 -->
+                                                <Button Content="删除" AutomationProperties.Name="删除订单记录" ToolTip="仅从列表移除记录，不会取消支付平台订单，请勿再支付旧二维码" Click="HideOrder_Click" Tag="{Binding OrderNo}"
+                                                        Visibility="{Binding CanHide, Converter={StaticResource BoolToVis}}"
+                                                        Style="{StaticResource Button.Compact.Tertiary}" Width="46" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                            <controls:EmptyState x:Name="EmptyOrders" Header="暂无订单" Description="当前账号尚无历史订单。" Visibility="Collapsed"/>
+                        </Grid>
+                    </DockPanel>
+                </Border>
             </Grid>
         </Grid>
     </Grid>

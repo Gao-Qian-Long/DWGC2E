@@ -1,6 +1,7 @@
 using CommunityToolkit.Mvvm.Input;
 using DwgTranslator.Core.Models;
 using DwgTranslator.Core.Resources;
+using DwgTranslator.App.Services;
 using System.Windows;
 
 namespace DwgTranslator.App.ViewModels;
@@ -68,6 +69,49 @@ public partial class MainViewModel
         GlossaryHitCount = 0; CacheHitCount = 0; VisibleCount = 0;
         ProgressValue = 0;
         StatusMessage = Strings.Get("StatusCleared");
+    }
+
+    /// <summary>
+    /// 把一张图纸移出队列（用户批注 2026-09-22：「文件队列怎么没有一些基础操作，比如删除队列里面的文件」）。
+    /// 只从队列、实体表与任务记录里移除，不删除磁盘文件；翻译进行中时拒绝，避免与运行中的批次互踩。
+    /// </summary>
+    [RelayCommand]
+    private void RemoveDrawing(DrawingFileItem? item)
+    {
+        if (item == null) return;
+        if (IsProcessing) { ToastService.Warning("当前任务正在执行，完成或取消后再移除图纸。"); return; }
+        if (item.Task?.IsActive == true) { ToastService.Warning("该图纸正在翻译，请先取消任务再移除。"); return; }
+
+        var index = DrawingFiles.IndexOf(item);
+        if (index < 0) return;
+        if (item.Task != null) _taskManager.Remove(item.Task);
+
+        var key = NormalizeSourcePath(item.FullPath);
+        var stale = Entities.Where(e => string.Equals(
+            NormalizeSourcePath(e.SourceFilePath), key, StringComparison.OrdinalIgnoreCase)).ToList();
+        foreach (var entity in stale) { Entities.Remove(entity); FilteredEntities.Remove(entity); }
+
+        DrawingFiles.Remove(item);
+        DetachDrawingFileObserver(item);
+        for (var i = 0; i < DrawingFiles.Count; i++) DrawingFiles[i].Index = i + 1;
+
+        if (SelectedDrawingFile == item)
+            SelectedDrawingFile = DrawingFiles.Count == 0 ? null : DrawingFiles[Math.Min(index, DrawingFiles.Count - 1)];
+        if (SelectedBatchTask == item) { SelectedBatchTask = null; IsTaskDetailOpen = false; }
+        if (string.Equals(SelectedFilePath, item.FullPath, StringComparison.OrdinalIgnoreCase))
+            SelectedFilePath = SelectedDrawingFile?.FullPath ?? string.Empty;
+
+        InvalidateEntityIndex();
+        UpdateStatistics();
+        ApplyFilter();
+        RefreshBatch();
+        HasDrawingFiles = DrawingFiles.Count > 0;
+        HasMultipleDrawingFiles = DrawingFiles.Count > 1;
+        UpdateDrawingSelection();
+        RaiseWorkspaceSummaryProperties();
+        RaiseBatchSummaryProperties();
+        ScheduleWorkspaceSessionSave();
+        StatusMessage = $"已把 {item.FileName} 移出队列（文件本身未删除）。";
     }
 
     partial void OnFilterStatusTextChanged(string value)

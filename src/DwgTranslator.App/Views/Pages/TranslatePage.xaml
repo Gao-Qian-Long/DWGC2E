@@ -109,54 +109,36 @@
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <StackPanel Orientation="Horizontal">
+                    <!-- 用户批注（2026-09-22）：「这两个按钮的样式太丑了」——降为 Compact.Secondary（32 高），
+                         与旁边琥珀胶囊同档，不再和右侧 36 高的 Primary 抢视觉重量。冒烟断言只查
+                         IsEnabled 与 ActualWidth ≥ 100，MinWidth 保留 112/104 不受影响。 -->
                     <Button x:Name="ExportSelectionButton" Content="导出已校对图纸"
                             Command="{Binding ExportDwgCommand}" IsEnabled="{Binding CanExportWorkspace}"
-                            Style="{StaticResource Button.Secondary}" MinWidth="136" Margin="{DynamicResource Spacing.Inline}" />
+                            Style="{StaticResource Button.Compact.Secondary}" MinWidth="112" VerticalAlignment="Center"
+                            Margin="{DynamicResource Spacing.Inline}" />
                     <Button x:Name="RetryFailedButton" Content="仅重试失败项"
                             Command="{Binding RetryFailedCommand}" IsEnabled="{Binding CanRetryFailedDrawingTasks}"
-                            Style="{StaticResource Button.Secondary}" MinWidth="120" Margin="{DynamicResource Spacing.Inline}" />
+                            Style="{StaticResource Button.Compact.Secondary}" MinWidth="104" VerticalAlignment="Center"
+                            Margin="{DynamicResource Spacing.Inline}" />
                     <Button Content="取消导出" Command="{Binding CancelExportCommand}" Style="{StaticResource Button.Danger}"
-                            MinWidth="104"
+                            MinWidth="104" VerticalAlignment="Center"
                             Visibility="{Binding IsExporting, Converter={StaticResource BoolToVis}}" />
                 </StackPanel>
 
-                <!-- 常驻文案（2026-10-02 重排）：原「等宽步骤提示 + 下一步 + 输出摘要」三段混排
-                     被用户反馈"太乱、样式不对、没有上下居中"——步骤提示与页头说明重复且字体不一，整段删除。
-                     现在只保留两块：琥珀"下一步"胶囊（Auto 列，宽度上限 280）+ 「张数 · 输出」弱字
-                     （星号列，空间不足时先省略号让位，任何受支持宽度都不会挤进右侧按钮区）。
-                     Border Padding 同步改为上下对称的 12,8，全部内容在条内垂直居中。
-                     WorkspaceNextStepTextBlock 被 UI 冒烟用几何断言测量（ActualWidth ≥ 80），
-                     重排时保留它，不要改成随状态折叠的元素。 -->
-                <Grid Grid.Column="1" Margin="12,0" VerticalAlignment="Center" AutomationProperties.Name="导出摘要">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <Border VerticalAlignment="Center" MaxWidth="280" Padding="9,3" Margin="0,0,10,0"
-                            Background="{DynamicResource Brush.AmberSoft}" BorderBrush="{DynamicResource Brush.Amber}"
-                            BorderThickness="1" CornerRadius="{DynamicResource CornerRadius.Small}">
-                        <TextBlock x:Name="WorkspaceNextStepTextBlock" Text="{Binding WorkspaceNextStepText}"
-                                   Foreground="{DynamicResource Brush.Primary}" FontWeight="SemiBold"
-                                   FontSize="{DynamicResource FontSize.Secondary}" VerticalAlignment="Center"
-                                   TextTrimming="CharacterEllipsis" ToolTip="{Binding WorkspaceNextStepText}" />
-                    </Border>
-                    <!-- M14 弱字摘要「光学偏高 ~3px」根因：CaptionStyle(Metrics.xaml:116) 给 13px 文本挂了
-                         LineHeight=22，默认 LineStackingStrategy=MaxHeight 把多出的 4.7 DIP 行距全部加在基线
-                         **下方**，于是字形中心比行框中心高约 2.4 DIP（150% 缩放下≈3.5px）；本元素又是
-                         VerticalAlignment=Center 紧贴琥珀胶囊排的，这点偏差直接可见。
-                         修法：只在本元素覆盖 LineHeight=17（LicenseDialog.xaml:66 已有同值同法先例），
-                         max(17, 自然行高 17.3) = 17.3 → 行框收回自然高度，字形回到正中。
-                         刻意不动 CaptionStyle 本体：CardHeader(Metrics.xaml:136) / FormRowDescription(:187) /
-                         PageSubtitleStyle / BodyStyle(:111) 全都 BasedOn 它，改本体等于全局回归。
-                         顺带补 TextWrapping=NoWrap：CaptionStyle 的 Wrap 会让本行已经声明的
-                         TextTrimming=CharacterEllipsis 永不生效（Wrap 先折行、只裁最后一行），
-                         与紧邻胶囊「单行 + 省略号 + ToolTip」的既定语义相矛盾。 -->
-                    <TextBlock x:Name="OutputDirectoryTextBlock" Grid.Column="1" Text="{Binding WorkspaceActionHintText}"
-                               Style="{StaticResource CaptionStyle}" Foreground="{DynamicResource Brush.TextMuted}"
-                               TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
-                               LineHeight="17" TextWrapping="NoWrap"
-                               ToolTip="{Binding WorkspaceOutputLocationText}" />
-                </Grid>
+                <!-- 用户批注（2026-09-22）：「左下角有显示，这里没必要写了」——「张数 · 输出目录」弱字整段
+                     删除（状态栏与输出卡都有同样的信息），中间列只保留琥珀"下一步"胶囊。
+                     WorkspaceNextStepTextBlock 被 UI 冒烟用几何断言测量（ActualWidth ≥ 80），保留它，
+                     不要改成随状态折叠的元素。 -->
+                <Border Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Left" MaxWidth="280"
+                        Padding="9,3" Margin="12,0,10,0"
+                        Background="{DynamicResource Brush.AmberSoft}" BorderBrush="{DynamicResource Brush.Amber}"
+                        BorderThickness="1" CornerRadius="{DynamicResource CornerRadius.Small}"
+                        AutomationProperties.Name="导出摘要">
+                    <TextBlock x:Name="WorkspaceNextStepTextBlock" Text="{Binding WorkspaceNextStepText}"
+                               Foreground="{DynamicResource Brush.Primary}" FontWeight="SemiBold"
+                               FontSize="{DynamicResource FontSize.Secondary}" VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis" ToolTip="{Binding WorkspaceNextStepText}" />
+                </Border>
 
                 <StackPanel Grid.Column="2" Orientation="Horizontal">
                     <Button Content="开始翻译" Command="{Binding TranslateCommand}"
@@ -243,6 +225,9 @@
                                         <MenuItem Header="全部选为导出" Command="{Binding SelectAllDrawingOutputsCommand}" />
                                         <MenuItem Header="取消全部导出选择" Command="{Binding ClearDrawingOutputsCommand}" />
                                         <Separator />
+                                        <MenuItem Header="移除所选文件" Command="{Binding RemoveDrawingCommand}"
+                                                  CommandParameter="{Binding SelectedDrawingFile}"
+                                                  ToolTip="从队列移除选中的图纸（不删除文件）" />
                                         <MenuItem Header="清空队列…" Command="{Binding ClearAllCommand}"
                                                   Foreground="{DynamicResource Brush.Danger}" />
                                     </ContextMenu>
@@ -269,7 +254,9 @@
                                 <DataGridCheckBoxColumn Header="导出"
                                                         Binding="{Binding IsIncludedForExport, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                                         Width="48" />
-                                <DataGridTemplateColumn Header="文件名" Width="*" MinWidth="150" IsReadOnly="True" SortMemberPath="FileName">
+                                <!-- MinWidth 从 150 收到 128：操作列要容纳第三个按钮（移除），星号列让出
+                                     这部分最小宽度，保证 1280 窄窗下列总和不溢出（冒烟断言操作列不出界）。 -->
+                                <DataGridTemplateColumn Header="文件名" Width="*" MinWidth="128" IsReadOnly="True" SortMemberPath="FileName">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
                                             <TextBlock Text="{Binding FileName}" TextTrimming="CharacterEllipsis"
@@ -328,18 +315,24 @@
                                         </DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
-                                <DataGridTemplateColumn Header="操作" Width="148" MinWidth="144" IsReadOnly="True">
+                                <!-- 操作列 164：三个 48 宽按钮 + 两个 4 间距 + 单元格内边距。移除是用户
+                                     2026-09-22 批注补上的基础操作（"文件队列怎么没有一些基础操作"）。 -->
+                                <DataGridTemplateColumn Header="操作" Width="164" MinWidth="164" IsReadOnly="True">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
                                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                                <!-- §L7 按钮不再锁死 Width，交给内容撑开；列宽已按"两个按钮 + 单元格内边距"重算 -->
+                                                <!-- §L7 按钮不再锁死 Width，交给内容撑开；列宽已按"三个按钮 + 单元格内边距"重算 -->
                                                 <Button Content="校对" Style="{StaticResource Button.Compact.Secondary}" MinWidth="44"
                                                         Command="{Binding DataContext.OpenDrawingFileItemsCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
                                                         CommandParameter="{Binding}" AutomationProperties.Name="查看该图纸的文本条目" />
-                                                <Button Content="打开" Style="{StaticResource Button.Compact.Secondary}" MinWidth="44" Margin="{DynamicResource Spacing.LeftGap}"
+                                                <Button Content="打开" Style="{StaticResource Button.Compact.Secondary}" MinWidth="44" Margin="4,0,0,0"
                                                         Visibility="{Binding HasOutput, Converter={StaticResource BoolToVis}}"
                                                         Command="{Binding DataContext.OpenDrawingOutputCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
                                                         CommandParameter="{Binding}" />
+                                                <Button Content="移除" Style="{StaticResource Button.Compact.Secondary}" MinWidth="44" Margin="4,0,0,0"
+                                                        Command="{Binding DataContext.RemoveDrawingCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                                        CommandParameter="{Binding}" AutomationProperties.Name="把该图纸移出队列"
+                                                        ToolTip="从队列移除该图纸（不删除文件）；翻译进行中时不可移除" />
                                             </StackPanel>
                                         </DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>

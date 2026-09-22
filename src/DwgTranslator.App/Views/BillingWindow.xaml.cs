@@ -29,6 +29,7 @@ public partial class BillingWindow : Window
  public BillingWindow(IBillingClient client,string account,Func<bool> valid,Action<BillingEntitlements> apply)
  {
   InitializeComponent();_client=client;_valid=valid;_apply=apply;Account.Text="购买账号："+account;
+  Plans.SelectionChanged+=(_,_)=>UpdatePlanMismatch(_current);
   Loaded+=async(_,_)=>await InitializeAsync();
   Closed+=(_,_)=>{_expiryTimer.Stop();_timer.Stop();_life.Cancel();_life.Dispose();_pendingStore?.Dispose();};
   Activated+=async(_,_)=>{if(_initialized)await RefreshAsync();};
@@ -91,6 +92,7 @@ public partial class BillingWindow : Window
    {
     _current=null;++_selection;Qr.Source=null;Qr.Visibility=Visibility.Collapsed;
     CurrentOrderCard.Visibility=Visibility.Collapsed;
+    PlanMismatchBar.Visibility=Visibility.Collapsed;
     OrderDetails.Text="";QrStatus.Text="尚未选择订单。可从历史订单查看付款状态。";
    }
    await LoadOrders(false);
@@ -105,7 +107,9 @@ public partial class BillingWindow : Window
    var selected=(Plans.SelectedItem as BillingPlan)?.Id;Plans.ItemsSource=purchasable;
    Plans.SelectedItem=purchasable.FirstOrDefault(p=>p.Id==selected)??purchasable.FirstOrDefault();
    _enabled=plans.PaymentsEnabled;PaymentMethods.IsEnabled=_enabled&&purchasable.Count>0;Plans.Visibility=purchasable.Count==0?Visibility.Collapsed:Visibility.Visible;Plans.IsEnabled=_enabled;
-   PurchaseAvailability.Text=!_enabled?"新购买暂未开放\n暂时无法创建新的支付订单。已有订单仍可查询，已付款订单继续确认到账。":purchasable.Count==0?"当前暂无可购买套餐；已有订单仍可查询。":"购买服务可用：选择套餐后获取二维码。价格与权益以服务器为准。";
+   PurchaseAvailability.Text=!_enabled?"新购买暂未开放\n暂时无法创建新的支付订单。已有订单仍可查询，已付款订单继续确认到账。":purchasable.Count==0?"当前暂无可购买套餐；已有订单仍可查询。":"购买服务可用。";
+   // 服务可用时这块灰底框没有信息量，整块收起；只在不可用/出错时出现（用户批注：不必要的文字不显示）。
+   PurchaseAvailabilityPanel.Visibility=!_enabled||purchasable.Count==0?Visibility.Visible:Visibility.Collapsed;
   } catch {
    _enabled=false;PaymentMethods.IsEnabled=false;Plans.IsEnabled=false;
    PurchaseAvailability.Text="套餐加载失败，请点击“刷新订单与会员”重试。已有订单请继续核对，勿重复付款。";
@@ -124,7 +128,7 @@ public partial class BillingWindow : Window
   try{await action();_failures=0;}
   catch(OperationCanceledException){if(!_life.IsCancellationRequested)Close();}
   catch(ApiAuthenticationException){Message.Text="登录已过期，请关闭购买窗口并重新登录。";_life.Cancel();_timer.Stop();Qr.Source=null;Qr.Visibility=Visibility.Collapsed;}
-  catch(Exception ex){if(Valid()){_failures=Math.Min(_failures+1,4);if(!_initialized)PurchaseAvailability.Text="购买信息加载失败，请点击“刷新订单与会员”重试。";Message.Text=(!_initialized&&_pending==null?"购买信息加载失败。 ":_current?.Status=="paid"?"支付成功，会员同步失败，请勿再次付款。":"操作未确认，请勿重复付款。 ")+ (ex is BillingException||ex is InvalidDataException?ex.Message:"请检查网络，或确认没有在其他 APP 窗口购买。");}}
+  catch(Exception ex){if(Valid()){_failures=Math.Min(_failures+1,4);if(!_initialized){PurchaseAvailability.Text="购买信息加载失败，请点击“刷新订单与会员”重试。";PurchaseAvailabilityPanel.Visibility=Visibility.Visible;}Message.Text=(!_initialized&&_pending==null?"购买信息加载失败。 ":_current?.Status=="paid"?"支付成功，会员同步失败，请勿再次付款。":"操作未确认，请勿重复付款。 ")+ (ex is BillingException||ex is InvalidDataException?ex.Message:"请检查网络，或确认没有在其他 APP 窗口购买。");}}
   finally{_busy=false;Buy.IsEnabled=_initialized&&((_enabled&&Plans.SelectedItem is BillingPlan)||_pending is {OrderNo:null})&&!_life.IsCancellationRequested;Buy.Content=_pending is {OrderNo:null}?"确认原购买（不重复建单）":"确认套餐并获取二维码";if(Valid()&&IsActive&&_initialized){_timer.Interval=TimeSpan.FromSeconds(Math.Min(30,3*Math.Pow(2,_failures)));_timer.Start();}}
  }
  private async void Buy_Click(object sender,RoutedEventArgs e)=>await Run(async()=>{
@@ -219,9 +223,8 @@ public partial class BillingWindow : Window
   if(o.Channel!="alipay"){QrStatus.Text="该订单不是支付宝订单，当前通道暂不可扫码。请刷新原订单确认状态，已付款请勿重复支付。";Message.Text="当前仅开放支付宝扫码；原订单查询与到账确认不受影响。";return;}
   QrStatus.Text=o.ExpiresAt<=DateTimeOffset.UtcNow?"该订单二维码展示期限已结束，不再提供扫码入口。请刷新原订单确认，已付款请勿再次支付。":!o.AllowedActions.Pay?"服务端尚未允许该订单扫码，正在确认原订单状态；请勿重复下单。":"正在加载支付二维码…";
   Message.Text=o.AllowedActions.Pay?"请核对金额后扫码，付款结果由服务器确认。":"订单正在确认，请勿重复付款。";
-  // 显示的订单与上方所选套餐不一致时必须说明原因，否则看起来像界面串了数据。
-  if(o.Status!="paid"&&(Plans.SelectedItem as BillingPlan)?.Id is string chosen&&chosen!=o.PlanId)
-   Message.Text+=$" 当前显示的是原订单（{o.PlanName}），与上方所选套餐不同；切换套餐不会取消原订单，如需按新套餐购买请点击“确认套餐并获取二维码”。";
+  // 显示的订单与上方所选套餐不一致时，右栏顶部给出常驻提示条（用户批注：「选的套餐和右边的金额对不上」）。
+  UpdatePlanMismatch(o);
   if(o.AllowedActions.Pay&&o.ExpiresAt>DateTimeOffset.UtcNow&&!string.IsNullOrEmpty(o.QrCode)){
    using var generator=new QRCodeGenerator();using var data=generator.CreateQrCode(o.QrCode,QRCodeGenerator.ECCLevel.M);using var png=new PngByteQRCode(data);using var stream=new MemoryStream(png.GetGraphic(8));
    var image=new BitmapImage();image.BeginInit();image.CacheOption=BitmapCacheOption.OnLoad;image.StreamSource=stream;image.EndInit();image.Freeze();Qr.Source=image;Qr.Visibility=Visibility.Visible;QrStatus.Text="当前订单为支付宝支付，请使用支付宝扫码；二维码有效至 "+o.ExpiresAt.ToLocalTime().ToString("HH:mm:ss")+"。";
@@ -249,5 +252,31 @@ public partial class BillingWindow : Window
  });}
  private async Task LoadOrders(bool append){var d=await _client.GetBillingOrdersAsync(append?_cursor:null,_life.Token);if(!Valid())return;if(!append)_orders.Clear();_orders.AddRange(d.Orders);_cursor=d.NextCursor;Orders.ItemsSource=null;Orders.ItemsSource=_orders.ToArray();EmptyOrders.Visibility=_orders.Count==0?Visibility.Visible:Visibility.Collapsed;Orders.Visibility=_orders.Count==0?Visibility.Collapsed:Visibility.Visible;More.IsEnabled=_cursor!=null;}
  private async void More_Click(object sender,RoutedEventArgs e)=>await Run(()=>LoadOrders(true));
- private async void Orders_SelectionChanged(object sender,SelectionChangedEventArgs e){if(_busy||Orders.SelectedItem is not BillingOrder selected)return;++_selection;await Run(async()=>{_current=await _client.GetBillingOrderAsync(selected.OrderNo,_life.Token);if(Valid())await Display(_current);});}
+ /// <summary>展开/收起历史订单弹层（用户批注：列表不要常驻占用右栏空间）。</summary>
+ private void ToggleOrders_Click(object sender,RoutedEventArgs e)
+ {
+  OrdersOverlay.Visibility=OrdersOverlay.Visibility==Visibility.Visible?Visibility.Collapsed:Visibility.Visible;
+ }
+ /// <summary>
+ /// 右侧二维码永远属于"当前订单"，而下拉框选的是"下一次购买"。两者套餐不同时在右栏顶部给出
+ /// 常驻提示条，否则看起来就像界面串了数据（用户批注：「选的套餐和右边的金额对不上啊」）。
+ /// </summary>
+ private void UpdatePlanMismatch(BillingOrder? o)
+ {
+  if(o==null||o.Status=="paid"||Plans.SelectedItem is not BillingPlan plan||plan.Id==o.PlanId)
+  {
+   PlanMismatchBar.Visibility=Visibility.Collapsed;
+   return;
+  }
+  PlanMismatchText.Text=$"所选套餐：{plan.Label}。右侧二维码仍属于原订单 {o.PlanName}（¥{o.PayableCents/100m:0.00}）——点击「确认套餐并获取二维码」后将生成新二维码；切换选择不会取消原订单。";
+  PlanMismatchBar.Visibility=Visibility.Visible;
+ }
+ private async void Orders_SelectionChanged(object sender,SelectionChangedEventArgs e)
+ {
+  if(_busy||Orders.SelectedItem is not BillingOrder selected)return;
+  ++_selection;
+  await Run(async()=>{_current=await _client.GetBillingOrderAsync(selected.OrderNo,_life.Token);if(Valid())await Display(_current);});
+  // 选中即把该订单显示到右栏当前订单卡，弹层完成使命，收起还给当前订单卡腾出空间。
+  if(Valid())OrdersOverlay.Visibility=Visibility.Collapsed;
+ }
 }

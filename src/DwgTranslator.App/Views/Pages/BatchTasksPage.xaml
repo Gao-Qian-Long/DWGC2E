@@ -539,39 +539,42 @@
                             </Grid>
                         </Border>
 
-                        <!-- 用户标注「这个卡片布局太丑了，优化」：这两个区块原先只是裸标题 + 左标签右值的长列表，
-                             一列排五行又空又散。改成真卡片，键值对压成两列。 -->
+                        <!-- 用户标注（2026-09-22）「弹出的卡片布局怪怪的」：概况原先把"标签/值"竖着堆在两个
+                             独立列里，左右列基线互不相干，读起来像两块错位的数据。改成四列规格表：
+                             标签列 Auto 按最长标签取宽，值列跟在自己标签后同行对齐，一行一组键值。 -->
                         <Border Style="{StaticResource Card}" Margin="{DynamicResource Spacing.BlockTopWide}">
                             <StackPanel>
                                 <TextBlock Text="任务概况" Style="{StaticResource SectionTitleStyle}"
                                            Margin="{DynamicResource Spacing.StackTight}" />
-                                <UniformGrid Columns="2">
-                                    <StackPanel Margin="{DynamicResource Spacing.Stack}">
-                                        <TextBlock Text="文本结果" Style="{StaticResource CaptionStyle}" />
-                                        <TextBlock Text="{Binding SelectedBatchTask.BatchResultText}"
-                                                   Margin="{DynamicResource Spacing.StackTight}" />
-                                    </StackPanel>
-                                    <StackPanel Margin="{DynamicResource Spacing.Stack}">
-                                        <TextBlock Text="耗时" Style="{StaticResource CaptionStyle}" />
-                                        <TextBlock Text="{Binding SelectedBatchTask.ElapsedDisplayText}"
-                                                   Margin="{DynamicResource Spacing.StackTight}" />
-                                    </StackPanel>
-                                    <StackPanel Margin="{DynamicResource Spacing.Stack}">
-                                        <TextBlock Text="优先级" Style="{StaticResource CaptionStyle}" />
-                                        <TextBlock Text="{Binding SelectedBatchTask.PriorityText}"
-                                                   Margin="{DynamicResource Spacing.StackTight}" />
-                                    </StackPanel>
-                                    <StackPanel Margin="{DynamicResource Spacing.Stack}">
-                                        <TextBlock Text="重试次数" Style="{StaticResource CaptionStyle}" />
-                                        <TextBlock Text="{Binding SelectedBatchTask.RetryCountText}"
-                                                   Margin="{DynamicResource Spacing.StackTight}" />
-                                    </StackPanel>
-                                    <StackPanel Margin="{DynamicResource Spacing.Stack}">
-                                        <TextBlock Text="最近更新" Style="{StaticResource CaptionStyle}" />
-                                        <TextBlock Text="{Binding SelectedBatchTask.LastUpdatedText}"
-                                                   Margin="{DynamicResource Spacing.StackTight}" />
-                                    </StackPanel>
-                                </UniformGrid>
+                                <Grid Margin="{DynamicResource Spacing.Stack}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+                                    <Grid.Resources>
+                                        <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionStyle}">
+                                            <Setter Property="VerticalAlignment" Value="Center" />
+                                            <Setter Property="Margin" Value="0,4,12,4" />
+                                        </Style>
+                                    </Grid.Resources>
+                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="文本结果" />
+                                    <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding SelectedBatchTask.BatchResultText}" Foreground="{DynamicResource Brush.TextPrimary}" />
+                                    <TextBlock Grid.Row="0" Grid.Column="2" Text="耗时" />
+                                    <TextBlock Grid.Row="0" Grid.Column="3" Text="{Binding SelectedBatchTask.ElapsedDisplayText}" Foreground="{DynamicResource Brush.TextPrimary}" />
+                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="优先级" />
+                                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SelectedBatchTask.PriorityText}" Foreground="{DynamicResource Brush.TextPrimary}" />
+                                    <TextBlock Grid.Row="1" Grid.Column="2" Text="重试次数" />
+                                    <TextBlock Grid.Row="1" Grid.Column="3" Text="{Binding SelectedBatchTask.RetryCountText}" Foreground="{DynamicResource Brush.TextPrimary}" />
+                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="最近更新" />
+                                    <TextBlock Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="3" Text="{Binding SelectedBatchTask.LastUpdatedText}" Foreground="{DynamicResource Brush.TextPrimary}" />
+                                </Grid>
                             </StackPanel>
                         </Border>
 
