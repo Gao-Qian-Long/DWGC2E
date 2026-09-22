@@ -69,7 +69,8 @@ build_out/
 # ===== Installer Output =====
 installer/Output/
 *.exe
-!DwgTranslator.iss
+# 安装脚本必须入库（产品改名 QLCAD 后同步更新命名）；上面 *.exe 的通配不要顺手把脚本也吃掉。
+!QLCAD.iss
 
 # ===== Runnable Release =====
 /release/
