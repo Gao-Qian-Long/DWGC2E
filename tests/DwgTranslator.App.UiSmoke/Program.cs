@@ -377,6 +377,15 @@ public sealed partial class SmokeApp : App
         await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
         Check(vm.IsTaskDetailOpen && vm.SelectedBatchTask == vm.DrawingFiles[0], "real detail button binding opens correct task");
         Check(((FrameworkElement)batchPage.FindName("TaskDetailDrawer")).IsVisible, "detail drawer renders above task table");
+        // 抽屉的滑入动画是 RenderTransform 实现的，而 RenderTransform 不参与布局——上面所有几何/
+        // 可见性断言都看不见它。FillBehavior.Stop 若没在动画结束时显式归零，抽屉会在滑入完成后
+        // 立刻跳回右侧视野之外（用户报的「点查看详情后面板卡在右边不出现」）。这里直接量偏移。
+        await Task.Delay(450);
+        await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+        var drawerElement = (FrameworkElement)batchPage.FindName("TaskDetailDrawer");
+        var drawerOffset = (drawerElement.RenderTransform as System.Windows.Media.TranslateTransform)?.X ?? 0;
+        Check(Math.Abs(drawerOffset) < 0.5,
+            "task drawer settles on screen after slide-in, offset=" + drawerOffset.ToString("F1"));
         vm.CloseTaskDetailCommand.Execute(null);
         Check(taskTable.Items.Count == 1006, "large task queue retains every row");
         Check(CountVisual<System.Windows.Controls.DataGridRow>(taskTable) < 80, "large queue uses bounded row virtualization");

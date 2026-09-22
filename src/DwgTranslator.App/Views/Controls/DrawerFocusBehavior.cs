@@ -105,8 +105,14 @@ public static class DrawerFocusBehavior
             EasingFunction = new System.Windows.Media.Animation.QuadraticEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut },
             FillBehavior = System.Windows.Media.Animation.FillBehavior.Stop
         };
-        // FillBehavior.Stop + 动画结束后清 RenderTransform：transform 归零后不再持有偏移，
-        // 后续 RenderTransform 变更（如未来加关闭动画）不会叠加。
+        // FillBehavior.Stop 只把 X 交还给基值，而基值正是"面板宽度"（视野之外）——动画一结束抽屉
+        // 就跳回右边，表现为"点了查看详情但面板卡在右边不出现"。RenderTransform 不参与布局，
+        // 几何断言完全看不到它，所以必须在动画结束时显式归零并卸掉动画。
+        animation.Completed += (_, _) =>
+        {
+            translate.BeginAnimation(System.Windows.Media.TranslateTransform.XProperty, null);
+            translate.X = 0;
+        };
         translate.BeginAnimation(System.Windows.Media.TranslateTransform.XProperty, animation);
     }
 
