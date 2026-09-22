@@ -240,3 +240,16 @@ test('S8 notifications never enter the operation_settings content whitelist',asy
  // The notification module owns its own tables rather than borrowing the announcement section.
  assert.equal(x.db.prepare("SELECT COUNT(*) n FROM operation_settings WHERE section='content'").get().n,1);
 });
+
+test('directed notifications address the 64-char ids registration actually issues',async t=>{
+ const x=fixture(t);
+ // Registration mints ids as two de-hyphenated UUIDs concatenated (64 hex), so a UUID-shaped
+ // check rejected every real account and the feature could never send anything.
+ const hex64='a7f34b72138a42c0abc7653e394448304230937ffa764ede9d1325ad7a2bdb1a';
+ x.db.prepare('INSERT INTO users(id,account,email,password_hash,created_at) VALUES(?,?,?,?,?)').run(hex64,'hex64','hex64@example.com',x.hash,new Date().toISOString());
+ const created=await x.admin('/v1/admin/notifications',send(x,{user_ids:[hex64]}));
+ assert.equal(created.status,201);
+ assert.equal((await created.json()).notification.recipient_count,1);
+ // A malformed id is still refused instead of silently dropping the recipient.
+ assert.equal((await x.admin('/v1/admin/notifications',send(x,{user_ids:['not-an-id']}))).status,400);
+});

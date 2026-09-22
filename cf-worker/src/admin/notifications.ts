@@ -6,6 +6,10 @@ type Env={DB:D1Database;ADMIN_API_KEY?:string;CORS_ORIGINS?:string;WEB_PROXY_IDE
 type Row=Record<string,any>;
 const PAGE_SIZE=25;
 const UUID=/^[-a-f0-9]{36}$/;
+// Accounts are keyed by a 64-char hex id (index.ts `random()`), not by a UUID. The UUID shape is
+// still accepted so an account created with a different id scheme keeps working. Request ids stay
+// strict UUIDs: those are minted by the console with crypto.randomUUID().
+const USER_ID=/^(?:[-a-f0-9]{36}|[a-f0-9]{64})$/;
 const ISO=/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 const MAX_BODY=2000,MAX_RECIPIENTS=500;
 const present=(row:Row)=>({id:row.id,title:row.title,body:row.body,actor:row.actor,reason:row.reason,created_at:row.created_at,updated_at:row.updated_at,expires_at:row.expires_at??null,withdrawn_at:row.withdrawn_at??null,revision:row.revision,recipient_count:Number(row.recipient_count||0),read_count:Number(row.read_count||0)});
@@ -22,7 +26,7 @@ export async function adminNotificationsRoute(r:Request,e:Env,readBody:(r:Reques
    if(!keys||keys.some(k=>!['title','body','user_ids','expires_at','reason','request_id'].includes(k)))return reply({message:'请求字段无效'},400);
    const title=typeof d.title==='string'?d.title.trim():'',body=typeof d.body==='string'?d.body.trim():'';
    if(!title||title.length>120||!body||body.length>MAX_BODY||typeof d.reason!=='string'||d.reason.trim().length<1||d.reason.trim().length>500||!UUID.test(d.request_id||''))return reply({message:`请填写 1–120 字标题、1–${MAX_BODY} 字正文和 1–500 字操作原因`},400);
-   if(!Array.isArray(d.user_ids)||d.user_ids.length<1||d.user_ids.length>MAX_RECIPIENTS||d.user_ids.some((x:unknown)=>typeof x!=='string'||!UUID.test(x)))return reply({message:`收件人须为 1–${MAX_RECIPIENTS} 个有效的用户编号`},400);
+   if(!Array.isArray(d.user_ids)||d.user_ids.length<1||d.user_ids.length>MAX_RECIPIENTS||d.user_ids.some((x:unknown)=>typeof x!=='string'||!USER_ID.test(x)))return reply({message:`收件人须为 1–${MAX_RECIPIENTS} 个有效的用户编号`},400);
    const recipients=[...new Set<string>(d.user_ids)];
    if(recipients.length!==d.user_ids.length)return reply({message:'收件人存在重复，请重新选择'},400);
    let expires:string|null=null;
