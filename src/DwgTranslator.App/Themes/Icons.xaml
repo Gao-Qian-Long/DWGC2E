@@ -1,8 +1,8 @@
-<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+﻿<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
     <!-- ============================================================
-         DWG Translator — Icon geometry
+         QLCAD — Icon geometry
          Vector shapes instead of emoji or symbol characters: the console fonts on a Chinese
          Windows install lack 📂 💾 📊 📅 📋 🗑 glyphs and silently substitute another face, which
          is what made the toolbar and the stats row look inconsistent.

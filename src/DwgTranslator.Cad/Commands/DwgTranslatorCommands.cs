@@ -1,4 +1,4 @@
-#if GSTARCAD
+﻿#if GSTARCAD
 using Gssoft.Gscad.ApplicationServices;
 #else
 using Autodesk.AutoCAD.ApplicationServices;
@@ -36,7 +36,7 @@ using CadRuntimeException = Autodesk.AutoCAD.Runtime.Exception;
 namespace DwgTranslator.Cad.Commands;
 
 /// <summary>
-/// AutoCAD command methods for DWG Translator.
+/// AutoCAD command methods for QLCAD.
 /// </summary>
 public class DwgTranslatorCommands
 {
@@ -202,7 +202,7 @@ public class DwgTranslatorCommands
             var dataDirectory = ProductDataDirectory.Initialize(AppDomain.CurrentDomain.BaseDirectory);
             var encryptedToken = config.AuthTokenEncrypted;
             if (string.IsNullOrWhiteSpace(AppConfig.DecryptApiKey(encryptedToken)))
-                throw new InvalidOperationException("请先在 DWGC2E 桌面端登录，再从 CAD 中执行翻译。");
+                throw new InvalidOperationException("请先在 QLCAD 桌面端登录，再从 CAD 中执行翻译。");
 
             var deviceId = GetOrCreateDeviceId(dataDirectory);
             var httpClient = SharedHttp;

@@ -1,4 +1,4 @@
-using DwgTranslator.App.ViewModels;
+﻿using DwgTranslator.App.ViewModels;
 using DwgTranslator.Core.Services;
 using System.IO;
 using System.Windows;
@@ -37,7 +37,7 @@ public partial class EnvironmentCheckPanel : System.Windows.Controls.UserControl
     private void RefreshStatus()
     {
         // App
-        AppVersionText.Text = $"{_viewModel.AppVersionText}（DWG Translator）";
+        AppVersionText.Text = $"{_viewModel.AppVersionText}（QLCAD）";
         AppLamp.Fill = _ok;
 
         bool selfContained = _viewModel.IsSelfContained;
@@ -102,7 +102,7 @@ public partial class EnvironmentCheckPanel : System.Windows.Controls.UserControl
         var status = CadPluginInstaller.Inspect(cadPath, _viewModel.CadPluginDirectory);
         if (status.PluginFilesPresent && status.AutoLoadConfigured) return;
         var answer = PromptDialog.Show(
-            "已检测到 CAD，但当前电脑尚未安装 DWGC2E CAD 插件。\n\n安装插件后，翻译结果才能直接写回 CAD 图纸；插件文件已随本 APP 内置，不需要另行下载。\n\n现在安装吗？",
+            "已检测到 CAD，但当前电脑尚未安装 QLCAD CAD 插件。\n\n安装插件后，翻译结果才能直接写回 CAD 图纸；插件文件已随本 APP 内置，不需要另行下载。\n\n现在安装吗？",
             "安装 CAD 插件", MessageBoxButton.YesNo, MessageBoxImage.Question);
         if (answer == MessageBoxResult.Yes) Install_Click(this, new RoutedEventArgs());
         else AppendLog("用户暂不安装 CAD 插件；翻译和导出功能仍可继续使用。");

@@ -1,4 +1,4 @@
-<UserControl x:Class="DwgTranslator.App.Views.EnvironmentCheckPanel"
+﻿<UserControl x:Class="DwgTranslator.App.Views.EnvironmentCheckPanel"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Background="Transparent"
@@ -49,7 +49,7 @@
                 <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
 
-            <DockPanel Grid.Row="0" Grid.Column="0" Margin="{DynamicResource Spacing.StackWide}" LastChildFill="True"><Ellipse x:Name="AppLamp" Style="{StaticResource Lamp}"/><TextBlock Text="DWGC2E" Style="{StaticResource RowLabel}"/><TextBlock x:Name="AppVersionText" Style="{StaticResource RowValue}" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/></DockPanel>
+            <DockPanel Grid.Row="0" Grid.Column="0" Margin="{DynamicResource Spacing.StackWide}" LastChildFill="True"><Ellipse x:Name="AppLamp" Style="{StaticResource Lamp}"/><TextBlock Text="QLCAD" Style="{StaticResource RowLabel}"/><TextBlock x:Name="AppVersionText" Style="{StaticResource RowValue}" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/></DockPanel>
             <DockPanel Grid.Row="1" Grid.Column="0" Margin="{DynamicResource Spacing.StackWide}" LastChildFill="True"><Ellipse x:Name="RuntimeLamp" Style="{StaticResource Lamp}"/><TextBlock Text="运行环境" Style="{StaticResource RowLabel}"/><TextBlock x:Name="RuntimeText" Style="{StaticResource RowValue}" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/></DockPanel>
             <DockPanel Grid.Row="2" Grid.Column="0" Margin="{DynamicResource Spacing.StackWide}" LastChildFill="True"><Button DockPanel.Dock="Right" Content="打开" Click="OpenDataDir_Click" Style="{StaticResource Button.Tertiary}" Margin="{DynamicResource Spacing.LeftGap}"/><Ellipse x:Name="PathsLamp" Style="{StaticResource Lamp}"/><TextBlock Text="数据目录" Style="{StaticResource RowLabel}"/><TextBlock x:Name="DataPathText" Style="{StaticResource RowValue}" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/></DockPanel>
 

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Diagnostics;
 using System.IO;
 using Microsoft.Win32;
@@ -18,9 +18,9 @@ namespace DwgTranslator.App.Services;
 public static class StartupRegistration
 {
     private const string RunKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
-    private const string ValueName = "DwgTranslator";
+    private const string ValueName = "QLCAD";
 
-    /// <summary>当前 exe 路径（单文件发布下就是 DwgTranslator.exe）。</summary>
+    /// <summary>当前 exe 路径（单文件发布下就是 QLCAD.exe）。</summary>
     private static string CurrentExecutablePath
     {
         get

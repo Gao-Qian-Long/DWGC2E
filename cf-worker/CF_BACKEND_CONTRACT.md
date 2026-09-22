@@ -1,4 +1,4 @@
-# DWGC2E 后端对接清单（Cloudflare 侧）
+﻿# QLCAD 后端对接清单（Cloudflare 侧）
 
 > 客户端已按本文档实现接口抽象（`IApiClient` / `Core/Api/ApiContracts.cs`）。
 > 当前已实现接口抽象与 Worker HTTP 客户端；桌面翻译入口仍显式阻止 Worker 模式。
@@ -7,7 +7,7 @@
 最终链路：
 
 ```text
-DWGC2E.exe ──HTTPS──► Cloudflare Worker ──► D1（账号/会员/额度/设备）
+QLCAD.exe ──HTTPS──► Cloudflare Worker ──► D1（账号/会员/额度/设备）
                                    └──────► AI Gateway ──► DeepSeek
 ```
 
@@ -95,7 +95,7 @@ DWGC2E.exe ──HTTPS──► Cloudflare Worker ──► D1（账号/会员/�
 { "success": true, "used_devices": 2, "max_devices": 3 }
 
 // VersionInfo
-{ "latest_version": "2.2.0", "download_url": "https://.../DWGC2E-2.2.0-setup.exe",
+{ "latest_version": "2.2.0", "download_url": "https://.../QLCAD-2.2.0-setup.exe",
   "backup_download_url": "https://github.com/.../releases/download/v2.2.0/...",
   "release_notes": "- 修复...\n- 新增...", "mandatory": false }
 ```
@@ -193,7 +193,7 @@ CREATE TABLE usage_logs (
 {
   "latest_version": "2.2.0",
   "download_url": "https://你的蓝奏云直链/setup.exe",
-  "backup_download_url": "https://github.com/你的仓库/releases/download/v2.2.0/DWGC2E-2.2.0-setup.exe",
+  "backup_download_url": "https://github.com/你的仓库/releases/download/v2.2.0/QLCAD-2.2.0-setup.exe",
   "release_notes": "- 新增批量任务分组\n- 修复中文图纸导出残留",
   "mandatory": false
 }

@@ -1,4 +1,4 @@
-using CommunityToolkit.Mvvm.ComponentModel;
+﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using DwgTranslator.App.Services;
 using DwgTranslator.Core.Models;
@@ -61,7 +61,7 @@ public partial class MainViewModel
     {
         try
         {
-            Clipboard.SetText($"DWGC2E {AppVersionText}\n{AppBuildText}");
+            Clipboard.SetText($"QLCAD {AppVersionText}\n{AppBuildText}");
             AboutFeedback = "版本信息已复制。";
             ToastService.Success("版本信息已复制。");
         }

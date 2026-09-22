@@ -1,4 +1,4 @@
-using CommunityToolkit.Mvvm.ComponentModel;
+﻿using CommunityToolkit.Mvvm.ComponentModel;
 using DwgTranslator.Core.Api;
 using DwgTranslator.Core.Logging;
 using DwgTranslator.Core.Models;
@@ -13,7 +13,7 @@ using Serilog;
 namespace DwgTranslator.App.ViewModels;
 
 /// <summary>
-/// Main ViewModel for DWG Translator — core skeleton.
+/// Main ViewModel for QLCAD — core skeleton.
 /// Partial classes: Config, Translation, ImportExport, Operations, Settings, Tasks, …
 ///
 /// 依赖全部由 DI 注入（构造函数只有一个），不再走 "App.Services?.GetService(...) ?? new ..."

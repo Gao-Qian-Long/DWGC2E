@@ -1,4 +1,4 @@
-# DWGC2E Cloudflare Worker
+﻿# QLCAD Cloudflare Worker
 
 ## 一次性部署顺序
 
@@ -34,7 +34,7 @@ npx wrangler secret put BREVO_API_KEY
 
 - `CORS_ORIGINS = "https://cad.pocketter.dpdns.org"`
 - `DEFAULT_PLAN = "free"`
-- `MAIL_FROM = "DWGC2E <noreply@mail.cad.pocketter.dpdns.org>"`
+- `MAIL_FROM = "QLCAD <noreply@mail.cad.pocketter.dpdns.org>"`
 - `LATEST_VERSION = "2.1.0"`
 - `DOWNLOAD_URL`：填写可公开访问的最新 EXE 直链；没有直链时留空
 - `BACKUP_DOWNLOAD_URL`、`RELEASE_NOTES`：可留空

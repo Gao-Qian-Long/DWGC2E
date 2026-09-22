@@ -1,4 +1,4 @@
-<UserControl x:Class="DwgTranslator.App.Views.HelpPanel"
+﻿<UserControl x:Class="DwgTranslator.App.Views.HelpPanel"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:conv="clr-namespace:DwgTranslator.App.Converters"
@@ -31,7 +31,7 @@
 
                 <!-- ========== 快速入门 ========== -->
                 <TextBlock Style="{StaticResource SectionHeader}" Text="快速入门"/>
-                <TextBlock Style="{StaticResource BodyText}" Text="DWG Translator 是一款图纸翻译工具，能够自动识别 DWG/DXF 图纸中的文字内容，并利用 AI 按你选择的方向翻译：简体中文、繁体中文、English、日本語、한국어、Русский、Deutsch、Français、Español 等 18 种语言之间可以任意互译。翻译完成后，译文会自动写回原图纸，位置、字号、字体按原图自动适配；支持一次导入多张图纸并批量导出。"/>
+                <TextBlock Style="{StaticResource BodyText}" Text="QLCAD 是一款图纸翻译工具，能够自动识别 DWG/DXF 图纸中的文字内容，并利用 AI 按你选择的方向翻译：简体中文、繁体中文、English、日本語、한국어、Русский、Deutsch、Français、Español 等 18 种语言之间可以任意互译。翻译完成后，译文会自动写回原图纸，位置、字号、字体按原图自动适配；支持一次导入多张图纸并批量导出。"/>
 
                 <TextBlock Style="{StaticResource BodyText}" Margin="{DynamicResource Spacing.BlockTop}" FontWeight="SemiBold" Foreground="{DynamicResource Brush.TextPrimary}" Text="四步完成翻译："/>
                 <TextBlock Style="{StaticResource BodyText}" Text="1. 点击「导入 DWG」按钮，选择一个或多个 DWG/DXF 文件"/>
