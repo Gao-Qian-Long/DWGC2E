@@ -363,7 +363,9 @@ public sealed partial class SmokeApp : App
         vm.BatchSearch = ""; vm.BatchDateFilter = 1; Check(vm.BatchView.Cast<object>().Count() == 6, "today filter"); vm.BatchDateFilter = 0;
         vm.CurrentPage = MainViewModel.PageBatch; vm.ShowTaskDetailCommand.Execute(vm.DrawingFiles[4]);
         Check(vm.IsTaskDetailOpen, "explicit detail action opens task detail");
-        await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle); Capture(window, "task-error-detail");
+        await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+        // 这里**故意不截图**：抽屉的 220ms 滑入动画刚起步，此刻 RenderTransform.X ≈ 265 DIP，
+        // 面板大半在窗口右边之外，截图看着就像"抽屉被裁掉了"。截图挪到下面的落定断言之后。
         vm.OpenTaskProofreadingCommand.Execute(null); Check(!vm.IsProofreading && vm.SelectedDrawingFile != vm.DrawingFiles[4], "failed detail cannot enter proofreading");
         vm.SelectedBatchTask = vm.DrawingFiles[2]; vm.OpenTaskProofreadingCommand.Execute(null); Check(vm.IsProofreading && vm.SelectedDrawingFile == vm.DrawingFiles[2], "review detail opens selected drawing proofreading");
         await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle); Capture(window, "task-proofreading");
@@ -395,6 +397,12 @@ public sealed partial class SmokeApp : App
         var drawerOffset = (drawerElement.RenderTransform as System.Windows.Media.TranslateTransform)?.X ?? 0;
         Check(Math.Abs(drawerOffset) < 0.5,
             "task drawer settles on screen after slide-in, offset=" + drawerOffset.ToString("F1"));
+        // 抽屉是 400 DIP 的右对齐覆盖层，父 Grid 一旦比可视区宽，它就会整个溢出到窗口右边之外——
+        // 用户看到的正是"弹出的卡片被裁掉/布局怪怪的"。这里用右边缘直接量出来。
+        var drawerRight = drawerElement.TranslatePoint(new Point(drawerElement.ActualWidth, 0), batchPage).X;
+        Check(drawerRight <= batchPage.ActualWidth + 0.5 && drawerRight <= window.ActualWidth + 0.5,
+            "task drawer stays inside the page, right=" + drawerRight.ToString("F1") + " page=" + batchPage.ActualWidth.ToString("F1"));
+        Capture(window, "task-error-detail");
         vm.CloseTaskDetailCommand.Execute(null);
         Check(taskTable.Items.Count == 1006, "large task queue retains every row");
         Check(CountVisual<System.Windows.Controls.DataGridRow>(taskTable) < 80, "large queue uses bounded row virtualization");
