@@ -342,6 +342,15 @@ public sealed partial class SmokeApp : App
         Check(vm.DrawingFiles.All(x => !x.IsIncludedForExport), "clear output selection");
         vm.SelectAllDrawingOutputsCommand.Execute(null);
         Check(vm.DrawingFiles.All(x => x.IsIncludedForExport), "select all outputs");
+        // 用户批注（2026-09-22）：「文件队列怎么没有一些基础操作，比如删除队列里面的文件」。
+        // 移除只摘队列行、实体与任务记录，不动磁盘文件；这里用一个临时行验证它真的被摘掉，
+        // 并且没有误伤其它行 —— 后面 :350/:366 的计数断言依赖队列长度仍是 6。
+        var removable = new DrawingFileItem(Path.Combine(AppDataDir, "待移除-验收.dwg"));
+        vm.DrawingFiles.Add(removable);
+        Check(vm.DrawingFiles.Contains(removable), "temporary queue row added for the removal check");
+        vm.RemoveDrawingCommand.Execute(removable);
+        await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+        Check(!vm.DrawingFiles.Contains(removable) && vm.DrawingFiles.Count == 6, "queue removal drops only the targeted row");
         var output = Path.Combine(AppDataDir, "test-output.dwg"); File.WriteAllText(output, "controlled fixture, not a real drawing");
         vm.DrawingFiles[3].Task!.LastExportPath = output;
         Check(vm.DrawingFiles[3].HasOutput, "existing output enables result action");
@@ -426,6 +435,16 @@ public sealed partial class SmokeApp : App
         // the narrower coverage was lost without any assertion failing. 900 = MinWidth floor.
         // The action column now carries 复制 + 删除, so the group — not the copy button alone — is
         // what must line up with the header centre.
+        // 2026-09-22：历史订单表格已移入按需展开的弹层（用户批注「列表滑动很难滑动，可以做成一个
+        // 按钮，点开弹出」）。折叠时 DataGrid 的行根本不会被实例化，下面的 FindVisuals 会得到 0 个
+        // 按钮，断言就成了假红/假绿；所以这里必须先点开弹层再测量，测完收回去，免得后面几张
+        // 截图（QR、到期态）被弹层盖住。
+        var toggleOrders=(System.Windows.Controls.Button)w.FindName("ToggleOrders");
+        var ordersOverlay=(System.Windows.Controls.Border)w.FindName("OrdersOverlay");
+        Check(ordersOverlay.Visibility==Visibility.Collapsed,"history orders start collapsed so the QR keeps the right column");
+        toggleOrders.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+        await Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ApplicationIdle);w.UpdateLayout();
+        Check(ordersOverlay.Visibility==Visibility.Visible,"history overlay opens on demand");
         var ordersGrid=(System.Windows.Controls.DataGrid)w.FindName("Orders");
         foreach(var width in new[]{900d,1020d})
         {
@@ -445,6 +464,9 @@ public sealed partial class SmokeApp : App
             Check(Math.Abs(groupCenter-headerCenter)<=1,"billing action header and row actions align at "+width);
             Capture(w,"billing-order-action-"+width);
         }
+        toggleOrders.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+        await Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ApplicationIdle);
+        Check(ordersOverlay.Visibility==Visibility.Collapsed,"history overlay collapses again, restoring the current order card");
         fake.Order.Channel="wxpay";
         await (Task)typeof(BillingWindow).GetMethod("RefreshAsync",BindingFlags.NonPublic|BindingFlags.Instance)!.Invoke(w,null)!;
         Check(((System.Windows.Controls.Image)w.FindName("Qr")).Source==null,"unsupported order channel never displays an Alipay QR");
