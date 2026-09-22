@@ -32,6 +32,25 @@ public class BillingClientTests
  [InlineData("allowedActions", "null")]
  public async Task InvalidOrderValuesCannotBeDisplayed(string field,string value){var json=System.Text.Json.Nodes.JsonNode.Parse(ValidOrder)!;json[field]=System.Text.Json.Nodes.JsonNode.Parse(value);using var http=new HttpClient(new Handler((r,ct)=>Task.FromResult(Json(json.ToJsonString()))));var c=new WorkerApiClient(http,"https://test.invalid",()=>"a","d","h");await Assert.ThrowsAsync<BillingException>(()=>c.GetBillingOrderAsync("DW123"));}
  [Fact] public async Task InvalidCheckoutRetryRetainsOriginalKey(){var calls=0;using var http=new HttpClient(new Handler((r,ct)=>{Assert.Equal("original-intent",r.Headers.GetValues("Idempotency-Key").Single());return Task.FromResult(Json(++calls==1?"{}":ValidOrder));}));var c=new WorkerApiClient(http,"https://test.invalid",()=>"a","d","h");await Assert.ThrowsAsync<BillingException>(()=>c.CheckoutAsync("plan","alipay","original-intent"));Assert.Equal("DW123",(await c.CheckoutAsync("plan","alipay","original-intent")).OrderNo);Assert.Equal(2,calls);}
+ [Fact] public async Task CheckoutConflictCarriesTheStillOpenOrderToTheWindow(){
+  // 409 payment_order_pending 的响应体带着仍未完成的订单；窗口必须能拿到它去恢复二维码，
+  // 否则用户只能看到一句失败提示，再也无法为这笔订单付款（网页端是直接接管该订单的）。
+  var body="{\"error_code\":\"payment_order_pending\",\"message\":\"已有未确认的购买订单\",\"order\":"+ValidOrder+"}";
+  using var http=new HttpClient(new Handler((r,ct)=>Task.FromResult(Json(body,HttpStatusCode.Conflict))));
+  var c=new WorkerApiClient(http,"https://test.invalid",()=>"a","d","h");
+  var ex=await Assert.ThrowsAsync<BillingException>(()=>c.CheckoutAsync("plan","alipay","original-intent"));
+  Assert.Equal("payment_order_pending",ex.Code);Assert.NotNull(ex.Order);Assert.Equal("DW123",ex.Order!.OrderNo);Assert.Equal("pending",ex.Order.Status);
+ }
+ [Theory]
+ [InlineData("{\"error_code\":\"idempotency_conflict\",\"message\":\"重复\"}")]
+ [InlineData("{\"error_code\":\"payment_order_pending\",\"message\":\"重复\"}")]
+ [InlineData("{\"error_code\":\"payment_order_pending\",\"order\":{\"orderNo\":\"DW9\"}}")]
+ public async Task ConflictsWithoutAUsableOrderNeverInventOne(string body){
+  using var http=new HttpClient(new Handler((r,ct)=>Task.FromResult(Json(body,HttpStatusCode.Conflict))));
+  var c=new WorkerApiClient(http,"https://test.invalid",()=>"a","d","h");
+  var ex=await Assert.ThrowsAsync<BillingException>(()=>c.CheckoutAsync("plan","alipay","original-intent"));
+  Assert.Null(ex.Order);
+ }
  [Fact] public async Task DifferentOrderCannotReplaceRequestedOrder(){using var http=new HttpClient(new Handler((r,ct)=>Task.FromResult(Json(ValidOrder))));var c=new WorkerApiClient(http,"https://test.invalid",()=>"a","d","h");await Assert.ThrowsAsync<BillingException>(()=>c.GetBillingOrderAsync("different-order"));await Assert.ThrowsAsync<BillingException>(()=>c.CheckoutAsync("different-plan","alipay","original-intent"));await Assert.ThrowsAsync<BillingException>(()=>c.CheckoutAsync("plan","wxpay","original-intent"));}
  [Theory]
  [InlineData("cancelled")]

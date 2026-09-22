@@ -61,4 +61,13 @@ public sealed class BillingEntitlements
  [JsonRequired] public BillingSubscription Subscription {get;set;} = new();
  [JsonRequired] public BillingUsage Usage {get;set;} = new();
 }
-public sealed class BillingException : Exception { public string Code {get;} public BillingException(string code,string message):base(message){Code=code;} }
+public sealed class BillingException : Exception
+{
+    public string Code { get; }
+    /// <summary>
+    /// 409 payment_order_pending 会带回仍未完成的原订单。网页端直接接管该订单继续展示二维码，
+    /// 桌面端也必须拿得到它，否则用户只能停在错误提示上，再也看不到那笔订单的二维码。
+    /// </summary>
+    public BillingOrder? Order { get; init; }
+    public BillingException(string code,string message):base(message){Code=code;}
+}

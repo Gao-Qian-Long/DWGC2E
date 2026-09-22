@@ -889,6 +889,8 @@ public sealed partial class WorkerApiClient : IApiClient, IAccountSessionClient,
     {
         [JsonPropertyName("error_code")] public string? ErrorCode { get; set; }
         [JsonPropertyName("message")] public string? Message { get; set; }
+        // 409 payment_order_pending carries the still-open order; the caller adopts it.
+        [JsonPropertyName("order")] public BillingOrder? Order { get; set; }
     }
 }
 

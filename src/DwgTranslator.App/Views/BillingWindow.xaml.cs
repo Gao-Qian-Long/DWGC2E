@@ -87,15 +87,76 @@ public partial class BillingWindow : Window
  }
  private async void Buy_Click(object sender,RoutedEventArgs e)=>await Run(async()=>{
   if(!_initialized)return;
+  // An unresolved intent is reconciled first: the user must either see that order's QR again or
+  // explicitly abandon it, exactly as the website does. Without this the window stays parked on an
+  // order whose display window lapsed, and no new purchase can ever be started.
+  if(_pending?.OrderNo is string openNo)
+  {
+   if(!await ReconcileOpenIntentAsync(openNo))return;
+   if(!Valid())return;
+  }
   if(_pending==null){if(!_enabled||Plans.SelectedItem is not BillingPlan plan)return;const string channel="alipay";
    if(MessageBox.Show(this,$"账号：{Account.Text}\n{plan.Label}\n确认购买？","核对购买",MessageBoxButton.YesNo)!=MessageBoxResult.Yes)return;
    _pending=new PendingPurchase{PlanId=plan.Id,Channel=channel,Key=Guid.NewGuid().ToString("N")};Save();
   }
   // Never convert an unresolved WeChat intent into a different payment channel.
   if(_pending.Channel!="alipay"){Qr.Source=null;Qr.Visibility=Visibility.Collapsed;Message.Text="微信支付暂未开通。原购买记录已保留，请查询已有订单或联系支持确认；不会自动改用支付宝或重复下单。";return;}
-  var o=await _checkout!.CheckoutAsync(_pending,Valid,_life.Token);if(o==null)return;
+  BillingOrder? o;
+  try{o=await _checkout!.CheckoutAsync(_pending,Valid,_life.Token);}
+  catch(BillingException ex) when (ex.Order!=null&&Valid())
+  {
+   // The server refused a second order because this one is still open; adopt it instead of
+   // stopping at the error text, which is what the website does with the same 409.
+   _pending.OrderNo=ex.Order!.OrderNo;Save();
+   _current=ex.Order;++_selection;await Display(_current);
+   Message.Text="已有未完成的购买，已恢复原订单；未创建新订单，请核对原套餐与金额。";
+   await LoadOrders(false);
+   return;
+  }
+  if(o==null)return;
   _current=o;++_selection;await Display(o);await LoadOrders(false);
  });
+ /// <summary>
+ /// Returns true when the caller may continue towards a (new) order, false when the open intent was
+ /// shown to the user instead. Branch order mirrors the website: terminal states are dropped, a
+ /// payable or still-confirming order is displayed as-is, and only a lapsed order asks the user
+ /// whether to abandon it. The platform order is never cancelled from here.
+ /// </summary>
+ private async Task<bool> ReconcileOpenIntentAsync(string orderNo)
+ {
+  var open=await _client.GetBillingOrderAsync(orderNo,_life.Token);if(!Valid())return false;
+  if(open.Status is "paid" or "failed" or "cancelled" or "refunded")
+  {
+   _pending=null;Save();
+   return true;
+  }
+  var sameIntent=_pending!.PlanId==open.PlanId&&_pending.Channel==open.Channel;
+  if(sameIntent&&open.AllowedActions.Pay&&open.ExpiresAt>DateTimeOffset.UtcNow)
+  {
+   _current=open;++_selection;await Display(open);
+   Message.Text="已显示原订单的二维码，请勿重复付款。";
+   return false;
+  }
+  if(open.Status=="pending"&&(open.ExpiresAt>DateTimeOffset.UtcNow||open.CreateState is "creating" or "unknown"))
+  {
+   _current=open;++_selection;await Display(open);
+   Message.Text="原购买仍待确认，已保留原订单；请先核实，不会因重试或切换套餐创建新订单。";
+   return false;
+  }
+  var answer=MessageBox.Show(this,
+   $"原订单二维码展示期限已结束，但不代表平台订单已取消。\n\n原订单：{open.PlanName} · ¥{open.PayableCents/100m:0.00}\n订单号：{open.OrderNo}\n\n请先确认没有付款，且不会再支付旧二维码。\n是否放弃原订单并继续购买？",
+   "核对原订单",MessageBoxButton.YesNo,MessageBoxImage.Warning);
+  if(answer!=MessageBoxResult.Yes)
+  {
+   _current=open;++_selection;await Display(open);
+   Message.Text="已保留原订单；若已付款请点击“刷新订单与会员”确认到账。";
+   return false;
+  }
+  // Abandoning the intent does not cancel the platform order; it stops this client from reusing
+  // its idempotency key, which is exactly what the website does when the user confirms.
+  _pending=null;Save();
+  return true;
+ }
  private async Task Display(BillingOrder o)
  {
   if(!Valid())return;var index=_orders.FindIndex(item=>item.OrderNo==o.OrderNo);if(index>=0){_orders[index]=o;Orders.ItemsSource=_orders.ToArray();}Qr.Source=null;Qr.Visibility=Visibility.Collapsed;
@@ -108,6 +169,9 @@ public partial class BillingWindow : Window
   if(o.Channel!="alipay"){QrStatus.Text="该订单不是支付宝订单，当前通道暂不可扫码。请刷新原订单确认状态，已付款请勿重复支付。";Message.Text="当前仅开放支付宝扫码；原订单查询与到账确认不受影响。";return;}
   QrStatus.Text=o.ExpiresAt<=DateTimeOffset.UtcNow?"该订单二维码展示期限已结束，不再提供扫码入口。请刷新原订单确认，已付款请勿再次支付。":!o.AllowedActions.Pay?"服务端尚未允许该订单扫码，正在确认原订单状态；请勿重复下单。":"正在加载支付二维码…";
   Message.Text=o.AllowedActions.Pay?"请核对金额后扫码，付款结果由服务器确认。":"订单正在确认，请勿重复付款。";
+  // 显示的订单与上方所选套餐不一致时必须说明原因，否则看起来像界面串了数据。
+  if(o.Status!="paid"&&(Plans.SelectedItem as BillingPlan)?.Id is string chosen&&chosen!=o.PlanId)
+   Message.Text+=$" 当前显示的是原订单（{o.PlanName}），与上方所选套餐不同；切换套餐不会取消原订单，如需按新套餐购买请点击“确认套餐并获取二维码”。";
   if(o.AllowedActions.Pay&&o.ExpiresAt>DateTimeOffset.UtcNow&&!string.IsNullOrEmpty(o.QrCode)){
    using var generator=new QRCodeGenerator();using var data=generator.CreateQrCode(o.QrCode,QRCodeGenerator.ECCLevel.M);using var png=new PngByteQRCode(data);using var stream=new MemoryStream(png.GetGraphic(8));
    var image=new BitmapImage();image.BeginInit();image.CacheOption=BitmapCacheOption.OnLoad;image.StreamSource=stream;image.EndInit();image.Freeze();Qr.Source=image;Qr.Visibility=Visibility.Visible;QrStatus.Text="当前订单为支付宝支付，请使用支付宝扫码；二维码有效至 "+o.ExpiresAt.ToLocalTime().ToString("HH:mm:ss")+"。";
