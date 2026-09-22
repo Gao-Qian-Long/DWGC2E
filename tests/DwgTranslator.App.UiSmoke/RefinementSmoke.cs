@@ -64,7 +64,9 @@ public sealed partial class SmokeApp
                     Check(summary.IsVisible && summary.ActualHeight >= 64 && summaryRight <= root.ActualWidth + 1,
                         "translation summary remains fully visible " + size);
                     var metricLabels = FindVisuals<TextBlock>(metrics).Where(x => x.IsVisible).Select(x => x.Text).ToHashSet();
-                    Check(new[] { "图纸", "运行状态", "整体进度", "翻译成功", "失败", "待校对", "待导出" }.All(metricLabels.Contains),
+                    // "待校对"改叫"未校对"：校对是可选的（2026-09-22 用户批注「校对不是必须的」），
+                    // 它不再是流程上的一道门，所以标签必须改成描述性的，而不是"待办"的语气。
+                    Check(new[] { "图纸", "运行状态", "整体进度", "翻译成功", "失败", "未校对", "待导出" }.All(metricLabels.Contains),
                         "translation summary exposes all seven workflow metrics " + size);
                     Check(nextStep.IsVisible && nextStep.ActualWidth >= 80,
                         "translation next-step guidance remains visible " + size);
@@ -118,25 +120,31 @@ public sealed partial class SmokeApp
                             var actionRight = actionHeader.TranslatePoint(new Point(actionHeader.ActualWidth, 0), queue).X;
                             Check(actionHeader.IsVisible && actionRight <= queue.ActualWidth + 1,
                                 "translation action column is not clipped " + size);
-                            Check(review.WorkflowStatusText == "待校对" && completed.WorkflowStatusText == "待导出",
-                                "translation rows distinguish review and export workflow states " + size);
-                            Check(vm.WorkspaceReviewCount == 1 && vm.WorkspacePendingExportCount == 1 && vm.WorkspaceFailedCount == 1,
+                            // 未校对（ReadyForReview）与已校对（Completed）现在都是"待导出"：两者都能立即导出。
+                            Check(review.WorkflowStatusText == "待导出" && completed.WorkflowStatusText == "待导出",
+                                "translated rows read as export-ready whether or not they were proofread " + size);
+                            Check(vm.WorkspaceReviewCount == 1 && vm.WorkspacePendingExportCount == 2 && vm.WorkspaceFailedCount == 1,
                                 "translation summary follows drawing collection changes " + size);
 
                             var export = (Button)translate.FindName("ExportSelectionButton");
                             var retry = (Button)translate.FindName("RetryFailedButton");
+                            // 关键回归：只翻译、没校对的行必须已经能导出（旧实现这里断言的是"不能导出"）。
+                            Check(export.IsEnabled && vm.CanExportWorkspace,
+                                "a translated-but-unproofread drawing enables export without proofreading " + size);
                             completed.IsIncludedForExport = false;
+                            review.IsIncludedForExport = false;
                             await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
                             Check(retry.IsEnabled && vm.CanRetryFailedDrawingTasks,
                                 "failed drawings enable the dedicated retry action " + size);
                             Check(!vm.CanStartWorkspaceTranslation,
                                 "failed drawings do not incorrectly enable the start-translation action " + size);
+                            // 另一半语义不能被这次解耦带走：导出仍然只看当前勾选的行。
                             Check(!export.IsEnabled && !vm.CanExportWorkspace,
-                                "ready-for-review drawing cannot skip proofreading and export " + size);
-                            completed.IsIncludedForExport = true;
+                                "export stays disabled while no exportable row is selected " + size);
+                            review.IsIncludedForExport = true;
                             await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
                             Check(export.IsEnabled && vm.CanExportWorkspace,
-                                "reviewed drawing waiting for export enables export " + size);
+                                "export follows the per-drawing selection " + size);
 
                             var actionBar = (FrameworkElement)translate.FindName("TranslationActionBar");
                             var start = FindVisuals<Button>(translate).Single(x => x.IsVisible && Equals(x.Content, "开始翻译"));
@@ -198,7 +206,7 @@ public sealed partial class SmokeApp
                         "batch table does not rely on horizontal scrolling " + size);
                     var summaryMetrics = (FrameworkElement)batch.FindName("BatchSummaryMetrics");
                     var batchLabels = FindVisuals<TextBlock>(summaryMetrics).Where(x => x.IsVisible).Select(x => x.Text).ToHashSet();
-                    Check(new[] { "全部", "运行中", "待处理", "待校对", "待导出", "已导出", "失败" }.All(batchLabels.Contains),
+                    Check(new[] { "全部", "运行中", "待处理", "未校对", "待导出", "已导出", "失败" }.All(batchLabels.Contains),
                         "batch summary exposes all seven workflow metrics " + size);
                     var actionHeader = FindVisuals<System.Windows.Controls.Primitives.DataGridColumnHeader>(taskTable)
                         .Single(x => Equals(x.Content, "操作"));
@@ -272,24 +280,27 @@ public sealed partial class SmokeApp
                             taskTable.ScrollIntoView(failed);
                             taskTable.UpdateLayout();
 
-                            Check(review.WorkflowStatusText == "待校对" && completed.WorkflowStatusText == "待导出" && exported.WorkflowStatusText == "已导出",
-                                "batch rows distinguish review, export and exported states " + size);
+                            Check(review.WorkflowStatusText == "待导出" && completed.WorkflowStatusText == "待导出" && exported.WorkflowStatusText == "已导出",
+                                "batch rows distinguish export-ready and exported states " + size);
                             Check(!failed.CanOpenProofreading && failed.CanRetry && !failed.CanExport,
                                 "failed task only exposes retry semantics " + size);
-                            Check(review.CanOpenProofreading && !review.CanRetry && !review.CanExport,
-                                "review task can proofread but cannot skip to export " + size);
+                            // 校对可选（2026-09-22）：未校对的行既能校对也能直接导出，但同样不能重试。
+                            Check(review.CanOpenProofreading && !review.CanRetry && review.CanExport,
+                                "unproofread task can be proofread and exported directly " + size);
                             Check(completed.CanOpenProofreading && completed.CanExport && !completed.CanRetry,
-                                "reviewed task exposes export semantics " + size);
+                                "proofread task exposes the same export semantics " + size);
                             Check(exported.CanOpenProofreading && exported.HasOutput && !exported.CanExport,
                                 "exported task exposes the existing output " + size);
 
                             vm.BatchSearch = "batch-";
                             vm.BatchStatusFilter = 3;
                             Check(vm.BatchView.Cast<object>().Contains(review) && !vm.BatchView.Cast<object>().Contains(completed),
-                                "batch review filter selects only review-stage fixtures " + size);
+                                "batch unreviewed filter selects only unproofread fixtures " + size);
+                            // 过滤器 4 现在等于"可导出"，未校对与已校对两张都在里面（2026-09-22 校对解耦）。
                             vm.BatchStatusFilter = 4;
-                            Check(vm.BatchView.Cast<object>().Contains(completed) && !vm.BatchView.Cast<object>().Contains(review),
-                                "batch export filter selects only reviewed fixtures " + size);
+                            Check(vm.BatchView.Cast<object>().Contains(completed) && vm.BatchView.Cast<object>().Contains(review)
+                                && !vm.BatchView.Cast<object>().Contains(exported),
+                                "batch export filter covers both proofread and unproofread export-ready rows " + size);
                             vm.BatchStatusFilter = 5;
                             Check(vm.BatchView.Cast<object>().Contains(exported), "batch exported filter uses an existing output " + size);
                             vm.BatchStatusFilter = 6;

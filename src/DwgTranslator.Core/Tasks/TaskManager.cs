@@ -908,7 +908,8 @@ public sealed class TaskManager : ITaskManager, ITaskRecoveryDiagnostics, IRunti
                 task.LastExportPath = null;
                 task.OutputPath = null;
             }
-            RaiseProgressMessage(Stage(task, 4, $"翻译完成：{task.TranslatedCount:N0} 条，等待校对和导出", 100));
+            // 校对是可选的人工复核（2026-09-22 产品调整），这条进度消息不再把它写成下一步。
+            RaiseProgressMessage(Stage(task, 4, $"翻译完成：{task.TranslatedCount:N0} 条，可以导出（校对可选）", 100));
             SaveNow();
             RaiseTaskUpdated(task);
             RaiseOverallProgress();

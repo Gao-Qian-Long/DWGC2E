@@ -336,7 +336,9 @@ public sealed partial class SmokeApp : App
         var queueGrid=(System.Windows.Controls.DataGrid)translate.FindName("DrawingQueue");
         var inRowExports=FindVisuals<System.Windows.Controls.Button>(queueGrid)
             .Where(b=>b.IsVisible&&Equals(b.Content,"导出")).ToArray();
-        Check(inRowExports.Length==1,"exactly the pending-export row exposes an in-row export button");
+        // 校对降级为可选后（2026-09-22 用户批注「校对不是必须的」），未校对（ReadyForReview）
+        // 与已校对（Completed）两行都属于"待导出"，都必须出现行内导出按钮——旧实现只有后者有。
+        Check(inRowExports.Length==2,"both export-ready rows expose an in-row export button, count="+inRowExports.Length);
         vm.ToggleLogViewerCommand.Execute(null);
         await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
         var logWindow = Application.Current.Windows.OfType<LogViewerWindow>().Single();
@@ -416,6 +418,7 @@ public sealed partial class SmokeApp : App
         Check(taskTable.Items.Count == 1006, "large task queue retains every row");
         Check(CountVisual<System.Windows.Controls.DataGridRow>(taskTable) < 80, "large queue uses bounded row virtualization");
         Capture(window, "task-large-queue");
+        await VerifyTranslationRestoreAsync(vm);
         vm.DrawingFiles.Clear(); vm.HasDrawingFiles = false;
         Check(!vm.IsTaskDetailOpen && vm.SelectedBatchTask == null, "workspace reset clears drawer selection");
         vm.SelectedDrawingFile = null;
@@ -424,6 +427,94 @@ public sealed partial class SmokeApp : App
         vm.SettingsSection = 0;
         Console.WriteLine("PHYSICAL_DPI_NOT_VALIDATED: matrix uses WPF effective dimensions; current monitor scale " + VisualTreeHelper.GetDpi(window).DpiScaleX);
     }
+
+    /// <summary>
+    /// 用户报告（2026-09-22）：「我翻译之后，退出软件，再次打开就看不到译文了！又要重新翻译啊！」
+    /// 根因：翻译成功会把译文归档进项目库（projects/&lt;id&gt;/project.json），此后"保存校对"写的也是项目库，
+    /// 而启动恢复只读 proofreading.json —— 两条路径不对称。任务状态（tasks.json，含 ProjectId）回得来，
+    /// 译文回不来，于是界面显示"待导出"但校对视图是空的。
+    /// 这里按真实状态复现：磁盘上真有一张图纸（ACadSharp 现场生成，仓库里没有二进制样本）、
+    /// 一个归档好的项目、一行带 ProjectId 的已完成任务，然后调用启动流程里的那个恢复阶段。
+    /// 方法被删掉/改名时反射会直接抛出来 —— 那正是"存了但读不回"复发的情形，必须炸而不是静默通过。
+    /// </summary>
+    private static async Task VerifyTranslationRestoreAsync(MainViewModel vm)
+    {
+        var savedEntities = vm.Entities.ToArray();
+        // 项目库/任务库写在**账号工作目录**下（MainViewModel.AccountDataDirectory 是私有属性，
+        // 实际是 <数据目录>/accounts/<账号>，离线未登录时是 accounts/guest），不是数据目录根部。
+        var accountDir = ResolveAccountDirectory();
+        var fixture = Path.Combine(AppDataDir, "恢复验收样本.dwg");
+        string? projectId = null;
+        DrawingFileItem? row = null;
+        try
+        {
+            vm.Entities.Clear();
+            var document = new ACadSharp.CadDocument();
+            document.Entities.Add(new ACadSharp.Entities.MText { Value = "阀门反馈", Height = 3.5 });
+            ACadSharp.IO.DwgWriter.Write(fixture, document);
+            var archived = new DwgTranslator.Core.Services.DwgReaderService().ExtractFromFile(fixture).ToArray();
+            Check(archived.Length == 1, "restore fixture exposes exactly one text entity");
+            foreach (var entity in archived)
+            {
+                entity.TranslatedText = "Valve feedback";
+                entity.Status = DwgTranslator.Core.Models.TranslationStatus.Translated;
+            }
+            var project = new DwgTranslator.Core.Services.TranslationProjectStore(accountDir)
+                .Create("恢复验收项目", "ZH", "EN", archived);
+            projectId = project.Id;
+            var projectJson = Path.Combine(accountDir, "projects", project.Id, "project.json");
+            Console.WriteLine("RESTORE_FIXTURE accountDir=" + accountDir + " projectFile=" + File.Exists(projectJson));
+            Check(File.Exists(projectJson), "restore fixture wrote the archived project into the account workspace");
+
+            row = new DrawingFileItem(fixture);
+            row.AttachTask(new DwgTranslator.Core.Tasks.TranslationTask(fixture)
+            {
+                Status = DwgTranslator.Core.Tasks.TranslationTaskStatus.Completed,
+                ProjectId = project.Id
+            });
+            vm.DrawingFiles.Add(row);
+
+            var stage = typeof(MainViewModel)
+                .GetMethod("RestoreActiveTranslationProjectAsync", BindingFlags.NonPublic | BindingFlags.Instance)
+                ?? throw new Exception("启动恢复译文的阶段不存在：译文会再次变成'存了但读不回'");
+            await (Task)stage.Invoke(vm, null)!;
+            Check(vm.Entities.Count == 1 && vm.Entities[0].TranslatedText == "Valve feedback",
+                "archived translation returns on startup instead of a blank workspace, count=" + vm.Entities.Count);
+            Check(vm.ActiveTranslationProject?.Id == project.Id, "restored translation stays bound to its project");
+        }
+        finally
+        {
+            if (row != null) vm.DrawingFiles.Remove(row);
+            vm.Entities.Clear();
+            foreach (var entity in savedEntities) vm.Entities.Add(entity);
+            if (projectId != null)
+            {
+                try { Directory.Delete(Path.Combine(accountDir, "projects", projectId), true); } catch { /* 清理失败不影响结论 */ }
+            }
+            try { if (File.Exists(fixture)) File.Delete(fixture); } catch { /* 清理失败不影响结论 */ }
+        }
+    }
+    /// <summary>
+    /// 账号工作目录（项目库、任务库都写在它下面）。MainViewModel 把它藏成私有属性，所以这里按
+    /// 磁盘形态推断：accounts 下唯一/含 tasks.json 的那个子目录；都没有时回落到 guest 规则。
+    /// </summary>
+    private static string ResolveAccountDirectory()
+    {
+        var accounts = Path.Combine(AppDataDir, "accounts");
+        // 冒烟全程离线未登录，MainViewModel 的 ActiveAccountId 为空 → AccountWorkspace 落到 guest。
+        // 这里必须优先 guest：accounts 下同时存在账号切换测试留下的哈希目录，按"含 tasks.json"或
+        // 目录枚举顺序去挑会挑错（实测就是挑错了，项目写进了别人的工作区）。
+        var guest = Path.Combine(accounts, "guest");
+        if (Directory.Exists(guest)) return guest;
+        if (Directory.Exists(accounts))
+        {
+            var dirs = Directory.GetDirectories(accounts);
+            if (dirs.Length > 0)
+                return dirs.OrderByDescending(d => File.GetLastWriteTimeUtc(d)).First();
+        }
+        return DwgTranslator.Core.Services.AccountWorkspace.DirectoryFor(AppDataDir, null);
+    }
+
     private async Task VerifyBilling(MainWindow owner)
     {
         var display=new DwgTranslator.App.Converters.BillingPresentationConverter();

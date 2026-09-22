@@ -14,7 +14,7 @@
              页头不再叠一行会随状态变化的说明（那是原先"两条互相竞争的横幅"之一）。 -->
         <controls:PageHeader x:Name="WorkspaceHeader"
                              Header="图纸翻译"
-                             Description="添加图纸、翻译、校对并导出；每个阶段都有独立状态。">
+                             Description="添加图纸 → 翻译 → 导出。校对是可选的，翻译完成就可以直接出图。">
             <Button Content="添加图纸" Command="{Binding ImportDwgCommand}">
                 <Button.Style>
                     <Style TargetType="Button" BasedOn="{StaticResource Button.Secondary}">
@@ -84,7 +84,9 @@
                 </Border>
                 <Border BorderBrush="{DynamicResource Brush.BorderLight}" BorderThickness="1,0,0,0" Padding="0">
                     <StackPanel HorizontalAlignment="Center">
-                        <TextBlock Text="待校对" Style="{StaticResource InfoLabel}" HorizontalAlignment="Center" />
+                        <!-- “待校对”改叫“未校对”（2026-09-22 用户批注「校对不是必须的」）：
+                             它是一个可选的校对进度，不是导出前必须清掉的关卡。 -->
+                        <TextBlock Text="未校对" Style="{StaticResource InfoLabel}" HorizontalAlignment="Center" />
                         <TextBlock Text="{Binding WorkspaceReviewCount}" Style="{StaticResource InfoValueStrong}" HorizontalAlignment="Center" />
                     </StackPanel>
                 </Border>
@@ -109,10 +111,12 @@
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <StackPanel Orientation="Horizontal">
-                    <!-- 用户批注（2026-09-22）：「这两个按钮的样式太丑了」——降为 Compact.Secondary（32 高），
-                         与旁边琥珀胶囊同档，不再和右侧 36 高的 Primary 抢视觉重量。冒烟断言只查
-                         IsEnabled 与 ActualWidth ≥ 100，MinWidth 保留 112/104 不受影响。 -->
-                    <Button x:Name="ExportSelectionButton" Content="导出已校对图纸"
+                    <!-- 用户批注（2026-09-22）：「校对不是必须的」「不要让用户都不知道怎么操作」。
+                         原名"导出已校对图纸"暗示了"必须先校对"，也让人以为这里只导出校对过的行；
+                         实际导出的是当前勾选的行。改成中性的"导出图纸"。 -->
+                    <Button x:Name="ExportSelectionButton" Content="导出图纸"
+                            ToolTip="导出队列中已勾选的图纸；不需要先校对"
+                            AutomationProperties.Name="导出图纸"
                             Command="{Binding ExportDwgCommand}" IsEnabled="{Binding CanExportWorkspace}"
                             Style="{StaticResource Button.Compact.Secondary}" MinWidth="112" VerticalAlignment="Center"
                             Margin="{DynamicResource Spacing.Inline}" />
@@ -278,7 +282,8 @@
                                                                 <DataTrigger Binding="{Binding WorkflowStatusText}" Value="翻译中"><Setter Property="Fill" Value="{DynamicResource Brush.Primary}" /></DataTrigger>
                                                                 <DataTrigger Binding="{Binding WorkflowStatusText}" Value="排版优化"><Setter Property="Fill" Value="{DynamicResource Brush.Primary}" /></DataTrigger>
                                                                 <DataTrigger Binding="{Binding WorkflowStatusText}" Value="写回中"><Setter Property="Fill" Value="{DynamicResource Brush.Primary}" /></DataTrigger>
-                                                                <DataTrigger Binding="{Binding WorkflowStatusText}" Value="待校对"><Setter Property="Fill" Value="{DynamicResource Brush.Warning}" /></DataTrigger>
+                                                                <!-- "待校对"这条触发器已删除：WorkflowStatusText 不再产出该值（2026-09-22 校对降级为可选），
+                                                                     留在这里只会是永远不命中的死代码。翻译完成=可导出=绿色。 -->
                                                                 <DataTrigger Binding="{Binding WorkflowStatusText}" Value="待导出"><Setter Property="Fill" Value="{DynamicResource Brush.Success}" /></DataTrigger>
                                                                 <DataTrigger Binding="{Binding WorkflowStatusText}" Value="已导出"><Setter Property="Fill" Value="{DynamicResource Brush.Success}" /></DataTrigger>
                                                                 <DataTrigger Binding="{Binding HasError}" Value="True"><Setter Property="Fill" Value="{DynamicResource Brush.Danger}" /></DataTrigger>
@@ -321,25 +326,26 @@
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
                                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                                <!-- §L7 按钮不再锁死 Width，交给内容撑开；列宽已按"三个按钮 + 单元格内边距"重算 -->
-                                                <Button Content="校对" Style="{StaticResource Button.Compact.Secondary}" MinWidth="44"
-                                                        Command="{Binding DataContext.OpenDrawingFileItemsCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
-                                                        CommandParameter="{Binding}" AutomationProperties.Name="查看该图纸的文本条目" />
-                                                <Button Content="打开" Style="{StaticResource Button.Compact.Secondary}" MinWidth="44" Margin="4,0,0,0"
-                                                        Visibility="{Binding HasOutput, Converter={StaticResource BoolToVis}}"
-                                                        Command="{Binding DataContext.OpenDrawingOutputCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
-                                                        CommandParameter="{Binding}" />
-                                                <!-- 用户批注（2026-09-22）：「校对完成之后好像没有导出按钮啊」——此前行内只有
-                                                     「校对」和（已导出后才出现的）「打开」，待导出这一行看不到任何导出动作，
-                                                     只能去用工具栏那个「导出已校对图纸」（它导出全部勾选项）。这里补上该图纸的
-                                                     单独导出：ExportSelectedDrawingCommand 会临时只勾选这一行再走同一条导出链路。
-                                                     与「打开」互斥——打开只在 HasOutput 时出现，导出只在 NeedsExport（无输出且已校对）时
-                                                     出现，所以操作列最多仍是三个按钮，164 的列宽无需再加。 -->
-                                                <Button Content="导出" Style="{StaticResource Button.Compact.Secondary}" MinWidth="44" Margin="4,0,0,0"
+                                                <!-- 行内动作按"先交付、后可选"排序（2026-09-22 用户批注「不要让用户都不知道怎么操作」）：
+                                                     ① 导出／打开 —— 这一行此刻真正能拿到的结果（两者互斥：有输出＝已导出）；
+                                                     ② 校对 —— 可选的人工复核，只在有译文可看时出现；
+                                                     ③ 移除 —— 队列维护。
+                                                     最多同屏三个按钮，164 的列宽仍然够（44*3+4*2+单元格内边距）。
+                                                     §L7 按钮不锁死 Width，交给内容撑开。 -->
+                                                <Button Content="导出" Style="{StaticResource Button.Compact.Secondary}" MinWidth="44"
                                                         Visibility="{Binding CanExport, Converter={StaticResource BoolToVis}}"
                                                         Command="{Binding DataContext.ExportSelectedDrawingCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
                                                         CommandParameter="{Binding}" AutomationProperties.Name="导出该图纸"
-                                                        ToolTip="只导出这一张已校对的图纸" />
+                                                        ToolTip="只导出这一张图纸；不需要先校对" />
+                                                <Button Content="打开" Style="{StaticResource Button.Compact.Secondary}" MinWidth="44"
+                                                        Visibility="{Binding HasOutput, Converter={StaticResource BoolToVis}}"
+                                                        Command="{Binding DataContext.OpenDrawingOutputCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                                        CommandParameter="{Binding}" AutomationProperties.Name="打开输出图纸" />
+                                                <Button Content="校对" Style="{StaticResource Button.Compact.Secondary}" MinWidth="44" Margin="4,0,0,0"
+                                                        Visibility="{Binding CanOpenProofreading, Converter={StaticResource BoolToVis}}"
+                                                        Command="{Binding DataContext.OpenDrawingFileItemsCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                                        CommandParameter="{Binding}" AutomationProperties.Name="查看该图纸的文本条目"
+                                                        ToolTip="可选：人工复核译文。不校对也可以直接导出" />
                                                 <Button Content="移除" Style="{StaticResource Button.Compact.Secondary}" MinWidth="44" Margin="4,0,0,0"
                                                         Command="{Binding DataContext.RemoveDrawingCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
                                                         CommandParameter="{Binding}" AutomationProperties.Name="把该图纸移出队列"

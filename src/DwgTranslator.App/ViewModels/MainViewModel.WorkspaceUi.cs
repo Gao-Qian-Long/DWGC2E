@@ -56,10 +56,10 @@ public partial class MainViewModel
             ? (IsCancellationRequested ? "正在停止" : "正在翻译")
             : WorkspaceFailedCount > 0
                 ? "需要处理"
-                : WorkspaceReviewCount > 0
-                    ? "等待校对"
-                    : WorkspacePendingExportCount > 0
-                        ? "等待导出"
+                // 校对不再是流程节点（2026-09-22 用户批注「校对不是必须的」）：不再出现"等待校对"，
+                // 翻译完成直接进入"等待导出"。
+                : WorkspacePendingExportCount > 0
+                    ? "等待导出"
                         : WorkspaceExportedCount > 0 && WorkspaceExportedCount == WorkspaceFileCount
                             ? "已全部导出"
                             : HasDrawingFiles ? "就绪" : "未添加图纸";
@@ -70,8 +70,12 @@ public partial class MainViewModel
             if (!HasDrawingFiles) return "下一步：添加 DWG / DXF 图纸。";
             if (IsTranslating || WorkspaceActiveCount > 0) return $"正在处理 {Math.Max(1, WorkspaceActiveCount)} 张图纸，请等待队列完成。";
             if (WorkspaceFailedCount > 0) return $"下一步：先重试 {WorkspaceFailedCount} 张失败图纸，或在任务中心查看原因。";
-            if (WorkspaceReviewCount > 0) return $"下一步：校对 {WorkspaceReviewCount} 张翻译结果；保存后才进入待导出。";
-            if (WorkspacePendingExportCount > 0) return $"下一步：导出 {WorkspacePendingExportCount} 张已校对图纸。";
+            // 校对是可选的（2026-09-22 用户批注「校对不是必须的」「不要让用户都不知道怎么操作」）：
+            // 翻译完成就直接告诉用户去导出，未校对只作为括号里的可选提示，不再挡在前面当一道门。
+            if (WorkspacePendingExportCount > 0)
+                return WorkspaceReviewCount > 0
+                    ? $"下一步：导出 {WorkspacePendingExportCount} 张图纸（其中 {WorkspaceReviewCount} 张未校对，可选）。"
+                    : $"下一步：导出 {WorkspacePendingExportCount} 张图纸。";
             if (WorkspaceExportedCount > 0) return $"已导出 {WorkspaceExportedCount} 张图纸，可继续添加新图纸。";
             return CanStartWorkspaceTranslation ? "下一步：开始翻译。" : "当前队列没有可执行任务。";
         }
@@ -145,7 +149,8 @@ public partial class MainViewModel
     public int BatchExportedCount => DrawingFiles.Count(x => x.HasOutput);
     public int BatchCompletedCount => BatchPendingExportCount + BatchExportedCount;
     public int BatchFailedCount => DrawingFiles.Count(IsFailedTask);
-    public string BatchCountText => $"全部 {BatchTotalCount}    运行中 {BatchActiveCount}    待处理 {BatchPendingCount}    待校对 {BatchReviewCount}    待导出 {BatchPendingExportCount}    已导出 {BatchExportedCount}    失败 {BatchFailedCount}";
+    // "待校对"改叫"未校对"（2026-09-22）：它现在只是一个可选的校对进度，不是流程上的一道门。
+    public string BatchCountText => $"全部 {BatchTotalCount}    运行中 {BatchActiveCount}    待处理 {BatchPendingCount}    未校对 {BatchReviewCount}    待导出 {BatchPendingExportCount}    已导出 {BatchExportedCount}    失败 {BatchFailedCount}";
     private void RaiseBatchSummaryProperties()
     {
         OnPropertyChanged(nameof(BatchTotalCount));

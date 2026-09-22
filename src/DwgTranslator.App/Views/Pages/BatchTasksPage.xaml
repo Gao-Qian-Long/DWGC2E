@@ -6,7 +6,7 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 <StackPanel>
-            <controls:PageHeader x:Name="WorkspaceHeader" Header="任务中心" WaveVariant="2" Description="所有翻译任务的进度与结果都在这里；点「查看详情」检查单张图纸并进入校对。" />
+            <controls:PageHeader x:Name="WorkspaceHeader" Header="任务中心" WaveVariant="2" Description="所有翻译任务的进度与结果都在这里；点「查看详情」可直接导出该图纸，需要复核时再进入校对。" />
             <Border x:Name="RecoveryNotice" Visibility="{Binding HasTaskRecoveryWarning, Converter={StaticResource BoolToVis}}" Background="{DynamicResource Brush.WarningLight}" BorderBrush="{DynamicResource Brush.Warning}" BorderThickness="1" CornerRadius="6" Padding="12" Margin="{DynamicResource Spacing.StackWide}" AutomationProperties.Name="任务恢复警告">
                 <TextBlock Text="{Binding TaskRecoveryWarning}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
             </Border>
@@ -51,7 +51,8 @@
                         <TextBlock Text="{Binding BatchPendingCount}" Style="{StaticResource InfoValueStrong}" HorizontalAlignment="Center" />
                     </StackPanel>
                     <StackPanel HorizontalAlignment="Center">
-                        <TextBlock Text="待校对" Style="{StaticResource InfoLabel}" HorizontalAlignment="Center" />
+                        <!-- “待校对”改叫“未校对”（2026-09-22）：它是可选的校对进度，不是导出前必须清掉的关卡。 -->
+                        <TextBlock Text="未校对" Style="{StaticResource InfoLabel}" HorizontalAlignment="Center" />
                         <TextBlock Text="{Binding BatchReviewCount}" Style="{StaticResource InfoValueStrong}" HorizontalAlignment="Center" />
                     </StackPanel>
                     <StackPanel HorizontalAlignment="Center">
@@ -95,7 +96,7 @@
                             <ComboBoxItem Content="全部阶段" />
                             <ComboBoxItem Content="运行中" />
                             <ComboBoxItem Content="待处理" />
-                            <ComboBoxItem Content="待校对" />
+                            <ComboBoxItem Content="未校对" />
                             <ComboBoxItem Content="待导出" />
                             <ComboBoxItem Content="已导出" />
                             <ComboBoxItem Content="失败" />
@@ -273,7 +274,7 @@
                                                     <Setter Property="Fill" Value="{DynamicResource Brush.TextMuted}" />
                                                     <Style.Triggers>
                                                         <DataTrigger Binding="{Binding IsActive}" Value="True"><Setter Property="Fill" Value="{DynamicResource Brush.Primary}" /></DataTrigger>
-                                                        <DataTrigger Binding="{Binding WorkflowStatusText}" Value="待校对"><Setter Property="Fill" Value="{DynamicResource Brush.Warning}" /></DataTrigger>
+                                                        <!-- "待校对"这条触发器已删除：WorkflowStatusText 不再产出该值（2026-09-22 校对降级为可选）。 -->
                                                         <DataTrigger Binding="{Binding WorkflowStatusText}" Value="待导出"><Setter Property="Fill" Value="{DynamicResource Brush.Success}" /></DataTrigger>
                                                         <DataTrigger Binding="{Binding WorkflowStatusText}" Value="已导出"><Setter Property="Fill" Value="{DynamicResource Brush.Success}" /></DataTrigger>
                                                         <DataTrigger Binding="{Binding HasError}" Value="True"><Setter Property="Fill" Value="{DynamicResource Brush.Danger}" /></DataTrigger>
@@ -395,9 +396,10 @@
                     <Button Grid.Column="2" Content="全部标为已校对" Command="{Binding MarkAllReviewedCommand}" Style="{StaticResource Button.Secondary}" Margin="{DynamicResource Spacing.Inline}" />
                     <Button Grid.Column="3" Content="保存更改" Command="{Binding SaveProofreadingCommand}" IsEnabled="{Binding HasUnsavedProofreading}" Style="{StaticResource Button.Secondary}" Margin="{DynamicResource Spacing.Inline}" />
                     <Button Grid.Column="4" Content="取消编辑" Command="{Binding DiscardProofreadingCommand}" IsEnabled="{Binding HasUnsavedProofreading}" Style="{StaticResource Button.Secondary}" Margin="{DynamicResource Spacing.Inline}" />
-                    <!-- §L13 与 TranslatePage 的同名按钮保持一致的 Primary/MinWidth/可用性；本页仅此一个 Primary -->
-                    <Button Grid.Column="5" Content="导出已校对图纸" Command="{Binding ExportDwgCommand}" Style="{StaticResource Button.Primary}"
-                            MinWidth="136" IsEnabled="{Binding CanExportWorkspace}" />
+                    <!-- §L13 与 TranslatePage 的同名按钮保持一致的 Primary/MinWidth/可用性；本页仅此一个 Primary。
+                         文案由"导出已校对图纸"改成中性的"导出图纸"：校对不是前置条件（2026-09-22）。 -->
+                    <Button Grid.Column="5" Content="导出图纸" Command="{Binding ExportDwgCommand}" Style="{StaticResource Button.Primary}"
+                            MinWidth="136" IsEnabled="{Binding CanExportWorkspace}" ToolTip="导出当前队列的已勾选图纸；不需要先校对" />
                 </Grid>
                 <TextBlock Grid.Row="1" Text="Enter 确认单元格，Esc 取消；完成后保存更改。" Style="{StaticResource CaptionStyle}" Margin="{DynamicResource Spacing.BlockTop}" />
             </Grid>
@@ -477,14 +479,21 @@
                             <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
                         <UniformGrid Grid.Row="0" Columns="2">
-                            <Button Content="进入译文校对" Command="{Binding OpenTaskProofreadingCommand}"
-                                    IsEnabled="{Binding SelectedBatchTask.CanOpenProofreading}"
-                                    Style="{StaticResource Button.Primary}" Margin="{DynamicResource Spacing.4}" />
-                            <!-- 抽屉内主按钮只保留"进入译文校对"一个，导出降为次级，避免同屏两个 Primary。 -->
+                            <!-- 主次对调（2026-09-22 用户批注「校对不是必须的」「不要让用户都不知道怎么操作」）：
+                                 这一屏该给用户的默认动作是「拿到输出」，校对才是可选旁路。
+                                 导出（CanExport）与打开输出（HasOutput）互斥，所以同屏永远只有一个 Primary。 -->
                             <Button Content="导出此图纸" Command="{Binding ExportSelectedDrawingCommand}"
                                     CommandParameter="{Binding SelectedBatchTask}"
                                     Visibility="{Binding SelectedBatchTask.CanExport, Converter={StaticResource BoolToVis}}"
-                                    Style="{StaticResource Button.Secondary}" Margin="{DynamicResource Spacing.4}" />
+                                    Style="{StaticResource Button.Primary}" Margin="{DynamicResource Spacing.4}" />
+                            <Button Content="进入译文校对" Command="{Binding OpenTaskProofreadingCommand}"
+                                    IsEnabled="{Binding SelectedBatchTask.CanOpenProofreading}"
+                                    Style="{StaticResource Button.Secondary}" Margin="{DynamicResource Spacing.4}"
+                                    ToolTip="可选：人工复核译文。不校对也可以直接导出" />
+                            <Button Content="打开输出文件" Command="{Binding OpenDrawingOutputCommand}"
+                                    CommandParameter="{Binding SelectedBatchTask}"
+                                    Visibility="{Binding SelectedBatchTask.HasOutput, Converter={StaticResource BoolToVis}}"
+                                    Style="{StaticResource Button.Primary}" Margin="{DynamicResource Spacing.4}" />
                             <Button Content="打开输出文件" Command="{Binding OpenDrawingOutputCommand}"
                                     CommandParameter="{Binding SelectedBatchTask}"
                                     Visibility="{Binding SelectedBatchTask.HasOutput, Converter={StaticResource BoolToVis}}"

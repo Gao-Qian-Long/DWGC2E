@@ -208,6 +208,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
         await RunStartupStageAsync("上次校对记录", degraded, RestoreSavedProofreadingAsync);
         await RunStartupStageAsync("未完成任务", degraded, () => { ResumePendingTasks(); return Task.CompletedTask; });
         await RunStartupStageAsync("上次工作区", degraded, () => { RestoreLastWorkspace(); return Task.CompletedTask; });
+        // 必须排在上面两步之后：译文靠队列行上的 ProjectId 找到项目，而队列行是那两步建出来的。
+        // 放在这里也意味着它只在"校对记录没恢复出东西"时才真正干活（Entities 非空就直接返回）。
+        await RunStartupStageAsync("上次译文", degraded, RestoreActiveTranslationProjectAsync);
 
         ReportStartupDegradation(degraded);
 

@@ -57,7 +57,7 @@ public partial class MainViewModel
             var completedTasks = MarkReviewedTasksCompleted(affectedSources);
             StatusMessage = completedTasks > 0
                 ? $"校对更改已保存，{completedTasks} 张图纸已进入待导出；请显式导出以生成输出图纸。"
-                : "校对更改已保存到当前账号；仍有未校对、空译文或失败条目时，任务会继续保留在待校对。";
+                : "校对更改已保存到当前账号；仍有未校对、空译文或失败条目时，这些图纸保持未校对状态，不影响导出。";
             RaiseWorkspaceSummaryProperties();
             return true;
         }

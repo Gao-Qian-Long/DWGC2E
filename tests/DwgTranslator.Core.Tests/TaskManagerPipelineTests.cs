@@ -472,7 +472,7 @@ public class TaskManagerPipelineTests : IDisposable
         Assert.Equal(TranslationTaskStatus.ReadyForReview,task.Status); Assert.Equal(2,completed.Count); Assert.Equal(100,task.Progress,1);
         Assert.Equal("online",task.BillingMode); Assert.Equal(task.Id,translator.BillingContext?.TaskId); Assert.Equal("online",translator.BillingContext?.Mode);
         Assert.Null(task.OutputPath); Assert.Empty(writer.Written); Assert.False(File.Exists(Path.Combine(_exportDir,"motor_en.dwg")));
-        Assert.Contains(messages,m=>m.Contains("等待校对和导出"));
+        Assert.Contains(messages,m=>m.Contains("可以导出（校对可选）"));
     }
 
     [Fact]

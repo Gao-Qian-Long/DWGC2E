@@ -118,8 +118,11 @@ public partial class DrawingFileItem : ObservableObject
     }
 
     /// <summary>
-    /// Commercial workflow wording. Translation completion, proofreading completion and export are
-    /// deliberately distinct so the table never presents “translated” as if the deliverable exists.
+    /// 流程状态：只表达"离交付物还差什么"。
+    /// 用户批注（2026-09-22）：「整体的翻译校对导出逻辑也很奇怪…不要让用户都不知道怎么操作！校对不是必须的。」
+    /// 原来翻成两道门：翻译完成显示"待校对"，必须先校对保存才变成"待导出"——于是翻译完的行只有一个
+    /// 校对入口，想直接出图的人找不到路。现在校对降级为可选旁路，「翻译完成」与「已校对」都直接显示
+    /// "待导出"，因为两者此刻都能立即导出（判定见 <see cref="NeedsExport"/>）。
     /// </summary>
     public string WorkflowStatusText
     {
@@ -127,8 +130,7 @@ public partial class DrawingFileItem : ObservableObject
         {
             if (!string.IsNullOrWhiteSpace(ImportError)) return "导入失败";
             if (HasOutput) return "已导出";
-            if (_task?.Status == TranslationTaskStatus.ReadyForReview) return "待校对";
-            if (_task?.Status == TranslationTaskStatus.Completed) return "待导出";
+            if (_task?.Status is TranslationTaskStatus.ReadyForReview or TranslationTaskStatus.Completed) return "待导出";
             return StatusText;
         }
     }
@@ -137,9 +139,17 @@ public partial class DrawingFileItem : ObservableObject
         || _task?.Status is TranslationTaskStatus.ReadyForReview or TranslationTaskStatus.Completed
         || _task == null && IsFinished && !HasError;
 
+    /// <summary>还没人工校对过。**只用于展示"可选的校对进度"**，不参与任何导出可用性判定。</summary>
     public bool NeedsReview => _task?.Status == TranslationTaskStatus.ReadyForReview;
 
-    public bool NeedsExport => !HasOutput && (_task?.Status == TranslationTaskStatus.Completed
+    /// <summary>
+    /// 能否导出。判定只要求"翻译已产出内容且还没有输出文件"，**不再要求先校对**：
+    /// 用户批注（2026-09-22）「校对不是必须的」。原来只有 Completed（保存过校对）才成立，
+    /// 导致翻译完成的行没有导出入口。导出链路本身对状态没有检查（MainViewModel.ImportExport），
+    /// 唯一的门槛就是这里与 <see cref="CanExport"/>，所以解耦点只在这一处。
+    /// </summary>
+    public bool NeedsExport => !HasOutput && (_task?.Status
+        is TranslationTaskStatus.Completed or TranslationTaskStatus.ReadyForReview
         || _task == null && IsFinished && !HasError);
     public string LastUpdatedText => FormatDateTime(_task?.UpdatedAt);
 
@@ -177,8 +187,9 @@ public partial class DrawingFileItem : ObservableObject
                 TranslationTaskStatus.Parsing or TranslationTaskStatus.Extracting
                     or TranslationTaskStatus.Translating or TranslationTaskStatus.LayoutOptimizing
                     or TranslationTaskStatus.Writing => "等待当前阶段完成",
-                TranslationTaskStatus.ReadyForReview => "进入校对并保存更改",
-                TranslationTaskStatus.Completed => "导出已校对图纸",
+                // 翻译完成即可导出；校对是可选旁路，不再写成"必须先校对"。
+                TranslationTaskStatus.ReadyForReview => "导出以生成输出图纸（校对可选）",
+                TranslationTaskStatus.Completed => "导出以生成输出图纸",
                 TranslationTaskStatus.Failed or TranslationTaskStatus.PartiallyCompleted => "查看错误并重试",
                 TranslationTaskStatus.Paused => "继续任务",
                 TranslationTaskStatus.Cancelled => "重新提交任务",

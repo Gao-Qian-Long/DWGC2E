@@ -70,7 +70,8 @@ public partial class MainViewModel
         ActiveTranslationProject = project;
         foreach (var task in tasks.Where(t => ready.Contains(NormalizeSourcePath(t.FilePath)))) _taskManager.AssignProject(task.Id, project.Id);
         RefreshTranslationProjects();
-        StatusMessage = $"翻译完成并已归档为项目“{project.Name}”，现在可校对后回写并导出。";
+        // 翻译完成即可导出；校对是可选的人工复核（2026-09-22 用户批注「校对不是必须的」）。
+        StatusMessage = $"翻译完成并已归档为项目“{project.Name}”，现在可以直接导出；需要人工复核时再进入校对。";
     }
 
     private bool SaveActiveProject()
@@ -120,27 +121,7 @@ public partial class MainViewModel
                 StatusMessage = $"项目有 {invalid.Length} 张源图缺失或内容已变化，已阻止套用旧句柄。请重新定位或重新导入。";
                 return;
             }
-            var dxfReader = _dxfReader;
-            var loaded = await Task.Run(() =>
-            {
-                var result = new List<TextEntity>();
-                foreach (var drawing in project.Drawings)
-                {
-                    var extracted = string.Equals(Path.GetExtension(drawing.SourcePath), ".dxf", StringComparison.OrdinalIgnoreCase)
-                        ? dxfReader?.ExtractFromFile(drawing.SourcePath) ?? throw new IOException("DXF 读取器不可用。")
-                        : _dwgReaderService.ExtractFromFile(drawing.SourcePath);
-                    var saved = drawing.Entries.ToDictionary(e => e.Handle, StringComparer.Ordinal);
-                    foreach (var entity in extracted)
-                    {
-                        entity.SourceFilePath = drawing.SourcePath;
-                        if (!saved.TryGetValue(entity.Handle, out var entry)) continue;
-                        entity.TranslatedText = entry.TranslatedText; entity.Status = entry.Status;
-                        entity.Notes = entry.Notes; entity.GlossaryHit = entry.GlossaryHit;
-                        result.Add(entity);
-                    }
-                }
-                return result;
-            });
+            var loaded = await LoadProjectEntitiesAsync(project, project.Drawings);
             Entities.Clear(); foreach (var entity in loaded) Entities.Add(entity); InvalidateEntityIndex();
             RebuildDrawingFileList(project.Drawings.Select(d => d.SourcePath).ToArray());
             ActiveTranslationProject = project; CurrentSourceLang = project.SourceLanguage; CurrentTargetLang = project.TargetLanguage;
@@ -148,6 +129,93 @@ public partial class MainViewModel
             StatusMessage = $"已打开项目“{project.Name}”，共 {loaded.Count} 条译文。";
         }
         catch (Exception ex) { Log.Warning(ex, "打开翻译项目失败"); StatusMessage = "翻译项目无法打开，原记录已保留。"; }
+    }
+
+    /// <summary>
+    /// 按句柄把项目里归档的译文套回磁盘上重新解析出来的实体。
+    /// 必须重新解析源图而不是直接信任归档里的文本：写回需要几何与位置，句柄也只是在"源图未变"时才有意义
+    /// （调用方负责先做 ValidateSource）。归档里没有的句柄直接跳过，不臆造译文。
+    /// </summary>
+    private async Task<List<TextEntity>> LoadProjectEntitiesAsync(
+        TranslationProject project, IReadOnlyCollection<TranslationProjectDrawing> drawings)
+    {
+        var dxfReader = _dxfReader;
+        return await Task.Run(() =>
+        {
+            var result = new List<TextEntity>();
+            foreach (var drawing in drawings)
+            {
+                var extracted = string.Equals(Path.GetExtension(drawing.SourcePath), ".dxf", StringComparison.OrdinalIgnoreCase)
+                    ? dxfReader?.ExtractFromFile(drawing.SourcePath) ?? throw new IOException("DXF 读取器不可用。")
+                    : _dwgReaderService.ExtractFromFile(drawing.SourcePath);
+                var saved = drawing.Entries.ToDictionary(e => e.Handle, StringComparer.Ordinal);
+                foreach (var entity in extracted)
+                {
+                    entity.SourceFilePath = drawing.SourcePath;
+                    if (!saved.TryGetValue(entity.Handle, out var entry)) continue;
+                    entity.TranslatedText = entry.TranslatedText; entity.Status = entry.Status;
+                    entity.Notes = entry.Notes; entity.GlossaryHit = entry.GlossaryHit;
+                    result.Add(entity);
+                }
+            }
+            return result;
+        });
+    }
+
+    /// <summary>
+    /// 启动时把上次翻译的译文补回工作区。
+    /// 用户报告（2026-09-22）：「我翻译之后，退出软件，再次打开就看不到译文了！又要重新翻译啊！」
+    /// 根因是两条持久化路径不对称：翻译成功会自动把译文归档进项目库
+    /// （<see cref="ArchiveTranslationRun"/> → projects/&lt;id&gt;/project.json），此后"保存校对"写的也是项目库
+    /// （<see cref="TrySaveProofreading"/> 里 ActiveTranslationProject != null 的分支）；
+    /// 而启动恢复 <see cref="RestoreSavedProofreadingAsync"/> 只读 proofreading.json —— 那份文件走项目库的
+    /// 流程里从头到尾没被写过。于是 tasks.json 能把"待导出"这个状态恢复回来，译文却是空的。
+    /// 这里按恢复出来的任务上的 ProjectId 静默加载译文：不打开校对视图、不覆盖用户正在编辑的内容。
+    /// </summary>
+    private async Task RestoreActiveTranslationProjectAsync()
+    {
+        if (Entities.Count != 0 || HasUnsavedProofreading || _taskManager.IsRunning || IsExporting || IsProcessing) return;
+
+        // 只认"翻译已经结束"的行：待处理/已暂停的图纸点"继续处理"会重新产出译文，
+        // 先灌一份旧的进去只会让两个来源打架。归档时也只给这些状态的任务挂过 ProjectId。
+        var settled = DrawingFiles
+            .Where(row => row.Task is { ProjectId: not null } task
+                && task.Status is TranslationTaskStatus.ReadyForReview or TranslationTaskStatus.Completed)
+            .ToArray();
+        if (settled.Length == 0) return;
+
+        var projectId = settled.OrderByDescending(row => row.Task!.UpdatedAt)
+            .Select(row => row.Task!.ProjectId!.Trim()).First();
+        TranslationProject project;
+        try { project = ProjectStore.Load(projectId); }
+        catch (Exception ex) { Log.Warning(ex, "启动恢复译文失败：项目 {ProjectId} 无法读取", projectId); return; }
+
+        var wanted = settled
+            .Where(row => string.Equals(row.Task!.ProjectId!.Trim(), projectId, StringComparison.Ordinal))
+            .Select(row => NormalizeSourcePath(row.FullPath))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var candidates = project.Drawings.Where(d => wanted.Contains(NormalizeSourcePath(d.SourcePath))).ToArray();
+        // 源图缺失或已被改写时不套用旧句柄（与用户主动"打开项目"同一道校验），但只跳过这几张，
+        // 不像主动打开那样整单拒绝 —— 否则用户又会看到"译文全没了"。
+        var valid = candidates.Where(d => ProjectStore.ValidateSource(d) == ProjectSourceValidation.Valid).ToArray();
+        if (valid.Length == 0) return;
+
+        List<TextEntity> loaded;
+        try { loaded = await LoadProjectEntitiesAsync(project, valid); }
+        catch (Exception ex) { Log.Warning(ex, "启动恢复译文失败：项目 {ProjectId} 的源图无法解析", projectId); return; }
+        if (loaded.Count == 0) return;
+        // 异步解析期间用户可能已经导入了图纸或开始翻译，那就不要用旧译文盖掉当前工作区。
+        if (Entities.Count != 0 || HasUnsavedProofreading || IsProcessing || IsExporting || _taskManager.IsRunning) return;
+
+        Entities.Clear(); foreach (var entity in loaded) Entities.Add(entity); InvalidateEntityIndex();
+        ActiveTranslationProject = project;
+        CurrentSourceLang = project.SourceLanguage; CurrentTargetLang = project.TargetLanguage;
+        ApplyFilter(); UpdateStatistics();
+
+        var skipped = candidates.Length - valid.Length;
+        StatusMessage = skipped == 0
+            ? $"已恢复上次翻译的 {loaded.Count} 条译文（项目“{project.Name}”），可直接校对或导出。"
+            : $"已恢复上次翻译的 {loaded.Count} 条译文（项目“{project.Name}”）；另有 {skipped} 张图纸已变化或缺失，未套用旧译文。";
     }
 
     [RelayCommand]

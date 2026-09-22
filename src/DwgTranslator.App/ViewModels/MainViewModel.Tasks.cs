@@ -358,7 +358,9 @@ public partial class MainViewModel
         int cancelled = tasks.Count(t => t.Status == TranslationTaskStatus.Cancelled);
         int pending = tasks.Count(t => t.Status is TranslationTaskStatus.Pending or TranslationTaskStatus.Paused);
 
-        var summary = $"队列结束：待校对 {ready} 张，翻译完成 {completed} 张，失败 {failed} 张";
+        // 翻译完成与已校对现在都是"待导出"（2026-09-22 校对降级为可选），合并成一个计数，
+        // 不再向用户报一个他既看不懂、又会以为"必须先处理"的"待校对"。
+        var summary = $"队列结束：待导出 {ready + completed} 张，失败 {failed} 张";
         if (partial > 0) summary += $"，部分完成 {partial} 张";
         if (skipped > 0) summary += $"，跳过 {skipped} 张";
         if (cancelled > 0) summary += $"，取消 {cancelled} 张";
