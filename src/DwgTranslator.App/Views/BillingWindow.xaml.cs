@@ -71,6 +71,7 @@ public partial class BillingWindow : Window
     if(_current?.OrderNo==no)
     {
      _current=null;++_selection;Qr.Source=null;Qr.Visibility=Visibility.Collapsed;
+     CurrentOrderCard.Visibility=Visibility.Collapsed;
      OrderDetails.Text="";QrStatus.Text="尚未选择订单。可从历史订单查看付款状态。";
     }
     await LoadOrders(false);
@@ -183,7 +184,12 @@ public partial class BillingWindow : Window
  private async Task Display(BillingOrder o)
  {
   if(!Valid())return;var index=_orders.FindIndex(item=>item.OrderNo==o.OrderNo);if(index>=0){_orders[index]=o;Orders.ItemsSource=_orders.ToArray();}Qr.Source=null;Qr.Visibility=Visibility.Collapsed;
-  OrderDetails.Text=$"{o.PlanName} · ¥{o.PayableCents/100m:0.00} · {(o.Channel=="alipay"?"支付宝":o.Channel=="wxpay"?"微信支付（暂未开通）":"未知支付方式")}\n订单：{o.OrderNo}";
+  // 当前订单卡是这一屏的主角：金额单独成行，订单号降为辅助行。
+  CurrentOrderCard.Visibility=Visibility.Visible;
+  OrderPlanName.Text=$"{o.PlanName} · {(o.Channel=="alipay"?"支付宝":o.Channel=="wxpay"?"微信支付（暂未开通）":"未知支付方式")}";
+  OrderAmount.Text=$"¥{o.PayableCents/100m:0.00}";
+  OrderDetails.Text=$"订单号：{o.OrderNo}";
+  CopyOrderNo.Tag=o.OrderNo;
   if(o.Status=="paid"){
    QrStatus.Text="该订单已付款，无需再次扫码。";Message.Text="支付成功，正在同步会员。";
    _pending=_checkout!.ClearPaidIntent(_pending,o);

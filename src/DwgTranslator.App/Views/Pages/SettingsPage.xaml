@@ -18,7 +18,9 @@
              （前提说明见 S5-report.md：用户报告的"第 6 项与上面 5 项不等高"在改前像素测量中**未复现**，
               本改动是机制层面的加固，不是"修前不等→修后相等"的对照。） -->
         <Style x:Key="Settings.SectionTile" TargetType="ListBoxItem">
-            <Setter Property="Height" Value="{DynamicResource Size.NavItem}" />
+            <!-- 42 = Size.NavItem。这里写字面量而不用 DynamicResource：该项高度是"6 格必须完全等高"的
+                 硬约束，任何资源解析意外都会退化成内容驱动的高度（选中态行盒略高就露出高低差）。 -->
+            <Setter Property="Height" Value="42" />
             <Setter Property="Padding" Value="12,10" />
             <Setter Property="Margin" Value="{DynamicResource Spacing.4}" />
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
@@ -42,7 +44,8 @@
                                 <Setter TargetName="Surface" Property="Background" Value="{DynamicResource Brush.PrimaryLight}" />
                                 <Setter TargetName="Surface" Property="BorderBrush" Value="{DynamicResource Brush.Primary}" />
                                 <Setter Property="Foreground" Value="{DynamicResource Brush.Primary}" />
-                                <Setter Property="FontWeight" Value="SemiBold" />
+                                <!-- 选中态只靠底色与描边强调：改字重会让行盒变高，6 格里"当前那一格"就比
+                                     其余 5 格高出一点，正是用户报的高度不一致。 -->
                             </Trigger>
                             <Trigger Property="IsKeyboardFocusWithin" Value="True">
                                 <Setter TargetName="Surface" Property="BorderBrush" Value="{DynamicResource Brush.Primary}" />

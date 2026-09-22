@@ -406,6 +406,11 @@ public sealed partial class SmokeApp : App
         Check(!((System.Windows.Controls.RadioButton)w.FindName("WechatPay")).IsEnabled,"unconnected WeChat payment cannot be selected");
         Check(((System.Windows.Controls.TextBlock)w.FindName("QrStatus")).Text.Contains("请使用支付宝扫码"),"QR identifies actual Alipay order channel");
         Check(((System.Windows.Controls.Image)w.FindName("Qr")).Source!=null,"native billing QR bitmap generated");Capture(w,"billing-native-qr");
+        // 2026-09-22 布局调整：付款这一屏以金额和二维码为主角，两者都必须在当前订单卡内可见。
+        Check(((System.Windows.Controls.Border)w.FindName("CurrentOrderCard")).Visibility==Visibility.Visible,"current order card hosts the QR and amount");
+        var amountText=((System.Windows.Controls.TextBlock)w.FindName("OrderAmount")).Text;
+        Check(amountText.StartsWith("¥")&&amountText.Contains("."),"amount is shown as the primary figure: "+amountText);
+        Check(((System.Windows.Controls.Button)w.FindName("CopyOrderNo")).Tag is string copyTag&&copyTag.StartsWith("DW"),"copy action carries the current order number");
         // Verify row actions fit and are centred under the header at the real minimum and the
         // default window width. These were 620/860 until BillingWindow MinWidth went to 900: both
         // were then clamped up to 900, so the two iterations silently tested the same geometry and
@@ -417,8 +422,9 @@ public sealed partial class SmokeApp : App
         {
             w.Width=width; ordersGrid.BringIntoView();
             await Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ApplicationIdle); w.UpdateLayout();
-            var actions=FindVisuals<System.Windows.Controls.Button>(ordersGrid).Where(b=>Equals(b.Content,"复制")||Equals(b.Content,"删除")).ToArray();
-            Check(actions.Length==2,"billing row offers copy and hide actions at "+width);
+            // 复制按钮已移入左栏的当前订单卡（表格里逐行复制订单号没有用途），操作列只剩「删除」。
+            var actions=FindVisuals<System.Windows.Controls.Button>(ordersGrid).Where(b=>Equals(b.Content,"删除")).ToArray();
+            Check(actions.Length==1,"billing row offers only the hide action at "+width);
             var cell=FindVisuals<System.Windows.Controls.DataGridCell>(ordersGrid).First(c=>FindVisuals<System.Windows.Controls.Button>(c).Contains(actions[0]));
             var bounds=actions.Select(b=>b.TransformToAncestor(cell).TransformBounds(new Rect(0,0,b.ActualWidth,b.ActualHeight))).ToArray();
             var left=bounds.Min(r=>r.Left);var right=bounds.Max(r=>r.Right);

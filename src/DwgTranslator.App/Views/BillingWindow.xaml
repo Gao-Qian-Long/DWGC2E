@@ -54,12 +54,35 @@
                     <TextBlock Text="套餐与订单" Style="{StaticResource SectionTitleStyle}" />
                     <TextBlock x:Name="Account" Margin="{DynamicResource Spacing.CardInset}" TextWrapping="Wrap" FontSize="{DynamicResource FontSize.Secondary}" Foreground="{DynamicResource Brush.TextMuted}" />
                     <TextBlock x:Name="Entitlements" Margin="{DynamicResource Spacing.StackLoose}" TextWrapping="Wrap" FontWeight="SemiBold" />
-                    <TextBlock Text="套餐与金额以服务器为准 · 本次购买绑定上述账号" TextWrapping="Wrap" FontSize="{DynamicResource FontSize.Secondary}" Foreground="{DynamicResource Brush.TextMuted}" />
-                    <Border Background="{DynamicResource Brush.BackgroundAlt}" Padding="12" Margin="{DynamicResource Spacing.Vertical}">
-                        <TextBlock x:Name="PurchaseAvailability" Text="正在检查购买服务…" TextWrapping="Wrap" FontSize="{DynamicResource FontSize.Secondary}" />
+
+                    <!-- 当前订单卡：付款这一屏真正要看的只有"多少钱"和"扫哪个码"，所以金额用大号字、
+                         二维码居中放大，其余信息（订单号、渠道说明、警告）退成辅助文字。
+                         无订单时整卡收起，不占位置。 -->
+                    <Border x:Name="CurrentOrderCard" Visibility="Collapsed" Background="{DynamicResource Brush.Surface}" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1" CornerRadius="{DynamicResource CornerRadius.Medium}" Padding="16" Margin="{DynamicResource Spacing.Vertical}">
+                        <StackPanel>
+                            <TextBlock x:Name="OrderPlanName" TextWrapping="Wrap" FontSize="15" FontWeight="SemiBold" />
+                            <TextBlock x:Name="OrderAmount" FontSize="32" FontWeight="SemiBold" Foreground="{DynamicResource Brush.Primary}" Margin="{DynamicResource Spacing.BlockTopTight}" />
+                            <TextBlock x:Name="QrStatus" Text="尚未选择订单。可从历史订单查看付款状态。" TextWrapping="Wrap" Margin="{DynamicResource Spacing.BlockTopTight}" FontSize="{DynamicResource FontSize.Secondary}" Foreground="{DynamicResource Brush.TextSecondary}" />
+                            <!-- 二维码框的可见性与图片同步：二维码隐藏或缺失时整块塌缩，不留固定占位高度。 -->
+                            <Border x:Name="QrBox" Visibility="{Binding Visibility, ElementName=Qr}" Background="{DynamicResource Brush.Surface}" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1" CornerRadius="{DynamicResource CornerRadius.Medium}" Padding="12" Margin="{DynamicResource Spacing.StackWide}" HorizontalAlignment="Center">
+                                <Image x:Name="Qr" Width="220" Height="220" Stretch="Uniform" HorizontalAlignment="Center" Visibility="Collapsed" />
+                            </Border>
+                            <DockPanel LastChildFill="True">
+                                <Button x:Name="CopyOrderNo" DockPanel.Dock="Right" Content="复制订单号" Click="CopyOrder_Click" Style="{StaticResource Button.Compact.Secondary}" Margin="{DynamicResource Spacing.LeftGap}" ToolTip="复制当前订单号，便于与客服核对" />
+                                <TextBlock x:Name="OrderDetails" TextWrapping="Wrap" VerticalAlignment="Center" FontSize="{DynamicResource FontSize.Secondary}" Foreground="{DynamicResource Brush.TextMuted}" />
+                            </DockPanel>
+                            <Border Background="{DynamicResource Brush.WarningLight}" Padding="10" Margin="{DynamicResource Spacing.StackWide}">
+                                <TextBlock Text="二维码展示期限结束不代表平台关单。已付款请勿再次支付，系统将继续确认。" TextWrapping="Wrap" FontSize="{DynamicResource FontSize.Secondary}" FontWeight="SemiBold" Foreground="{DynamicResource Brush.Warning}" />
+                            </Border>
+                        </StackPanel>
                     </Border>
-                    <ComboBox x:Name="Plans" DisplayMemberPath="Label" Margin="{DynamicResource Spacing.Vertical}" />
-                    <TextBlock Text="新购买支付方式：目前仅支持支付宝。下方二维码属于所显示的订单，不会因套餐选择而更换。" TextWrapping="Wrap" FontSize="{DynamicResource FontSize.Secondary}" Foreground="{DynamicResource Brush.TextMuted}" Margin="{DynamicResource Spacing.Stack}" />
+
+                    <TextBlock x:Name="Message" Text="正在加载…" TextWrapping="Wrap" Margin="{DynamicResource Spacing.Vertical}" FontWeight="SemiBold" />
+
+                    <!-- 购买动作区：选套餐 → 取二维码。当前订单存在时这里不会覆盖原订单，只用于新单。 -->
+                    <TextBlock Text="选择新套餐并获取二维码" Style="{StaticResource FormRowLabel}" Margin="{DynamicResource Spacing.Stack}" />
+                    <ComboBox x:Name="Plans" DisplayMemberPath="Label" Margin="{DynamicResource Spacing.StackTight}" />
+                    <TextBlock Text="新购买支付方式：目前仅支持支付宝。上方二维码属于当前显示的订单，不会因套餐选择而更换。" TextWrapping="Wrap" FontSize="{DynamicResource FontSize.Secondary}" Foreground="{DynamicResource Brush.TextMuted}" Margin="{DynamicResource Spacing.Stack}" />
                     <StackPanel x:Name="PaymentMethods" Orientation="Horizontal" Margin="{DynamicResource Spacing.Vertical}">
                         <RadioButton x:Name="Alipay" Content="支付宝" IsChecked="True" Margin="{DynamicResource Spacing.InlineLeading}" />
                         <RadioButton x:Name="WechatPay" Content="微信支付（暂未开通）" IsEnabled="False" ToolTip="微信支付通道尚未接入，当前仅支持支付宝。" ToolTipService.ShowOnDisabled="True" />
@@ -68,16 +91,10 @@
                         <Button Style="{StaticResource Button.Primary}" x:Name="Buy" Content="确认套餐并获取二维码" Click="Buy_Click" Padding="14,0" IsEnabled="False" />
                         <Button Style="{StaticResource Button.Secondary}" Content="刷新订单与会员" Click="Refresh_Click" Padding="14,0" Margin="{DynamicResource Spacing.LeftGap}" />
                     </WrapPanel>
-                    <TextBlock x:Name="Message" Text="正在加载…" TextWrapping="Wrap" Margin="{DynamicResource Spacing.Vertical}" FontWeight="SemiBold" />
-                    <TextBlock x:Name="OrderDetails" TextWrapping="Wrap" Margin="{DynamicResource Spacing.Vertical}" />
-                    <TextBlock x:Name="QrStatus" Text="尚未选择订单。可从历史订单查看付款状态。" TextWrapping="Wrap" Margin="{DynamicResource Spacing.Vertical}" FontSize="{DynamicResource FontSize.Secondary}" Foreground="{DynamicResource Brush.TextSecondary}" />
-                    <!-- 二维码框的可见性与图片同步：二维码隐藏或缺失时整块塌缩，不留固定占位高度。 -->
-                    <Border Visibility="{Binding Visibility, ElementName=Qr}" Background="{DynamicResource Brush.Surface}" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1" CornerRadius="{DynamicResource CornerRadius.Medium}" Padding="12" HorizontalAlignment="Left">
-                        <Image x:Name="Qr" Width="200" Height="200" Stretch="Uniform" HorizontalAlignment="Left" Visibility="Collapsed" />
+                    <Border Background="{DynamicResource Brush.BackgroundAlt}" Padding="12" Margin="{DynamicResource Spacing.Vertical}">
+                        <TextBlock x:Name="PurchaseAvailability" Text="正在检查购买服务…" TextWrapping="Wrap" FontSize="{DynamicResource FontSize.Secondary}" />
                     </Border>
-                    <Border Background="{DynamicResource Brush.WarningLight}" Padding="12" Margin="{DynamicResource Spacing.BlockTopWide}">
-                        <TextBlock Text="二维码展示期限结束不代表平台关单。已付款请勿再次支付，系统将继续确认。" TextWrapping="Wrap" FontSize="{DynamicResource FontSize.Secondary}" FontWeight="SemiBold" Foreground="{DynamicResource Brush.Warning}" />
-                    </Border>
+                    <TextBlock Text="套餐与金额以服务器为准 · 本次购买绑定上述账号" TextWrapping="Wrap" FontSize="{DynamicResource FontSize.Secondary}" Foreground="{DynamicResource Brush.TextMuted}" />
                 </StackPanel>
             </ScrollViewer>
 
@@ -97,20 +114,15 @@
                             <DataGridTextColumn Header="套餐" Binding="{Binding PlanName}" Width="1.4*" MinWidth="112" ElementStyle="{StaticResource PlanCellText}" />
                             <DataGridTextColumn Header="状态" Binding="{Binding DisplayState, Converter={StaticResource BillingDisplay}}" Width="Auto" ElementStyle="{StaticResource StateCellText}" />
                             <DataGridTextColumn Header="金额" Binding="{Binding PayableCents, Converter={StaticResource BillingDisplay}, ConverterParameter=Amount}" Width="Auto" ElementStyle="{StaticResource AmountCellText}" />
-                            <!-- 操作列 110 = 两个 46 按钮 + 4 间隔 + 单元格 6×2 内边距（余 2）。为它腾出的宽度
-                                 来自订单列 MinWidth 84→80：900 最小宽度下 80+112+66+69+110 = 437 <= 441，
-                                 仍不出横向滚动条（UI 冒烟 Program.cs 在此宽度断言两按钮都落在单元格内）。 -->
-                            <DataGridTemplateColumn Header="操作" Width="110" MinWidth="110" HeaderStyle="{StaticResource OrderActionHeader}" CellStyle="{StaticResource OrderActionCell}">
+                            <!-- 操作列 76 = 46 按钮 + 单元格 6×2 内边距（余 18）。复制按钮已移除：订单号在
+                                 左栏当前订单卡内有明确语境（"复制订单号"），表格里逐行复制没有用途。 -->
+                            <DataGridTemplateColumn Header="操作" Width="76" MinWidth="76" HeaderStyle="{StaticResource OrderActionHeader}" CellStyle="{StaticResource OrderActionCell}">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
-                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                            <Button Content="复制" AutomationProperties.Name="复制订单号" ToolTip="{Binding OrderNo}" Click="CopyOrder_Click" Tag="{Binding OrderNo}"
-                                                    Style="{StaticResource Button.Compact.Tertiary}" Width="46"/>
-                                            <!-- 仅未付款记录可移除；已付款订单必须留在列表里作为到账凭证（服务端同样拒绝）。 -->
-                                            <Button Content="删除" AutomationProperties.Name="删除订单记录" ToolTip="仅从列表移除记录，不会取消支付平台订单，请勿再支付旧二维码" Click="HideOrder_Click" Tag="{Binding OrderNo}"
-                                                    Visibility="{Binding CanHide, Converter={StaticResource BoolToVis}}"
-                                                    Style="{StaticResource Button.Compact.Tertiary}" Width="46" Margin="4,0,0,0"/>
-                                        </StackPanel>
+                                        <!-- 仅未付款记录可移除；已付款订单必须留在列表里作为到账凭证（服务端同样拒绝）。 -->
+                                        <Button Content="删除" AutomationProperties.Name="删除订单记录" ToolTip="仅从列表移除记录，不会取消支付平台订单，请勿再支付旧二维码" Click="HideOrder_Click" Tag="{Binding OrderNo}"
+                                                Visibility="{Binding CanHide, Converter={StaticResource BoolToVis}}"
+                                                Style="{StaticResource Button.Compact.Tertiary}" Width="46" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
