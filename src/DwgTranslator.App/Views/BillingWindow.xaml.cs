@@ -55,6 +55,29 @@ public partial class BillingWindow : Window
   });
  }
  private void CopyOrder_Click(object sender, RoutedEventArgs e) { if(sender is Button { Tag: string no }) { try { Clipboard.SetText(no); Message.Text="订单号已复制。"; } catch { Message.Text="复制失败，请稍后重试。"; } } }
+ /// <summary>
+ /// 从历史列表移除一条未付款记录，与网页端 hideOrder 同一契约：只删本账号的显示记录，
+ /// 不取消平台订单，所以提示必须写明旧二维码不可再支付。
+ /// </summary>
+ private async void HideOrder_Click(object sender,RoutedEventArgs e)
+ {
+  if(_busy||sender is not Button{Tag:string no})return;
+  if(MessageBox.Show(this,
+   $"仅从列表移除这笔记录，不会取消支付平台订单。\n\n订单号：{no}\n\n请确认不会再支付该订单的旧二维码。是否继续？",
+   "删除订单记录",MessageBoxButton.YesNo,MessageBoxImage.Warning)!=MessageBoxResult.Yes)return;
+  await Run(async()=>{
+   if(await _client.HideBillingOrderAsync(no,_life.Token)&&Valid())
+   {
+    if(_current?.OrderNo==no)
+    {
+     _current=null;++_selection;Qr.Source=null;Qr.Visibility=Visibility.Collapsed;
+     OrderDetails.Text="";QrStatus.Text="尚未选择订单。可从历史订单查看付款状态。";
+    }
+    await LoadOrders(false);
+    Message.Text="已从列表移除该记录；平台订单未取消，请勿再支付旧二维码。";
+   }
+  });
+ }
  private async Task LoadPlans(){
   try {
    var plans=await _client.GetBillingPlansAsync(_life.Token);if(!Valid())return;

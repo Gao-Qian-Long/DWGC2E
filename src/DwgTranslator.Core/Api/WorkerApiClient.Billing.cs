@@ -1,6 +1,7 @@
 using System;
 using System.Net.Http;
 using System.Linq;
+using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 namespace DwgTranslator.Core.Api;
@@ -52,6 +53,21 @@ public sealed partial class WorkerApiClient : IBillingClient
    throw new BillingException("invalid_response","订单信息与本次请求不符，请刷新原订单确认，请勿重复付款。");
   return result;
  }
+ /// <summary>
+ /// Hides one unpaid record from this account's history. The endpoint answers with an
+ /// acknowledgement envelope instead of an order, so it does not go through BillingRequest; the
+ /// platform order itself is never cancelled and already-paid orders are refused by the server.
+ /// </summary>
+ public async Task<bool> HideBillingOrderAsync(string no,CancellationToken ct=default)
+ {
+  if(!IsConfigured)throw new BillingException("unconfigured","账户服务未配置，无法购买。");
+  var outcome=await SendAsync(HttpMethod.Post,Url("/v1/billing/orders/"+Uri.EscapeDataString(no)+"/hide"),JsonContent(new{}),DefaultTimeout,ct).ConfigureAwait(false);
+  if(!outcome.IsSuccess){ThrowIfAuthenticationFailure(outcome);var (code,message)=ReadError(outcome);throw new BillingException(code,message??"删除订单记录失败，请稍后重试。");}
+  var ack=Deserialize<WireHideAck>(outcome.Body);
+  if(ack?.Hidden!=true)throw new BillingException("invalid_response","服务端未确认删除，请刷新订单列表后重试。");
+  return true;
+ }
+ private sealed class WireHideAck{ [JsonPropertyName("hidden")] public bool Hidden {get;set;} }
  private static bool ValidBillingResponse(object value)=>value switch
  {
   BillingOrder o=>!string.IsNullOrWhiteSpace(o.OrderNo)&&!string.IsNullOrWhiteSpace(o.PlanId)&&!string.IsNullOrWhiteSpace(o.PlanName)

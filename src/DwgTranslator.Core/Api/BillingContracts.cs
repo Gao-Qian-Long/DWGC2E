@@ -11,6 +11,8 @@ public interface IBillingClient
  Task<BillingOrder> GetBillingOrderAsync(string no, CancellationToken ct = default);
  Task<BillingOrder> CheckoutAsync(string planId, string channel, string key, CancellationToken ct = default);
  Task<BillingOrder> ConfirmBillingOrderAsync(string no, CancellationToken ct = default);
+ /// <summary>Hides one unpaid order from this account's history. The platform order is never cancelled.</summary>
+ Task<bool> HideBillingOrderAsync(string no, CancellationToken ct = default);
  Task<BillingEntitlements> GetBillingEntitlementsAsync(CancellationToken ct = default);
 }
 public sealed class BillingPlan
@@ -41,6 +43,13 @@ public sealed class BillingOrder
  public string? QrCodeImageUrl {get;set;}
  [JsonRequired] public BillingActions AllowedActions {get;set;} = new();
  public int PollAfterMs {get;set;}
+ /// <summary>付款时间。服务端已付款订单列表会返回该字段；历史记录只读，不参与下单判断。</summary>
+ [JsonPropertyName("paidAt")] public DateTimeOffset? PaidAt {get;set;}
+ /// <summary>
+ /// 只有未付款的记录允许从列表移除，与网页端 hideOrder 的判定一致：已付款订单必须保留，
+ /// 否则用户会失去到账凭证。
+ /// </summary>
+ [JsonIgnore] public bool CanHide => Status!="paid"&&PaidAt==null;
  public string Label => $"{PlanName} · ¥{PayableCents/100m:0.00} · {(Status=="paid"?"已付款":"待确认")} · {OrderNo}";
 }
 public sealed class BillingSubscription

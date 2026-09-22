@@ -406,23 +406,28 @@ public sealed partial class SmokeApp : App
         Check(!((System.Windows.Controls.RadioButton)w.FindName("WechatPay")).IsEnabled,"unconnected WeChat payment cannot be selected");
         Check(((System.Windows.Controls.TextBlock)w.FindName("QrStatus")).Text.Contains("请使用支付宝扫码"),"QR identifies actual Alipay order channel");
         Check(((System.Windows.Controls.Image)w.FindName("Qr")).Source!=null,"native billing QR bitmap generated");Capture(w,"billing-native-qr");
-        // Verify row actions fit and share the header center at the real minimum and the default
-        // window width. These were 620/860 until BillingWindow MinWidth went to 900: both were then
-        // clamped up to 900, so the two iterations silently tested the same geometry and the
-        // narrower coverage was lost without any assertion failing. 900 = MinWidth floor.
+        // Verify row actions fit and are centred under the header at the real minimum and the
+        // default window width. These were 620/860 until BillingWindow MinWidth went to 900: both
+        // were then clamped up to 900, so the two iterations silently tested the same geometry and
+        // the narrower coverage was lost without any assertion failing. 900 = MinWidth floor.
+        // The action column now carries 复制 + 删除, so the group — not the copy button alone — is
+        // what must line up with the header centre.
         var ordersGrid=(System.Windows.Controls.DataGrid)w.FindName("Orders");
         foreach(var width in new[]{900d,1020d})
         {
             w.Width=width; ordersGrid.BringIntoView();
             await Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ApplicationIdle); w.UpdateLayout();
-            var copy=FindVisuals<System.Windows.Controls.Button>(ordersGrid).First(b=>Equals(b.Content,"复制"));
-            var cell=FindVisuals<System.Windows.Controls.DataGridCell>(ordersGrid).First(c=>FindVisuals<System.Windows.Controls.Button>(c).Contains(copy));
-            var rect=copy.TransformToAncestor(cell).TransformBounds(new Rect(0,0,copy.ActualWidth,copy.ActualHeight));
-            Check(rect.Left>=0 && rect.Top>=0 && rect.Right<=cell.ActualWidth+0.5 && rect.Bottom<=cell.ActualHeight+0.5,"billing copy button fits row at "+width);
+            var actions=FindVisuals<System.Windows.Controls.Button>(ordersGrid).Where(b=>Equals(b.Content,"复制")||Equals(b.Content,"删除")).ToArray();
+            Check(actions.Length==2,"billing row offers copy and hide actions at "+width);
+            var cell=FindVisuals<System.Windows.Controls.DataGridCell>(ordersGrid).First(c=>FindVisuals<System.Windows.Controls.Button>(c).Contains(actions[0]));
+            var bounds=actions.Select(b=>b.TransformToAncestor(cell).TransformBounds(new Rect(0,0,b.ActualWidth,b.ActualHeight))).ToArray();
+            var left=bounds.Min(r=>r.Left);var right=bounds.Max(r=>r.Right);
+            Check(left>=0 && bounds.Min(r=>r.Top)>=0 && right<=cell.ActualWidth+0.5 && bounds.Max(r=>r.Bottom)<=cell.ActualHeight+0.5,"billing row actions fit row at "+width);
             var header=FindVisuals<System.Windows.Controls.Primitives.DataGridColumnHeader>(ordersGrid).First(h=>Equals(h.Content,"操作"));
-            var buttonCenter=copy.TranslatePoint(new Point(copy.ActualWidth/2,0),ordersGrid).X;
+            var cellOrigin=cell.TranslatePoint(new Point(0,0),ordersGrid).X;
+            var groupCenter=cellOrigin+(left+right)/2;
             var headerCenter=header.TranslatePoint(new Point(header.ActualWidth/2,0),ordersGrid).X;
-            Check(Math.Abs(buttonCenter-headerCenter)<=1,"billing action header and button align at "+width);
+            Check(Math.Abs(groupCenter-headerCenter)<=1,"billing action header and row actions align at "+width);
             Capture(w,"billing-order-action-"+width);
         }
         fake.Order.Channel="wxpay";
@@ -810,6 +815,7 @@ public sealed class FakeApi : IApiClient, IBillingClient, IAccountSessionClient
     public Task<BillingOrders> GetBillingOrdersAsync(string? before=null,CancellationToken ct=default)=>throw new NotSupportedException();
     public Task<BillingOrder> GetBillingOrderAsync(string no,CancellationToken ct=default)=>throw new NotSupportedException();
     public Task<BillingOrder> ConfirmBillingOrderAsync(string no,CancellationToken ct=default)=>throw new NotSupportedException();
+    public Task<bool> HideBillingOrderAsync(string no,CancellationToken ct=default)=>throw new NotSupportedException();
     public Task<BillingOrder> CheckoutAsync(string plan,string channel,string key,CancellationToken ct=default)=>throw new NotSupportedException();
     public Func<bool>? OnLogout; public int LogoutCalls;
     public Task<bool> LogoutAsync(CancellationToken cancellationToken = default) { LogoutCalls++; return Task.FromResult(OnLogout?.Invoke() ?? true); }
@@ -838,7 +844,9 @@ public sealed class FakeBilling : IBillingClient
  public BillingPlans? Catalog; public bool FailPlans;
  public BillingOrder Order=new(){OrderNo="DW"+new string('a',32),PlanId="p",PlanName="隔离验收套餐（不可付款）",Status="pending",CreateState="ready",PayableCents=19,Channel="alipay",QrCode="LOCAL ACCEPTANCE ONLY - NOT A PAYMENT",ExpiresAt=DateTimeOffset.UtcNow.AddMinutes(10),AllowedActions=new(){Pay=true,Confirm=true}};
  public Task<BillingPlans> GetBillingPlansAsync(CancellationToken ct=default)=>FailPlans?Task.FromException<BillingPlans>(new BillingException("invalid_response","套餐响应不完整，请刷新套餐后重试。")):Task.FromResult(Catalog??new BillingPlans{PaymentsEnabled=PaymentsEnabled,Plans=PaymentsEnabled?[new(){Id="p",Name="隔离验收套餐",PriceCents=19,DurationDays=7}]:[]});
- public Task<BillingOrders> GetBillingOrdersAsync(string? before=null,CancellationToken ct=default)=>Task.FromResult(new BillingOrders{Orders=Creates>0?[Order]:[]});
+ public int Hides;public string? LastHidden;public readonly HashSet<string> Hidden=new();
+ public Task<BillingOrders> GetBillingOrdersAsync(string? before=null,CancellationToken ct=default)=>Task.FromResult(new BillingOrders{Orders=Creates>0&&!Hidden.Contains(Order.OrderNo)?[Order]:[]});
+ public Task<bool> HideBillingOrderAsync(string no,CancellationToken ct=default){Hides++;LastHidden=no;Hidden.Add(no);return Task.FromResult(true);}
  public Task<BillingOrder> GetBillingOrderAsync(string no,CancellationToken ct=default)=>Task.FromResult(Order);
  public Task<BillingOrder> CheckoutAsync(string p,string channel,string key,CancellationToken ct=default){Creates++;LastKey=key;OnCheckout?.Invoke();return Task.FromResult(Order);}
  public Task<BillingOrder> ConfirmBillingOrderAsync(string no,CancellationToken ct=default)=>Task.FromResult(Order);

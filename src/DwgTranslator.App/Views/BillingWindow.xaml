@@ -93,15 +93,24 @@
                 <Grid Grid.Row="1" Margin="{DynamicResource Spacing.Stack}">
                     <DataGrid x:Name="Orders" SelectionMode="Single" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" SelectionChanged="Orders_SelectionChanged" MaxHeight="360" VerticalAlignment="Top">
                         <DataGrid.Columns>
-                            <DataGridTextColumn Header="订单" Binding="{Binding OrderNo, Converter={StaticResource BillingDisplay}, ConverterParameter=Order}" Width="*" MinWidth="84" ElementStyle="{StaticResource OrderNoCellText}" />
+                            <DataGridTextColumn Header="订单" Binding="{Binding OrderNo, Converter={StaticResource BillingDisplay}, ConverterParameter=Order}" Width="*" MinWidth="80" ElementStyle="{StaticResource OrderNoCellText}" />
                             <DataGridTextColumn Header="套餐" Binding="{Binding PlanName}" Width="1.4*" MinWidth="112" ElementStyle="{StaticResource PlanCellText}" />
                             <DataGridTextColumn Header="状态" Binding="{Binding DisplayState, Converter={StaticResource BillingDisplay}}" Width="Auto" ElementStyle="{StaticResource StateCellText}" />
                             <DataGridTextColumn Header="金额" Binding="{Binding PayableCents, Converter={StaticResource BillingDisplay}, ConverterParameter=Amount}" Width="Auto" ElementStyle="{StaticResource AmountCellText}" />
-                            <DataGridTemplateColumn Header="操作" Width="80" MinWidth="80" HeaderStyle="{StaticResource OrderActionHeader}" CellStyle="{StaticResource OrderActionCell}">
+                            <!-- 操作列 110 = 两个 46 按钮 + 4 间隔 + 单元格 6×2 内边距（余 2）。为它腾出的宽度
+                                 来自订单列 MinWidth 84→80：900 最小宽度下 80+112+66+69+110 = 437 <= 441，
+                                 仍不出横向滚动条（UI 冒烟 Program.cs 在此宽度断言两按钮都落在单元格内）。 -->
+                            <DataGridTemplateColumn Header="操作" Width="110" MinWidth="110" HeaderStyle="{StaticResource OrderActionHeader}" CellStyle="{StaticResource OrderActionCell}">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
-                                        <Button Content="复制" AutomationProperties.Name="复制订单号" ToolTip="{Binding OrderNo}" Click="CopyOrder_Click" Tag="{Binding OrderNo}"
-                                                Style="{StaticResource Button.Compact.Tertiary}" Width="56" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                            <Button Content="复制" AutomationProperties.Name="复制订单号" ToolTip="{Binding OrderNo}" Click="CopyOrder_Click" Tag="{Binding OrderNo}"
+                                                    Style="{StaticResource Button.Compact.Tertiary}" Width="46"/>
+                                            <!-- 仅未付款记录可移除；已付款订单必须留在列表里作为到账凭证（服务端同样拒绝）。 -->
+                                            <Button Content="删除" AutomationProperties.Name="删除订单记录" ToolTip="仅从列表移除记录，不会取消支付平台订单，请勿再支付旧二维码" Click="HideOrder_Click" Tag="{Binding OrderNo}"
+                                                    Visibility="{Binding CanHide, Converter={StaticResource BoolToVis}}"
+                                                    Style="{StaticResource Button.Compact.Tertiary}" Width="46" Margin="4,0,0,0"/>
+                                        </StackPanel>
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>

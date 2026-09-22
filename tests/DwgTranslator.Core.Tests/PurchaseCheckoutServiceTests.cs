@@ -108,6 +108,7 @@ public sealed class PurchaseCheckoutServiceTests : IDisposable
         public Task<BillingOrders> GetBillingOrdersAsync(string? before = null, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<BillingOrder> GetBillingOrderAsync(string no, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<BillingOrder> ConfirmBillingOrderAsync(string no, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<bool> HideBillingOrderAsync(string no, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<BillingEntitlements> GetBillingEntitlementsAsync(CancellationToken ct = default) => throw new NotSupportedException();
     }
 }
