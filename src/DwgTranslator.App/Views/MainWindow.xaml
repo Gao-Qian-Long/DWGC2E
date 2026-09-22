@@ -304,7 +304,7 @@
                 <!-- 品牌（墨底反白：琥珀 logo＋衬线刊名＋等宽副标） -->
                 <StackPanel x:Name="SidebarBrand" Grid.Row="0" Orientation="Horizontal" Margin="16,18,16,16">
                     <Border Width="32" Height="32" CornerRadius="{DynamicResource CornerRadius.Medium}" Margin="{DynamicResource Spacing.InlineWide}" Background="{DynamicResource Brush.Amber}">
-                        <TextBlock Text="D" FontFamily="{DynamicResource FontFamily.Display}" Foreground="{DynamicResource Brush.Ink}" FontSize="18" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        <TextBlock Text="Q" FontFamily="{DynamicResource FontFamily.Display}" Foreground="{DynamicResource Brush.Ink}" FontSize="18" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Border>
                     <StackPanel x:Name="BrandLabel" VerticalAlignment="Center">
                         <TextBlock Text="QLCAD" FontFamily="{DynamicResource FontFamily.Display}" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource Brush.OnInk}" />

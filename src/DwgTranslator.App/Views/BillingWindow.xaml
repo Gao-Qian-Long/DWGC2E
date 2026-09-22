@@ -32,7 +32,7 @@
     </Window.Resources>
     <Grid>
         <Grid.RowDefinitions><RowDefinition Height="44"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-        <Border BorderBrush="{DynamicResource Brush.Border}" BorderThickness="0,0,0,1"><DockPanel><controls:TitleBarControl DockPanel.Dock="Right" WindowChrome.IsHitTestVisibleInChrome="True"/><StackPanel Orientation="Horizontal" Margin="{DynamicResource Spacing.LeftGap}"><Border Background="{DynamicResource Brush.Primary}" CornerRadius="4" Width="24" Height="24"><TextBlock Text="D" Foreground="White" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><TextBlock Text="会员购买与订单" Margin="{DynamicResource Spacing.LeftGap}" VerticalAlignment="Center"/></StackPanel></DockPanel></Border>
+        <Border BorderBrush="{DynamicResource Brush.Border}" BorderThickness="0,0,0,1"><DockPanel><controls:TitleBarControl DockPanel.Dock="Right" WindowChrome.IsHitTestVisibleInChrome="True"/><StackPanel Orientation="Horizontal" Margin="{DynamicResource Spacing.LeftGap}"><Border Background="{DynamicResource Brush.Primary}" CornerRadius="4" Width="24" Height="24"><TextBlock Text="Q" Foreground="White" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><TextBlock Text="会员购买与订单" Margin="{DynamicResource Spacing.LeftGap}" VerticalAlignment="Center"/></StackPanel></DockPanel></Border>
 
         <!-- 左栏购买、右栏订单历史。右栏按内容取高（不撑满整行），「更多订单」因此紧贴表格下方，
              不再孤零零悬在窗口底部；两栏之间用一条通高的分隔线明确分界。

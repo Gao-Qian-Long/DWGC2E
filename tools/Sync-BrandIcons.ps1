@@ -8,8 +8,14 @@ if(!$EvidenceDirectory){$EvidenceDirectory=Join-Path $root 'artifacts/brand-unif
 [IO.Directory]::CreateDirectory($EvidenceDirectory)|Out-Null
 [xml]$window=Get-Content -LiteralPath (Join-Path $root 'src/DwgTranslator.App/Views/MainWindow.xaml') -Raw -Encoding UTF8
 [xml]$tokens=Get-Content -LiteralPath (Join-Path $root 'src/DwgTranslator.App/Themes/ColorTokens.xaml') -Raw -Encoding UTF8
-$label=$window.SelectSingleNode('//*[local-name()="TextBlock" and @Text="D"]')
+# Anchor on the badge structure, not on the letter: the letters change with the product name
+# (DWG/DWGC2E -> QLCAD took the badge from "D" to "Q"), and a hard-coded letter would either throw
+# or silently regenerate the wrong logo. SidebarBrand is the single source of truth for the badge.
+$brand=$window.SelectSingleNode('//*[local-name()="StackPanel" and @*[local-name()="Name"]="SidebarBrand"]')
+if(!$brand){throw 'APP sidebar brand block not found; refusing to invent a logo'}
+$label=$brand.SelectSingleNode('.//*[local-name()="TextBlock"]')
 if(!$label){throw 'APP sidebar badge not found; refusing to invent a logo'}
+Write-Host "BRAND_BADGE=$($label.Text)"
 $badge=$label.ParentNode
 $color=$tokens.SelectSingleNode('//*[local-name()="SolidColorBrush" and @*[local-name()="Key"]="Brush.Primary"]').Color
 $radius=[double]$tokens.SelectSingleNode('//*[local-name()="CornerRadius" and @*[local-name()="Key"]="CornerRadius.Medium"]').TopLeft
