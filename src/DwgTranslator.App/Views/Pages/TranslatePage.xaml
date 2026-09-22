@@ -258,9 +258,16 @@
                                 <DataGridCheckBoxColumn Header="导出"
                                                         Binding="{Binding IsIncludedForExport, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                                         Width="48" />
-                                <!-- MinWidth 从 150 收到 128：操作列要容纳第三个按钮（移除），星号列让出
-                                     这部分最小宽度，保证 1280 窄窗下列总和不溢出（冒烟断言操作列不出界）。 -->
-                                <DataGridTemplateColumn Header="文件名" Width="*" MinWidth="128" IsReadOnly="True" SortMemberPath="FileName">
+                                <!-- 用户批注（2026-09-22）：「左边的文件名没必要占用那么大宽度」。
+                                     原来文件名是这张表唯一的星号列，窗口越宽它越宽（最大化下能吃掉 700+ DIP），
+                                     把状态/文本/进度顶到中间、操作按钮推到最右边缘，中间留一大片空。
+                                     现在文件名取固定宽，"多出来的空间"交给末尾的空白星号列（见表格最后）——
+                                     列因此贴着左边排成一列，操作按钮紧跟在进度之后。
+                                     取 200 而不是更大：实测队列表在 1366 下只有 687 DIP、在 1280 下只有 601 DIP，
+                                     而列宽超出可用宽时表格会**按比例压缩所有列**（不是裁切）——文件名定得越大，
+                                     「操作」里的第三个按钮被压掉的风险越高。200 时固定列合计 680 <= 687，
+                                     1366 及以上完全不压缩。过长文件名照旧 CharacterEllipsis + ToolTip。 -->
+                                <DataGridTemplateColumn Header="文件名" Width="192" IsReadOnly="True" SortMemberPath="FileName">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
                                             <TextBlock Text="{Binding FileName}" TextTrimming="CharacterEllipsis"
@@ -268,7 +275,9 @@
                                         </DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
-                                <DataGridTemplateColumn Header="状态" Width="104" IsReadOnly="True" SortMemberPath="WorkflowStatusText">
+                                <!-- 状态 104→96：最长文案 4 个汉字 + 状态点 7 + Spacing.Inline 8 + 单元格内边距
+                                     约 79 DIP，104 的余量可在文件名固定宽之后收回 8。 -->
+                                <DataGridTemplateColumn Header="状态" Width="96" IsReadOnly="True" SortMemberPath="WorkflowStatusText">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
                                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center" ToolTip="{Binding SummaryText}">
@@ -297,10 +306,14 @@
                                         </DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
-                                <!-- §L8 5 位数（"12,345"）加 Padding 需要 80 DIP，原 68 会溢出 -->
-                                <DataGridTextColumn Header="文本" Binding="{Binding TextCountText}" Width="80"
+                                <!-- §L8 5 位数（"12,345"）加 Padding 需要 80 DIP，原 68 会溢出。
+                                     用户批注后把文件名固定为 240，这 16 DIP 是补给列宽预算的：内容是等宽
+                                     "12,345"（约 42 DIP）+ 单元格内边距 12 = 54，64 仍有余量。 -->
+                                <DataGridTextColumn Header="文本" Binding="{Binding TextCountText}" Width="64"
                                                     IsReadOnly="True" ElementStyle="{StaticResource CenteredCellStyle}" />
-                                <DataGridTemplateColumn Header="进度" Width="118" IsReadOnly="True" SortMemberPath="ProgressPercent">
+                                <!-- 进度 118→108：内容框 = 进度条 + 等宽 "100%"(29) + LeftGap 8，原值的余量可在
+                                     文件名固定宽之后收回 10 DIP。 -->
+                                <DataGridTemplateColumn Header="进度" Width="108" IsReadOnly="True" SortMemberPath="ProgressPercent">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
                                             <Grid VerticalAlignment="Center">
@@ -320,9 +333,11 @@
                                         </DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
-                                <!-- 操作列 164：三个 48 宽按钮 + 两个 4 间距 + 单元格内边距。移除是用户
-                                     2026-09-22 批注补上的基础操作（"文件队列怎么没有一些基础操作"）。 -->
-                                <DataGridTemplateColumn Header="操作" Width="164" MinWidth="164" IsReadOnly="True">
+                                <!-- 操作列 176：移除是用户 2026-09-22 批注补上的基础操作（"文件队列怎么没有一些
+                                     基础操作"），三个按钮实测占 166 DIP（含单元格内边距），164 会少 2 DIP。
+                                     176 留 10 DIP 余量；为保持"固定列合计 <= 1366 下的 687 DIP"，文件名同步
+                                     从 200 收到 192（合计 684），因此 1366 及以上完全不会触发按比例压缩。 -->
+                                <DataGridTemplateColumn Header="操作" Width="176" IsReadOnly="True">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
                                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
@@ -354,6 +369,11 @@
                                         </DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
+                                <!-- 收尾空白星号列（用户批注 2026-09-22：「多出的空白放在表格最右侧」）。
+                                     所有实列都是固定宽，富余宽度全落到这一列上，于是列组贴着左边排、
+                                     操作按钮紧跟在进度之后，而不是被推到窗口最右边缘。
+                                     它也是"不溢出"的保险：窄窗下这一列归零，其余列仍按各自固定宽排布。 -->
+                                <DataGridTemplateColumn Header="" Width="*" MinWidth="0" IsReadOnly="True" CanUserSort="False" />
                             </DataGrid.Columns>
                         </DataGrid>
                     </Grid>

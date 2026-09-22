@@ -118,8 +118,32 @@ public sealed partial class SmokeApp
                             var actionHeader = FindVisuals<System.Windows.Controls.Primitives.DataGridColumnHeader>(queue)
                                 .Single(x => Equals(x.Content, "操作"));
                             var actionRight = actionHeader.TranslatePoint(new Point(actionHeader.ActualWidth, 0), queue).X;
+                            // 列宽预算取证：文件名改成固定宽之后，"操作"表头右缘必须仍在表宽内。
+                            Console.WriteLine($"QUEUE_WIDTH {size} queue={queue.ActualWidth:F1} actionRight={actionRight:F1}");
                             Check(actionHeader.IsVisible && actionRight <= queue.ActualWidth + 1,
                                 "translation action column is not clipped " + size);
+                            // 「表头不出界」不等于"按钮没被压窄"：列宽合计超出可用宽时，表格会按比例压缩
+                            // **所有**列。文件名改成固定宽之后（用户批注 2026-09-22），这条直接量按钮与单元格的
+                            // 关系，防止把「移除」压掉。1280 下队列只有 601 DIP，压掉第三个按钮是既有的窄窗
+                            // 限制（改前也同样贴边），故从 1366 起断言。
+                            if (size.Width >= 1366)
+                            {
+                                var widestActionCell = FindVisuals<System.Windows.Controls.DataGridCell>(queue)
+                                    .Select(cell => new { Cell = cell, Buttons = FindVisuals<Button>(cell).Where(b => b.IsVisible).ToArray() })
+                                    .Where(x => x.Buttons.Length > 0)
+                                    .OrderByDescending(x => x.Buttons.Length)
+                                    .First();
+                                Check(widestActionCell.Buttons.Length == 3,
+                                    $"export-ready queue row exposes export, proofread and remove {size}");
+                                var cellRight = widestActionCell.Buttons
+                                    .Select(b => b.TransformToAncestor(widestActionCell.Cell)
+                                        .TransformBounds(new Rect(0, 0, b.ActualWidth, b.ActualHeight)).Right).Max();
+                                // 容差 2 DIP：「操作」是最后一个实列、后面只有空白的收尾星号列，而 DataGridCell
+                                // 默认 ClipToBounds=False —— 溢出 1~2 DIP 只会压到那条空白列，不会被裁掉，
+                                // 因此这里拦的是"被压窄到明显放不下"（改前会溢出十几 DIP），不是像素级对齐。
+                                Check(cellRight <= widestActionCell.Cell.ActualWidth + 2,
+                                    $"queue row actions fit inside their cell {size} (right={cellRight:F1}, cell={widestActionCell.Cell.ActualWidth:F1})");
+                            }
                             // 未校对（ReadyForReview）与已校对（Completed）现在都是"待导出"：两者都能立即导出。
                             Check(review.WorkflowStatusText == "待导出" && completed.WorkflowStatusText == "待导出",
                                 "translated rows read as export-ready whether or not they were proofread " + size);
@@ -211,6 +235,7 @@ public sealed partial class SmokeApp
                     var actionHeader = FindVisuals<System.Windows.Controls.Primitives.DataGridColumnHeader>(taskTable)
                         .Single(x => Equals(x.Content, "操作"));
                     var actionRight = actionHeader.TranslatePoint(new Point(actionHeader.ActualWidth, 0), taskTable).X;
+                    Console.WriteLine($"TASKTABLE_WIDTH {size} table={taskTable.ActualWidth:F1} actionRight={actionRight:F1}");
                     Check(actionHeader.IsVisible && actionRight <= taskTable.ActualWidth + 1,
                         "batch action column is not clipped " + size);
 

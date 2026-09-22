@@ -256,7 +256,13 @@
                      且该列本就有 CharacterEllipsis + ToolTip 兜底。
                      固定列合计 752→750，比改前小 2；表最小总宽 992→990，星号列在 1280 下反而多 2 DIP 余量，
                      RefinementSmoke.cs:206 的安全边际只增不减。 -->
-                        <DataGridTemplateColumn Header="任务 / 图纸" Width="*" MinWidth="240" SortMemberPath="FileName">
+                        <!-- 用户批注（2026-09-22）：「左边的文件名没必要占用那么大宽度」，两张表要一致。
+                                     原来这是本表唯一的星号列，最大化下能吃掉 1100+ DIP，把阶段/结果/进度/操作
+                                     全挤到中间偏右，中间留一大片空。
+                                     取 240 = 它原先的 MinWidth：**最小宽度下的列总和不增一分**，
+                                     所以 RefinementSmoke 里"1280 下操作表头不出界"的安全边际原样保留；
+                                     富余宽度改落到表尾的空白星号列（见 DataGrid.Columns 末尾）。 -->
+                        <DataGridTemplateColumn Header="任务 / 图纸" Width="240" SortMemberPath="FileName">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <TextBlock Text="{Binding FileName}" TextTrimming="CharacterEllipsis"
@@ -343,6 +349,12 @@
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
+                        <!-- 收尾空白星号列，与图纸翻译页的文件队列同一套做法（用户批注 2026-09-22：
+                             「多出的空白放在表格最右侧」，并要求两张表一致）。
+                             实列全部固定宽后，富余宽度只落在这一列，列组因此贴左排布、
+                             「查看详情」紧跟进度列，而不是被推到窗口最右边缘。
+                             窄窗下这一列归零，其余列的最小总宽与改前一模一样（990 DIP）。 -->
+                        <DataGridTemplateColumn Header="" Width="*" MinWidth="0" IsReadOnly="True" CanUserSort="False" />
                     </DataGrid.Columns>
                 </DataGrid>
 
