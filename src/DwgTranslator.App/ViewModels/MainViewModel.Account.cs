@@ -86,7 +86,10 @@ public partial class MainViewModel
         System.ComponentModel.PropertyChangedEventHandler changed = (_, _) => { if (version != _sessionVersion || !IsAccountLoggedIn) window.Close(); };
         PropertyChanged += changed;
         window.Closed += (_, _) => { PropertyChanged -= changed; _billingWindow = null; };
-        window.Show();
+        // 用户批注（2026-09-23）：「而且这个窗口应该是要阻塞运行的吧」——购买窗口改成模态。
+        // 之前用 Show()，主窗口仍可操作：用户能在扫码期间改动队列、切页甚至关掉账号，
+        // 支付状态与界面就此分叉。ShowDialog 由主窗口拥有，未关闭前主窗口不可交互。
+        window.ShowDialog();
     }
     private void ApplyBillingEntitlements(BillingEntitlements snapshot)
     {

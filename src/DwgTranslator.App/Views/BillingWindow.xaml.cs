@@ -24,13 +24,17 @@ public partial class BillingWindow : Window
  private string? _cursor;
  private PendingPurchase? _pending;
  private BillingOrder? _current;
- private bool _busy, _enabled, _initialized;
+ private bool _busy, _enabled, _initialized, _planSelectionLocked;
  private int _failures, _selection;
  public BillingWindow(IBillingClient client,string account,Func<bool> valid,Action<BillingEntitlements> apply)
  {
   // 「购买账号：」这个前缀已移到 XAML 的 InfoLabel 里，这里只给值，避免同一行出现两次。
   InitializeComponent();_client=client;_valid=valid;_apply=apply;Account.Text=account;
-  Plans.SelectionChanged+=(_,_)=>UpdatePlanMismatch(_current);
+  // 用户批注（2026-09-23）：「更改套餐后 右侧的二维码并不刷新」——原来改选只弹一条提示条，
+  // 二维码仍是旧订单的。现在把"改套餐"当成一次明确的换单意图：确认后按新套餐重新下单并刷新二维码
+  // （原订单不取消，也不会重复扣款）。_planSelectionLocked 用来区分"程序性回填选择"
+  // （加载套餐、用户取消后把选择拨回原位），那种绝不能再触发换单。
+  Plans.SelectionChanged+=OnPlansSelectionChanged;
   Loaded+=async(_,_)=>await InitializeAsync();
   Closed+=(_,_)=>{_expiryTimer.Stop();_timer.Stop();_life.Cancel();_life.Dispose();_pendingStore?.Dispose();};
   Activated+=async(_,_)=>{if(_initialized)await RefreshAsync();};
@@ -105,8 +109,15 @@ public partial class BillingWindow : Window
    var plans=await _client.GetBillingPlansAsync(_life.Token);if(!Valid())return;
    // The shared catalog includes Free and disabled tiers; neither is a checkout choice.
    var purchasable=plans.Plans.Where(p=>p.IsPurchasable).ToList();
-   var selected=(Plans.SelectedItem as BillingPlan)?.Id;Plans.ItemsSource=purchasable;
-   Plans.SelectedItem=purchasable.FirstOrDefault(p=>p.Id==selected)??purchasable.FirstOrDefault();
+   // 程序性回填选择必须上锁：否则刷新套餐列表会被当成"用户改了套餐"，直接触发换单。
+   var selected=(Plans.SelectedItem as BillingPlan)?.Id;
+   _planSelectionLocked=true;
+   try
+   {
+    Plans.ItemsSource=purchasable;
+    Plans.SelectedItem=purchasable.FirstOrDefault(p=>p.Id==selected)??purchasable.FirstOrDefault();
+   }
+   finally{_planSelectionLocked=false;}
    _enabled=plans.PaymentsEnabled;PaymentMethods.IsEnabled=_enabled&&purchasable.Count>0;Plans.Visibility=purchasable.Count==0?Visibility.Collapsed:Visibility.Visible;Plans.IsEnabled=_enabled;
    PurchaseAvailability.Text=!_enabled?"新购买暂未开放\n暂时无法创建新的支付订单。已有订单仍可查询，已付款订单继续确认到账。":purchasable.Count==0?"当前暂无可购买套餐；已有订单仍可查询。":"购买服务可用。";
    // 服务可用时这块灰底框没有信息量，整块收起；只在不可用/出错时出现（用户批注：不必要的文字不显示）。
@@ -277,9 +288,53 @@ public partial class BillingWindow : Window
    PlanMismatchBar.Visibility=Visibility.Collapsed;
    return;
   }
-  PlanMismatchText.Text=$"所选套餐：{plan.Label}。右侧二维码仍属于原订单 {o.PlanName}（¥{o.PayableCents/100m:0.00}）——点击「确认套餐并获取二维码」后将生成新二维码；切换选择不会取消原订单。";
+  // 提示条同时承担"刷新二维码"的入口（用户批注 2026-09-23：「更改套餐后 右侧的二维码并不刷新」）：
+  // 右侧按钮就是那一步明确动作，文案里直接写出"点它为新套餐下单"。
+  PlanMismatchText.Text=$"所选套餐：{plan.Label}。右侧二维码仍属于原订单 {o.PlanName}（¥{o.PayableCents/100m:0.00}）——点击右侧按钮为「{plan.Label}」生成新二维码；原订单不会被取消。";
+  SwitchPlanButton.Content=$"为「{plan.Label}」生成二维码";
+  SwitchPlanButton.IsEnabled=_enabled&&!_busy;
   PlanMismatchBar.Visibility=Visibility.Visible;
  }
+ /// <summary>
+ /// 用户改选套餐：只刷新提示条与"生成新二维码"按钮的状态，**不自动下单**。
+ /// 用户批注（2026-09-23）「更改套餐后 右侧的二维码并不刷新」——二维码本身就是订单：
+ /// 要展示另一个套餐的二维码，必须先存在那个套餐的订单。所以"自动刷新"只能靠自动建单，
+ /// 而用户在下拉框里划过三个套餐就会凭空多出三张平台订单（还要占用额度和人工核对）。
+ /// 改法是把"刷新二维码"变成一步明确的动作：提示条右侧直接给出按钮，点一下就下单并刷新，
+ /// 既不违反"不静默建单"，也不需要用户自己去找「确认套餐并获取二维码」。
+ /// </summary>
+ private void OnPlansSelectionChanged(object sender,SelectionChangedEventArgs e)
+ {
+  if(_planSelectionLocked)return;
+  UpdatePlanMismatch(_current);
+ }
+
+ /// <summary>为当前所选套餐下单并刷新右侧二维码。原订单不取消、不重复扣款。</summary>
+ private async void SwitchPlan_Click(object sender,RoutedEventArgs e)
+ {
+  if(_busy||!_initialized)return;
+  if(Plans.SelectedItem is not BillingPlan plan)return;
+  if(!_enabled){Message.Text="新购买暂未开放；已有订单仍可查询。";return;}
+  await Run(async()=>{
+   // 放弃旧意图（不取消平台订单），按新套餐重新下单：新幂等键 = 新订单。
+   _pending=new PendingPurchase{PlanId=plan.Id,Channel="alipay",Key=Guid.NewGuid().ToString("N")};Save();
+   BillingOrder? order;
+   try{order=await _checkout!.CheckoutAsync(_pending,Valid,_life.Token);}
+   catch(BillingException ex) when (ex.Order!=null&&Valid())
+   {
+    // 服务端说这个套餐已有未完成订单：复用它，绝不重复建单。
+    _pending.OrderNo=ex.Order!.OrderNo;Save();
+    _current=ex.Order;++_selection;await Display(_current);
+    Message.Text="该套餐已有未完成的购买，已恢复它的二维码；未创建新订单。";
+    await LoadOrders(false);
+    return;
+   }
+   if(order==null)return;
+   _current=order;++_selection;await Display(order);await LoadOrders(false);
+   Message.Text=$"已为「{plan.Label}」生成新的支付二维码；原订单仍然有效，请只支付其中一笔。";
+  });
+ }
+
  private async void Orders_SelectionChanged(object sender,SelectionChangedEventArgs e)
  {
   if(_busy||Orders.SelectedItem is not BillingOrder selected)return;

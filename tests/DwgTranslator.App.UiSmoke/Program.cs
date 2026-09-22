@@ -586,12 +586,42 @@ public sealed partial class SmokeApp : App
         toggleOrders.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
         await Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ApplicationIdle);
         Check(ordersOverlay.Visibility==Visibility.Collapsed,"history overlay collapses again, restoring the current order card");
+        // 用户批注（2026-09-23）：「更改套餐后 右侧的二维码并不刷新」。
+        // 二维码就是订单：要显示另一个套餐的二维码，必须先有那个套餐的订单。所以"改选即自动刷新"
+        // 只能靠自动建单——用户在下拉框里划过三个套餐就会凭空多出三张平台订单。这里验证替代路径：
+        // 选中另一个套餐后提示条必须出现，并且它右侧那个按钮真的下单、刷新二维码、收起提示条。
+        fake.Catalog=new BillingPlans{PaymentsEnabled=true,Plans=[
+            new(){Id="p",Name="Go",PriceCents=2000,DurationDays=30},
+            new(){Id="max",Name="Max",PriceCents=5900,DurationDays=30}]};
+        await (Task)typeof(BillingWindow).GetMethod("LoadPlans",BindingFlags.NonPublic|BindingFlags.Instance)!.Invoke(w,null)!;
+        await Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ApplicationIdle);w.UpdateLayout();
+        var plansBox=(System.Windows.Controls.ComboBox)w.FindName("Plans");
+        var mismatchBar=(System.Windows.Controls.Border)w.FindName("PlanMismatchBar");
+        var switchPlanButton=(System.Windows.Controls.Button)w.FindName("SwitchPlanButton");
+        Check(mismatchBar.Visibility==Visibility.Collapsed,"refresh keeps selection on the current order's plan");
+        // 改选到**另一个**套餐（max），当前订单是 p —— 这才构成"选的套餐和二维码对不上"。
+        plansBox.SelectedItem=((System.Collections.IEnumerable)plansBox.ItemsSource).Cast<object>()
+            .First(item=>(string)item.GetType().GetProperty("Id")!.GetValue(item)=="max");
+        await Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ApplicationIdle);
+        Check(mismatchBar.Visibility==Visibility.Visible,"picking another plan surfaces the mismatch bar instead of silently keeping the old QR");
+        Check(switchPlanButton.IsVisible && switchPlanButton.Content is string label && label.Contains("Max"),
+            "mismatch bar offers the one-click refresh for the selected plan: "+switchPlanButton.Content);
+        var createsBeforePlanSwitch=fake.Creates;
+        switchPlanButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+        await Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ApplicationIdle);
+        Check(fake.Creates==createsBeforePlanSwitch+1,"the bar action creates exactly one order for the selected plan");
+        Check(((System.Windows.Controls.Image)w.FindName("Qr")).Source!=null,"the QR is regenerated for the newly selected plan");
+        Check(mismatchBar.Visibility==Visibility.Collapsed,"the mismatch bar clears once the QR matches the selection");
+        // 必须还原：Catalog 一旦非空就会盖过 fake.PaymentsEnabled，后面的"暂停服务"用例
+        // （paused service remains visible…）依赖默认目录返回 PaymentsEnabled=false。
+        fake.Catalog=null;
+        // 换套餐会产生一张新订单，所以后面几处"只创建过一次"的计数都要以此为基准（原值 1 → 2）。
         fake.Order.Channel="wxpay";
         await (Task)typeof(BillingWindow).GetMethod("RefreshAsync",BindingFlags.NonPublic|BindingFlags.Instance)!.Invoke(w,null)!;
         Check(((System.Windows.Controls.Image)w.FindName("Qr")).Source==null,"unsupported order channel never displays an Alipay QR");
-        Check(fake.Creates==1,"viewing unsupported order never creates replacement payment");
+        Check(fake.Creates==2,"viewing unsupported order never creates replacement payment");
         fake.Order.Channel="alipay";
-        w.Close();fake.PaymentsEnabled=false;w=Create();w.Show();await Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ApplicationIdle);Check(fake.Creates==1,"billing restart restores without checkout");
+        w.Close();fake.PaymentsEnabled=false;w=Create();w.Show();await Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ApplicationIdle);Check(fake.Creates==2,"billing restart restores without checkout");
         Check(((System.Windows.Controls.TextBlock)w.FindName("PurchaseAvailability")).Text.Contains("新购买暂未开放"),"paused service remains visible after existing order refresh");
         Check(!((FrameworkElement)w.FindName("PaymentMethods")).IsEnabled,"paused service disables payment methods");
         Check(((System.Windows.Controls.ComboBox)w.FindName("Plans")).Visibility==Visibility.Collapsed,"no empty plan selector while paused");
@@ -1009,7 +1039,9 @@ public sealed class FakeBilling : IBillingClient
  public Task<BillingOrders> GetBillingOrdersAsync(string? before=null,CancellationToken ct=default)=>Task.FromResult(new BillingOrders{Orders=Creates>0&&!Hidden.Contains(Order.OrderNo)?[Order]:[]});
  public Task<bool> HideBillingOrderAsync(string no,CancellationToken ct=default){Hides++;LastHidden=no;Hidden.Add(no);return Task.FromResult(true);}
  public Task<BillingOrder> GetBillingOrderAsync(string no,CancellationToken ct=default)=>Task.FromResult(Order);
- public Task<BillingOrder> CheckoutAsync(string p,string channel,string key,CancellationToken ct=default){Creates++;LastKey=key;OnCheckout?.Invoke();return Task.FromResult(Order);}
+ // 真实服务端返回的订单一定属于被请求的套餐；这里补上这一步，否则"换套餐"用例里
+ // 新订单仍带着旧套餐 id，提示条永远收不起来，等于在测一个假象。
+ public Task<BillingOrder> CheckoutAsync(string p,string channel,string key,CancellationToken ct=default){Creates++;LastKey=key;Order.PlanId=p;OnCheckout?.Invoke();return Task.FromResult(Order);}
  public Task<BillingOrder> ConfirmBillingOrderAsync(string no,CancellationToken ct=default)=>Task.FromResult(Order);
  public Task<BillingEntitlements> GetBillingEntitlementsAsync(CancellationToken ct=default)=>FailSnapshot?Task.FromException<BillingEntitlements>(new BillingException("offline","模拟断网")):Task.FromResult(new BillingEntitlements{UserId=UserId,Subscription=new(){PlanName=Order.Status=="paid"?"pro":"free"},Usage=new(){MonthlyQuota=1000000,Used=321}});
 }

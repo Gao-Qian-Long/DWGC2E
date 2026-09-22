@@ -118,7 +118,22 @@
                 <Border x:Name="PlanMismatchBar" Grid.Row="1" Visibility="Collapsed"
                         Background="{DynamicResource Brush.WarningLight}" BorderBrush="{DynamicResource Brush.Warning}"
                         BorderThickness="1" CornerRadius="{DynamicResource CornerRadius.Small}" Padding="10" Margin="{DynamicResource Spacing.CardInset}">
-                    <TextBlock x:Name="PlanMismatchText" TextWrapping="Wrap" FontSize="{DynamicResource FontSize.Secondary}" Foreground="{DynamicResource Brush.Warning}" />
+                    <!-- 提示条右侧的按钮就是这个提示的唯一出路：为所选套餐下单并刷新二维码
+                         （用户批注 2026-09-23：「更改套餐后 右侧的二维码并不刷新」）。
+                         放在提示条里而不是只留工具栏那个按钮，是因为提示条自己说出了问题，
+                         行动点必须和它在一起。 -->
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock x:Name="PlanMismatchText" TextWrapping="Wrap" FontSize="{DynamicResource FontSize.Secondary}"
+                                   Foreground="{DynamicResource Brush.Warning}" VerticalAlignment="Center" />
+                        <Button Grid.Column="1" x:Name="SwitchPlanButton" Content="生成新二维码" Click="SwitchPlan_Click"
+                                Style="{StaticResource Button.Compact.Primary}" MinWidth="132" Margin="10,0,0,0"
+                                VerticalAlignment="Center" AutomationProperties.Name="生成新二维码"
+                                ToolTip="按所选套餐生成新的支付二维码；原订单不会被取消，请只支付其中一笔" />
+                    </Grid>
                 </Border>
                 <!-- 当前订单卡：付款时真正要看的只有"多少钱"和"扫哪个码"。二维码过展示期后整块塌缩、
                      不再显示，但金额与订单号保留以便核对；未付款记录可以在这里直接删除。 -->
