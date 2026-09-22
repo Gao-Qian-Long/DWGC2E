@@ -10,6 +10,18 @@
             <Border x:Name="RecoveryNotice" Visibility="{Binding HasTaskRecoveryWarning, Converter={StaticResource BoolToVis}}" Background="{DynamicResource Brush.WarningLight}" BorderBrush="{DynamicResource Brush.Warning}" BorderThickness="1" CornerRadius="6" Padding="12" Margin="{DynamicResource Spacing.StackWide}" AutomationProperties.Name="任务恢复警告">
                 <TextBlock Text="{Binding TaskRecoveryWarning}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
             </Border>
+            <!-- 未完成任务（2026-09-22 用户反馈「软件打开时不要跳出未完成弹窗」）：
+                 启动不再弹模态框，改由导航红点和这张卡片呈现，续跑与清除都在这里由用户主动选择。 -->
+            <Border x:Name="PendingTasksCard" Visibility="{Binding HasPendingTasks, Converter={StaticResource BoolToVis}}" Background="{DynamicResource Brush.WarningLight}" BorderBrush="{DynamicResource Brush.Warning}" BorderThickness="1" CornerRadius="6" Padding="12" Margin="{DynamicResource Spacing.StackWide}" AutomationProperties.Name="未完成任务">
+                <StackPanel>
+                    <TextBlock Text="{Binding PendingTasksNotice}" TextWrapping="Wrap" FontWeight="SemiBold" AutomationProperties.LiveSetting="Polite" />
+                    <TextBlock Text="继续处理会接着上次的进度跑；清除只删除任务记录，不会删除图纸文件，也不影响已完成或已取消的历史。" TextWrapping="Wrap" Style="{StaticResource CaptionStyle}" Margin="{DynamicResource Spacing.BlockTopTight}" />
+                    <StackPanel Orientation="Horizontal" Margin="{DynamicResource Spacing.BlockTop}">
+                        <Button x:Name="ResumePendingTasksButton" Content="继续处理" Command="{Binding ResumePendingTasksCommand}" Style="{StaticResource Button.Primary}" />
+                        <Button x:Name="ClearPendingTasksButton" Content="清除未完成记录" Command="{Binding ClearPendingTasksCommand}" Style="{StaticResource Button.Secondary}" Margin="{DynamicResource Spacing.LeftGap}" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
         </StackPanel>
         <Grid Grid.Row="1" Visibility="{Binding IsProofreading, Converter={StaticResource BoolToVis}, ConverterParameter=false}">
             <Grid.RowDefinitions>

@@ -325,6 +325,13 @@
                             <TextBlock Style="{StaticResource NavIndexStyle}" Text="02" Margin="0,0,8,0" />
                             <Path Data="{StaticResource Icon.NavBatch}" Width="18" Height="18" Stretch="Uniform" Fill="Transparent" Margin="{DynamicResource Spacing.InlineWide}" VerticalAlignment="Center" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" StrokeThickness="{DynamicResource Size.Stroke}" />
                             <TextBlock Text="任务中心" VerticalAlignment="Center" />
+                            <!-- 未完成任务的红点：启动不再弹窗打断，用这个标记提示还有没跑完的图纸；
+                                 详细清单与「继续处理 / 清除」在任务中心页内。 -->
+                            <Ellipse x:Name="PendingTasksDot" Width="7" Height="7" Margin="6,0,0,0" VerticalAlignment="Center"
+                                     Fill="{DynamicResource Brush.Danger}"
+                                     Visibility="{Binding HasPendingTasks, Converter={StaticResource BoolToVis}}"
+                                     ToolTip="{Binding PendingTasksNotice}"
+                                     AutomationProperties.Name="有未完成的任务" />
                         </StackPanel>
                     </ListBoxItem>
                     <ListBoxItem Tag="glossary" AutomationProperties.Name="术语库">

@@ -28,10 +28,55 @@ public partial class MainViewModel
     public string TaskRecoveryWarning => (_taskManager as ITaskRecoveryDiagnostics)?.RecoveryWarning ?? string.Empty;
     public bool HasTaskRecoveryWarning => !string.IsNullOrEmpty(TaskRecoveryWarning);
 
+    /// <summary>
+    /// 上次运行遗留的未完成任务数。启动不再弹模态框询问，改用导航红点 + 任务中心的提示条呈现，
+    /// 让"有东西没跑完"可见但不打断启动。
+    /// </summary>
+    public int PendingTaskCount => _taskManager.PendingFromLastRun.Count;
+    public bool HasPendingTasks => PendingTaskCount > 0;
+    public string PendingTasksNotice
+    {
+        get
+        {
+            var pending = _taskManager.PendingFromLastRun;
+            if (pending.Count == 0) return string.Empty;
+            var names = string.Join("、", pending.Take(5).Select(t => t.FileName));
+            return pending.Count > 5
+                ? $"上次有 {pending.Count} 张图纸没有跑完：{names} 等 {pending.Count} 张"
+                : $"上次有 {pending.Count} 张图纸没有跑完：{names}";
+        }
+    }
+
     private void RefreshTaskRecoveryNotice()
     {
         OnPropertyChanged(nameof(TaskRecoveryWarning));
         OnPropertyChanged(nameof(HasTaskRecoveryWarning));
+        OnPropertyChanged(nameof(PendingTaskCount));
+        OnPropertyChanged(nameof(HasPendingTasks));
+        OnPropertyChanged(nameof(PendingTasksNotice));
+    }
+
+    /// <summary>任务中心的「继续处理」：沿用上次的写回方式直接续跑队列。</summary>
+    [RelayCommand]
+    private Task ResumePendingTasksAsync()
+    {
+        if (!HasPendingTasks || _taskManager.IsRunning) return Task.CompletedTask;
+        return RunTaskQueueAsync(retryFailedFirst: false, askWritebackMode: false);
+    }
+
+    /// <summary>任务中心的「清除未完成记录」：只删记录，不删图纸文件，也不动已完成/已取消的历史。</summary>
+    [RelayCommand]
+    private void ClearPendingTasks()
+    {
+        var pending = _taskManager.PendingFromLastRun;
+        if (pending.Count == 0) return;
+        if (Views.PromptDialog.Show(
+                $"将清除 {pending.Count} 条未完成记录。\n\n图纸文件本身不会被删除，再次导入仍可翻译；已完成或已取消的历史记录不受影响。是否继续？",
+                "清除未完成记录", MessageBoxButton.YesNo,
+                confirmText: "清除记录", rejectText: "保留记录") != MessageBoxResult.Yes) return;
+        foreach (var task in pending.ToArray()) _taskManager.Remove(task);
+        StatusMessage = Strings.Get("StatusReady");
+        RefreshTaskRecoveryNotice();
     }
 
     #region 事件订阅
@@ -353,46 +398,31 @@ public partial class MainViewModel
     }
 
     /// <summary>
-    /// 启动时检测上次未完成的任务（任务层从 tasks.json 恢复）。
-    /// 选择"继续"则直接开跑（沿用上次的写回方式，不再多弹一个对话框）；
-    /// 仅显式选择清除才删除记录；关闭、Esc 或暂不处理均保留恢复队列。
+    /// 启动时把上次未完成的任务放回队列（任务层已从 tasks.json 恢复）。
+    /// 这里不再弹窗：任务只以"等待中"显示，并由导航红点与任务中心提示条告知，
+    /// 是否续跑、是否清除都由用户在任务中心里显式决定，启动过程不被打断。
     /// </summary>
     private void ResumePendingTasks()
     {
-        RefreshTaskRecoveryNotice();
         var pending = _taskManager.PendingFromLastRun;
-        if (pending.Count == 0) return;
-
-        foreach (var task in pending)
+        if (pending.Count > 0)
         {
-            if (DrawingFiles.All(r => !string.Equals(
-                    NormalizeSourcePath(r.FullPath), NormalizeSourcePath(task.FilePath), StringComparison.OrdinalIgnoreCase)))
+            foreach (var task in pending)
             {
-                DrawingFiles.Add(new DrawingFileItem(task.FilePath) { Index = DrawingFiles.Count + 1 });
+                if (DrawingFiles.All(r => !string.Equals(
+                        NormalizeSourcePath(r.FullPath), NormalizeSourcePath(task.FilePath), StringComparison.OrdinalIgnoreCase)))
+                {
+                    DrawingFiles.Add(new DrawingFileItem(task.FilePath) { Index = DrawingFiles.Count + 1 });
+                }
             }
+
+            AttachTasksToRows();
+            HasDrawingFiles = DrawingFiles.Count > 0;
+            HasMultipleDrawingFiles = DrawingFiles.Count > 1;
+            Log.Information("上次遗留 {Count} 个未完成任务，已用红点提示并由任务中心处理", pending.Count);
         }
 
-        AttachTasksToRows();
-        HasDrawingFiles = DrawingFiles.Count > 0;
-        HasMultipleDrawingFiles = DrawingFiles.Count > 1;
-
-        var answer = Views.PromptDialog.Show(
-            $"检测到上次有 {pending.Count} 张图纸没有跑完：\n\n    {string.Join("\n    ", pending.Take(8).Select(t => t.FileName))}"
-                + (pending.Count > 8 ? $"\n    …等 {pending.Count} 张" : string.Empty)
-                + "\n\n可继续处理，或暂不处理并保留任务。只有选择「清除未完成记录」才会清除；关闭窗口不会清除。",
-            "未完成的任务", MessageBoxButton.YesNoCancel,
-            confirmText: "继续处理", rejectText: "清除未完成记录", cancelText: "暂不处理");
-        if (answer == MessageBoxResult.Yes)
-        {
-            // 不 await：OnLoaded 还在跑初始化，队列在后台自己跑完并回填界面。
-            _ = RunTaskQueueAsync(retryFailedFirst: false, askWritebackMode: false);
-        }
-        else if (answer == MessageBoxResult.No)
-        {
-            // The recovery choice applies only to the displayed unfinished tasks.
-            foreach (var task in pending.ToArray()) _taskManager.Remove(task);
-            StatusMessage = Strings.Get("StatusReady");
-        }
+        RefreshTaskRecoveryNotice();
     }
 
     #endregion
