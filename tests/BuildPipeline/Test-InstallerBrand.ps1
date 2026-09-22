@@ -1,7 +1,7 @@
 # Verify every installer entry point references the canonical APP branding.
 $ErrorActionPreference='Stop'
 $root=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
-$iss=[IO.File]::ReadAllText((Join-Path $root 'installer/DwgTranslator.iss'))
+$iss=[IO.File]::ReadAllText((Join-Path $root 'installer/QLCAD.iss'))
 $match=[regex]::Match($iss,'(?m)^SetupIconFile=(.+)\r?$')
 if(-not $match.Success){throw 'Installer executable lacks canonical icon'}
 $icon=[IO.Path]::GetFullPath((Join-Path (Join-Path $root 'installer') $match.Groups[1].Value.Trim()))

@@ -24,8 +24,8 @@ public static class DesktopReviewCapture {
 }
 "@
 }
-$release = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../release/DwgTranslator.exe'))
-$processes = @(Get-Process DwgTranslator -ErrorAction SilentlyContinue | Where-Object Path -EQ $release)
+$release = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../release/QLCAD.exe'))
+$processes = @(Get-Process QLCAD -ErrorAction SilentlyContinue | Where-Object Path -EQ $release)
 if ($processes.Count -ne 1) { throw 'Expected exactly one installed release process.' }
 if ($WindowHandle -eq 0) { $WindowHandle = $processes[0].MainWindowHandle }
 $h = [IntPtr]$WindowHandle

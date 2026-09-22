@@ -1,4 +1,4 @@
-using System.Collections;
+﻿using System.Collections;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Runtime.Loader;
@@ -33,7 +33,7 @@ internal static class PipelineAcceptance
         void Check(bool ok,string message) { if (!ok) throw new InvalidOperationException(message); }
         void Save(string file,object data) => File.WriteAllText(Path.Combine(root,file),JsonSerializer.Serialize(data,new JsonSerializerOptions { WriteIndented=true }));
         object Read(object reader,string path) => reader.GetType().GetMethod("ExtractFromFile")!.Invoke(reader,new object[]{path})!;
-        var appBytes = bundle.ReadAssembly("DwgTranslator.dll") ?? throw new InvalidDataException("APP assembly missing");
+        var appBytes = bundle.ReadAssembly("QLCAD.dll") ?? throw new InvalidDataException("APP assembly missing");
         var app = AssemblyLoadContext.Default.LoadFromStream(new MemoryStream(appBytes));
         var interop = Activator.CreateInstance(app.GetType("DwgTranslator.App.Services.AutoCadInteropService",true)!)!;
         int providerCalls=0,interopCalls=0,offlineWrites=0;

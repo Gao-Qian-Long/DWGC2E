@@ -59,7 +59,7 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="AppTitle" xml:space="preserve">
-    <value>DWG Translator - 图纸中英文互译</value>
+    <value>QLCAD - 图纸中英文互译</value>
   </data>
   <data name="AppTitleShort" xml:space="preserve">
     <value>图纸中英文互译</value>
@@ -74,7 +74,7 @@
     <value>授权管理</value>
   </data>
   <data name="HelpTitle" xml:space="preserve">
-    <value>DWG Translator 使用帮助</value>
+    <value>QLCAD 使用帮助</value>
   </data>
   <data name="GlossaryManagerTitle" xml:space="preserve">
     <value>术语库管理</value>
@@ -566,7 +566,7 @@
     <value>• 智能宽度和字高缩放</value>
   </data>
   <data name="LicenseHeader" xml:space="preserve">
-    <value>DWG Translator 授权管理</value>
+    <value>QLCAD 授权管理</value>
   </data>
   <data name="LicenseManageDesc" xml:space="preserve">
     <value>管理您的软件许可，解锁全部功能</value>
@@ -638,7 +638,7 @@
     <value>机器码已复制到剪贴板，请发送给客服获取激活码。</value>
   </data>
   <data name="LicenseActivationSuccessPerpetual" xml:space="preserve">
-    <value>永久授权激活成功！感谢您购买 DWG Translator (买断制 ¥699)。</value>
+    <value>永久授权激活成功！感谢您购买 QLCAD (买断制 ¥699)。</value>
   </data>
   <data name="LicenseActivationSuccessSubscription" xml:space="preserve">
     <value>订阅授权激活成功！有效期至 {0}。</value>
@@ -801,7 +801,7 @@ AutoCAD 可能会弹出「是否加载来自非信任路径的程序集」安全
 日志位置: {1}</value>
   </data>
   <data name="MsgFirstLaunch" xml:space="preserve">
-    <value>欢迎使用 DWG Translator v2.1!
+    <value>欢迎使用 QLCAD v2.1!
 
 首次使用需要配置 DeepSeek API Key。
 请点击「设置」按钮进行配置。
@@ -896,7 +896,7 @@ AutoCAD 可能会弹出「是否加载来自非信任路径的程序集」安全
     <value>三、文字排版优化</value>
   </data>
   <data name="HelpLayoutIntro" xml:space="preserve">
-    <value>DWG Translator v2.1 对文字排版进行了全面优化：</value>
+    <value>QLCAD v2.1 对文字排版进行了全面优化：</value>
   </data>
   <data name="HelpLayoutFixedWidth" xml:space="preserve">
     <value>• 固定宽度 MText：翻译后自动调整矩形宽度，防止单词间距过大</value>
@@ -914,7 +914,7 @@ AutoCAD 可能会弹出「是否加载来自非信任路径的程序集」安全
     <value>四、授权方案</value>
   </data>
   <data name="HelpLicenseIntro" xml:space="preserve">
-    <value>DWG Translator 提供三种授权方案：</value>
+    <value>QLCAD 提供三种授权方案：</value>
   </data>
   <data name="HelpLicenseTrial" xml:space="preserve">
     <value>体验版（免费）：</value>
@@ -971,7 +971,7 @@ AutoCAD 可能会弹出「是否加载来自非信任路径的程序集」安全
     <value>3. 如果只点击「加载」(Load)，下次使用仍会弹出此对话框</value>
   </data>
   <data name="HelpFaq4Tip" xml:space="preserve">
-    <value>提示：DWG Translator 会在发送命令前弹窗提醒您注意此对话框</value>
+    <value>提示：QLCAD 会在发送命令前弹窗提醒您注意此对话框</value>
   </data>
   <data name="HelpFaq5Q" xml:space="preserve">
     <value>Q: 导出 DWG 时如何取消？</value>

@@ -14,7 +14,7 @@ var root = Path.GetFullPath(args[3]);
 const string replacement = "Dust removal valve closed position feedback";
 string Hash(string p) => Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(p)));
 void Require(bool ok, string message) { if (!ok) throw new InvalidOperationException(message); }
-var bundle = new InstalledBundle(Path.Combine(release, "DwgTranslator.exe"));
+var bundle = new InstalledBundle(Path.Combine(release, "QLCAD.exe"));
 AssemblyLoadContext.Default.Resolving += (_, name) => {
     var bytes = bundle.ReadAssembly(name.Name + ".dll");
     return bytes is null ? null : AssemblyLoadContext.Default.LoadFromStream(new MemoryStream(bytes));

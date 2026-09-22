@@ -15,7 +15,7 @@ $info=Get-Content -LiteralPath (Join-Path $dir 'build-info.json') -Raw | Convert
 if([string]$info.version -notmatch '^\d+\.\d+\.\d+\+ui\.\d{8}-\d{6}\.[a-zA-Z0-9]+$'){throw 'Invalid desktop build version'}
 $platform=(Get-Content -LiteralPath (Join-Path $dir 'CadPlugin/cad-platform.txt') -Raw).Trim()
 if($platform -notin @('GstarCAD','AutoCAD')){throw 'Unsupported CAD platform'}
-$names=@('DwgTranslator.exe','CadPlugin/DwgTranslator.Cad.dll','CadPlugin/DwgTranslator.Core.dll')
+$names=@('QLCAD.exe','CadPlugin/DwgTranslator.Cad.dll','CadPlugin/DwgTranslator.Core.dll')
 $files=@($names | ForEach-Object {
     $file=Get-Item -LiteralPath (Join-Path $dir $_)
     [ordered]@{name=$_;size=$file.Length;sha256=(Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash}

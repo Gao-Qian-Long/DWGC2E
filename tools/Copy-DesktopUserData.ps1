@@ -11,7 +11,7 @@ Safe $old; Safe $next
 if(-not(Test-Path -LiteralPath $old)){return}
 function Files([string]$p){foreach($item in Get-ChildItem -LiteralPath $p -Force){Safe $item.FullName;if($item.PSIsContainer){Files $item.FullName}else{$item}}}
 # Only explicitly declared application files are disposable; unknown files anywhere are data.
-$owned=@('prompts\deepl_context.txt','DwgTranslator.exe','DwgTranslator.pdb','DwgTranslator.Core.pdb','build-info.json','architecture-audit.json','assets\default-glossaries\mechanical_zh_en.json','CadPlugin\cad-files.txt')
+$owned=@('prompts\deepl_context.txt','QLCAD.exe','QLCAD.pdb','DwgTranslator.Core.pdb','build-info.json','architecture-audit.json','assets\default-glossaries\mechanical_zh_en.json','CadPlugin\cad-files.txt')
 $cadManifest=Join-Path $old 'CadPlugin/cad-files.txt'
 if(Test-Path -LiteralPath $cadManifest){
  foreach($entry in Get-Content -LiteralPath $cadManifest -Encoding UTF8){

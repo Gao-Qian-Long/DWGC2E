@@ -11,7 +11,7 @@ function Put($p,$text){New-Item -ItemType Directory -Path ([IO.Path]::GetDirecto
 $checks=New-Object 'System.Collections.Generic.List[string]'
 function Check($v,$label){if(-not $v){throw $label};$checks.Add($label)}
 foreach($file in Get-ChildItem (Join-Path $root 'tools') -Filter '*.ps1' | Where-Object { $_.Name -in @('Publish-Desktop.ps1','Get-DesktopPayload.ps1','Get-DesktopSourceSnapshot.ps1','New-DesktopInstaller.ps1','Copy-DesktopUserData.ps1','Clean-DesktopArtifacts.ps1') }){$tokens=$null;$errors=$null;[Management.Automation.Language.Parser]::ParseFile($file.FullName,[ref]$tokens,[ref]$errors)|Out-Null;Check ($errors.Count -eq 0) ('syntax '+$file.Name)}
-Put (Join-Path $old 'DwgTranslator.exe') 'old';Put (Join-Path $next 'DwgTranslator.exe') 'new'
+Put (Join-Path $old 'QLCAD.exe') 'old';Put (Join-Path $next 'QLCAD.exe') 'new'
 Put (Join-Path $old 'CadPlugin/cad-files.txt') 'owned.dll'
 Put (Join-Path $old 'CadPlugin/owned.dll') 'old plugin';Put (Join-Path $next 'CadPlugin/owned.dll') 'new plugin'
 $obsolete='prompts/deepl_context.txt';Put (Join-Path $old $obsolete) 'obsolete client prompt'
@@ -21,7 +21,7 @@ Put (Join-Path $next 'settings.json') 'default'
 & (Join-Path $root 'tools/Copy-DesktopUserData.ps1') -OldRelease $old -NewRelease $next -WorkspaceRoot $fixture
 foreach($p in $personal){Check ((Get-FileHash (Join-Path $old $p)).Hash -eq (Get-FileHash (Join-Path $next $p)).Hash) ('preserved '+$p)}
 Check (-not(Test-Path -LiteralPath (Join-Path $next $obsolete))) 'obsolete client prompt is not migrated into new release'
-Check ((Get-Content (Join-Path $next 'DwgTranslator.exe') -Raw) -eq 'new') 'new executable not overwritten'
+Check ((Get-Content (Join-Path $next 'QLCAD.exe') -Raw) -eq 'new') 'new executable not overwritten'
 Check ((Get-Content (Join-Path $next 'CadPlugin/owned.dll') -Raw) -eq 'new plugin') 'new owned plugin not overwritten'
 Put (Join-Path $old 'collision.txt') 'personal';Put (Join-Path $next 'collision.txt') 'runtime'
 $rejected=$false;try{& (Join-Path $root 'tools/Copy-DesktopUserData.ps1') -OldRelease $old -NewRelease $next -WorkspaceRoot $fixture}catch{$rejected=$true}

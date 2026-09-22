@@ -1,7 +1,7 @@
 # Purpose: LIVE endpoint checks and Wrangler secret-NAME inventory; requires approved Cloudflare access.
 # Input: WorkerUrl, WorkerName. Output: diagnostics; no secret values requested.
 # Usage: powershell -NoProfile -File tools/Test-CloudflareSetup.ps1 -WorkerUrl <test-api> -WorkerName <test-worker>
-# DWGC2E Cloudflare 配置检查（不读取 Secret 值、不发送邮件、不修改 D1）
+# QLCAD Cloudflare 配置检查（不读取 Secret 值、不发送邮件、不修改 D1）
 param(
   [string]$WorkerUrl = 'https://dwgc2e-api.maplehousezz.workers.dev',
   [string]$WorkerName = 'dwgc2e-api'

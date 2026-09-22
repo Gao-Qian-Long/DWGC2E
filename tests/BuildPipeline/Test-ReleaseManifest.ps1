@@ -16,9 +16,9 @@ function Reject($label){
     Check ($rejected -and !(Test-Path -LiteralPath $out)) $label
 }
 try {
-    foreach($name in @('DwgTranslator.exe','CadPlugin/DwgTranslator.Cad.dll','CadPlugin/DwgTranslator.Core.dll')){Set-Content -LiteralPath (Join-Path $dir $name) "fixture $name"}
+    foreach($name in @('QLCAD.exe','CadPlugin/DwgTranslator.Cad.dll','CadPlugin/DwgTranslator.Core.dll')){Set-Content -LiteralPath (Join-Path $dir $name) "fixture $name"}
     Set-Content -LiteralPath (Join-Path $dir 'CadPlugin/cad-platform.txt') 'GstarCAD'
-    $info=@{version='2.1.1+ui.20260916-120000.test';revision='test';builtAt='2026-09-16T12:00:00+08:00';sha256=(Get-FileHash (Join-Path $dir 'DwgTranslator.exe')).Hash}
+    $info=@{version='2.1.1+ui.20260916-120000.test';revision='test';builtAt='2026-09-16T12:00:00+08:00';sha256=(Get-FileHash (Join-Path $dir 'QLCAD.exe')).Hash}
     $info|ConvertTo-Json|Set-Content -LiteralPath (Join-Path $dir 'build-info.json');Pack
     $out=Join-Path $fixture 'valid.json';& $tool -PublishDir $dir -PackagePath $zip -OutputPath $out | Out-Null
     $m=Get-Content -LiteralPath $out -Raw|ConvertFrom-Json
@@ -34,9 +34,9 @@ try {
     $before=(Get-FileHash $out).Hash;$blocked=$false
     try{& $tool -PublishDir $dir -PackagePath $zip -OutputPath $out|Out-Null}catch{$blocked=$true}
     Check ($blocked -and (Get-FileHash $out).Hash -eq $before) 'existing output cannot be overwritten'
-    $exe=Get-Content -LiteralPath (Join-Path $dir 'DwgTranslator.exe') -Raw
-    Set-Content -LiteralPath (Join-Path $dir 'DwgTranslator.exe') 'tampered';Reject 'installed-executable-tampering'
-    [IO.File]::WriteAllText((Join-Path $dir 'DwgTranslator.exe'),$exe)
+    $exe=Get-Content -LiteralPath (Join-Path $dir 'QLCAD.exe') -Raw
+    Set-Content -LiteralPath (Join-Path $dir 'QLCAD.exe') 'tampered';Reject 'installed-executable-tampering'
+    [IO.File]::WriteAllText((Join-Path $dir 'QLCAD.exe'),$exe)
     Set-Content -LiteralPath (Join-Path $dir 'CadPlugin/DwgTranslator.Cad.dll') 'different';Reject 'plugin-package-mismatch'
     Pack
     $info.version='2.1.1+ui.20260916-130000.test';$info|ConvertTo-Json|Set-Content -LiteralPath (Join-Path $dir 'build-info.json');Reject 'package-version-mismatch'
@@ -45,7 +45,7 @@ try {
     Set-Content -LiteralPath (Join-Path $dir 'CadPlugin/cad-platform.txt') 'AutoCAD';Pack
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     $a=[IO.Compression.ZipFile]::Open($zip,[IO.Compression.ZipArchiveMode]::Update)
-    try{$entry=$a.CreateEntry('DwgTranslator.exe');$w=[IO.StreamWriter]::new($entry.Open());try{$w.Write('duplicate')}finally{$w.Dispose()}}finally{$a.Dispose()}
+    try{$entry=$a.CreateEntry('QLCAD.exe');$w=[IO.StreamWriter]::new($entry.Open());try{$w.Write('duplicate')}finally{$w.Dispose()}}finally{$a.Dispose()}
     Reject 'duplicate-executable-entry'
     Write-Host 'RELEASE_MANIFEST_TESTS=PASS (11 cases)'
 }finally{

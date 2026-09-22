@@ -2,7 +2,7 @@ param([string]$ExecutablePath)
 $ErrorActionPreference='Stop'
 $root=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 $script=Join-Path $root 'tools/Refresh-DesktopShellIcon.ps1'
-if(-not $ExecutablePath){$ExecutablePath=Join-Path $root 'release/DwgTranslator.exe'}
+if(-not $ExecutablePath){$ExecutablePath=Join-Path $root 'release/QLCAD.exe'}
 $exe=(Get-Item -LiteralPath $ExecutablePath).FullName
 $before=(Get-FileHash -LiteralPath $exe).Hash
 foreach($invalid in @((Split-Path -Parent $exe),$script,(Join-Path (Split-Path -Parent $exe) 'nonexistent-icon-test.exe'))) {

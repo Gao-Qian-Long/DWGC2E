@@ -59,7 +59,7 @@ try {
         }
     }
     if (-not $BuildOnly) {
-        $running = Get-Process DwgTranslator -ErrorAction SilentlyContinue | Where-Object { $_.Path -and [IO.Path]::GetFullPath($_.Path) -eq (Join-Path $release 'DwgTranslator.exe') }
+        $running = Get-Process QLCAD -ErrorAction SilentlyContinue | Where-Object { $_.Path -and [IO.Path]::GetFullPath($_.Path) -eq (Join-Path $release 'QLCAD.exe') }
         if ($running) { throw 'Close the release application before publishing. No processes were stopped.' }
     }
     # A runtime-only machine-wide dotnet must not hide a usable per-user SDK.
@@ -153,7 +153,7 @@ try {
     Copy-Item -LiteralPath (Join-Path $root 'assets/glossaries/mechanical_zh_en.json') -Destination (Join-Path $stage 'glossaries/mechanical_zh_en.json') -Force
     & (Join-Path $root 'tools/Verify-ReleasePackage.ps1') -PublishDir $stage
     if (-not $?) { throw 'Release dependency verification failed' }
-    $exe = Join-Path $stage 'DwgTranslator.exe'
+    $exe = Join-Path $stage 'QLCAD.exe'
     if (-not (Test-Path -LiteralPath $exe)) { throw 'Missing executable' }
     # Check candidate resources before packaging or touching the installed release.
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root 'tools/Verify-ExecutableIcon.ps1') -ExecutablePath $exe
@@ -195,7 +195,7 @@ try {
     # or otherwise change the shared candidate/package retention set used by normal delivery.
     $zip = $null
     if (-not $BuildOnly) {
-        $zip = Join-Path $root "artifacts/DwgTranslator-win-x64-$platform-$stamp.zip"
+        $zip = Join-Path $root "artifacts/QLCAD-win-x64-$platform-$stamp.zip"
         Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $zip -CompressionLevel Optimal
     }
     if (-not $BuildOnly) {
@@ -206,14 +206,14 @@ try {
             $previousCandidate=Join-Path $root ('artifacts/publish-'+$Matches[1])
             # Never compile a test installer from personal settings in the installed release.
             if(-not(Test-Path -LiteralPath $previousCandidate)){throw 'Previous clean candidate missing; restore it before cross-build upgrade acceptance.'}
-            if((Get-FileHash -LiteralPath (Join-Path $previousCandidate 'DwgTranslator.exe')).Hash -ne $previousInfo.sha256){throw 'Previous candidate does not match installed build'}
+            if((Get-FileHash -LiteralPath (Join-Path $previousCandidate 'QLCAD.exe')).Hash -ne $previousInfo.sha256){throw 'Previous candidate does not match installed build'}
             $installerArgs.PreviousPublishDir=$previousCandidate
         }
         $installer = & (Join-Path $PSScriptRoot 'New-DesktopInstaller.ps1') @installerArgs
         if (-not $installer.installerSha256) { throw 'Missing verified installer receipt' }
         $sourceAfter = @(& (Join-Path $PSScriptRoot 'Get-DesktopSourceSnapshot.ps1'))
         if (($sourceBefore | ConvertTo-Json -Compress) -cne ($sourceAfter | ConvertTo-Json -Compress)) { throw 'Build inputs changed during delivery; installed release preserved.' }
-        if (Get-Process DwgTranslator -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq (Join-Path $release 'DwgTranslator.exe') }) { throw 'Release was started during validation; installed release preserved.' }
+        if (Get-Process QLCAD -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq (Join-Path $release 'QLCAD.exe') }) { throw 'Release was started during validation; installed release preserved.' }
         New-Item -ItemType Directory -Path $next | Out-Null
         Get-ChildItem -LiteralPath $stage | Copy-Item -Destination $next -Recurse -Force
         # Preserve portable config and all unknown user files, not just a short list.
@@ -228,9 +228,9 @@ try {
             @{ schemaVersion=1; stamp=$stamp; release=$release; backup=$backup; next=$next; preparedAt=(Get-Date -Format o) } | ConvertTo-Json | Set-Content -LiteralPath $switchPointer -Encoding UTF8
             if (Test-Path -LiteralPath $release) { Move-Item -LiteralPath (Assert-WorkspacePath $release) -Destination (Assert-WorkspacePath $backup); $moved = $true }
             Move-Item -LiteralPath (Assert-WorkspacePath $next) -Destination (Assert-WorkspacePath $release)
-            $installedHash = (Get-FileHash -LiteralPath (Join-Path $release 'DwgTranslator.exe') -Algorithm SHA256).Hash
+            $installedHash = (Get-FileHash -LiteralPath (Join-Path $release 'QLCAD.exe') -Algorithm SHA256).Hash
             if ($installedHash -ne $hash) { throw 'Installed executable hash mismatch' }
-            $record = [ordered]@{ schemaVersion=1; status='installed-local'; version=$version; cadPlatform=$platform; appSha256=$hash; installedExecutable=(Join-Path $release 'DwgTranslator.exe'); candidate=$stage; rollbackDirectory=$(if($moved){$backup}else{$null}); installerPath=$installer.installerPath; installerSha256=$installer.installerSha256; publicDirectory=$installer.publicDirectory; acceptanceReport=$installer.acceptanceReport; sourceSnapshot=(Join-Path $deliveryDir 'source-snapshot.json'); deliveryDirectory=$deliveryDir; installedAt=(Get-Date -Format o); publicUploadPerformed=$false }
+            $record = [ordered]@{ schemaVersion=1; status='installed-local'; version=$version; cadPlatform=$platform; appSha256=$hash; installedExecutable=(Join-Path $release 'QLCAD.exe'); candidate=$stage; rollbackDirectory=$(if($moved){$backup}else{$null}); installerPath=$installer.installerPath; installerSha256=$installer.installerSha256; publicDirectory=$installer.publicDirectory; acceptanceReport=$installer.acceptanceReport; sourceSnapshot=(Join-Path $deliveryDir 'source-snapshot.json'); deliveryDirectory=$deliveryDir; installedAt=(Get-Date -Format o); publicUploadPerformed=$false }
             $recordJson = $record | ConvertTo-Json -Depth 5
             $recordJson | Set-Content -LiteralPath (Join-Path $deliveryDir 'installed-release.json') -Encoding UTF8
             $currentTemp = Join-Path $deliveryDir 'current-release.tmp'
@@ -255,7 +255,7 @@ try {
     if (-not $BuildOnly) {
         # The replacement retains the same path; invalidate the Shell's old icon entry.
         # A desktop notification failure must not roll back a verified, usable release.
-        try { & (Join-Path $root 'tools/Refresh-DesktopShellIcon.ps1') -ExecutablePath (Join-Path $release 'DwgTranslator.exe') | Out-Host }
+        try { & (Join-Path $root 'tools/Refresh-DesktopShellIcon.ps1') -ExecutablePath (Join-Path $release 'QLCAD.exe') | Out-Host }
         catch { Write-Warning "Installed release is valid; Shell icon refresh failed: $($_.Exception.Message)" }
     }
     # Retain only the latest verified candidate, installed package, and one rollback copy. Cleanup
@@ -293,7 +293,7 @@ try {
         Write-Host "Internal portable ZIP (not the primary download): $zip"
         Write-Host "UPLOAD_THIS_SETUP: $($installer.installerPath)"
         Write-Host "CURRENT_RELEASE: $currentPath"
-        Write-Host "Installed: $release/DwgTranslator.exe"
+        Write-Host "Installed: $release/QLCAD.exe"
         Write-Host "Previous release preserved: $backup"
     }
     exit 0

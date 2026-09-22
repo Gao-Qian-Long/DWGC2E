@@ -34,7 +34,7 @@ function Edit-Link([string]$path,[string]$target,[string]$arguments,[string]$des
     finally{if($link){[Runtime.InteropServices.Marshal]::ReleaseComObject($link)|Out-Null};if($shell){[Runtime.InteropServices.Marshal]::ReleaseComObject($shell)|Out-Null}}
 }
 $ownedShortcuts=New-Object 'System.Collections.Generic.List[object]'
-$exe=Join-Path $ResultDir 'DwgTranslator.exe'
+$exe=Join-Path $ResultDir 'QLCAD.exe'
 [IO.File]::WriteAllText($exe,'Synthetic file, never execute')
 $linkPath=Join-Path $ResultDir 'owned.lnk'
 New-Shortcut $linkPath $exe $ResultDir 'first' 'Desktop'

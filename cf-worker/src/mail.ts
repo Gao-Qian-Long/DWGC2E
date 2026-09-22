@@ -47,7 +47,7 @@ export async function deliverMail(env: MailEnv, message: MailMessage,
           ? { "api-key": env.BREVO_API_KEY!, "Content-Type": "application/json" }
           : { Authorization: "Bearer " + env.RESEND_API_KEY, "Content-Type": "application/json", "Idempotency-Key": "verification-" + message.id },
         body: JSON.stringify(provider === "brevo" ? {
-          sender: { name: match?.[1]?.trim() || "DWGC2E", email: match?.[2] || from },
+          sender: { name: match?.[1]?.trim() || "QLCAD", email: match?.[2] || from },
           to: [{ email: message.to }], subject: message.subject, htmlContent: message.html,
         } : { from, to: [message.to], subject: message.subject, html: message.html }),
       });

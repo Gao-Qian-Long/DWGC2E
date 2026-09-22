@@ -1,6 +1,6 @@
 ﻿# Input: verified package; output: installation directory and optional shortcuts.
 # Isolated validation: -TargetDir <sandbox> -NoLaunch -NoPrompt -NoShortcuts.
-# DWG Translator — 一键安装（免管理员）
+# QLCAD — 一键安装（免管理员）
 #
 # 复制程序到选择的安装目录、创建快捷方式、写入卸载脚本。程序是自包含发布，目标机器无需安装
 # .NET 运行时；唯一需要在目标机器上完成的环境动作是把 CAD 插件装进 CAD，安装完成后由
@@ -18,8 +18,8 @@ $ErrorActionPreference = 'Stop'
 
 # First installation prefers D; explicit -TargetDir always wins. Never migrate existing data.
 function Get-DefaultInstallDirectory([bool]$HasDDrive) {
-    if ($HasDDrive) { return 'D:\DWGC2E' }
-    return 'C:\DWGC2E'
+    if ($HasDDrive) { return 'D:\QLCAD' }
+    return 'C:\QLCAD'
 }
 if (-not $TargetDir) { $TargetDir = Get-DefaultInstallDirectory (Test-Path -LiteralPath 'D:\' -PathType Container) }
 
@@ -32,14 +32,14 @@ function Fail([string]$text, [int]$code) {
 
 Write-Host ""
 # Keep localized destination guidance in PowerShell, not the UTF-8 CMD parser.
-Write-Step "安装默认使用 D:\DWGC2E，没有 D 盘时使用 C:\DWGC2E。"
+Write-Step "安装默认使用 D:\QLCAD，没有 D 盘时使用 C:\QLCAD。"
 Write-Step "安装目录需有写入权限；源码目录会被拒绝，请另选安装位置。"
 Write-Step "安装目录：$TargetDir"
 
 if (-not $SourceDir) { $SourceDir = $PSScriptRoot }
-$exeSource = Join-Path $SourceDir 'DwgTranslator.exe'
+$exeSource = Join-Path $SourceDir 'QLCAD.exe'
 if (-not (Test-Path $exeSource)) {
-    Fail "安装包不完整：未找到 DwgTranslator.exe（当前位置 $SourceDir）。请把安装包解压后再运行。" 2
+    Fail "安装包不完整：未找到 QLCAD.exe（当前位置 $SourceDir）。请把安装包解压后再运行。" 2
 }
 
 # Validate before touching an existing installation. Never replace a running application.
@@ -54,14 +54,19 @@ if ($TargetDir -eq [IO.Path]::GetPathRoot($TargetDir).TrimEnd('\') -or
     (Test-Path -LiteralPath (Join-Path $TargetDir '.git'))) {
     throw 'Refusing to install into a drive root or source workspace. Choose a separate -TargetDir.'
 }
-$required = @('DwgTranslator.exe','settings.json','CadPlugin\DwgTranslator.Cad.dll','CadPlugin\DwgTranslator.Core.dll','CadPlugin\cad-platform.txt','glossaries\mechanical_zh_en.json','assets\default-glossaries\mechanical_zh_en.json')
+$required = @('QLCAD.exe','settings.json','CadPlugin\DwgTranslator.Cad.dll','CadPlugin\DwgTranslator.Core.dll','CadPlugin\cad-platform.txt','glossaries\mechanical_zh_en.json','assets\default-glossaries\mechanical_zh_en.json')
 foreach ($name in $required) {
     $file = Join-Path $SourceDir $name
     if (-not (Test-Path -LiteralPath $file -PathType Leaf) -or (Get-Item -LiteralPath $file).Length -eq 0) { throw "Missing or empty package resource: $name" }
 }
 Get-Content -LiteralPath (Join-Path $SourceDir 'settings.json') -Raw -Encoding UTF8 | ConvertFrom-Json | Out-Null
-$installedExe = Join-Path $TargetDir 'DwgTranslator.exe'
-$running = Get-Process DwgTranslator -ErrorAction SilentlyContinue | Where-Object { $_.Path -and [IO.Path]::GetFullPath($_.Path) -eq $installedExe }
+# 改名迁移（2026-09-23）：旧版可执行文件叫 DwgTranslator.exe，它已不属于本安装的写入集。
+# 升级时显式删掉，避免同一目录里新旧两个 exe 并存、点错就启动旧版本。
+$legacyExe = Join-Path $TargetDir 'DwgTranslator.exe'
+if (Test-Path -LiteralPath $legacyExe -PathType Leaf) { Remove-Item -LiteralPath $legacyExe -Force }
+
+$installedExe = Join-Path $TargetDir 'QLCAD.exe'
+$running = Get-Process QLCAD -ErrorAction SilentlyContinue | Where-Object { $_.Path -and [IO.Path]::GetFullPath($_.Path) -eq $installedExe }
 if ($running) { throw 'Close the installed application before updating. No processes were stopped.' }
 # Refuse reparse points before recursive copying; do not traverse user-created links.
 foreach ($dir in @($SourceDir, $TargetDir)) {
@@ -81,7 +86,7 @@ Restore-PendingInstallTransaction $TargetDir
 # Check every existing destination before the first copy, not only the executable.
 # This detects current locks/read-only targets; it is not transaction rollback or a race guarantee.
 $writeTargets=New-Object 'System.Collections.Generic.List[string]'
-foreach($name in @('DwgTranslator.exe','使用说明.txt')) {
+foreach($name in @('QLCAD.exe','使用说明.txt')) {
     if(Test-Path -LiteralPath (Join-Path $SourceDir $name) -PathType Leaf){$writeTargets.Add((Join-Path $TargetDir $name))}
 }
 foreach($sub in @('CadPlugin','glossaries','assets')) {
@@ -120,7 +125,7 @@ foreach($destination in $writeTargets){
 }
 if(-not(Test-Path -LiteralPath (Join-Path $TargetDir 'settings.json'))){Register-InstallWrite $script:InstallTransaction (Join-Path $TargetDir 'settings.json') (Get-InstallFileSha256 (Join-Path $SourceDir 'settings.json'))}
 New-Item -ItemType Directory -Force -Path $TargetDir | Out-Null
-foreach ($name in @('DwgTranslator.exe','settings.json','使用说明.txt')) {
+foreach ($name in @('QLCAD.exe','settings.json','使用说明.txt')) {
     $src = Join-Path $SourceDir $name
     $dst = Join-Path $TargetDir $name
     if (-not (Test-Path -LiteralPath $src)) { continue }
@@ -153,7 +158,7 @@ $previousManifest=Join-Path $TargetDir 'installation-manifest.json'
 if(Test-Path -LiteralPath $previousManifest -PathType Leaf){
     try {
         $previous=Get-Content -LiteralPath $previousManifest -Raw -Encoding UTF8 | ConvertFrom-Json
-        if($previous.Schema -eq 1 -and $previous.Product -eq 'DWGC2E' -and $previous.Root -eq $TargetDir){
+        if($previous.Schema -eq 1 -and $previous.Product -eq 'QLCAD' -and $previous.Root -eq $TargetDir){
             foreach($record in @($previous.Shortcuts)){
                 if($record.Kind -in @('StartMenu','Desktop') -and $record.Sha256 -match '^[a-fA-F0-9]{64}$'){
                     $ownedShortcuts.Add(@{Kind=$record.Kind;Sha256=$record.Sha256})
@@ -163,7 +168,7 @@ if(Test-Path -LiteralPath $previousManifest -PathType Leaf){
     } catch { Write-Step 'Previous shortcut ownership unavailable; unregistered shortcuts will be preserved.' }
 }
 # ── 3. 快捷方式 ─────────────────────────────────────────────
-$exe = Join-Path $TargetDir 'DwgTranslator.exe'
+$exe = Join-Path $TargetDir 'QLCAD.exe'
 function New-Shortcut([string]$linkPath, [string]$target, [string]$workDir, [string]$description, [string]$kind) {
     # Never overwrite a different installation's link or traverse redirected paths.
     $ancestor=[IO.Path]::GetFullPath($linkPath)
@@ -206,8 +211,8 @@ function New-Shortcut([string]$linkPath, [string]$target, [string]$workDir, [str
 if (-not $NoShortcuts) {
 $startMenuDir = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs'
 New-Item -ItemType Directory -Force -Path $startMenuDir | Out-Null
-$startMenuLink = Join-Path $startMenuDir 'DWG Translator.lnk'
-New-Shortcut $startMenuLink $exe $TargetDir 'DWG Translator — CAD 图纸翻译' 'StartMenu'
+$startMenuLink = Join-Path $startMenuDir 'QLCAD.lnk'
+New-Shortcut $startMenuLink $exe $TargetDir 'QLCAD — CAD 图纸翻译' 'StartMenu'
 
 
 $wantDesktop = $true
@@ -217,7 +222,7 @@ if (-not $NoPrompt) {
 }
 if ($wantDesktop) {
     $desktop = [Environment]::GetFolderPath('Desktop')
-    New-Shortcut (Join-Path $desktop 'DWG Translator.lnk') $exe $TargetDir 'DWG Translator — CAD 图纸翻译' 'Desktop'
+    New-Shortcut (Join-Path $desktop 'QLCAD.lnk') $exe $TargetDir 'QLCAD — CAD 图纸翻译' 'Desktop'
 
 }
 
@@ -225,7 +230,7 @@ if ($wantDesktop) {
 
 # Record program ownership only after successful copy; never claim personal data.
 $owned=New-Object 'System.Collections.Generic.List[object]'
-foreach($name in @('DwgTranslator.exe','使用说明.txt')) {
+foreach($name in @('QLCAD.exe','使用说明.txt')) {
     $src=Join-Path $SourceDir $name
     $dst=Join-Path $TargetDir $name
     if((Test-Path -LiteralPath $src -PathType Leaf) -and (Test-Path -LiteralPath $dst -PathType Leaf)) {
@@ -240,7 +245,7 @@ foreach($sub in @('CadPlugin','assets')) {
     }
 }
 Copy-Item -LiteralPath $uninstallerSource -Destination (Join-Path $TargetDir 'Uninstall.ps1') -Force
-@{Schema=1;Product='DWGC2E';Root=$TargetDir;Files=$owned.ToArray();Shortcuts=$ownedShortcuts.ToArray()} | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $TargetDir 'installation-manifest.json') -Encoding UTF8
+@{Schema=1;Product='QLCAD';Root=$TargetDir;Files=$owned.ToArray();Shortcuts=$ownedShortcuts.ToArray()} | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $TargetDir 'installation-manifest.json') -Encoding UTF8
 
 # ── 4. 卸载脚本 ─────────────────────────────────────────────
 $uninstall = @'

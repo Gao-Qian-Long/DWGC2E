@@ -282,7 +282,7 @@ public partial class App : Application
         if (StartupFiles.Length > 0)
             Log.Information("Startup files: {Count}", StartupFiles.Length);
 
-        // "DwgTranslator.exe --env-check" opens straight into the environment self-check. The
+        // "QLCAD.exe --env-check" opens straight into the environment self-check. The
         // installers use it right after installing, because that screen carries the one step that
         // has to run on the receiving machine: putting the CAD plugin into the CAD.
         OpenEnvironmentCheckOnStart = e.Args.Any(arg =>
@@ -298,7 +298,7 @@ public partial class App : Application
 
         // Configure structured logging
         LogStore = new InMemoryLogStore(capacity: 3000);
-        var logPath = Path.Combine(AppDataDir, "logs", "dwgtranslator-.log");
+        var logPath = Path.Combine(AppDataDir, "logs", "qlcad-.log");
 
         // Read minimum log level from settings (default: Debug)
         var configuredLogLevel = ReadConfiguredLogLevel(out var logLevelWarning);

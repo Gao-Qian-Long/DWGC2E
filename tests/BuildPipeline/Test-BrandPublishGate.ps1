@@ -5,7 +5,7 @@ $root=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 if(-not $ResultDir){$ResultDir=Join-Path $root 'artifacts/icon-cache-20260916/publish-gate'}
 New-Item -ItemType Directory -Force -Path $ResultDir | Out-Null
 $verify=Join-Path $root 'tools/Verify-ExecutableIcon.ps1'
-$exe=Join-Path $root 'release/DwgTranslator.exe'
+$exe=Join-Path $root 'release/QLCAD.exe'
 $before=(Get-FileHash -LiteralPath $exe).Hash
 & $verify -ExecutablePath $exe
 & $verify -ExecutablePath $exe # repeated in-process use of native type

@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
@@ -24,7 +24,7 @@ public static class Program
         var app = new SmokeApp();
         app.Resources = new ResourceDictionary();
         foreach (var name in new[] { "ColorTokens", "Icons", "Metrics", "Decorations", "MainWindowStyles" })
-            app.Resources.MergedDictionaries.Add(new ResourceDictionary { Source = new Uri("pack://application:,,,/DwgTranslator;component/Themes/" + name + ".xaml") });
+            app.Resources.MergedDictionaries.Add(new ResourceDictionary { Source = new Uri("pack://application:,,,/QLCAD;component/Themes/" + name + ".xaml") });
         return app.Run();
     }
 }
@@ -38,7 +38,7 @@ public sealed partial class SmokeApp : App
         base.OnStartup(e);
         Resources = new ResourceDictionary();
         foreach (var name in new[] { "ColorTokens", "Icons", "Metrics", "Decorations", "MainWindowStyles" })
-            Resources.MergedDictionaries.Add(new ResourceDictionary { Source = new Uri("pack://application:,,,/DwgTranslator;component/Themes/" + name + ".xaml") });
+            Resources.MergedDictionaries.Add(new ResourceDictionary { Source = new Uri("pack://application:,,,/QLCAD;component/Themes/" + name + ".xaml") });
         var services = new ServiceCollection();
         typeof(App).GetMethod("ConfigureServices", BindingFlags.NonPublic | BindingFlags.Static)!.Invoke(null, new object[] { services });
         services.AddSingleton<IApiClient>(api);

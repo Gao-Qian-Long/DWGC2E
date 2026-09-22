@@ -29,9 +29,9 @@ if($root -eq [IO.Path]::GetPathRoot($root).TrimEnd('\') -or (Test-Path -LiteralP
 $manifestPath=Join-Path $root 'installation-manifest.json'
 Assert-NoLink $manifestPath
 $manifest=Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
-if($manifest.Schema -ne 1 -or $manifest.Product -ne 'DWGC2E' -or $manifest.Root -ne $root) { throw 'Invalid installation manifest; no files removed' }
+if($manifest.Schema -ne 1 -or $manifest.Product -ne 'QLCAD' -or $manifest.Root -ne $root) { throw 'Invalid installation manifest; no files removed' }
 if(@($manifest.Files).Count -gt 10000 -or @($manifest.Files).Count -eq 0) { throw 'Invalid manifest file count' }
-$exe=Join-Path $root 'DwgTranslator.exe'
+$exe=Join-Path $root 'QLCAD.exe'
 $running=Get-Process -ErrorAction SilentlyContinue | Where-Object { try { $_.Path -and ([IO.Path]::GetFullPath($_.Path) -eq $exe) } catch { $false } }
 if($running){throw 'Close this installed application first; no process was stopped'}
 $remove=New-Object 'System.Collections.Generic.List[object]'
@@ -39,7 +39,7 @@ $keep=New-Object 'System.Collections.Generic.List[string]'
 $seen=@{}
 foreach($entry in $manifest.Files) {
     $relative=[string]$entry.Path
-    if($relative -notmatch '^(DwgTranslator\.exe|使用说明\.txt|(?:CadPlugin|assets)\\[^:]+)$' -or
+    if($relative -notmatch '^(QLCAD\.exe|使用说明\.txt|(?:CadPlugin|assets)\\[^:]+)$' -or
        $relative -match '(^|[\\/])\.\.?([\\/]|$)' -or $relative.Contains('/') -or
        [IO.Path]::IsPathRooted($relative) -or $entry.Sha256 -notmatch '^[A-Fa-f0-9]{64}$') {throw "Unsafe manifest entry: $relative"}
     $path=[IO.Path]::GetFullPath((Join-Path $root $relative))
@@ -64,7 +64,7 @@ foreach($record in $shortcutRecords){
     $shortcutKinds[[string]$record.Kind]=$true
     $folder=if($record.Kind -eq 'Desktop'){[Environment]::GetFolderPath('Desktop')}else{Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs'}
     if([string]::IsNullOrWhiteSpace($folder)){continue}
-    $path=[IO.Path]::GetFullPath((Join-Path $folder 'DWG Translator.lnk'))
+    $path=[IO.Path]::GetFullPath((Join-Path $folder 'QLCAD.lnk'))
     Assert-NoLink $path
     if(-not(Test-Path -LiteralPath $path -PathType Leaf)){continue}
     if((Get-UninstallFileSha256 $path) -ne $record.Sha256){$keep.Add('Modified '+$record.Kind+' shortcut');continue}

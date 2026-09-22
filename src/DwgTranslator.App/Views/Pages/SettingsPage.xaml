@@ -409,10 +409,10 @@
                                         <ColumnDefinition Width="*" />
                                     </Grid.ColumnDefinitions>
                                     <Border Width="{DynamicResource Size.AboutIconBox}" Height="{DynamicResource Size.AboutIconBox}" Background="{DynamicResource Brush.AmberSoft}" BorderBrush="{DynamicResource Brush.Amber}" BorderThickness="1" CornerRadius="2" VerticalAlignment="Top" HorizontalAlignment="Left">
-                                        <Image Source="pack://application:,,,/DwgTranslator;component/icon.ico" Width="{DynamicResource Size.AboutIconGlyph}" Height="{DynamicResource Size.AboutIconGlyph}" Stretch="Uniform" />
+                                        <Image Source="pack://application:,,,/QLCAD;component/icon.ico" Width="{DynamicResource Size.AboutIconGlyph}" Height="{DynamicResource Size.AboutIconGlyph}" Stretch="Uniform" />
                                     </Border>
                                     <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="{DynamicResource Spacing.InlineLeading}">
-                                        <TextBlock Text="DWGC2E" FontFamily="{DynamicResource FontFamily.Display}" FontSize="23" FontWeight="SemiBold" Foreground="{DynamicResource Brush.TextPrimary}" />
+                                        <TextBlock Text="QLCAD" FontFamily="{DynamicResource FontFamily.Display}" FontSize="23" FontWeight="SemiBold" Foreground="{DynamicResource Brush.TextPrimary}" />
                                         <TextBlock Text="DWG TRANSLATION · 图纸翻译工作台" FontFamily="{DynamicResource FontFamily.Mono}" FontSize="{DynamicResource FontSize.Secondary}" Foreground="{DynamicResource Brush.TextMuted}" Margin="{DynamicResource Spacing.StackTight}" />
                                         <WrapPanel>
                                             <TextBlock Text="{Binding AppReleaseVersionText}" FontFamily="{DynamicResource FontFamily.Mono}" FontSize="16" FontWeight="SemiBold" Margin="{DynamicResource Spacing.InlineWide}" />
@@ -510,7 +510,7 @@
                                     </Grid>
                                 </Border>
                             </Grid>
-                            <TextBlock Text="© DWGC2E · DWG TRANSLATION" FontFamily="{DynamicResource FontFamily.Mono}" Style="{StaticResource CaptionStyle}" HorizontalAlignment="Center" Margin="{DynamicResource Spacing.BlockTop}" />
+                            <TextBlock Text="© QLCAD · DWG TRANSLATION" FontFamily="{DynamicResource FontFamily.Mono}" Style="{StaticResource CaptionStyle}" HorizontalAlignment="Center" Margin="{DynamicResource Spacing.BlockTop}" />
                         </StackPanel>
                     </StackPanel>
                 </Border>

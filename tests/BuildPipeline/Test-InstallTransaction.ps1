@@ -8,7 +8,7 @@ $fixture=Join-Path $ResultDir ('fixture-'+[guid]::NewGuid().ToString('N'))
 $package=Join-Path $fixture 'package'
 function Put($base,$rel,$text){$p=Join-Path $base $rel;[IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($p))|Out-Null;[IO.File]::WriteAllText($p,$text,[Text.UTF8Encoding]::new($true))}
 foreach($name in @('Install.ps1','InstallTransaction.ps1','Uninstall.ps1')){Put $package $name ([IO.File]::ReadAllText((Join-Path $root ('installer/'+$name))))}
-$payload=@{'DwgTranslator.exe'='v1';'settings.json'='{}';'CadPlugin/DwgTranslator.Cad.dll'='cad-v1';'CadPlugin/DwgTranslator.Core.dll'='core-v1';'CadPlugin/cad-platform.txt'='GstarCAD';'assets/default-glossaries/mechanical_zh_en.json'='{}';'glossaries/mechanical_zh_en.json'='{}'}
+$payload=@{'QLCAD.exe'='v1';'settings.json'='{}';'CadPlugin/DwgTranslator.Cad.dll'='cad-v1';'CadPlugin/DwgTranslator.Core.dll'='core-v1';'CadPlugin/cad-platform.txt'='GstarCAD';'assets/default-glossaries/mechanical_zh_en.json'='{}';'glossaries/mechanical_zh_en.json'='{}'}
 foreach($name in $payload.Keys){Put $package $name $payload[$name]}
 $original=[IO.File]::ReadAllText((Join-Path $package 'Install.ps1'))
 function Snapshot($target){$map=@{};if(Test-Path -LiteralPath $target){Get-ChildItem -LiteralPath $target -Recurse -File -Force|ForEach-Object {$map[$_.FullName.Substring($target.Length+1)]=(Get-FileHash -LiteralPath $_.FullName).Hash}};return $map}
@@ -19,10 +19,10 @@ foreach($upgrade in @($false,$true)){
     for($i=0;$i -lt $points.Count;$i++){
         $target=Join-Path $fixture ("target-$upgrade-$i")
         Put $package 'Install.ps1' $original
-        Put $package 'DwgTranslator.exe' 'v1'
+        Put $package 'QLCAD.exe' 'v1'
         if($upgrade){if((RunInstall $target (Join-Path $ResultDir "baseline-$i.log")) -ne 0){throw 'Baseline failed'};Put $target 'settings.json' '{"personal":true}';Put $target 'unknown.txt' 'keep';Put $target 'prompts/deepl_context.txt' 'personal';Put $target 'accounts/local.json' 'synthetic-private'}
         $before=Snapshot $target
-        Put $package 'DwgTranslator.exe' 'v2'
+        Put $package 'QLCAD.exe' 'v2'
         # Point 0 occurs twice (preflight and write loop); inject at LAST occurrence only.
         $marker=$points[$i];$at=$original.LastIndexOf($marker);if($at -lt 0){throw 'Fault marker missing'}
         $fault=$original.Insert($at,"throw 'SYNTHETIC_INSTALL_FAILURE'"+[Environment]::NewLine)
@@ -40,10 +40,10 @@ foreach($upgrade in @($false,$true)){
 foreach($upgrade in @($false,$true)) {
     $target=Join-Path $fixture ("interrupted-$upgrade")
     Put $package 'Install.ps1' $original
-    Put $package 'DwgTranslator.exe' 'v1'
+    Put $package 'QLCAD.exe' 'v1'
     if($upgrade){if((RunInstall $target (Join-Path $ResultDir 'interrupt-baseline.log')) -ne 0){throw 'Baseline failed'};Put $target 'settings.json' '{"personal":true}'}
     $before=Snapshot $target
-    Put $package 'DwgTranslator.exe' 'v2'
+    Put $package 'QLCAD.exe' 'v2'
     $at=$original.LastIndexOf('Write-Step "写入 卸载.cmd"')
     Put $package 'Install.ps1' ($original.Insert($at,'[Environment]::Exit(81)'+[Environment]::NewLine))
     if((RunInstall $target (Join-Path $ResultDir ("interrupted-$upgrade.log"))) -ne 81){throw 'Abrupt-exit fixture did not exit at checkpoint'}
@@ -61,21 +61,21 @@ foreach($upgrade in @($false,$true)) {
 # Test recovery-file validation and a failed restore without touching real shortcuts.
 . (Join-Path $root 'installer/InstallTransaction.ps1')
 $target=Join-Path $fixture 'helper-tests'
-Put $target 'DwgTranslator.exe' 'old-program'
+Put $target 'QLCAD.exe' 'old-program'
 $tx=Start-InstallTransaction $target
-Register-InstallWrite $tx (Join-Path $target 'DwgTranslator.exe')
-Put $target 'DwgTranslator.exe' 'new-program'
-$held=[IO.File]::Open((Join-Path $target 'DwgTranslator.exe'),[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::Read)
+Register-InstallWrite $tx (Join-Path $target 'QLCAD.exe')
+Put $target 'QLCAD.exe' 'new-program'
+$held=[IO.File]::Open((Join-Path $target 'QLCAD.exe'),[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::Read)
 $failed=$false
 try {try {Undo-InstallTransaction $tx} catch {$failed=$true}} finally {$held.Dispose()}
 if(-not $failed -or -not(Test-Path -LiteralPath (Join-Path $tx.Backup 'journal.json'))){throw 'Failed restore did not retain recovery evidence'}
 Undo-InstallTransaction (Import-InstallTransaction $tx.Backup $target)
-if([IO.File]::ReadAllText((Join-Path $target 'DwgTranslator.exe')) -ne 'old-program'){throw 'Retry restore failed'}
+if([IO.File]::ReadAllText((Join-Path $target 'QLCAD.exe')) -ne 'old-program'){throw 'Retry restore failed'}
 $checks++;Write-Host 'PASS failed rollback retains journal and later restores exactly'
 
 $tx=Start-InstallTransaction $target
-Register-InstallWrite $tx (Join-Path $target 'DwgTranslator.exe')
-Put $target 'DwgTranslator.exe' 'new-program'
+Register-InstallWrite $tx (Join-Path $target 'QLCAD.exe')
+Put $target 'QLCAD.exe' 'new-program'
 $journal=Join-Path $tx.Backup 'journal.json'
 $saved=[IO.File]::ReadAllText($journal)
 foreach($tamper in @('escape','backup-hash')) {
@@ -84,7 +84,7 @@ foreach($tamper in @('escape','backup-hash')) {
     } else {Put $tx.Backup '0.bin' 'tampered-backup'}
     $rejected=$false
     try {Import-InstallTransaction $tx.Backup $target|Out-Null} catch {$rejected=$true}
-    if(-not $rejected -or [IO.File]::ReadAllText((Join-Path $target 'DwgTranslator.exe')) -ne 'new-program'){throw 'Invalid recovery evidence modified installation'}
+    if(-not $rejected -or [IO.File]::ReadAllText((Join-Path $target 'QLCAD.exe')) -ne 'new-program'){throw 'Invalid recovery evidence modified installation'}
     $checks++;Write-Host "PASS tampered recovery rejected before restoration: $tamper"
     [IO.File]::WriteAllText($journal,$saved,[Text.UTF8Encoding]::new($true))
 }
@@ -95,8 +95,8 @@ Undo-InstallTransaction (Import-InstallTransaction $tx.Backup $target)
 $savedAppData=$env:APPDATA
 try {
     $env:APPDATA=Join-Path $fixture 'isolated-appdata'
-    $link=Join-Path $env:APPDATA 'Microsoft/Windows/Start Menu/Programs/DWG Translator.lnk'
-    Put ([IO.Path]::GetDirectoryName($link)) 'DWG Translator.lnk' 'old-link-bytes'
+    $link=Join-Path $env:APPDATA 'Microsoft/Windows/Start Menu/Programs/QLCAD.lnk'
+    Put ([IO.Path]::GetDirectoryName($link)) 'QLCAD.lnk' 'old-link-bytes'
     $tx=Start-InstallTransaction $target
     Register-InstallWrite $tx $link
     [IO.File]::WriteAllText($link,'new-link-bytes')
@@ -107,7 +107,7 @@ try {
 
 # A completed rollback whose snapshot cleanup was interrupted must be resumable.
 $tx=Start-InstallTransaction $target
-Register-InstallWrite $tx (Join-Path $target 'DwgTranslator.exe')
+Register-InstallWrite $tx (Join-Path $target 'QLCAD.exe')
 $tx.State='RolledBack';Save-InstallTransaction $tx
 Remove-Item -LiteralPath (Join-Path $tx.Backup '0.bin')
 Restore-PendingInstallTransaction $target

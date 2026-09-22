@@ -17,7 +17,7 @@ try {
  $info=Get-Content -LiteralPath (Join-Path $PublishDir 'build-info.json') -Raw | ConvertFrom-Json
  $platform=(Get-Content -LiteralPath (Join-Path $PublishDir 'CadPlugin/cad-platform.txt') -Raw).Trim()
  if($info.version -notmatch '^(\d+\.\d+\.\d+)\+ui\.(\d{8}-\d{6})\.[a-zA-Z0-9]+$'){throw 'Invalid build ID'}
- $filename='DWGC2E-'+$Matches[1]+'-win-x64-'+$platform+'-'+$Matches[2]+'-Setup.exe'
+ $filename='QLCAD-'+$Matches[1]+'-win-x64-'+$platform+'-'+$Matches[2]+'-Setup.exe'
  New-Item -ItemType Directory -Path $out | Out-Null
  $resultDir=Join-Path $out 'acceptance'
  $arguments=@('-NoProfile','-ExecutionPolicy','Bypass','-File',(Join-Path $root 'tests/BuildPipeline/Test-InnoInstaller.ps1'),'-PublishDir',$PublishDir,'-ResultDir',$resultDir)

@@ -1,4 +1,4 @@
-; DWG Translator — Inno Setup 6.x script
+; QLCAD — Inno Setup 6.x script
 ;
 ; Build the publish output first (publish.bat), then compile this script with ISCC.
 ; On a machine without Inno Setup use tools\New-ReleasePackage.ps1 instead: it produces the same
@@ -9,15 +9,15 @@
 ; and a valid settings.json. An earlier version of this script packed ..\settings.json from the
 ; repository root, which is a 0-byte placeholder there and made the first start fail.
 
-#define MyAppName "DWG Translator"
-#define MyAppDirName "DWGC2E"
+#define MyAppName "QLCAD"
+#define MyAppDirName "QLCAD"
 // Version is read from the verified executable below.
-#define MyAppPublisher "DWG Translator"
-#define MyAppExeName "DwgTranslator.exe"
+#define MyAppPublisher "QLCAD"
+#define MyAppExeName "QLCAD.exe"
 #ifndef PublishDir
   #error Supply /DPublishDir=<verified artifacts publish directory>
 #endif
-#define MyAppVersion GetVersionNumbersString(PublishDir + "\DwgTranslator.exe")
+#define MyAppVersion GetVersionNumbersString(PublishDir + "\QLCAD.exe")
 
 ; Isolated acceptance build only. Normal builds retain the production paths.
 #ifdef TestRoot
@@ -32,7 +32,7 @@
 
 [Setup]
 #ifdef TestRoot
-AppId=DWGC2E-Isolated-Acceptance
+AppId=QLCAD-Isolated-Acceptance
 CreateUninstallRegKey=no
 UsePreviousAppDir=no
 UsePreviousTasks=no
@@ -51,7 +51,7 @@ AppVerName={#MyAppName} {#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 DefaultGroupName={#MyAppName}
 OutputDir=..\artifacts
-OutputBaseFilename=DwgTranslator_Setup_{#MyAppVersion}
+OutputBaseFilename=QLCAD_Setup_{#MyAppVersion}
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
@@ -87,6 +87,10 @@ Source: "使用说明.txt"; DestDir: "{app}"; Flags: ignoreversion
 [InstallDelete]
 ; Remove the exact legacy client-side system prompt. Unknown files in this directory are preserved.
 Type: files; Name: "{app}\prompts\deepl_context.txt"
+; 产品由 DWGC2E/DWG Translator 改名为 QLCAD（2026-09-23）：可执行文件跟着改名，
+; 旧的 DwgTranslator.exe 不再属于本安装的写入集。升级时必须显式删掉它，否则用户目录里会
+; 同时留下新旧两个 exe，点错就打开旧版本。只删精确文件名，不动其它未知文件。
+Type: files; Name: "{app}\DwgTranslator.exe"
 
 [Dirs]
 Name: "{#UserDataDir}"; Flags: uninsneveruninstall
@@ -157,7 +161,7 @@ begin
   Log('Default directory branches passed: D present / D absent');
   if (not IsDriveRoot('C:\')) or (not IsDriveRoot('D:\')) or
      (not IsDriveRoot('D:')) or (not IsDriveRoot('C:/')) or
-     IsDriveRoot('D:\DWGC2E') or IsDriveRoot('C:\DWGC2E') then
+     IsDriveRoot('D:\QLCAD') or IsDriveRoot('C:\QLCAD') then
   begin
     Result := 'Drive root guard regression failed.';
     Exit;

@@ -7,4 +7,4 @@ if errorlevel 1 (
   pause
   exit /b 1
 )
-start "" /D "%~dp0release" "%~dp0release\DwgTranslator.exe"
+start "" /D "%~dp0release" "%~dp0release\QLCAD.exe"

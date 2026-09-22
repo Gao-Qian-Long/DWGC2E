@@ -1,7 +1,7 @@
-# 五页截图巡回：启动（或复用）DWG Translator，用 UI 自动化逐个点开左侧导航并截图，
+# 五页截图巡回：启动（或复用）QLCAD，用 UI 自动化逐个点开左侧导航并截图，
 # 用于逐页核对与设计稿的复刻程度。
 param(
-    [string]$ExePath = 'D:\DWGC2E\release\DwgTranslator.exe',
+    [string]$ExePath = 'D:\DWGC2E\release\QLCAD.exe',
     [string[]]$Pages = @('图纸翻译', '任务中心', '术语库', '会员中心', '设置'),
     [string]$Tag = 'pages',
     [int]$StartupTimeoutSeconds = 45,
@@ -13,7 +13,7 @@ Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
 
 if (-not $NoLaunch) {
     # Never terminate a user's active application to obtain screenshots.
-    if (Get-Process DwgTranslator -ErrorAction SilentlyContinue) {
+    if (Get-Process QLCAD -ErrorAction SilentlyContinue) {
         throw 'APP_ALREADY_RUNNING: Close the application normally, or use -NoLaunch to review the existing window. No process was stopped.'
     }
     Start-Sleep -Milliseconds 800
@@ -23,7 +23,7 @@ if (-not $NoLaunch) {
 $proc = $null
 for ($i = 0; $i -lt ($StartupTimeoutSeconds * 2); $i++) {
     Start-Sleep -Milliseconds 500
-    $proc = Get-Process DwgTranslator -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1
+    $proc = Get-Process QLCAD -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1
     if ($proc) { break }
 }
 if (-not $proc) { Write-Output 'NO_WINDOW'; exit 2 }

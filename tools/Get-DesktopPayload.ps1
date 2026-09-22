@@ -4,7 +4,7 @@ param([Parameter(Mandatory=$true)][string]$PublishDir, [string]$WorkspaceRoot)
 $ErrorActionPreference='Stop'
 $info = & (Join-Path $PSScriptRoot 'Assert-CleanPackageInput.ps1') -PublishDir $PublishDir -WorkspaceRoot $WorkspaceRoot
 $dir=(Resolve-Path -LiteralPath $PublishDir).Path.TrimEnd('\')
-$runtime=@('DwgTranslator.exe','settings.json','assets/default-glossaries/mechanical_zh_en.json','glossaries/mechanical_zh_en.json','CadPlugin/cad-files.txt')
+$runtime=@('QLCAD.exe','settings.json','assets/default-glossaries/mechanical_zh_en.json','glossaries/mechanical_zh_en.json','CadPlugin/cad-files.txt')
 $manifest=Join-Path $dir 'CadPlugin/cad-files.txt'
 if(-not(Test-Path -LiteralPath $manifest -PathType Leaf)){throw 'Public installer requires an explicit CAD payload manifest.'}
 foreach($name in Get-Content -LiteralPath $manifest -Encoding UTF8){

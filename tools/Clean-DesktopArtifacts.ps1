@@ -33,13 +33,13 @@ $items = @(Get-ChildItem -LiteralPath $artifacts -Force)
 $builds = @(foreach ($dir in $items | Where-Object { $_.PSIsContainer -and $_.Name -match '^publish-\d{8}-\d{6}$' } | Sort-Object Name -Descending) {
     $safe = Assert-SafeTarget $dir.FullName
     $infoPath = Join-Path $safe 'build-info.json'
-    $exe = Join-Path $safe 'DwgTranslator.exe'
+    $exe = Join-Path $safe 'QLCAD.exe'
     if (!(Test-Path -LiteralPath $infoPath) -or !(Test-Path -LiteralPath $exe)) { continue }
     try { $info = Get-Content -LiteralPath $infoPath -Raw | ConvertFrom-Json } catch { continue }
     if (!$info.sha256 -or (Get-FileHash -LiteralPath $exe).Hash -ne $info.sha256) { continue }
     $stamp = $dir.Name.Substring(8)
-    $packages = @($items | Where-Object { !$_.PSIsContainer -and $_.Name -match '^DwgTranslator-win-x64-[A-Za-z0-9]+-\d{8}-\d{6}\.zip$' -and $_.Name.EndsWith("-$stamp.zip") })
-    foreach ($zip in $packages) { [pscustomobject]@{Dir=$dir; Zip=$zip; Platform=($zip.Name -replace '^DwgTranslator-win-x64-(.+)-\d{8}-\d{6}\.zip$', '$1')} }
+    $packages = @($items | Where-Object { !$_.PSIsContainer -and $_.Name -match '^QLCAD-win-x64-[A-Za-z0-9]+-\d{8}-\d{6}\.zip$' -and $_.Name.EndsWith("-$stamp.zip") })
+    foreach ($zip in $packages) { [pscustomobject]@{Dir=$dir; Zip=$zip; Platform=($zip.Name -replace '^QLCAD-win-x64-(.+)-\d{8}-\d{6}\.zip$', '$1')} }
 })
 if (!$builds.Count) { Write-Warning 'No verified candidate: cleanup skipped.'; return }
 # Only candidates whose executable matches their own build-info.json are proven build products.
@@ -69,17 +69,17 @@ if (Test-Path -LiteralPath $releaseInfo) {
     $version = (Get-Content -LiteralPath $releaseInfo -Raw | ConvertFrom-Json).version
     if ($version -match '\+ui\.(\d{8}-\d{6})\.') {
         $stamp = $Matches[1]
-        $keep += @($items | Where-Object { !$_.PSIsContainer -and $_.Name -like "DwgTranslator-win-x64-*-$stamp.zip" } | ForEach-Object { $_.FullName })
+        $keep += @($items | Where-Object { !$_.PSIsContainer -and $_.Name -like "QLCAD-win-x64-*-$stamp.zip" } | ForEach-Object { $_.FullName })
     }
 }
-$running = @(Get-Process DwgTranslator -ErrorAction SilentlyContinue | Where-Object Path | ForEach-Object { $_.Path })
+$running = @(Get-Process QLCAD -ErrorAction SilentlyContinue | Where-Object Path | ForEach-Object { $_.Path })
 $references = @($release) + @($latest | ForEach-Object { $_.Dir.FullName })
 $deleted = @(); [long]$bytes = 0
 foreach ($item in $items) {
     # release-next-*/release-failed-* are interrupted or failed swap directories. They hold a copy of
     # the installed release plus portable user data, so they are recognized for cleanup but always
     # pass through the identical-copy rule below.
-    $recognized = if ($item.PSIsContainer) { $item.Name -match '^(publish|review-publish|publish-\d{8}-\d{6}|release-backup-\d{8}-\d{6}|release-next-\d{8}-\d{6}|release-failed-\d{8}-\d{6})$' } else { $item.Name -match '^DwgTranslator-win-x64-[A-Za-z0-9]+(-\d{8}-\d{6})?\.zip$' }
+    $recognized = if ($item.PSIsContainer) { $item.Name -match '^(publish|review-publish|publish-\d{8}-\d{6}|release-backup-\d{8}-\d{6}|release-next-\d{8}-\d{6}|release-failed-\d{8}-\d{6})$' } else { $item.Name -match '^QLCAD-win-x64-[A-Za-z0-9]+(-\d{8}-\d{6})?\.zip$' }
     if (!$recognized -or $item.FullName -in $keep) { continue }
     $target = Assert-SafeTarget $item.FullName
     if ($running | Where-Object { $_.StartsWith($target + '\', [StringComparison]::OrdinalIgnoreCase) }) { Write-Warning "Running app retained: $target"; continue }
@@ -88,8 +88,8 @@ foreach ($item in $items) {
         $unique = $false
         # Only declared program files are disposable. Unknown DBs/files, including files
         # under assets or CadPlugin, must have an identical live copy before deletion.
-        $owned=@('DwgTranslator.exe','DwgTranslator.pdb','DwgTranslator.Core.pdb','build-info.json','architecture-audit.json','assets\default-glossaries\mechanical_zh_en.json','glossaries\mechanical_zh_en.json','CadPlugin\cad-files.txt')
-        # The CAD plugin assemblies are the app's own compiled output, exactly like DwgTranslator.exe
+        $owned=@('QLCAD.exe','QLCAD.pdb','DwgTranslator.Core.pdb','build-info.json','architecture-audit.json','assets\default-glossaries\mechanical_zh_en.json','glossaries\mechanical_zh_en.json','CadPlugin\cad-files.txt')
+        # The CAD plugin assemblies are the app's own compiled output, exactly like QLCAD.exe
         # above - they were simply missing from this list, so every older payload looked like it held
         # unique data because its DLL bytes differ from the live release. Verified as PE images that
         # reference their own .pdb and the DwgTranslator namespace.

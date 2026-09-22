@@ -1,4 +1,4 @@
-// Read-only compiled dependency/resource audit. Does not load or execute application/CAD assemblies.
+﻿// Read-only compiled dependency/resource audit. Does not load or execute application/CAD assemblies.
 // Usage: dotnet run --project tests/ArchitectureAudit -c Release -- <workspace> <new-report.json> [payload-directory]
 using System.Collections;
 using System.Reflection.Metadata;
@@ -26,7 +26,7 @@ string At(string relative) => relative.StartsWith("release/", StringComparison.O
     : Path.Combine(root, relative.Replace('/', Path.DirectorySeparatorChar));
 string Hash(byte[] data) => Convert.ToHexString(SHA256.HashData(data));
 var forbiddenAssemblies = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-    { "DwgTranslator", "DwgTranslator.App", "PresentationCore", "PresentationFramework", "WindowsBase", "System.Windows.Forms" };
+    { "QLCAD", "DwgTranslator.App", "PresentationCore", "PresentationFramework", "WindowsBase", "System.Windows.Forms" };
 var assemblyEvidence = new List<object>();
 foreach (var relative in new[] {
     "src/DwgTranslator.Core/bin/Release/net8.0/DwgTranslator.Core.dll",
@@ -45,7 +45,7 @@ foreach (var relative in new[] {
     Check(uiTypes.Length == 0, relative + " has no WPF/WinForms UI type references", uiTypes);
     assemblyEvidence.Add(new { path = relative, sha256 = Hash(File.ReadAllBytes(At(relative))), references });
 }
-var appPath = At("src/DwgTranslator.App/bin/Release/net8.0-windows/win-x64/DwgTranslator.dll");
+var appPath = At("src/DwgTranslator.App/bin/Release/net8.0-windows/win-x64/QLCAD.dll");
 using var appStream = File.OpenRead(appPath);
 using var appPe = new PEReader(appStream);
 var appMd = appPe.GetMetadataReader();
@@ -91,7 +91,7 @@ foreach (var file in Directory.EnumerateFiles(appRoot, "*.xaml", SearchOption.Al
 }
 Check(Hash(File.ReadAllBytes(At("assets/glossaries/mechanical_zh_en.json"))) == Hash(File.ReadAllBytes(At("release/assets/default-glossaries/mechanical_zh_en.json"))), "Payload immutable default glossary matches source");
 var info = JsonDocument.Parse(File.ReadAllText(At("release/build-info.json")));
-var installedHash = Hash(File.ReadAllBytes(At("release/DwgTranslator.exe")));
+var installedHash = Hash(File.ReadAllBytes(At("release/QLCAD.exe")));
 Check(installedHash == info.RootElement.GetProperty("sha256").GetString(), "Payload executable hash matches delivery record");
 Directory.CreateDirectory(Path.GetDirectoryName(report)!);
 File.WriteAllText(report, JsonSerializer.Serialize(new {

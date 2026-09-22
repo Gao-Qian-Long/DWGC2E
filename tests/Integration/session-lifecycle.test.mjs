@@ -10,8 +10,8 @@ function setup(fetch){
  const data=new Map([['dwgc2e.session',JSON.stringify({token:'old',expiresAt:'2099-01-01'})]]);
  const storage={getItem:k=>data.get(k)||null,removeItem:k=>data.delete(k),setItem:(k,v)=>data.set(k,v)};
  let now=Date.now();class ClockDate extends Date {static now(){return now;}}
- const context={Date:ClockDate,window:{DWGC2E_SITE:{apiBaseUrl:'/api'}},sessionStorage:storage,fetch,AbortController,FormData,setTimeout,clearTimeout,TypeError};
- vm.runInNewContext(source,context);return {api:context.window.DWGC2E_API,storage,advance:ms=>now+=ms};
+ const context={Date:ClockDate,window:{QLCAD_SITE:{apiBaseUrl:'/api'}},sessionStorage:storage,fetch,AbortController,FormData,setTimeout,clearTimeout,TypeError};
+ vm.runInNewContext(source,context);return {api:context.window.QLCAD_API,storage,advance:ms=>now+=ms};
 }
 for(const replacement of [null,'new'])for(const status of [200,401])test(`late ${status} after ${replacement?'account switch':'logout'} is discarded`,async()=>{
  let finish;const x=setup(()=>new Promise(r=>finish=r));const request=x.api.account.profile();

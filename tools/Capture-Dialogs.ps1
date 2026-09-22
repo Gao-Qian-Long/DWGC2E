@@ -1,7 +1,7 @@
 ﻿# 逐个打开可点击进入的对话框并截图（设置 / 环境自检 / 帮助 / 术语库管理），
 # 用于统一核对控件样式是否与浅色工程风一致。
 param(
-    [string]$ExePath = 'D:\DWGC2E\release\DwgTranslator.exe',
+    [string]$ExePath = 'D:\DWGC2E\release\QLCAD.exe',
     [string]$Tag = 'dlg',
     [switch]$NoLaunch
 )
@@ -12,7 +12,7 @@ Add-Type -AssemblyName System.Windows.Forms
 
 if (-not $NoLaunch) {
     # Never terminate a user's active application to obtain screenshots.
-    if (Get-Process DwgTranslator -ErrorAction SilentlyContinue) {
+    if (Get-Process QLCAD -ErrorAction SilentlyContinue) {
         throw 'APP_ALREADY_RUNNING: Close the application normally, or use -NoLaunch to review the existing window. No process was stopped.'
     }
     Start-Sleep -Milliseconds 800
@@ -22,7 +22,7 @@ if (-not $NoLaunch) {
 $proc = $null
 for ($i = 0; $i -lt 90; $i++) {
     Start-Sleep -Milliseconds 500
-    $proc = Get-Process DwgTranslator -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1
+    $proc = Get-Process QLCAD -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1
     if ($proc) { break }
 }
 if (-not $proc) { Write-Output 'NO_WINDOW'; exit 2 }

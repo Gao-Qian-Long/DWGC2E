@@ -10,6 +10,8 @@ public sealed class ProductApiEndpointTests
 {
     [Theory]
     [InlineData("https://dwgc2e-api.maplehousezz.workers.dev")]
+    // 这个旧地址是**部署在外的 Worker 域名**，改名时不能跟着改：它就是 ProductApiEndpoint.FormerDefault
+    // 的比对目标（大小写不敏感）。写死大写是为了同时覆盖大小写归一化。
     [InlineData(" HTTPS://DWGC2E-API.MAPLEHOUSEZZ.WORKERS.DEV/ ")]
     public void OnlyFormerProductDefaultMigrates(string address) => Assert.Equal(ProductApiEndpoint.Default, ProductApiEndpoint.Migrate(address));
 

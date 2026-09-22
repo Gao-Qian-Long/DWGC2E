@@ -28,7 +28,7 @@ function Assert-Tree([string]$Path) {
 }
 Assert-Tree $publish
 $info = Get-Content -LiteralPath (Join-Path $publish 'build-info.json') -Raw -Encoding UTF8 | ConvertFrom-Json
-$exe = Join-Path $publish 'DwgTranslator.exe'
+$exe = Join-Path $publish 'QLCAD.exe'
 if ($info.sha256 -notmatch '^[a-fA-F0-9]{64}$' -or (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash -ne $info.sha256) {
     throw 'Candidate executable does not match build-info.json.'
 }

@@ -8,10 +8,10 @@ $out=$ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Ou
 if(-not $out.StartsWith((Join-Path $root 'artifacts')+'\',[StringComparison]::OrdinalIgnoreCase) -or (Test-Path -LiteralPath $out)){throw 'Use a new evidence directory under artifacts.'}
 $fixture=Join-Path $out 'fixture'
 New-Item -ItemType Directory -Path $fixture -Force | Out-Null
-$inputs=@('src/DwgTranslator.Core/bin/Release/net8.0/DwgTranslator.Core.dll','src/DwgTranslator.App/bin/Release/net8.0-windows/win-x64/DwgTranslator.dll','release/CadPlugin/DwgTranslator.Core.dll','release/CadPlugin/DwgTranslator.Cad.dll','release/CadPlugin/cad-files.txt','release/CadPlugin/cad-platform.txt','assets/glossaries/mechanical_zh_en.json','release/assets/default-glossaries/mechanical_zh_en.json','src/DwgTranslator.App/Views/MainWindow.xaml')
+$inputs=@('src/DwgTranslator.Core/bin/Release/net8.0/DwgTranslator.Core.dll','src/DwgTranslator.App/bin/Release/net8.0-windows/win-x64/QLCAD.dll','release/CadPlugin/DwgTranslator.Core.dll','release/CadPlugin/DwgTranslator.Cad.dll','release/CadPlugin/cad-files.txt','release/CadPlugin/cad-platform.txt','assets/glossaries/mechanical_zh_en.json','release/assets/default-glossaries/mechanical_zh_en.json','src/DwgTranslator.App/Views/MainWindow.xaml')
 foreach($input in $inputs){$destination=Join-Path $fixture $input;New-Item -ItemType Directory -Path (Split-Path $destination) -Force|Out-Null;Copy-Item -LiteralPath (Join-Path $root $input) -Destination $destination}
 # The audit only hashes the executable. Explicit inert fixture bytes avoid duplicating the runnable APP.
-$exe=Join-Path $fixture 'release/DwgTranslator.exe'
+$exe=Join-Path $fixture 'release/QLCAD.exe'
 [IO.File]::WriteAllText($exe,'INERT ARCHITECTURE TEST FIXTURE; NOT AN EXECUTABLE')
 @{version='test-fixture-not-a-delivery';sha256=(Get-FileHash -LiteralPath $exe).Hash}|ConvertTo-Json|Set-Content -LiteralPath (Join-Path $fixture 'release/build-info.json') -Encoding UTF8
 $probe=Join-Path $root 'tests/ArchitectureAudit/bin/Release/net8.0/ArchitectureAudit.dll'
@@ -52,7 +52,7 @@ Run-Case 'manifest-divergence' $false
 $missing=Join-Path $fixture 'src/DwgTranslator.App/Views/NotCompiled.xaml'
 [IO.File]::WriteAllText($missing,'<Page />')
 Run-Case 'missing-compiled-xaml' $false
-$candidateExe=Join-Path $candidate 'DwgTranslator.exe'
+$candidateExe=Join-Path $candidate 'QLCAD.exe'
 Copy-Item -LiteralPath (Join-Path $fixture 'release/CadPlugin/cad-platform.txt') -Destination (Join-Path $candidate 'CadPlugin/cad-platform.txt') -Force
 # Remove only our known synthetic XAML from enumeration by renaming it in this fixture.
 Move-Item -LiteralPath $missing -Destination ($missing+'.fixture')

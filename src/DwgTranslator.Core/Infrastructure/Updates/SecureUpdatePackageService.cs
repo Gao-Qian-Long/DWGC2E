@@ -17,7 +17,7 @@ public sealed class UpdatePackageManifest
 {
     public int SchemaVersion { get; set; } = 2;
     public string Version { get; set; } = string.Empty;
-    public string ExecutablePath { get; set; } = "DwgTranslator.exe";
+    public string ExecutablePath { get; set; } = "QLCAD.exe";
     public string ExecutableSha256 { get; set; } = string.Empty;
     public List<UpdatePackageFile> Files { get; set; } = new();
     public List<string> ObsoletePaths { get; set; } = new();

@@ -38,7 +38,7 @@ if ($output.TrimEnd('\') -ne $artifactRoot -and -not $output.StartsWith($artifac
 $packageLock = & (Join-Path $scriptRoot 'Enter-DesktopPublishLock.ps1') -WorkspaceRoot (Split-Path -Parent $scriptRoot)
 try {
 $buildInfo = & (Join-Path $scriptRoot 'Assert-CleanPackageInput.ps1') -PublishDir $publish
-$exe = Join-Path $publish 'DwgTranslator.exe'
+$exe = Join-Path $publish 'QLCAD.exe'
 if (-not (Test-Path -LiteralPath $exe)) { throw "发布产物不完整：未找到 $exe（请先运行 publish.bat 或 dotnet publish）" }
 
 # InformationalVersion ("2.1.0") is what the product advertises; FileVersion carries the extra
@@ -71,7 +71,7 @@ if (-not $SkipZip -and (Test-Path -LiteralPath $zip)) { throw 'Package ZIP alrea
 New-Item -ItemType Directory -Force -Path $stage | Out-Null
 
 # ── 1. 程序本体 ──────────────────────────────────────────────
-$required = @('DwgTranslator.exe', 'settings.json', 'build-info.json')
+$required = @('QLCAD.exe', 'settings.json', 'build-info.json')
 foreach ($name in $required) {
     $src = Join-Path $publish $name
     if (-not (Test-Path -LiteralPath $src)) { throw "缺少必需文件：$name" }
@@ -144,7 +144,7 @@ $plugin = Join-Path $stage 'CadPlugin\DwgTranslator.Cad.dll'
 if (-not (Test-Path -LiteralPath $plugin)) { throw "打包结果缺少 CAD 插件：$plugin" }
 Write-Step ("CAD 插件：{0} （{1} B）" -f (Split-Path $plugin -Leaf), (Get-Item -LiteralPath $plugin).Length)
 
-if ((Get-FileHash -LiteralPath (Join-Path $stage 'DwgTranslator.exe') -Algorithm SHA256).Hash -ne $buildInfo.sha256) {
+if ((Get-FileHash -LiteralPath (Join-Path $stage 'QLCAD.exe') -Algorithm SHA256).Hash -ne $buildInfo.sha256) {
     throw 'Packaged executable hash differs from validated candidate; do not distribute this stage.'
 }
 

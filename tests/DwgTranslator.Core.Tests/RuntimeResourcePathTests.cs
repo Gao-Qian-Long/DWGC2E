@@ -4,7 +4,7 @@ namespace DwgTranslator.Core.Tests;
 
 public sealed class RuntimeResourcePathTests : IDisposable
 {
-    private readonly string root = Path.Combine(Path.GetTempPath(), "DWGC2E-PathTests-" + Guid.NewGuid().ToString("N"));
+    private readonly string root = Path.Combine(Path.GetTempPath(), "QLCAD-PathTests-" + Guid.NewGuid().ToString("N"));
 
     private string Put(string relative, string contents)
     {
@@ -62,7 +62,7 @@ public sealed class RuntimeResourcePathTests : IDisposable
         var full = Path.GetFullPath(root);
         var temp = Path.GetFullPath(Path.GetTempPath()).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
         if (!full.StartsWith(temp, StringComparison.OrdinalIgnoreCase) ||
-            !Path.GetFileName(full).StartsWith("DWGC2E-PathTests-", StringComparison.Ordinal))
+            !Path.GetFileName(full).StartsWith("QLCAD-PathTests-", StringComparison.Ordinal))
             throw new InvalidOperationException("Refusing to remove an unexpected fixture directory.");
         if (Directory.Exists(full)) Directory.Delete(full, recursive: true);
     }

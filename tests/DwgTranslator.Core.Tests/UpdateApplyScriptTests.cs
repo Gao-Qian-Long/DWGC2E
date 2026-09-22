@@ -91,7 +91,7 @@ public sealed class UpdateApplyScriptTests : IDisposable
         var install = Path.Combine(_root, "installed");
         Directory.CreateDirectory(work);
         Directory.CreateDirectory(install);
-        File.WriteAllText(Path.Combine(install, "DwgTranslator.exe"), "old-exe");
+        File.WriteAllText(Path.Combine(install, "QLCAD.exe"), "old-exe");
         File.WriteAllText(Path.Combine(install, "old.dll"), "old-library");
         Directory.CreateDirectory(Path.Combine(install, "prompts"));
         File.WriteAllText(Path.Combine(install, "prompts", "deepl_context.txt"), "old-prompt");
@@ -101,12 +101,12 @@ public sealed class UpdateApplyScriptTests : IDisposable
         {
             schemaVersion = 1,
             version = "old",
-            files = new[] { "DwgTranslator.exe", "old.dll", "prompts/deepl_context.txt" }
+            files = new[] { "QLCAD.exe", "old.dll", "prompts/deepl_context.txt" }
         }));
 
         var payload = Path.Combine(work, "payload");
         Directory.CreateDirectory(payload);
-        var executable = Path.Combine(payload, "DwgTranslator.exe");
+        var executable = Path.Combine(payload, "QLCAD.exe");
         File.Copy(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "where.exe"), executable);
         Directory.CreateDirectory(Path.Combine(payload, "lib"));
         File.WriteAllText(Path.Combine(payload, "lib", "new.dll"), "new-library");
@@ -116,7 +116,7 @@ public sealed class UpdateApplyScriptTests : IDisposable
             Size = new FileInfo(file).Length,
             Sha256 = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(file))).ToLowerInvariant()
         }).ToList();
-        var exeRecord = records.Single(item => item.Path == "DwgTranslator.exe");
+        var exeRecord = records.Single(item => item.Path == "QLCAD.exe");
         File.WriteAllText(Path.Combine(payload, "update-manifest.json"), JsonSerializer.Serialize(new UpdatePackageManifest
         {
             Version = "2.2.0",
@@ -155,7 +155,7 @@ public sealed class UpdateApplyScriptTests : IDisposable
         Assert.True(updater.WaitForExit(30_000), "Updater timed out.");
         Assert.True(updater.ExitCode == 0, stdout + stderr + Environment.NewLine + File.ReadAllText(log));
 
-        Assert.True(File.Exists(Path.Combine(install, "DwgTranslator.exe")));
+        Assert.True(File.Exists(Path.Combine(install, "QLCAD.exe")));
         Assert.Equal("new-library", File.ReadAllText(Path.Combine(install, "lib", "new.dll")));
         Assert.False(File.Exists(Path.Combine(install, "old.dll")));
         Assert.False(File.Exists(Path.Combine(install, "prompts", "deepl_context.txt")));
@@ -165,7 +165,7 @@ public sealed class UpdateApplyScriptTests : IDisposable
         Assert.Equal(2, receipt.RootElement.GetProperty("files").GetArrayLength());
 
         var rollback = install + ".rollback";
-        Assert.Equal("old-exe", File.ReadAllText(Path.Combine(rollback, "DwgTranslator.exe")));
+        Assert.Equal("old-exe", File.ReadAllText(Path.Combine(rollback, "QLCAD.exe")));
         Assert.Equal("old-library", File.ReadAllText(Path.Combine(rollback, "old.dll")));
         Assert.Equal("old-prompt", File.ReadAllText(Path.Combine(rollback, "prompts", "deepl_context.txt")));
         Assert.True(File.Exists(Path.Combine(rollback, "update-managed-files.json")));

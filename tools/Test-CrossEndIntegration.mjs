@@ -61,13 +61,13 @@ export function checkLocal({workspace = root, websiteRoot = 'D:/DWGC2E_Website'}
   inspect('local.website', () => {
     const context = {window:{}};
     vm.runInNewContext(fs.readFileSync(path.join(websiteRoot,'js/site-config.js'),'utf8'),context,{timeout:1000});
-    site = context.window.DWGC2E_SITE;
+    site = context.window.QLCAD_SITE;
     if (!site || typeof site.version !== 'string') throw Error();
     return result('local.website','pass',`官网配置版本 ${site.version}`);
   });
   inspect('local.release', () => {
     release = JSON.parse(fs.readFileSync(path.join(workspace,'release/build-info.json'),'utf8').replace(/^\uFEFF/, ''));
-    const hash = createHash('sha256').update(fs.readFileSync(path.join(workspace,'release/DwgTranslator.exe'))).digest('hex');
+    const hash = createHash('sha256').update(fs.readFileSync(path.join(workspace,'release/QLCAD.exe'))).digest('hex');
     return result('local.release',hash.toLowerCase() === String(release.sha256).toLowerCase() ? 'pass' : 'fail',`已安装版本 ${release.version}；核对本地 EXE 与构建记录哈希（非数字签名验证）`);
   });
   inspect('local.worker', () => {

@@ -12,8 +12,8 @@ if((Get-Item -LiteralPath $root -Force).Attributes -band [IO.FileAttributes]::Re
 $release=Join-Path $PSScriptRoot '../release'
 $info=Get-Content (Join-Path $release 'build-info.json') -Raw|ConvertFrom-Json
 if($info.version -ne '2.1.1+ui.20260916-080934.a3f6f1f'){throw 'This cleanup only applies to the confirmed first release'}
-if((Get-FileHash (Join-Path $release 'DwgTranslator.exe')).Hash -ne $info.sha256){throw 'Installed hash mismatch'}
-$keep=@('publish-20260916-080934','DwgTranslator-win-x64-GstarCAD-20260916-080934.zip','云端同步修复审核-20260916','ui-smoke','cloud-sync-publish.log','governance-final-20260916-072248','governance-resolution-20260916-080055','inno-acceptance-20260916-082013','inno-toolchain-20260916-081055','governance-current.txt','governance-resolution-current.txt','inno-acceptance-current.txt','inno-toolchain-current.txt','README.md','website-page-review-fixed-20260915')
+if((Get-FileHash (Join-Path $release 'QLCAD.exe')).Hash -ne $info.sha256){throw 'Installed hash mismatch'}
+$keep=@('publish-20260916-080934','QLCAD-win-x64-GstarCAD-20260916-080934.zip','云端同步修复审核-20260916','ui-smoke','cloud-sync-publish.log','governance-final-20260916-072248','governance-resolution-20260916-080055','inno-acceptance-20260916-082013','inno-toolchain-20260916-081055','governance-current.txt','governance-resolution-current.txt','inno-acceptance-current.txt','inno-toolchain-current.txt','README.md','website-page-review-fixed-20260915')
 $items=@(Get-ChildItem -LiteralPath $root -Force)
 $targets=@($items|Where-Object {$_.Name -notin $keep -and $_.Name -notlike 'review-*' -and $_.Name -notmatch '^payment-.*(backup|before|settings|predeploy).*\.(sql|json)$'})
 $running=@(Get-CimInstance Win32_Process|Where-Object {$_.ProcessId -ne $PID})

@@ -1,4 +1,4 @@
-# Captures the running DWG Translator window (or any window of that process) to a PNG so UI
+# Captures the running QLCAD window (or any window of that process) to a PNG so UI
 # changes can be reviewed and iterated without a human in the loop.
 param(
     [string]$ProcessName = 'DwgTranslator',

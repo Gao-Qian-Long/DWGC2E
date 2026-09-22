@@ -21,7 +21,7 @@ function Reject($label,[scriptblock]$action,[string]$expected){
  Check ($errorText -like "*$expected*") $label
 }
 $info=& $tool -PublishDir $candidate -WorkspaceRoot $fixture
-Check ($info.sha256 -eq (Get-FileHash (Join-Path $candidate 'DwgTranslator.exe')).Hash) 'clean candidate accepted'
+Check ($info.sha256 -eq (Get-FileHash (Join-Path $candidate 'QLCAD.exe')).Hash) 'clean candidate accepted'
 Reject 'installed release rejected' {& $tool -PublishDir (Join-Path $root 'release')} 'direct artifacts/publish'
 $metadata=Join-Path $candidate 'build-info.json';$original=[IO.File]::ReadAllBytes($metadata)
 try{
@@ -62,7 +62,7 @@ $stage=Join-Path $validOutput "DwgTranslator-$version-win-x64"
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 $archive=[IO.Compression.ZipFile]::OpenRead((Join-Path $validOutput "DwgTranslator-$version-win-x64.zip"))
 try { Check ($archive.Entries.Count -eq 14 -and @($archive.Entries | Where-Object FullName -eq 'build-info.json').Count -eq 1) 'zip contains 14 expected payload files including provenance' } finally { $archive.Dispose() }
-Check ((Get-FileHash (Join-Path $stage 'DwgTranslator.exe')).Hash -eq $info.sha256) 'packaged executable matches manifest'
+Check ((Get-FileHash (Join-Path $stage 'QLCAD.exe')).Hash -eq $info.sha256) 'packaged executable matches manifest'
 Check ((Get-FileHash (Join-Path $stage 'build-info.json')).Hash -eq (Get-FileHash (Join-Path $PublishDir 'build-info.json')).Hash) 'package retains build provenance'
 Reject 'existing stage rejected' {& $packager -PublishDir $PublishDir -OutputDir $validOutput} 'output already exists'
 # A valid Windows directory may contain brackets; never treat it as a wildcard.
@@ -75,6 +75,6 @@ $literalArchive=[IO.Compression.ZipFile]::OpenRead($literalZip)
 try {
  Check ($literalArchive.Entries.Count -eq 14 -and @($literalArchive.Entries | Where-Object { $_.FullName.Replace('\','/') -eq 'CadPlugin/DwgTranslator.Cad.dll' }).Count -eq 1) 'bracket directory zip has expected root and CAD payload'
 } finally { $literalArchive.Dispose() }
-Check ((Get-FileHash -LiteralPath (Join-Path $literalStage 'DwgTranslator.exe')).Hash -eq $info.sha256) 'bracket directory executable matches candidate'
+Check ((Get-FileHash -LiteralPath (Join-Path $literalStage 'QLCAD.exe')).Hash -eq $info.sha256) 'bracket directory executable matches candidate'
 $results|ConvertTo-Json -Depth 4|Set-Content -LiteralPath (Join-Path $evidence 'results.json') -Encoding UTF8
 Write-Host "CLEAN_PACKAGE_INPUT_TESTS=PASS ($($results.Count))"

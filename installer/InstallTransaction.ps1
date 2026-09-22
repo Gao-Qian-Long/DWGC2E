@@ -39,8 +39,8 @@ function Register-InstallWrite($Transaction,[string]$Destination,[string]$Expect
     Assert-TransactionPath $path
     if($Transaction.Seen.ContainsKey($path)){return}
     $inRoot=$path.StartsWith($Transaction.Root+'\',[StringComparison]::OrdinalIgnoreCase)
-    $menu=Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\DWG Translator.lnk'
-    $desktop=Join-Path ([Environment]::GetFolderPath('Desktop')) 'DWG Translator.lnk'
+    $menu=Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\QLCAD.lnk'
+    $desktop=Join-Path ([Environment]::GetFolderPath('Desktop')) 'QLCAD.lnk'
     if(-not $inRoot -and $path -ne $menu -and $path -ne $desktop){throw "Unapproved transaction destination: $path"}
     $exists=Test-Path -LiteralPath $path
     $entry=@{Path=$path;Existed=$exists;NewHash=$ExpectedNewHash;BackupName=($Transaction.Entries.Count.ToString()+'.bin');Hash=$null;Attributes=$null;LastWriteUtc=$null}
@@ -119,15 +119,15 @@ function Import-InstallTransaction([string]$Backup,[string]$Root) {
     if($record.Schema -ne 1 -or $record.Root -ne $Root -or $record.State -notin @('Active','Committed','RolledBack')){throw 'Invalid recovery journal'}
     if(@($record.Entries).Count -gt 10000){throw 'Too many recovery entries'}
     $transaction=@{State=$record.State;Root=$Root;Backup=$Backup;Entries=(New-Object 'System.Collections.Generic.List[object]');Seen=@{};Directories=(New-Object 'System.Collections.Generic.List[string]')}
-    $menu=Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\DWG Translator.lnk'
-    $desktop=Join-Path ([Environment]::GetFolderPath('Desktop')) 'DWG Translator.lnk'
+    $menu=Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\QLCAD.lnk'
+    $desktop=Join-Path ([Environment]::GetFolderPath('Desktop')) 'QLCAD.lnk'
     $index=0
     foreach($entry in @($record.Entries)) {
         $path=[IO.Path]::GetFullPath([string]$entry.Path)
         if($path -ne $entry.Path -or $transaction.Seen.ContainsKey($path) -or $entry.BackupName -cne ($index.ToString()+'.bin') -or $entry.Existed -isnot [bool]){throw 'Invalid recovery entry'}
         if($path.StartsWith($Root+'\',[StringComparison]::OrdinalIgnoreCase)) {
             $relative=$path.Substring($Root.Length+1)
-            if($relative -notmatch '^(DwgTranslator\.exe|settings\.json|使用说明\.txt|Uninstall\.ps1|installation-manifest\.json|卸载\.cmd|(?:CadPlugin|assets|glossaries)\\[^:]+|prompts\\deepl_context\.txt)$' -or $relative -match '(^|[\\/])\.\.?([\\/]|$)'){throw 'Recovery path not in installer write set'}
+            if($relative -notmatch '^(QLCAD\.exe|settings\.json|使用说明\.txt|Uninstall\.ps1|installation-manifest\.json|卸载\.cmd|(?:CadPlugin|assets|glossaries)\\[^:]+|prompts\\deepl_context\.txt)$' -or $relative -match '(^|[\\/])\.\.?([\\/]|$)'){throw 'Recovery path not in installer write set'}
             if($entry.Existed -and $relative -match '^(settings\.json|glossaries\\)'){throw 'Recovery must not overwrite personal data'}
         } elseif($path -ne $menu -and $path -ne $desktop){throw 'Recovery path outside installation'}
         Assert-TransactionPath $path

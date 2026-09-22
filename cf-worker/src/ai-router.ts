@@ -340,7 +340,7 @@ export async function probeProvider(env: AiEnv, providerId: string): Promise<AiP
     target_lang: "en",
     protection: { protect_dimensions: true, protect_tolerances: true, protect_models: true, glossary_first: true },
     glossary: [],
-    items: [{ id: 0, text: "DWGC2E provider health check" }]
+    items: [{ id: 0, text: "QLCAD provider health check" }]
   });
   let parsed: unknown;
   try {

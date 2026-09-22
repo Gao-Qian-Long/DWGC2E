@@ -205,7 +205,7 @@ async function sendCode(email: string, purpose: string, e: Env) {
     )]);
   const result = await deliverMail(e, {
     id, to: email,
-    subject: purpose === "register" ? "DWGC2E 注册验证码" : "DWGC2E 密码重置验证码",
+    subject: purpose === "register" ? "QLCAD 注册验证码" : "QLCAD 密码重置验证码",
     html: '<p>你的验证码是：</p><p style="font-size:28px;font-weight:700;letter-spacing:6px">' +
       code + '</p><p>验证码 10 分钟内有效。如非本人操作，请忽略此邮件。</p>',
   }, fetch, 8000, providers);
@@ -652,7 +652,7 @@ async function route(r: Request,e: Env) {
     if (p === "/v1/feedback" || p === "/v1/health" || p.startsWith("/v1/admin/feedback")) return feedbackRoute(r,e);
     if (p === "/" && r.method === "GET")
       return json(
-        { service: "DWGC2E API", status: "ok", version: e.LATEST_VERSION || "0.1.0" },
+        { service: "QLCAD API", status: "ok", version: e.LATEST_VERSION || "0.1.0" },
         200,
         origin,
       );
@@ -675,7 +675,7 @@ async function route(r: Request,e: Env) {
     if (p === "/v1/auth/register" && r.method === "POST") return register(r, e);
     if (p === "/v1/auth/login" && r.method === "POST") return login(r, e);
     if (p === "/v1/auth/web/login" && r.method === "POST") return login(r, e, 'web');
-    if(p==='/v1/version'&&r.method==='GET'){const release=await settings(e,'release');const latestVersion=release.latest_version||e.LATEST_VERSION||'0.0.0';return json({service:'DWGC2E API',latest_version:latestVersion,app_version:latestVersion,worker_build_id:e.WORKER_BUILD_ID||'local',schema_version:e.WORKER_SCHEMA_VERSION||'unknown',deployed_at:e.WORKER_DEPLOYED_AT||null,ai_routing_version:e.AI_ROUTING_VERSION||'router-v1',mandatory:false,release_notes:release.release_notes||'',download_url:release.download_url||'',backup_download_url:release.backup_download_url||''},200,origin);}
+    if(p==='/v1/version'&&r.method==='GET'){const release=await settings(e,'release');const latestVersion=release.latest_version||e.LATEST_VERSION||'0.0.0';return json({service:'QLCAD API',latest_version:latestVersion,app_version:latestVersion,worker_build_id:e.WORKER_BUILD_ID||'local',schema_version:e.WORKER_SCHEMA_VERSION||'unknown',deployed_at:e.WORKER_DEPLOYED_AT||null,ai_routing_version:e.AI_ROUTING_VERSION||'router-v1',mandatory:false,release_notes:release.release_notes||'',download_url:release.download_url||'',backup_download_url:release.backup_download_url||''},200,origin);}
     if (p==='/v1/admin/billing/recovery'||/^\/v1\/admin\/billing\/orders\/[^/]+\/review$/.test(p)) return recoveryAdmin(r,e);
     if (/^\/v1\/admin\/billing\/orders\/[^/]+\/inspect$/.test(p)) return inspectPayment(r, e);
     if (p === "/v1/billing/notify/ezfpy") return notifyPayment(r, e);

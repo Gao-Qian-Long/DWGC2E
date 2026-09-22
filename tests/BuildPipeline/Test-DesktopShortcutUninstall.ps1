@@ -1,5 +1,5 @@
 # Purpose: exercise the production Desktop shortcut branch without changing existing user shortcuts.
-# Requires explicit -AllowDesktopFixture and an absent Desktop/DWG Translator.lnk.
+# Requires explicit -AllowDesktopFixture and an absent Desktop/QLCAD.lnk.
 # Creates only its own link using no-overwrite copy, never launches the synthetic executable.
 # Cleanup removes only the exact newly created link with an unchanged SHA256; no recursive deletion.
 param([switch]$AllowDesktopFixture,[string]$ResultDir)
@@ -14,7 +14,7 @@ No-Link $ResultDir
 if(Test-Path -LiteralPath $ResultDir){throw 'Use a fresh result directory'}
 $desktop=[Environment]::GetFolderPath('Desktop')
 if([string]::IsNullOrWhiteSpace($desktop) -or -not(Test-Path -LiteralPath $desktop -PathType Container)){throw 'Desktop is unavailable'}
-$link=Join-Path $desktop 'DWG Translator.lnk';No-Link $link
+$link=Join-Path $desktop 'QLCAD.lnk';No-Link $link
 if(Test-Path -LiteralPath $link){throw 'Existing desktop shortcut preserved; this test must not run here'}
 New-Item -ItemType Directory -Path $ResultDir|Out-Null
 $checks=New-Object 'System.Collections.Generic.List[string]'
@@ -22,14 +22,14 @@ function Check($v,[string]$label){if(-not $v){throw $label};$checks.Add($label);
 function Hash([string]$p){(Get-FileHash -LiteralPath $p -Algorithm SHA256).Hash}
 function Make-Link([string]$p,[string]$target,[string]$arguments){
  $shell=$null;$lnk=$null
- try{$shell=New-Object -ComObject WScript.Shell;$lnk=$shell.CreateShortcut($p);$lnk.TargetPath=$target;$lnk.Arguments=$arguments;$lnk.Description='DWGC2E temporary regression fixture - do not open';$lnk.Save()}
+ try{$shell=New-Object -ComObject WScript.Shell;$lnk=$shell.CreateShortcut($p);$lnk.TargetPath=$target;$lnk.Arguments=$arguments;$lnk.Description='QLCAD temporary regression fixture - do not open';$lnk.Save()}
  finally{if($lnk){[Runtime.InteropServices.Marshal]::ReleaseComObject($lnk)|Out-Null};if($shell){[Runtime.InteropServices.Marshal]::ReleaseComObject($shell)|Out-Null}}
 }
 function Snapshot([string]$dir){$h=@{};Get-ChildItem -LiteralPath $dir -Recurse -File|ForEach-Object{$h[$_.FullName]=Hash $_.FullName};return $h}
 function Equal($a,$b){if($a.Count -ne $b.Count){return $false};foreach($k in $a.Keys){if($a[$k] -ne $b[$k]){return $false}};return $true}
 foreach($case in @('owned','modified','other-target','custom-arguments','unregistered','duplicate','locked','preview')){
  $dir=Join-Path $ResultDir $case;$app=Join-Path $dir 'app';New-Item -ItemType Directory -Path $app|Out-Null
- $exe=Join-Path $app 'DwgTranslator.exe';[IO.File]::WriteAllText($exe,'synthetic never execute')
+ $exe=Join-Path $app 'QLCAD.exe';[IO.File]::WriteAllText($exe,'synthetic never execute')
  $settings=Join-Path $app 'settings.json';[IO.File]::WriteAllText($settings,'{"personal":"preserve"}')
  $script=Join-Path $app 'Uninstall.ps1';Copy-Item -LiteralPath (Join-Path $root 'installer/Uninstall.ps1') -Destination $script
  $stagedLink=Join-Path $dir 'fixture.lnk';$target=$exe;if($case -eq 'other-target'){$target=Join-Path $dir 'other.exe'}
@@ -38,7 +38,7 @@ foreach($case in @('owned','modified','other-target','custom-arguments','unregis
  $expectedHash=Hash $stagedLink;$registeredHash=$expectedHash;if($case -eq 'modified'){$registeredHash='0'*64}
  $record=@{Kind='Desktop';Sha256=$registeredHash};$records=@($record)
  if($case -eq 'unregistered'){$records=@()};if($case -eq 'duplicate'){$records=@($record,$record)}
- @{Schema=1;Product='DWGC2E';Root=$app;Files=@(@{Path='DwgTranslator.exe';Sha256=Hash $exe});Shortcuts=$records}|ConvertTo-Json -Depth 6|Set-Content -LiteralPath (Join-Path $app 'installation-manifest.json') -Encoding UTF8
+ @{Schema=1;Product='QLCAD';Root=$app;Files=@(@{Path='QLCAD.exe';Sha256=Hash $exe});Shortcuts=$records}|ConvertTo-Json -Depth 6|Set-Content -LiteralPath (Join-Path $app 'installation-manifest.json') -Encoding UTF8
  $before=Snapshot $app;$settingsHash=Hash $settings;$created=$false;$lock=$null;$childLive=$false
  try{
   No-Link $link

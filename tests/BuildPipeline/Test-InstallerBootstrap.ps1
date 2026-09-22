@@ -16,7 +16,7 @@ $checks=New-Object 'System.Collections.Generic.List[string]'
 function Check($v,[string]$label){if(-not $v){throw $label};$checks.Add($label);Write-Host "PASS $label"}
 function Hash([string]$p){(Get-FileHash -LiteralPath $p).Hash}
 function Put([string]$p,[string]$v){New-Item -ItemType Directory -Force -Path ([IO.Path]::GetDirectoryName($p))|Out-Null;[IO.File]::WriteAllText($p,$v)}
-foreach($name in @('DwgTranslator.exe','CadPlugin/DwgTranslator.Cad.dll','CadPlugin/DwgTranslator.Core.dll','CadPlugin/cad-platform.txt')){Put (Join-Path $package $name) 'synthetic never execute'}
+foreach($name in @('QLCAD.exe','CadPlugin/DwgTranslator.Cad.dll','CadPlugin/DwgTranslator.Core.dll','CadPlugin/cad-platform.txt')){Put (Join-Path $package $name) 'synthetic never execute'}
 foreach($name in @('settings.json','glossaries/mechanical_zh_en.json','assets/default-glossaries/mechanical_zh_en.json')){Put (Join-Path $package $name) '{}'}
 foreach($name in @('Install.ps1','InstallTransaction.ps1','Uninstall.ps1','安装.cmd')){Copy-Item -LiteralPath (Join-Path $root ('installer/'+$name)) -Destination (Join-Path $package $name)}
 # Apply the exact production packaging conversion, rather than a test-only normalization.
@@ -52,13 +52,13 @@ $r=Run-Bootstrap 'success'
 Check ($r.Exit -eq 0) 'Chinese-space bootstrap installs successfully from different working directory'
 Check ($r.Output.Contains('安装程序')) 'Chinese bootstrap heading decodes correctly'
 Check ([string]::IsNullOrWhiteSpace($r.ErrorOutput)) 'successful bootstrap produces no command or PowerShell errors'
-Check ($r.Output.Contains('安装默认使用 D:\DWGC2E，没有 D 盘时使用 C:\DWGC2E。')) 'full default destination guidance is printed'
+Check ($r.Output.Contains('安装默认使用 D:\QLCAD，没有 D 盘时使用 C:\QLCAD。')) 'full default destination guidance is printed'
 Check ($r.Output.Contains('安装目录需有写入权限；源码目录会被拒绝，请另选安装位置。')) 'full source protection guidance is printed'
-Check ((Hash (Join-Path $package 'DwgTranslator.exe')) -eq (Hash (Join-Path $target 'DwgTranslator.exe'))) 'forwarded target contains exact package executable'
+Check ((Hash (Join-Path $package 'QLCAD.exe')) -eq (Hash (Join-Path $target 'QLCAD.exe'))) 'forwarded target contains exact package executable'
 $m=Get-Content (Join-Path $target 'installation-manifest.json') -Raw -Encoding UTF8|ConvertFrom-Json
 Check ($m.Root -eq $target -and @($m.Shortcuts).Count -eq 0) 'explicit target and NoShortcuts reach production installer'
 $before=@{};Get-ChildItem -LiteralPath $target -Recurse -File|ForEach-Object{$before[$_.FullName]=Hash $_.FullName}
-Rename-Item -LiteralPath (Join-Path $package 'DwgTranslator.exe') -NewName 'missing-executable.fixture'
+Rename-Item -LiteralPath (Join-Path $package 'QLCAD.exe') -NewName 'missing-executable.fixture'
 $r=Run-Bootstrap 'missing-exe'
 Check ($r.Exit -eq 2) 'bootstrap propagates installer failure exit code 2'
 Check ([string]::IsNullOrWhiteSpace($r.ErrorOutput)) 'expected package rejection contains no CMD parsing errors'

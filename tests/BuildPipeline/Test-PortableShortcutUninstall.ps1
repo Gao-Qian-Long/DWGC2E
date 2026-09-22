@@ -42,10 +42,10 @@ foreach($case in @('owned','modified','other-target','custom-arguments','unregis
  $dir=Join-Path $ResultDir $case;$app=Join-Path $dir 'app';$fakeData=Join-Path $dir 'user-data'
  $menu=Join-Path $fakeData 'Microsoft/Windows/Start Menu/Programs'
  New-Item -ItemType Directory -Path $app,$menu|Out-Null
- $exe=Join-Path $app 'DwgTranslator.exe';[IO.File]::WriteAllText($exe,'fixture never execute')
+ $exe=Join-Path $app 'QLCAD.exe';[IO.File]::WriteAllText($exe,'fixture never execute')
  $settings=Join-Path $app 'settings.json';[IO.File]::WriteAllText($settings,'{"personal":"keep"}')
  $script=Join-Path $app 'Uninstall.ps1';Copy-Item -LiteralPath (Join-Path $root 'installer/Uninstall.ps1') -Destination $script
- $link=Join-Path $menu 'DWG Translator.lnk'
+ $link=Join-Path $menu 'QLCAD.lnk'
  $target=$exe;if($case -eq 'other-target'){$target=Join-Path $dir 'Other.exe'}
  $arguments='';if($case -eq 'custom-arguments'){$arguments='--custom'}
  Make-Link $link $target $arguments 'original'
@@ -54,7 +54,7 @@ foreach($case in @('owned','modified','other-target','custom-arguments','unregis
  if($case -eq 'unregistered'){$records=@()}
  if($case -eq 'duplicate'){$records=@($record,$record)}
  if($case -eq 'modified'){Make-Link $link $exe '' 'user modified'}
- @{Schema=1;Product='DWGC2E';Root=$app;Files=@(@{Path='DwgTranslator.exe';Sha256=Hash $exe});Shortcuts=$records}|ConvertTo-Json -Depth 6|Set-Content -LiteralPath (Join-Path $app 'installation-manifest.json') -Encoding UTF8
+ @{Schema=1;Product='QLCAD';Root=$app;Files=@(@{Path='QLCAD.exe';Sha256=Hash $exe});Shortcuts=$records}|ConvertTo-Json -Depth 6|Set-Content -LiteralPath (Join-Path $app 'installation-manifest.json') -Encoding UTF8
  $before=Snapshot $dir;$linkHash=Hash $link;$settingsHash=Hash $settings
  $lock=$null
  try{

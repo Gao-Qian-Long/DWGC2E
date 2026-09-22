@@ -20,7 +20,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $publishDir = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($PublishDir)
 $required = @(
-    'DwgTranslator.exe',
+    'QLCAD.exe',
     'settings.json',
     'assets\default-glossaries\mechanical_zh_en.json',
     'glossaries\mechanical_zh_en.json',

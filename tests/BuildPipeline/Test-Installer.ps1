@@ -15,7 +15,7 @@ function Put([string]$relative,[string]$value) {
     New-Item -ItemType Directory -Force -Path ([IO.Path]::GetDirectoryName($file)) | Out-Null
     [IO.File]::WriteAllText($file,$value)
 }
-Put 'DwgTranslator.exe' 'fake-executable-v1-never-launched'
+Put 'QLCAD.exe' 'fake-executable-v1-never-launched'
 Put 'settings.json' '{"sample":true}'
 Put 'CadPlugin/DwgTranslator.Cad.dll' 'fake-plugin-v1'
 Put 'CadPlugin/DwgTranslator.Core.dll' 'fake-core-v1'
@@ -30,8 +30,8 @@ if($parseErrors.Count){throw 'Installer parse failed'}
 $selector=$ast.Find({param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Get-DefaultInstallDirectory'},$true)
 if(-not $selector){throw 'Default directory selector missing'}
 . ([scriptblock]::Create($selector.Extent.Text))
-Check ((Get-DefaultInstallDirectory $true) -eq 'D:\DWGC2E') 'default prefers D when available'
-Check ((Get-DefaultInstallDirectory $false) -eq 'C:\DWGC2E') 'default falls back to C without D'
+Check ((Get-DefaultInstallDirectory $true) -eq 'D:\QLCAD') 'default prefers D when available'
+Check ((Get-DefaultInstallDirectory $false) -eq 'C:\QLCAD') 'default falls back to C without D'
 function Install([string]$destination,[bool]$success) {
     $log = Join-Path $fixture ('run-' + [guid]::NewGuid().ToString('N') + '.log')
     $previousPreference = $ErrorActionPreference
@@ -49,7 +49,7 @@ Check ((Get-Content -LiteralPath (Join-Path $target 'settings.json') -Raw) -eq '
 New-Item -ItemType Directory -Force -Path (Join-Path $target 'prompts') | Out-Null
 [IO.File]::WriteAllText((Join-Path $target 'prompts/deepl_context.txt'),'legacy-client-prompt')
 [IO.File]::WriteAllText((Join-Path $target 'glossaries/mechanical_zh_en.json'),'{"personal":"term"}')
-Put 'DwgTranslator.exe' 'fake-executable-v2-never-launched'
+Put 'QLCAD.exe' 'fake-executable-v2-never-launched'
 Put 'CadPlugin/DwgTranslator.Cad.dll' 'fake-plugin-v2'
 Put 'glossaries/new-default.json' '{}'
 Install $target $true
@@ -73,8 +73,8 @@ $after = Snapshot
 Check (($before.Count -eq $after.Count) -and -not @($before.Keys | Where-Object { $before[$_] -ne $after[$_] }).Count) 'invalid configuration leaves installation unchanged'
 Put 'settings.json' '{}'
 Install $package $false
-Check ((Get-Content -LiteralPath (Join-Path $package 'DwgTranslator.exe') -Raw) -eq 'fake-executable-v2-never-launched') 'overlapping source and target rejected'
-$exe = Join-Path $target 'DwgTranslator.exe'
+Check ((Get-Content -LiteralPath (Join-Path $package 'QLCAD.exe') -Raw) -eq 'fake-executable-v2-never-launched') 'overlapping source and target rejected'
+$exe = Join-Path $target 'QLCAD.exe'
 $hash = (Get-FileHash -LiteralPath $exe).Hash
 $lock = [IO.File]::Open($exe,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::Read)
 try { Install $target $false } finally { $lock.Dispose() }
@@ -82,18 +82,18 @@ Check ((Get-FileHash -LiteralPath $exe).Hash -eq $hash) 'locked executable is no
 Check (-not (Test-Path -LiteralPath ($exe + '.old'))) 'failed copy creates no old executable workaround'
 # Later write failures must be detected before the executable has been replaced.
 foreach($relative in @('CadPlugin/DwgTranslator.Core.dll','assets/default-glossaries/mechanical_zh_en.json','Uninstall.ps1','installation-manifest.json','卸载.cmd')) {
-    Put 'DwgTranslator.exe' ('synthetic-next-version-'+$relative)
+    Put 'QLCAD.exe' ('synthetic-next-version-'+$relative)
     $before=Snapshot
     $held=[IO.File]::Open((Join-Path $target $relative),[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::Read)
     try {Install $target $false} finally {$held.Dispose()}
     $after=Snapshot
     Check ($before.Count -eq $after.Count -and -not @($before.Keys | Where-Object {$before[$_] -ne $after[$_]}).Count) ('late destination lock leaves all files unchanged: '+$relative)
 }
-Put 'DwgTranslator.exe' 'fake-executable-v2-never-launched'
+Put 'QLCAD.exe' 'fake-executable-v2-never-launched'
 # The portable bootstrap must never kill another installation or delete user data.
 $uninstallText = Get-Content -LiteralPath (Join-Path $target '卸载.cmd') -Raw
 Check ($uninstallText -notmatch '(?im)^\s*(taskkill|rmdir|rd|del|erase)\b') 'uninstall bootstrap performs no automatic destructive actions'
-$inno = Get-Content -LiteralPath (Join-Path $root 'installer/DwgTranslator.iss') -Raw
+$inno = Get-Content -LiteralPath (Join-Path $root 'installer/QLCAD.iss') -Raw
 foreach ($resource in @('settings.json','glossaries')) {
     $line = @($inno -split "`n" | Where-Object { $_ -like 'Source:*' -and $_.Contains("\$resource") -and $_.Contains('DestDir: "{app}') })
     Check ($line.Count -eq 1 -and $line[0].Contains('onlyifdoesntexist') -and $line[0].Contains('uninsneveruninstall')) "Inno preserves portable $resource"
@@ -105,7 +105,7 @@ Copy-Item -LiteralPath (Join-Path $root 'installer/InstallTransaction.ps1') -Des
 $defaultTarget = Join-Path $fixture 'default-source-installed'
 $log = Join-Path $fixture 'default-source.log'
 & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $package 'Install.ps1') -TargetDir $defaultTarget -NoLaunch -NoPrompt -NoShortcuts *> $log
-Check ($LASTEXITCODE -eq 0 -and (Test-Path -LiteralPath (Join-Path $defaultTarget 'DwgTranslator.exe'))) 'package defaults to its own directory not caller working directory'
+Check ($LASTEXITCODE -eq 0 -and (Test-Path -LiteralPath (Join-Path $defaultTarget 'QLCAD.exe'))) 'package defaults to its own directory not caller working directory'
 $emptyPackage = Join-Path $fixture 'empty-package'
 New-Item -ItemType Directory -Path $emptyPackage | Out-Null
 & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $installer -SourceDir $emptyPackage -TargetDir (Join-Path $fixture 'must-not-install') -NoLaunch -NoPrompt -NoShortcuts *> (Join-Path $fixture 'empty-package.log')
@@ -149,7 +149,7 @@ $manifest=$manifestText | ConvertFrom-Json
 $manifest.Files[0].Path='assets\..\..\outside.txt'
 $manifest | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
 Uninstall $false
-Check (Test-Path -LiteralPath (Join-Path $target 'DwgTranslator.exe')) 'path traversal rejected before removing executable'
+Check (Test-Path -LiteralPath (Join-Path $target 'QLCAD.exe')) 'path traversal rejected before removing executable'
 [IO.File]::WriteAllText($manifestPath,$manifestText,[Text.UTF8Encoding]::new($true))
 # Manifest corruption must be rejected before any owned file is removed.
 foreach($case in @('wrong-root','protected-settings','duplicate-path','invalid-hash')) {

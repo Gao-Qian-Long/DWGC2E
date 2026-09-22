@@ -1,4 +1,4 @@
-﻿# DWG Translator（DWGC2E）
+﻿# QLCAD（图纸翻译工作台）
 
 面向机械工程 CAD 图纸的 Windows 桌面翻译工具，可提取并翻译 DWG/DXF 中的文字标注，再将译文回写到图纸。支持离线文件处理，也支持通过宿主专用插件在线回写。
 
@@ -11,7 +11,7 @@
 ## 本机已安装版本运行
 
 1. 打开 [`release`](./release/) 目录。
-2. 双击 `DwgTranslator.exe`。
+2. 双击 `QLCAD.exe`。
 3. 首次运行后直接登录账户；翻译服务由 Cloudflare Worker 管理，不需要在 APP 中填写 DeepSeek API Key。
 4. 可一次拖入多张 DWG/DXF：左侧按文件显示，双击图纸进入译文列表并直接编辑。
 5. 勾选需要输出的图纸后点击“导出”，只选择一次输出文件夹即可批量生成 `*_translated.dwg/.dxf`，无需再次选择源文件。
@@ -32,7 +32,7 @@
 
 ```text
 release/
-├─ DwgTranslator.exe          # Windows 可运行程序
+├─ QLCAD.exe          # Windows 可运行程序
 ├─ settings.json              # 默认配置模板（不包含私人 API Key）
 ├─ assets/default-glossaries/ # 随包默认术语资源
 ├─ glossaries/                # 默认术语表兼容副本
@@ -119,7 +119,7 @@ dotnet build src/DwgTranslator.Cad -c Release -p:CadPlatform=GstarCAD
 # 从明确的干净发布候选生成安装包，不以 release 用户目录为输入
 .\tools\New-ReleasePackage.ps1 -PublishDir "artifacts/publish-<时间戳>" -OutputDir "artifacts/installer-<时间戳>"
 # 装有 Inno Setup 6 时：
-ISCC /DPublishDir="D:\DWGC2E\artifacts\publish-<时间戳>" installer/DwgTranslator.iss
+ISCC /DPublishDir="D:\DWGC2E\artifacts\publish-<时间戳>" installer/QLCAD.iss
 ```
 
 UI 冒烟使用隔离数据和受控接口，不等同于真实登录、付款或宿主 CAD 图纸验收。LicenseGenerator 当前仅提示离线签发已退休并返回失败，保留兼容入口，不生成授权码。
@@ -138,7 +138,7 @@ UI 冒烟使用隔离数据和受控接口，不等同于真实登录、付款�
 
 ### 首次安装目录（2026-09-16）
 
-Inno 与便携安装脚本默认选择 D:\DWGC2E；D:\ 不可用时选择 C:\DWGC2E。Inno 可手动选择目录，升级保持原路径；便携脚本以显式 -TargetDir 为准，不自动发现或迁移旧安装。默认目录无写入权限时应选择其他目录，不绕过权限。运行数据位置不因安装默认值而改变。
+Inno 与便携安装脚本默认选择 D:\QLCAD；D:\ 不可用时选择 C:\QLCAD。Inno 可手动选择目录，升级保持原路径；便携脚本以显式 -TargetDir 为准，不自动发现或迁移旧安装。默认目录无写入权限时应选择其他目录，不绕过权限。运行数据位置不因安装默认值而改变。
 
 ### 本轮治理交接
 

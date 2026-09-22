@@ -6,12 +6,12 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
     <RootNamespace>DwgTranslator.App</RootNamespace>
-    <AssemblyName>DwgTranslator</AssemblyName>
+    <AssemblyName>QLCAD</AssemblyName>
     <Version>2.1.1</Version>
     <FileVersion>2.1.1.0</FileVersion>
     <InformationalVersion>2.1.1</InformationalVersion>
-    <Product>DWG Translator</Product>
-    <Company>DWG Translator</Company>
+    <Product>QLCAD</Product>
+    <Company>QLCAD</Company>
     <ApplicationIcon>..\..\assets\icons\icon.ico</ApplicationIcon>
   </PropertyGroup>
 

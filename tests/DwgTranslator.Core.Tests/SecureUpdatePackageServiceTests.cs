@@ -28,7 +28,7 @@ public sealed class SecureUpdatePackageServiceTests : IDisposable
         using var rsa = RSA.Create(2048);
         var zip = CreatePackage("2.2.0", new Dictionary<string, string>
         {
-            ["DwgTranslator.exe"] = "new-exe",
+            ["QLCAD.exe"] = "new-exe",
             ["lib/helper.dll"] = "helper"
         });
         var info = Sign(zip, rsa, "2.2.0");
@@ -46,7 +46,7 @@ public sealed class SecureUpdatePackageServiceTests : IDisposable
     public async Task HashAndSignatureMismatchAreRejectedAndCleaned()
     {
         using var rsa = RSA.Create(2048);
-        var zip = CreatePackage("2.2.0", new Dictionary<string, string> { ["DwgTranslator.exe"] = "new-exe" });
+        var zip = CreatePackage("2.2.0", new Dictionary<string, string> { ["QLCAD.exe"] = "new-exe" });
         var badHash = Sign(zip, rsa, "2.2.0");
         badHash.PackageSha256 = new string('0', 64);
         using var http1 = new HttpClient(new BytesHandler(zip));
@@ -62,7 +62,7 @@ public sealed class SecureUpdatePackageServiceTests : IDisposable
     public async Task TruncatedDownloadAndManifestVersionMismatchAreRejected()
     {
         using var rsa = RSA.Create(2048);
-        var zip = CreatePackage("2.2.0", new Dictionary<string, string> { ["DwgTranslator.exe"] = "new-exe" });
+        var zip = CreatePackage("2.2.0", new Dictionary<string, string> { ["QLCAD.exe"] = "new-exe" });
         var truncated = Sign(zip, rsa, "2.2.0");
         truncated.PackageSize = zip.Length + 1;
         using var http1 = new HttpClient(new BytesHandler(zip, includeLength: false));
@@ -79,9 +79,9 @@ public sealed class SecureUpdatePackageServiceTests : IDisposable
         using var rsa = RSA.Create(2048);
         var zip = CreatePackage("2.2.0", new Dictionary<string, string>
         {
-            ["DwgTranslator.exe"] = "new-exe",
+            ["QLCAD.exe"] = "new-exe",
             ["hidden.bin"] = "not-listed"
-        }, manifestPaths: new[] { "DwgTranslator.exe" });
+        }, manifestPaths: new[] { "QLCAD.exe" });
         var info = Sign(zip, rsa, "2.2.0");
         using var http = new HttpClient(new BytesHandler(zip));
 
@@ -92,14 +92,14 @@ public sealed class SecureUpdatePackageServiceTests : IDisposable
     public async Task PerFileHashMismatchAndProtectedUserPathAreRejected()
     {
         using var rsa = RSA.Create(2048);
-        var badFileHash = CreatePackage("2.2.0", new Dictionary<string, string> { ["DwgTranslator.exe"] = "new-exe" }, corruptManifestHash: true);
+        var badFileHash = CreatePackage("2.2.0", new Dictionary<string, string> { ["QLCAD.exe"] = "new-exe" }, corruptManifestHash: true);
         var badFileInfo = Sign(badFileHash, rsa, "2.2.0");
         using var http1 = new HttpClient(new BytesHandler(badFileHash));
         await Assert.ThrowsAsync<CryptographicException>(() => new SecureUpdatePackageService(http1, rsa.ExportSubjectPublicKeyInfoPem()).DownloadAndStageAsync(badFileInfo, Path.Combine(_root, "file-hash")));
 
         var protectedPayload = CreatePackage("2.2.0", new Dictionary<string, string>
         {
-            ["DwgTranslator.exe"] = "new-exe",
+            ["QLCAD.exe"] = "new-exe",
             ["settings.json"] = "must-not-overwrite"
         });
         var protectedInfo = Sign(protectedPayload, rsa, "2.2.0");
@@ -141,11 +141,11 @@ public sealed class SecureUpdatePackageServiceTests : IDisposable
                 Sha256 = corruptManifestHash ? new string('0', 64) : Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant()
             };
         }).ToList();
-        var executable = records.Single(record => record.Path.Equals("DwgTranslator.exe", StringComparison.OrdinalIgnoreCase));
+        var executable = records.Single(record => record.Path.Equals("QLCAD.exe", StringComparison.OrdinalIgnoreCase));
         var manifest = JsonSerializer.Serialize(new UpdatePackageManifest
         {
             Version = version,
-            ExecutablePath = "DwgTranslator.exe",
+            ExecutablePath = "QLCAD.exe",
             ExecutableSha256 = executable.Sha256,
             Files = records,
             ObsoletePaths = new List<string> { "prompts/deepl_context.txt" }
