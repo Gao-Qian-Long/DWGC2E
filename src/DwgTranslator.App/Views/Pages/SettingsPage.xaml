@@ -31,7 +31,10 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ListBoxItem">
-                        <Border x:Name="Surface" Background="{DynamicResource Brush.Surface}" BorderBrush="{DynamicResource Brush.BorderLight}" BorderThickness="1" CornerRadius="{DynamicResource CornerRadius.Medium}" Padding="{TemplateBinding Padding}" SnapsToDevicePixels="True">
+                        <!-- 边框用 Border 而不是 BorderLight：六格高度本来就相等，但未选中格里那圈几乎
+                             看不见的浅边框会让它"只有文字那么高"，而选中格有琥珀描边显得更大。
+                             加深边框后六格在任何选中状态下视觉一致。 -->
+                        <Border x:Name="Surface" Background="{DynamicResource Brush.Surface}" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1" CornerRadius="{DynamicResource CornerRadius.Medium}" Padding="{TemplateBinding Padding}" SnapsToDevicePixels="True">
                             <!-- ClipToBounds=False + 固定行高：内容行盒若因字体变化略高于 20 DIP，
                                  也只会溢出显示而不会被切掉上缘（改前 MinHeight 语义下的宽容度得以保留）。 -->
                             <ContentPresenter VerticalAlignment="Center" />
@@ -117,8 +120,10 @@
             <!-- 左卡：分区导航。Padding 用 10 而非 Section.Surface 默认的 Spacing.Card(20)——
                  168 的列宽扣掉 20 内边距、再扣格子自身的边距与内边距后放不下最长的「CAD 与环境」。
                  整卡与右卡同源 Section.Surface，H 组柔化阴影后两卡自动一致。 -->
+            <!-- 左卡改为贴合内容而不是被右卡拉伸（2026-09-22 用户反馈「底下空一大块」）：
+                 六个导航格只有 300 DIP 高，Stretch 到分区内容高度会在卡底留下成片空白。 -->
             <Border x:Name="SettingsNavCard" Grid.Row="1" Grid.Column="0"
-                    Style="{StaticResource Section.Surface}" Padding="10" VerticalAlignment="Stretch">
+                    Style="{StaticResource Section.Surface}" Padding="10" VerticalAlignment="Top">
                 <!-- 竖排列表：去掉原先的 UniformGrid Rows=2 Columns=3 面板，回到 ListBox 默认纵向堆叠。
                      6 个固定项总高约 300 DIP，在全部受支持窗口高度下都放得下，故纵向滚动条保持 Disabled
                      （改 Auto 会在极端矮窗多出 10 DIP 滚动条、把最长标题挤成省略号）。 -->

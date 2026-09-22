@@ -569,6 +569,11 @@ public sealed partial class SmokeApp : App
                     Check(inCard.Left >= -0.5 && inCard.Top >= -0.5 && inCard.Right <= navCard.ActualWidth + 0.5 && inCard.Bottom <= navCard.ActualHeight + 0.5,
                         $"settings nav tile is not clipped by the card (tile={inCard}, card={navCard.ActualWidth:F1}x{navCard.ActualHeight:F1})");
                 }
+                // 六格必须严格等高：用户反复反馈"第 6 项比其他格高一点"。高度由 Height 与选中态样式
+                // 共同决定，任何一方回退都会在这里被拦下（"看起来不一样"另由边框色统一处理）。
+                var tileHeights = navTiles.Select(t => t.ActualHeight).ToArray();
+                Check(tileHeights.Max() - tileHeights.Min() < 0.5,
+                    "settings nav tiles share one height, actual=" + string.Join("/", tileHeights.Select(h => h.ToString("F1"))));
                 var sectionHost = (StackPanel)((Border)navSettingsPage.FindName("SettingsContent")).Child;
                 Check(sectionHost.Children.Count == 6, "settings right card hosts exactly six section panels, actual=" + sectionHost.Children.Count);
                 var navSaveBar = (FrameworkElement)navSettingsPage.FindName("SettingsSaveBar");

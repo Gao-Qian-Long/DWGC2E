@@ -8,6 +8,7 @@ using DwgTranslator.Core.Models;
 using DwgTranslator.Core.Infrastructure.Payments;
 using DwgTranslator.Core.Application.Payments;
 using QRCoder;
+using Serilog;
 namespace DwgTranslator.App.Views;
 public partial class BillingWindow : Window
 {
@@ -61,22 +62,39 @@ public partial class BillingWindow : Window
  /// </summary>
  private async void HideOrder_Click(object sender,RoutedEventArgs e)
  {
-  if(_busy||sender is not Button{Tag:string no})return;
+  // 自动刷新（_timer，每 3~30 秒一次）与"刷新订单与会员"都会占用 _busy。旧实现在这里直接
+  // return，于是只要恰好在刷新，点"删除"就毫无反应——正是"点了删除列表项没变"的来源。
+  // 先停掉自动刷新，等当前操作收尾（最多 3 秒）；确实拿不到就给出可见原因。
+  _timer.Stop();
+  var waited=0;
+  while(_busy&&waited<3000){await Task.Delay(100);waited+=100;}
+  if(_busy)
+  {
+   Message.Text="上一个操作仍在进行，请稍候再删除。";
+   if(Valid()&&IsActive)_timer.Start();
+   return;
+  }
+  if(sender is not Button button||button.Tag is not string no||string.IsNullOrEmpty(no))
+  {
+   Message.Text="无法确定要删除的订单编号，请点击“刷新订单与会员”后重试。";
+   Log.Warning("删除订单记录被跳过：按钮没有携带订单编号");
+   return;
+  }
   if(MessageBox.Show(this,
    $"仅从列表移除这笔记录，不会取消支付平台订单。\n\n订单号：{no}\n\n请确认不会再支付该订单的旧二维码。是否继续？",
    "删除订单记录",MessageBoxButton.YesNo,MessageBoxImage.Warning)!=MessageBoxResult.Yes)return;
   await Run(async()=>{
-   if(await _client.HideBillingOrderAsync(no,_life.Token)&&Valid())
+   var hidden=await _client.HideBillingOrderAsync(no,_life.Token);
+   if(!Valid())return;
+   if(!hidden)throw new BillingException("invalid_response","服务端未确认删除，请刷新订单列表后重试。");
+   if(_current?.OrderNo==no)
    {
-    if(_current?.OrderNo==no)
-    {
-     _current=null;++_selection;Qr.Source=null;Qr.Visibility=Visibility.Collapsed;
-     CurrentOrderCard.Visibility=Visibility.Collapsed;
-     OrderDetails.Text="";QrStatus.Text="尚未选择订单。可从历史订单查看付款状态。";
-    }
-    await LoadOrders(false);
-    Message.Text="已从列表移除该记录；平台订单未取消，请勿再支付旧二维码。";
+    _current=null;++_selection;Qr.Source=null;Qr.Visibility=Visibility.Collapsed;
+    CurrentOrderCard.Visibility=Visibility.Collapsed;
+    OrderDetails.Text="";QrStatus.Text="尚未选择订单。可从历史订单查看付款状态。";
    }
+   await LoadOrders(false);
+   Message.Text=$"已从列表移除 {no}；平台订单未取消，请勿再支付旧二维码。";
   });
  }
  private async Task LoadPlans(){
@@ -190,6 +208,9 @@ public partial class BillingWindow : Window
   OrderAmount.Text=$"¥{o.PayableCents/100m:0.00}";
   OrderDetails.Text=$"订单号：{o.OrderNo}";
   CopyOrderNo.Tag=o.OrderNo;
+  // 卡片内的删除入口与表格里的删除按钮同一判定：只有未付款记录可移除。
+  HideCurrentOrder.Tag=o.OrderNo;
+  HideCurrentOrder.Visibility=o.CanHide?Visibility.Visible:Visibility.Collapsed;
   if(o.Status=="paid"){
    QrStatus.Text="该订单已付款，无需再次扫码。";Message.Text="支付成功，正在同步会员。";
    _pending=_checkout!.ClearPaidIntent(_pending,o);
