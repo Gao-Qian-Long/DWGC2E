@@ -25,6 +25,9 @@ function configured(t){
  const x=setup(t);
  x.env.ADMIN_API_KEY=adminKey;
  x.env.AI_CONFIG_ENCRYPTION_KEY=masterKey;
+ // Provider egress is host-allowlisted; without this the built-in DeepSeek-only default would
+ // reject every *.example fixture used below.
+ x.env.AI_PROVIDER_HOST_ALLOWLIST='example';
  return x;
 }
 

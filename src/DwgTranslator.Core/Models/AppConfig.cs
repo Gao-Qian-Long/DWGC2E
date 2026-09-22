@@ -46,9 +46,10 @@ public class AppConfig
 
     /// <summary>
     /// Minimum log level for file and UI output. Values: Verbose, Debug, Information, Warning, Error, Fatal.
-    /// Default is "Debug" (all levels). Set to "Information" or "Warning" in production to reduce noise.
+    /// Default is "Information": Debug additionally records drawing text, and engineering drawings
+    /// usually belong to a customer, so the quieter default is the safe one.
     /// </summary>
-    public string MinimumLogLevel { get; set; } = "Debug";
+    public string MinimumLogLevel { get; set; } = "Information";
 
     /// <summary>AutoCAD installation directory (e.g. C:\Program Files\Autodesk\AutoCAD 2026). Used for COM detection.</summary>
     public string AutoCadInstallPath { get; set; } = string.Empty;
@@ -65,8 +66,10 @@ public class AppConfig
     private const string DpapiPrefix = "DPAPI:";
 
     /// <summary>
-    /// Decrypts a stored API key value. Handles both DPAPI-encrypted (prefixed with "DPAPI:")
-    /// and legacy plaintext storage. Returns empty string on decryption failure.
+    /// Decrypts a stored API key value. Only DPAPI-protected values (prefixed with "DPAPI:") are
+    /// accepted; an unprotected value is treated as unusable rather than returned as a credential,
+    /// so a settings file written by anything other than this app can never supply a live token.
+    /// Returns empty string when decryption fails.
     /// </summary>
     public static string DecryptApiKey(string storedKey)
     {
@@ -74,7 +77,7 @@ public class AppConfig
             return string.Empty;
 
         if (!storedKey.StartsWith(DpapiPrefix, StringComparison.Ordinal))
-            return storedKey; // Legacy plaintext — return as-is
+            return string.Empty;
 
         try
         {

@@ -10,7 +10,8 @@ public static class SiteAnnouncementClient
     {
         var address = ProductApiEndpoint.Migrate(baseUrl).Trim().TrimEnd('/');
         if (address.EndsWith("/v1", StringComparison.OrdinalIgnoreCase)) address = address[..^3];
-        if (!Uri.TryCreate(address + "/v1/site", UriKind.Absolute, out var endpoint)
+        if (!ProductApiEndpoint.IsAllowed(address)
+            || !Uri.TryCreate(address + "/v1/site", UriKind.Absolute, out var endpoint)
             || endpoint.Scheme is not ("http" or "https") || !string.IsNullOrEmpty(endpoint.UserInfo)
             || !string.IsNullOrEmpty(endpoint.Query) || !string.IsNullOrEmpty(endpoint.Fragment))
             throw new InvalidOperationException("公告服务地址无效。");

@@ -116,6 +116,8 @@ test('P2-4 provider secret names are restricted to the operator allowlist and ne
  x.db.prepare("INSERT INTO ai_providers(id,name,base_url,model,secret_name,enabled,weight,priority,timeout_ms,max_failures,cooldown_seconds,temperature,revision,created_at,updated_at) VALUES('exfil','Exfil','https://evil.example/v1','m','EZFPY_KEY',1,100,100,9000,3,60,0.1,1,?,?)").run(stamp,stamp);
  x.db.exec("UPDATE ai_providers SET enabled=0 WHERE secret_name='DEEPSEEK_API_KEY'");
  x.env.EZFPY_KEY='payment-signing-key';
+ // Allow the fixture host so the probe reaches the secret check it is actually asserting.
+ x.env.AI_PROVIDER_HOST_ALLOWLIST='evil.example';
  let calls=0;
  t.mock.method(globalThis,'fetch',async()=>{calls++;return Response.json({});});
  await assert.rejects(()=>routeCompletion(x.env,'secret-allowlist-probe',{}),/provider_key_missing/);
@@ -136,6 +138,9 @@ test('P2-4 provider endpoints reject hidden queries, IP literals and hosts outsi
  for(const value of ['https://api.example/v1?token=secret','https://1.2.3.4/v1','https://[2606:4700::1]/v1','https://evil.example/v1','http://api.deepseek.com'])
   assert.throws(()=>providerEndpoint(value,['api.deepseek.com']),/invalid_provider_url/,value);
  assert.throws(()=>providerEndpoint('https://api.deepseek.com/v1#fragment'),/invalid_provider_url/);
+ // An omitted allowlist must fall back to the built-in host, never to "any public HTTPS host".
+ assert.throws(()=>providerEndpoint('https://evil.example/v1'),/invalid_provider_url/);
+ assert.equal(providerEndpoint('https://api.deepseek.com/v1'),'https://api.deepseek.com/v1/chat/completions');
 });
 
 // P2-5: a challenge is bound to the client that requested it.

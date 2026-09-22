@@ -105,7 +105,14 @@ public sealed partial class WorkerApiClient : IApiClient, IAccountSessionClient,
         _deviceId = deviceId ?? string.Empty;
         _deviceName = deviceName ?? string.Empty;
 
-        if (_baseUri == null && _baseUrl.Length > 0)
+        // 令牌和全部译文都发往这个地址：非受信任的 HTTPS 地址（本机调试除外）一律视为未配置，
+        // 避免被改写过的 settings.json 把凭据与图纸内容导向任意服务器。
+        if (_baseUri != null && !ProductApiEndpoint.IsAllowed(_baseUrl))
+        {
+            Log.Warning("apiBaseUrl 不是受信任的 HTTPS 地址，Worker 客户端将视为未配置");
+            _baseUri = null;
+        }
+        else if (_baseUri == null && _baseUrl.Length > 0)
             Log.Warning("apiBaseUrl 不是可用的 http/https 绝对地址，Worker 客户端将视为未配置");
     }
 

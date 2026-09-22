@@ -98,9 +98,9 @@ public class TranslationConsistencyService : ITranslationConsistencyService
             if (!_cache.ContainsKey(normalized))
             {
                 _cache[normalized] = translatedText;
-                Log.Debug("Translation cached: '{Src}' -> '{Tgt}'",
-                    sourceText.Length > 40 ? sourceText[..40] + "..." : sourceText,
-                    translatedText.Length > 40 ? translatedText[..40] + "..." : translatedText);
+                // 图纸正文属于客户资料：日志只记规模，不记原文或译文内容。
+                Log.Debug("Translation cached: {Chars} chars, cache entries {Count}",
+                    sourceText.Length, _cache.Count);
             }
             else
             {

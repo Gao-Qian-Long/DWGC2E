@@ -150,7 +150,12 @@ public partial class MainViewModel
             committed = true;
             // The glossary service must see the new file before anyone translates with these terms.
             // Reload happens on a worker thread to avoid a UI-thread deadlock / long freeze on slow disks.
-            Task.Run(() => _glossaryService.LoadGlossaryAsync(path)).GetAwaiter().GetResult();
+            var reload = Task.Run(() => _glossaryService.LoadGlossaryAsync(path));
+            // 这条路径结构上无法 await（关闭窗口提示等），但仍不能让 UI 无限期冻结：
+            // 只等待完成句柄，失败时的异常仍由下面的统一处理给出原始信息。
+            if (!((IAsyncResult)reload).AsyncWaitHandle.WaitOne(TimeSpan.FromSeconds(30)))
+                throw new TimeoutException("术语表重新加载超时，请重试保存。");
+            reload.GetAwaiter().GetResult();
             return CompleteTermSave(entries);
         }
         catch (Exception ex) { return FailTermSave(committed, ex); }

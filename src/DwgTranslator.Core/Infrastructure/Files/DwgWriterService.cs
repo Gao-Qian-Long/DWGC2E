@@ -26,6 +26,16 @@ public class DwgWriterService : IDwgWriterService, IDxfWriterService
             return result;
         }
 
+        // 整图会被一次性载入内存：超大图纸在这里给出明确失败，而不是让进程被 OOM 终止。
+        const long MaxSourceBytes = 1_500_000_000;
+        var sourceLength = new FileInfo(sourceFilePath).Length;
+        if (sourceLength > MaxSourceBytes)
+        {
+            result.Errors.Add($"Source drawing is too large for offline writeback ({sourceLength / 1_048_576} MB)");
+            Log.Error("Source CAD file exceeds the writeback size limit: {Bytes} bytes", sourceLength);
+            return result;
+        }
+
         if (entities.Count == 0)
         {
             result.Errors.Add("No entities to write");

@@ -38,8 +38,8 @@ public class DeepSeekClient : IDeepSeekClient
         if (!response.IsSuccessStatusCode)
         {
             var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
-            // Log full error body only at Debug level (file-only, not user-facing)
-            Log.Debug("DeepSeek API error {StatusCode}: {Body}", (int)response.StatusCode, errorBody);
+            // 只记规模：错误响应体经常回显请求内容，也就等于回显了图纸文字。
+            Log.Debug("DeepSeek API error {StatusCode}: error body {Bytes} bytes", (int)response.StatusCode, errorBody.Length);
             // Sanitize: log status code at Warning level without leaking response internals
             Log.Warning("DeepSeek API error {StatusCode}", (int)response.StatusCode);
             throw new HttpRequestException(
@@ -53,7 +53,8 @@ public class DeepSeekClient : IDeepSeekClient
         if (string.IsNullOrEmpty(content))
             throw new InvalidOperationException("DeepSeek API returned empty response");
 
-        Log.Debug("DeepSeek response: {Content}", content.Length > 100 ? content[..100] + "..." : content);
+        // 译文属于图纸内容：只记规模，不记文本。
+        Log.Debug("DeepSeek response received: {Chars} chars", content.Length);
         return content;
     }
 

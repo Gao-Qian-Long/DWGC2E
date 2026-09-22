@@ -20,6 +20,7 @@ using DwgTranslator.Core.Api;
 using DwgTranslator.Core.Services;
 using DwgTranslator.Cad;
 using DwgTranslator.Core.Translation;
+using System.Collections.Concurrent;
 using System.Text.Json;
 using Exception = System.Exception;
 #if GSTARCAD
@@ -40,8 +41,41 @@ namespace DwgTranslator.Cad.Commands;
 public class DwgTranslatorCommands
 {
     private static AppConfig? _config;
-    private static readonly Dictionary<string, List<TextEntity>> _extractedEntitiesByDoc = new();
+    // 命令入口与文档销毁回调都会访问它：普通 Dictionary 在跨命令/跨回调写入时会损坏。
+    private static readonly ConcurrentDictionary<string, List<TextEntity>> _extractedEntitiesByDoc = new(StringComparer.OrdinalIgnoreCase);
     private static bool _documentCleanupHooked;
+    // 每次命令新建 HttpClient 会耗尽端口且永不刷新 DNS；共享一个带连接池的实例。
+    private static readonly HttpClient SharedHttp = new() { Timeout = TimeSpan.FromMinutes(10) };
+
+    /// <summary>
+    /// 在宿主命令线程上等待后台任务，但必须有上限：无上限的等待会让 CAD 一直停在命令里，
+    /// 用户既看不到进度也无法取消。超时后取消令牌并抛出可直接显示给用户的错误。
+    /// </summary>
+    private static T RunWithTimeout<T>(Func<CancellationToken, Task<T>> work, TimeSpan timeout, string operation)
+    {
+        using var cts = new CancellationTokenSource();
+        var task = Task.Run(() => work(cts.Token));
+        WaitOrThrow(task, cts, timeout, operation);
+        return task.GetAwaiter().GetResult();
+    }
+
+    /// <summary>Same ceiling for operations that return nothing.</summary>
+    private static void RunActionWithTimeout(Func<CancellationToken, Task> work, TimeSpan timeout, string operation)
+    {
+        using var cts = new CancellationTokenSource();
+        var task = Task.Run(() => work(cts.Token));
+        WaitOrThrow(task, cts, timeout, operation);
+        task.GetAwaiter().GetResult();
+    }
+
+    private static void WaitOrThrow(Task task, CancellationTokenSource cts, TimeSpan timeout, string operation)
+    {
+        if (task.Wait(timeout)) return;
+        cts.Cancel();
+        // 后台任务仍会结束，但结果已无人接收：观察异常，避免未处理异常在终结时抛出。
+        task.ContinueWith(t => { _ = t.Exception; }, TaskContinuationOptions.OnlyOnFaulted);
+        throw new TimeoutException($"{operation} 超过 {timeout.TotalMinutes:0.#} 分钟仍未完成，已停止等待。");
+    }
 
     /// <summary>
     /// Removes cached extraction results when a document closes so the static
@@ -66,7 +100,7 @@ public class DwgTranslatorCommands
                 foreach (var key in _extractedEntitiesByDoc.Keys.ToList())
                 {
                     if (!openKeys.Contains(key))
-                        _extractedEntitiesByDoc.Remove(key);
+                        _extractedEntitiesByDoc.TryRemove(key, out _);
                 }
             }
             catch (Exception ex)
@@ -118,8 +152,8 @@ public class DwgTranslatorCommands
                 $"translations_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx");
 
             var excelService = new ExcelService();
-            Task.Run(() => excelService.ExportToExcelAsync(extractedEntities, exportPath))
-                .GetAwaiter().GetResult();
+            RunActionWithTimeout(ct => excelService.ExportToExcelAsync(extractedEntities, exportPath, ct),
+                TimeSpan.FromMinutes(5), "导出 Excel");
 
             editor.WriteMessage($"\n[DwgTranslator] Extracted {extractedEntities.Count} text entities");
             editor.WriteMessage($"\n[DwgTranslator] Exported to: {exportPath}");
@@ -162,7 +196,8 @@ public class DwgTranslatorCommands
                 config.SourceLanguage, config.TargetLanguage);
             var glossaryPath = string.Equals(Path.GetFileName(config.GlossaryPath), expectedGlossary,
                 StringComparison.OrdinalIgnoreCase) ? config.GlossaryPath : string.Empty;
-            Task.Run(() => glossaryService.LoadGlossaryAsync(glossaryPath)).GetAwaiter().GetResult();
+            RunActionWithTimeout(_ => glossaryService.LoadGlossaryAsync(glossaryPath),
+                TimeSpan.FromMinutes(2), "加载术语表");
 
             var dataDirectory = ProductDataDirectory.Initialize(AppDomain.CurrentDomain.BaseDirectory);
             var encryptedToken = config.AuthTokenEncrypted;
@@ -170,7 +205,7 @@ public class DwgTranslatorCommands
                 throw new InvalidOperationException("请先在 DWGC2E 桌面端登录，再从 CAD 中执行翻译。");
 
             var deviceId = GetOrCreateDeviceId(dataDirectory);
-            using var httpClient = new HttpClient();
+            var httpClient = SharedHttp;
             var apiClient = new WorkerApiClient(
                 httpClient, config.ApiBaseUrl, config.UpdateManifestUrl,
                 () => AppConfig.DecryptApiKey(encryptedToken), deviceId, Environment.MachineName);
@@ -183,11 +218,13 @@ public class DwgTranslatorCommands
                 .Where(e => !e.IsXref)
                 .ToList();
 
-            // Network translation runs on the thread pool; the host UI thread only waits.
-            var results = Task.Run(() => translationService.TranslateBatchAsync(
+            // Network translation runs on the thread pool; the host UI thread only waits, with a
+            // ceiling and a cancellation token so the host is never stuck in the command forever.
+            var results = RunWithTimeout(ct => translationService.TranslateBatchAsync(
                 entitiesToTranslate,
                 config.SourceLanguage,
-                config.TargetLanguage)).GetAwaiter().GetResult();
+                config.TargetLanguage,
+                ct), TimeSpan.FromMinutes(30), "云端翻译");
 
             // Update entities with translations
             foreach (var result in results)
@@ -207,8 +244,8 @@ public class DwgTranslatorCommands
                 $"translations_{DateTime.Now:yyyyMMdd_HHmmss}_translated.xlsx");
 
             var excelService = new ExcelService();
-            Task.Run(() => excelService.ExportToExcelAsync(extractedEntities, exportPath))
-                .GetAwaiter().GetResult();
+            RunActionWithTimeout(ct => excelService.ExportToExcelAsync(extractedEntities, exportPath, ct),
+                TimeSpan.FromMinutes(5), "导出译文 Excel");
 
             var successCount = results.Count(r => r.Status == TranslationStatus.Translated);
             editor.WriteMessage($"\n[DwgTranslator] Translated {successCount}/{results.Count} entities");
@@ -253,8 +290,8 @@ public class DwgTranslatorCommands
 
             // Import reviewed translations (Excel I/O offloaded from the host UI thread)
             var excelService = new ExcelService();
-            var entities = Task.Run(() => excelService.ImportFromExcelAsync(filePath))
-                .GetAwaiter().GetResult();
+            var entities = RunWithTimeout(ct => excelService.ImportFromExcelAsync(filePath, ct),
+                TimeSpan.FromMinutes(5), "读取 Excel 译文");
 
             // Write back
             var replacer = new TextReplacer(targetIsCjk: TranslationLanguages.IsCjk(config.TargetLanguage));

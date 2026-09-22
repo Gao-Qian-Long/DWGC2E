@@ -13,7 +13,11 @@ export async function adminActor(r:Request,e:Env){
 export async function adminSessionAuthorized(r:Request,e:Env){
  if(validAdminKey(r,e))return true;
  if(!e.ADMIN_API_KEY||e.ADMIN_API_KEY.length<32)return false;
- if(!['GET','HEAD'].includes(r.method)&&!sameOrigin(r,e))return false;
+ // Writes must always prove their origin. Safe methods are routinely sent without an Origin header
+ // (navigation, no-cors GET), so an absent header is allowed there — but a present one must match,
+ // otherwise any cross-site page could read admin data with the victim's ambient cookie.
+ if(!['GET','HEAD'].includes(r.method)){ if(!sameOrigin(r,e))return false; }
+ else if(r.headers.get('origin')!==null&&!sameOrigin(r,e))return false;
  const value=token(r);if(!/^[a-f0-9]{64}$/.test(value))return false;
  const row=await e.DB.prepare('SELECT key_fingerprint FROM admin_sessions WHERE token_hash=? AND expires_at>?').bind(await digest(value),Math.floor(Date.now()/1000)).first<{key_fingerprint:string}>();
  return !!row&&row.key_fingerprint===await digest(e.ADMIN_API_KEY);

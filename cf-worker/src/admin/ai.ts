@@ -1,4 +1,4 @@
-import {allowedProviderSecrets,defaultPrompt,encryptProviderKey,probeProvider,providerEndpoint} from '../ai-router.ts';
+import {allowedProviderHosts,allowedProviderSecrets,defaultPrompt,encryptProviderKey,probeProvider,providerEndpoint} from '../ai-router.ts';
 import {adminRequestAuthorized,auditActor} from './session.ts';
 type Env={DB:D1Database;AI_CONFIG_ENCRYPTION_KEY?:string;ADMIN_API_KEY?:string;CORS_ORIGINS?:string;AI_PROVIDER_SECRET_ALLOWLIST?:string;AI_PROVIDER_HOST_ALLOWLIST?:string};
 type Row=Record<string,any>;
@@ -6,12 +6,14 @@ const reply=(value:unknown,status=200)=>new Response(JSON.stringify(value),{stat
 const read=async(r:Request)=>{try{return await r.json() as Row;}catch{throw new Error('invalid_json');}};
 const id=()=>crypto.randomUUID();
 const now=()=>new Date().toISOString();
-const validUrl=(value:unknown,e:Env)=>{if(typeof value!=='string'||value.length>2048)return false;try{providerEndpoint(value,(e.AI_PROVIDER_HOST_ALLOWLIST||'').split(',').map(x=>x.trim().toLowerCase()).filter(Boolean));return true;}catch{return false;}};
+// Saving must apply the same host allowlist as routing, otherwise an URL is accepted here and
+// only rejected later, at translation time, with no way for the operator to see why.
+const validUrl=(value:unknown,e:Env)=>{if(typeof value!=='string'||value.length>2048)return false;try{providerEndpoint(value,allowedProviderHosts(e));return true;}catch{return false;}};
 const providerView=(row:Row)=>({id:row.id,name:row.name,base_url:row.base_url,model:row.model,enabled:!!row.enabled,weight:row.weight,priority:row.priority,timeout_ms:row.timeout_ms,max_failures:row.max_failures,cooldown_seconds:row.cooldown_seconds,temperature:row.temperature,has_credential:!!(row.credential_ciphertext||row.secret_name),credential_source:row.secret_name?'worker_secret':row.credential_ciphertext?'encrypted_store':'missing',revision:row.revision,updated_at:row.updated_at,health:{consecutive_failures:Number(row.consecutive_failures||0),last_success_at:row.last_success_at||null,last_failure_at:row.last_failure_at||null,last_latency_ms:row.last_latency_ms??null,cooldown_until:row.cooldown_until||null,last_error_code:row.last_error_code||null}});
 function validate(d:Row,e:Env,updating=false){
  if(!d||typeof d!=='object'||Array.isArray(d))return '配置格式无效';
  if(!updating||Object.hasOwn(d,'name'))if(typeof d.name!=='string'||!d.name.trim()||d.name.trim().length>80)return '名称需为 1–80 个字符';
- if(!updating||Object.hasOwn(d,'base_url'))if(!validUrl(d.base_url,e))return 'API 地址必须是 HTTPS';
+ if(!updating||Object.hasOwn(d,'base_url'))if(!validUrl(d.base_url,e))return 'API 地址必须是 HTTPS，且主机需在允许列表内（AI_PROVIDER_HOST_ALLOWLIST）';
  if(!updating||Object.hasOwn(d,'model'))if(typeof d.model!=='string'||!d.model.trim()||d.model.length>200)return '模型名称无效';
  for(const [key,min,max] of [['weight',1,1000],['priority',1,1000],['timeout_ms',5000,120000],['max_failures',1,20],['cooldown_seconds',5,3600]] as const)
   if(Object.hasOwn(d,key)&&(!Number.isSafeInteger(d[key])||d[key]<min||d[key]>max))return `${key} 超出允许范围`;

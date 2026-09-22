@@ -19,6 +19,10 @@ const MIN_CHARGE_CENTS=100;
  *  confirm on a pending unpaid order re-issues a fresh QR and pushes the window forward,
  *  so expiry is a display boundary, never a dead end. */
 export const QR_DISPLAY_WINDOW_MS=30*60000;
+/** Re-issuing a lapsed QR keeps an order payable, but settlement still accepts late callbacks for
+ *  `expired` orders. Cap the re-issues so a pending order cannot be kept open indefinitely and
+ *  scanned long after the buyer was told to stop. */
+const QR_REISSUE_LIMIT=2;
 type CreateStage='prepare'|'request'|'read'|'parse'|'business'|'validate'|'persist'|'audit'|'query';
 type FieldSummary={type:string;present:boolean;length?:number};
 class CreateDiagnostic {
@@ -207,7 +211,8 @@ export async function billingRoute(r:Request,e:PaymentEnv,user:User,origin:strin
  // expires_at forward. Never a second order, never for blocked or non-pending orders,
  // and any provider failure keeps the original confirm reply intact.
  const blockedByMismatch=o.status!=='paid'&&(qrAmountMismatch(o.qr_code,o.payable_cents)||qrAmountMismatch(o.qr_image_url,o.payable_cents));
- if(o.status==='pending'&&!blockedByMismatch&&Date.parse(o.expires_at)<=Date.now()){
+ const reissued=await e.DB.prepare("SELECT COUNT(*) n FROM payment_events WHERE order_no=? AND event_type='payment_qr_reissued'").bind(no).first<{n:number}>();
+ if(o.status==='pending'&&!blockedByMismatch&&Date.parse(o.expires_at)<=Date.now()&&Number(reissued?.n||0)<QR_REISSUE_LIMIT){
   const diagnostic=new CreateDiagnostic();
   try{
    configured(e);

@@ -10,13 +10,26 @@ export type AiEnv = {
 // stored secret_name was a free-form env lookup, so a stolen administrator session could point a
 // provider at an attacker host and have EZFPY_KEY or ADMIN_API_KEY mailed to it as a Bearer token.
 const BUILTIN_PROVIDER_SECRETS = ["DEEPSEEK_API_KEY"];
+// Mirror of the secret allowlist for egress hosts. An unset allowlist must never mean "any public
+// HTTPS host", otherwise a stolen administrator session can point a provider at an attacker host
+// and get a call signed with an allowlisted secret.
+const BUILTIN_PROVIDER_HOSTS = ["api.deepseek.com"];
+// Never reachable as a provider credential, even if an operator names it: these keys sign
+// payments, sessions and passwords, so a single misconfiguration would leak them upstream.
+const FORBIDDEN_PROVIDER_SECRETS = new Set([
+  "EZFPY_KEY","EZFPY_PID","ADMIN_API_KEY","PASSWORD_PEPPER","JWT_SECRET","AI_CONFIG_ENCRYPTION_KEY","WEB_PROXY_IDENTITY_KEY","RESEND_API_KEY","BREVO_API_KEY"
+]);
 export function allowedProviderSecrets(env: { AI_PROVIDER_SECRET_ALLOWLIST?: string }) {
   const configured = (env.AI_PROVIDER_SECRET_ALLOWLIST || "").split(",").map(value => value.trim()).filter(Boolean);
-  return new Set(configured.length ? configured : BUILTIN_PROVIDER_SECRETS);
+  const base = configured.length ? configured : BUILTIN_PROVIDER_SECRETS;
+  return new Set(base.filter(name => !FORBIDDEN_PROVIDER_SECRETS.has(name)));
 }
 
-function allowedProviderHosts(env: AiEnv) {
-  return (env.AI_PROVIDER_HOST_ALLOWLIST || "").split(",").map(value => value.trim().toLowerCase()).filter(Boolean);
+export function allowedProviderHosts(env: { AI_PROVIDER_HOST_ALLOWLIST?: string }) {
+  const configured = (env.AI_PROVIDER_HOST_ALLOWLIST || "").split(",").map(value => value.trim().toLowerCase()).filter(Boolean);
+  // Empty configuration falls back to the built-in host instead of disabling the check. Adding a
+  // provider on another host requires the operator to name it in AI_PROVIDER_HOST_ALLOWLIST.
+  return configured.length ? configured : BUILTIN_PROVIDER_HOSTS;
 }
 
 type Row = Record<string, any>;
@@ -94,7 +107,9 @@ function ipLiteral(hostname: string) {
   return /^\d{1,3}(?:\.\d{1,3}){3}$/.test(hostname) || hostname.includes(":");
 }
 
-export function providerEndpoint(baseUrl: string, allowedHosts: string[] = []) {
+// The default is the built-in host list, not "allow everything": a caller that forgets to pass the
+// allowlist still cannot reach an arbitrary public host.
+export function providerEndpoint(baseUrl: string, allowedHosts: string[] = BUILTIN_PROVIDER_HOSTS) {
   const url = new URL(baseUrl);
   const hostname = url.hostname.toLowerCase();
   // A query string or fragment must be rejected rather than silently stripped: the administrator

@@ -813,10 +813,14 @@ public sealed class TaskManager : ITaskManager, ITaskRecoveryDiagnostics, IRunti
             {
                 if (task.CheckpointSignature != signature) task.SuccessfulTranslations = new();
                 task.CheckpointSignature = signature;
+                // 断点续译可能带回上万条已完成条目：逐条线性查找会让这一步退化成 O(n²)，
+                // 先按 (Handle, 原文) 建索引再匹配实体。
+                var savedByKey = task.SuccessfulTranslations
+                    .GroupBy(p => (p.Handle, p.SourceText))
+                    .ToDictionary(g => g.Key, g => g.First());
                 foreach (var entity in entities)
                 {
-                    var saved = task.SuccessfulTranslations.FirstOrDefault(p => p.Handle == entity.Handle && p.SourceText == entity.PlainText);
-                    if (saved == null) continue;
+                    if (!savedByKey.TryGetValue((entity.Handle, entity.PlainText), out var saved)) continue;
                     entity.TranslatedText = saved.TranslatedText;
                     entity.Status = saved.Status;
                     task.TranslatedCount++;

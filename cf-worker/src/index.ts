@@ -30,6 +30,8 @@ interface Env extends PaymentEnv {
   DEFAULT_PLAN?: string;
   MAX_TRANSLATE_ITEMS?: string;
   MAX_TEXT_LENGTH?: string;
+  TRANSLATE_RATE_REQUESTS?: string;
+  TRANSLATE_RATE_CHARS?: string;
   SESSION_TTL_DAYS?: string;
   MAIL_PROVIDER?: string;
   MAIL_FALLBACK_ENABLED?: string;
@@ -70,9 +72,11 @@ async function digest(s: string) {
     .map((x) => x.toString(16).padStart(2, "0"))
     .join("");
 }
-// TODO(v1-salt-migration): the "dwgc2e-password-v1" fallback uses a fixed salt, so identical
-// passwords share a digest. Rehashing to v2 needs a login-time migration policy (out of scope
-// here); do not remove the fallback until every stored hash has been migrated.
+// The legacy "dwgc2e-password-v1" fallback uses a fixed salt, so identical passwords produced a
+// shared digest. Every successful login rewrites the hash with a per-account random salt (see the
+// upgrade below); the fallback therefore only survives for accounts that have not logged in since
+// per-account salts were introduced. Watch the 'password_hash_migrated_v2' log to know when it
+// can be removed — do not remove it while that counter is still moving.
 async function pass(p: string, pepper: string, salt = random()) {
   const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(p + "\\0" + pepper), "PBKDF2", false, ["deriveBits"]);
   const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", salt: new TextEncoder().encode(salt), iterations: 100000, hash: "SHA-256" }, key, 256);
@@ -95,6 +99,23 @@ async function takeLimit(e: Env, key: string, seconds: number, max: number) {
   const timestamp = Math.floor(Date.now()/1000);
   const row = await e.DB.prepare("INSERT INTO request_limits(key,window_start,count) VALUES(?,?,1) ON CONFLICT(key) DO UPDATE SET window_start=CASE WHEN window_start<=?-? THEN ? ELSE window_start END,count=CASE WHEN window_start<=?-? THEN 1 ELSE count+1 END RETURNING count")
     .bind(key,timestamp,timestamp,seconds,timestamp,timestamp,seconds).first<J>();
+  return Number(row?.count || 0) <= max;
+}
+const LOGIN_FAIL_LIMIT = 10;
+const LOGIN_LOCKOUT_SECONDS = 900;
+/** Failed-login run for one account. Read-only: the lockout check must not itself increment. */
+async function loginFailures(e: Env, accountKey: string) {
+  const row = await e.DB.prepare("SELECT count,window_start FROM request_limits WHERE key=?")
+    .bind("login-fail:" + accountKey).first<{count:number;window_start:number}>();
+  if (!row) return 0;
+  const seconds = Math.floor(Date.now()/1000);
+  return seconds - Number(row.window_start || 0) >= LOGIN_LOCKOUT_SECONDS ? 0 : Number(row.count || 0);
+}
+/** Counter window that charges `amount` units instead of one, for character budgets. */
+async function takeAmount(e: Env, key: string, seconds: number, max: number, amount: number) {
+  const timestamp = Math.floor(Date.now()/1000);
+  const row = await e.DB.prepare("INSERT INTO request_limits(key,window_start,count) VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET window_start=CASE WHEN window_start<=?-? THEN ? ELSE window_start END,count=CASE WHEN window_start<=?-? THEN ? ELSE count+? END RETURNING count")
+    .bind(key,timestamp,amount,timestamp,seconds,timestamp,timestamp,seconds,amount,amount).first<J>();
   return Number(row?.count || 0) <= max;
 }
 
@@ -403,7 +424,12 @@ async function login(r: Request, e: Env, kind: 'web' | 'app' = 'app') {
       cors(e),
     );
   const account = normalizeAccount(b.account);
-  if (!(await takeLimit(e, "login-account:" + await digest(account), 600, 20)) ||
+  const accountKey = await digest(account);
+  // Rate limiting alone only slows guessing down; a run of failures must also close the account
+  // for a while, otherwise a slow attacker gets unlimited attempts across windows.
+  if (await loginFailures(e, accountKey) >= LOGIN_FAIL_LIMIT)
+    return json({ success:false,error_code:"account_locked",message:`登录失败次数过多，请 ${Math.round(LOGIN_LOCKOUT_SECONDS/60)} 分钟后重试` },429,cors(e));
+  if (!(await takeLimit(e, "login-account:" + accountKey, 600, 20)) ||
       !(await takeLimit(e, "login-ip:" + await digest(await clientAddress(r,e)), 600, 100)))
     return json({ success:false,error_code:"rate_limited",message:"登录尝试过于频繁" },429,cors(e));
   const u = await e.DB.prepare("SELECT * FROM users WHERE account=?")
@@ -412,7 +438,8 @@ async function login(r: Request, e: Env, kind: 'web' | 'app' = 'app') {
   if (
     !u || !u.is_active ||
     !(await passwordMatches(String(b.password), e.PASSWORD_PEPPER, u.password_hash))
-  )
+  ) {
+    await takeLimit(e, "login-fail:" + accountKey, LOGIN_LOCKOUT_SECONDS, LOGIN_FAIL_LIMIT);
     return json(
       {
         success: false,
@@ -422,11 +449,16 @@ async function login(r: Request, e: Env, kind: 'web' | 'app' = 'app') {
       401,
       cors(e),
     );
+  }
+  // A correct password clears the failure run, so the lockout never punishes a successful login.
+  await e.DB.prepare("DELETE FROM request_limits WHERE key=?").bind("login-fail:" + accountKey).run();
   if (!u.password_hash.startsWith("v2:")) {
     const upgraded = await pass(String(b.password), e.PASSWORD_PEPPER);
     const result = await e.DB.prepare("UPDATE users SET password_hash=? WHERE id=? AND password_hash=?").bind(upgraded,u.id,u.password_hash).run();
     if (!result.meta.changes) return json({error_code:'invalid_credentials',message:'凭证已变更，请重新登录'},401,cors(e));
     u.password_hash = upgraded;
+    // Identity-free counter: the only way to know when the fixed-salt fallback is dead.
+    console.log(JSON.stringify({event:'password_hash_migrated_v2'}));
   }
   const device = String(b.device_id || '').trim();
   if (kind === 'app' && (!device || device.length > 128 || device.startsWith('web-')))
@@ -486,6 +518,15 @@ async function translate(r: Request, e: Env, user: J) {
     if (!billing || billing.mode !== mode) return json({error_code:'billing_mode_conflict',message:'同一任务不能更改计费模式，请保留原模式重试'},409,cors(e));
     percent = billing.percent;
   }
+  // L9: translation was the only metered write without a rate limit, so one stolen session could
+  // burn the whole monthly quota — and real upstream spend — within minutes. Two buckets: a
+  // request count and a per-minute character budget sized for one full batch plus headroom.
+  const rateRequests = Number.isFinite(Number(e.TRANSLATE_RATE_REQUESTS)) && Number(e.TRANSLATE_RATE_REQUESTS) > 0 ? Number(e.TRANSLATE_RATE_REQUESTS) : 30;
+  const rateChars = Number.isFinite(Number(e.TRANSLATE_RATE_CHARS)) && Number(e.TRANSLATE_RATE_CHARS) > 0 ? Number(e.TRANSLATE_RATE_CHARS) : 120000;
+  const rateLimited = (message: string) => new Response(JSON.stringify({success:false,error_code:"rate_limited",message}),{status:429,headers:{"content-type":"application/json; charset=utf-8","access-control-allow-origin":cors(e),"retry-after":"60","cache-control":"no-store"}});
+  if (!await takeLimit(e, `translate:${user.user_id}`, 60, rateRequests)) return rateLimited("翻译请求过于频繁，请稍后重试");
+  const budgetChars = clean.reduce((sum:any,x:any)=>sum + x.text.length + x.context.length,0);
+  if (!await takeAmount(e, `translate-chars:${user.user_id}:${Math.floor(timestamp/60)}`, 120, rateChars, Math.max(1,budgetChars))) return rateLimited("本分钟翻译字数已达上限，请稍后重试");
   const quotaValue = await effectiveQuota(e,user.user_id);
   await e.DB.prepare("INSERT INTO usage_monthly(user_id,year_month,chars_used,chars_quota,task_count) VALUES(?,?,0,?,0) ON CONFLICT(user_id,year_month) DO UPDATE SET chars_quota=excluded.chars_quota").bind(user.user_id,ym,quotaValue).run();
   const chars=clean.reduce((n,x)=>n+x.text.length,0);
@@ -569,7 +610,9 @@ export default {
       throw new Error('payment_recovery_failed');
     }));
     // A cleanup failure must never disturb payment recovery, hence the swallow-and-log.
-    if (Math.random() < 0.1) {
+    // Deterministic every fifth minute: a random sample could skip many consecutive runs and let
+    // the rate-limit table grow without bound.
+    if (Math.floor(Date.now() / 60000) % 5 === 0) {
       try { await runRetentionCleanup(e); }
       catch { console.error(JSON.stringify({event:'retention_cleanup_failed',runId})); }
     }
@@ -618,6 +661,9 @@ async function route(r: Request,e: Env) {
       if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)||!['register','password_reset'].includes(purpose))return json({message:'请先填写有效邮箱'},400,origin);
       const address=await clientAddress(r,e);
       if(!await takeLimit(e,'captcha:'+await digest(address),60,15))return json({message:'刷新过于频繁，请稍后再试'},429,origin);
+      // The per-address window above still lets one mailbox be refreshed indefinitely from many
+      // addresses; a challenge is single-use, so issuing is the actual brute-force budget.
+      if(!await takeLimit(e,'captcha-mail:'+await digest(email+'|'+purpose),600,20))return json({message:'该邮箱获取验证码过于频繁，请稍后再试'},429,origin);
       return json(await issueCaptcha(e,email,purpose,address),200,origin);
     }
     if (p === "/v1/auth/register/request-code" && r.method === "POST")
