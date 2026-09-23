@@ -152,8 +152,9 @@
                                   SelectedItem="{Binding SelectedTranslationProject}" DisplayMemberPath="DisplayLabel"
                                   AutomationProperties.Name="历史翻译项目" Margin="{DynamicResource Spacing.Inline}"
                                   ToolTip="历史翻译项目：名称 · 图纸张数 · 最后修改时间；选中后点「打开项目」即可改校对并重新导出" />
-                        <Button Grid.Column="3" Content="打开项目" Command="{Binding OpenTranslationProjectCommand}"
-                                CommandParameter="{Binding SelectedTranslationProject}" Style="{StaticResource Button.Secondary}" />
+                        <TextBlock Grid.Column="3" Text="选择后自动打开"
+                                   Style="{StaticResource CaptionStyle}" VerticalAlignment="Center"
+                                   Margin="{DynamicResource Spacing.Inline}" />
                         <!-- 竖线把「选历史项目」（左）与「改当前项目名」（右）分成两组，
                              用户批注 2026-09-23：「这里筛选的逻辑有点混乱啊」。 -->
                         <Border Grid.Column="5" BorderBrush="{DynamicResource Brush.BorderLight}" BorderThickness="1,0,0,0"
@@ -607,10 +608,6 @@
                                     Style="{StaticResource Button.Primary}" Margin="{DynamicResource Spacing.4}"
                                     AutomationProperties.Name="重新导出"
                                     ToolTip="用最新校对结果覆盖导出该图纸" />
-                            <Button Content="打开输出文件" Command="{Binding OpenDrawingOutputCommand}"
-                                    CommandParameter="{Binding SelectedBatchTask}"
-                                    Visibility="{Binding SelectedBatchTask.HasOutput, Converter={StaticResource BoolToVis}}"
-                                    Style="{StaticResource Button.Primary}" Margin="{DynamicResource Spacing.4}" />
                             <Button Content="打开输出文件" Command="{Binding OpenDrawingOutputCommand}"
                                     CommandParameter="{Binding SelectedBatchTask}"
                                     Visibility="{Binding SelectedBatchTask.HasOutput, Converter={StaticResource BoolToVis}}"
