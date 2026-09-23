@@ -12,7 +12,7 @@ public partial class MainViewModel
     [ObservableProperty] private string _batchReplacementText = string.Empty;
     [ObservableProperty] private int _proofreadingScope; // 0 当前图纸，1 所选图纸，2 全项目
     [ObservableProperty] private int _batchReplaceMatchCount;
-    private List<(TextEntity Entity, string Text, TranslationStatus Status)>? _lastBulkEdit;
+    private List<(TextEntity Entity, string Text, TranslationStatus Status, bool GlossaryHit, bool WasTrackedBefore)>? _lastBulkEdit;
     public bool CanUndoBulkEdit => _lastBulkEdit?.Count > 0;
 
     private IEnumerable<TextEntity> ProofreadingScopeEntities()
@@ -51,7 +51,7 @@ public partial class MainViewModel
             "批量替换预览", MessageBoxButton.OKCancel, MessageBoxImage.Question);
         if (answer != MessageBoxResult.OK) return;
         var targets = ProofreadingScopeEntities().Where(e => (e.TranslatedText ?? string.Empty).Contains(BatchFindText, StringComparison.OrdinalIgnoreCase)).ToArray();
-        _lastBulkEdit = targets.Select(e => (e, e.TranslatedText ?? string.Empty, e.Status)).ToList();
+        _lastBulkEdit = targets.Select(e => (e, e.TranslatedText ?? string.Empty, e.Status, e.GlossaryHit, _proofreadingOriginals.ContainsKey(e))).ToList();
         foreach (var entity in targets)
         {
             TrackProofreadingEdit(entity);
@@ -66,8 +66,19 @@ public partial class MainViewModel
     private void UndoBulkEdit()
     {
         if (_lastBulkEdit == null) return;
-        foreach (var item in _lastBulkEdit) { item.Entity.TranslatedText = item.Text; item.Entity.Status = item.Status; }
-        var count = _lastBulkEdit.Count; _lastBulkEdit = null; OnPropertyChanged(nameof(CanUndoBulkEdit));
+        foreach (var item in _lastBulkEdit)
+        {
+            item.Entity.TranslatedText = item.Text;
+            item.Entity.Status = item.Status;
+            item.Entity.GlossaryHit = item.GlossaryHit;
+            // 这次批量操作才首次建立的“未保存校对”快照，在完整撤销后也必须移除；
+            // 如果操作前本来就有人工编辑，则保留原快照，离开页面时仍应提示保存。
+            if (!item.WasTrackedBefore) _proofreadingOriginals.Remove(item.Entity);
+        }
+        _proofreadingWorkspaceVersion++;
+        var count = _lastBulkEdit.Count; _lastBulkEdit = null;
+        OnPropertyChanged(nameof(CanUndoBulkEdit));
+        OnPropertyChanged(nameof(HasUnsavedProofreading));
         ApplyFilter(); UpdateStatistics(); ScheduleProjectAutosave(); StatusMessage = $"已撤销最近一次批量操作（{count} 条）。";
     }
 
@@ -90,7 +101,7 @@ public partial class MainViewModel
         }
         var preview = string.Join("\n", changes.Take(5).Select(c => $"{c.Entity.TranslatedText} → {c.NewText}"));
         if (Views.PromptDialog.Show($"术语预览：命中 {sourceHits} 个术语，可安全修改 {changes.Count} 条译文。无法安全映射的句子不会被修改。\n\n{preview}", "应用术语到当前项目", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
-        _lastBulkEdit = changes.Select(c => (c.Entity, c.Entity.TranslatedText ?? string.Empty, c.Entity.Status)).ToList();
+        _lastBulkEdit = changes.Select(c => (c.Entity, c.Entity.TranslatedText ?? string.Empty, c.Entity.Status, c.Entity.GlossaryHit, _proofreadingOriginals.ContainsKey(c.Entity))).ToList();
         foreach (var change in changes) { TrackProofreadingEdit(change.Entity); change.Entity.TranslatedText = change.NewText; change.Entity.Status = TranslationStatus.Reviewed; change.Entity.GlossaryHit = true; }
         OnPropertyChanged(nameof(CanUndoBulkEdit)); ApplyFilter(); UpdateStatistics(); ScheduleProjectAutosave();
     }
