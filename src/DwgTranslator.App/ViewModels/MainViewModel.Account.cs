@@ -476,6 +476,7 @@ public partial class MainViewModel
         _taskManager.SwitchAccountStore(
             new DwgTranslator.Core.Tasks.JsonTaskStore(Path.Combine(destination, "tasks.json")),
             () => SaveAccountSession(token, accountId));
+        ClearActiveTranslationProjectContext();
         RefreshTaskRecoveryNotice();
         if (_consistencyService is DwgTranslator.Core.Translation.TranslationConsistencyService cache)
             cache.SwitchAccountFile(Path.Combine(AccountDataDirectory, "translation_cache.json"));
