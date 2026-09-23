@@ -386,7 +386,18 @@ public partial class MainViewModel
     [RelayCommand]
     private async Task LogoutAccountAsync()
     {
-        if (IsLoggingIn || IsAccountRefreshing) return;
+        if (IsLoggingIn)
+        {
+            AccountFeedback = "账户正在切换，请稍候。";
+            ToastService.Info(AccountFeedback);
+            return;
+        }
+        if (IsAccountRefreshing)
+        {
+            AccountFeedback = "正在同步账户信息，请完成后再退出登录。";
+            ToastService.Info(AccountFeedback);
+            return;
+        }
         if (IsExporting || IsGlossaryLoading || IsProcessing)
         {
             AccountFeedback = "当前有任务或数据操作正在进行，请完成后再退出登录。";
