@@ -334,6 +334,12 @@ public sealed partial class SmokeApp : App
         // 注意表头「导出」是 DataGridColumnHeader 的 Content 而不是 Button，不会被下面的筛选命中。
         translate.UpdateLayout();
         var queueGrid=(System.Windows.Controls.DataGrid)translate.FindName("DrawingQueue");
+        Check(queueGrid.SelectionMode == DataGridSelectionMode.Single,
+            "translate queue uses one contextual row selection; export batching stays on checkboxes");
+        queueGrid.SelectedItem = vm.DrawingFiles[1];
+        await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+        Check(ReferenceEquals(vm.SelectedDrawingFile, vm.DrawingFiles[1]),
+            "translate queue selection stays synchronized with SelectedDrawingFile");
         var inRowExports=FindVisuals<System.Windows.Controls.Button>(queueGrid)
             .Where(b=>b.IsVisible&&Equals(b.Content,"导出")).ToArray();
         // 校对降级为可选后（2026-09-22 用户批注「校对不是必须的」），未校对（ReadyForReview）
