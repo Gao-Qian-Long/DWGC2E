@@ -493,7 +493,7 @@
                                         HorizontalAlignment="Center" VerticalAlignment="Center"
                                         Background="{DynamicResource Brush.SurfaceSubtle}">
                                     <TextBlock x:Name="StatusBadgeText" Text="{Binding StatusText}"
-                                               FontSize="{DynamicResource FontSize.Caption}"
+                                               FontSize="{DynamicResource FontSize.Kicker}"
                                                Foreground="{DynamicResource Brush.TextMuted}" />
                                 </Border>
                                 <DataTemplate.Triggers>
