@@ -313,6 +313,14 @@ public sealed partial class SmokeApp
                                 "batch rows distinguish export-ready and exported states " + size);
                             Check(!failed.CanOpenProofreading && failed.CanRetry && !failed.CanExport,
                                 "failed task only exposes retry semantics " + size);
+                            // 「清空已结束任务」的**回收范围**（用户批注 2026-09-23：「为什么不能删除任务」）。
+                            // 这里只断言"谁会/不会被打上清理标记"——不执行删除，因为删行会让本段后续断言
+                            // （抽屉、筛选）失去夹具；真正的移除机制复用已被覆盖的 RemoveDrawing 路径。
+                            Check(exported.IsCleanupFinished && failed.IsCleanupFinished
+                                    && !review.IsCleanupFinished && !completed.IsCleanupFinished,
+                                "clear-finished targets only exported and failed rows " + size);
+                            Check(vm.CanClearFinishedBatchTasks,
+                                "clear-finished is offered while finished rows exist " + size);
                             // 校对可选（2026-09-22）：未校对的行既能校对也能直接导出，但同样不能重试。
                             Check(review.CanOpenProofreading && !review.CanRetry && review.CanExport,
                                 "unproofread task can be proofread and exported directly " + size);

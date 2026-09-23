@@ -215,9 +215,49 @@ public partial class MainViewModel
         VisibleCount = FilteredEntities.Count;
     }
 
+    /// <summary>
+    /// 校对视图顶部的分类摘要（用户批注 2026-09-23：「把没有翻译的，还有替换了的，标记一下，让用户知道」）。
+    /// 直接读 Entities，不新增计数字段；由 <see cref="UpdateStatistics"/> 统一触发重算。
+    /// 「未翻译」= Skipped（源图里无文字、或排版阶段被跳过的条目）；「术语命中」= 译文由术语库直接替换而来。
+    /// </summary>
+    public bool HasEntityCategorySummary => Entities.Count > 0;
+
+    public string EntityCategorySummary
+    {
+        get
+        {
+            if (Entities.Count == 0) return string.Empty;
+            var skipped = Entities.Count(e => e.Status == TranslationStatus.Skipped);
+            var glossary = Entities.Count(e => e.Status == TranslationStatus.GlossaryMatched);
+            var pending = Entities.Count(e => e.Status == TranslationStatus.Pending);
+            var failed = Entities.Count(e => e.Status == TranslationStatus.TranslationFailed);
+            return $"本张 {Entities.Count} 条 · 未翻译 {skipped} · 术语命中 {glossary} · 待翻译 {pending} · 失败 {failed}";
+        }
+    }
+
+    /// <summary>
+    /// 点摘要里的分类直接过滤。复用既有的 FilterStatusText 通道（过滤键取自 Strings），
+    /// 不新增过滤机制；传 "all" 回到全部。
+    /// </summary>
+    [RelayCommand]
+    private void ApplyEntityFilter(string? category)
+    {
+        FilterStatusText = (category ?? "all") switch
+        {
+            "skipped" => Strings.Get("FilterSkipped"),
+            "glossary" => Strings.Get("FilterGlossaryHit"),
+            "pending" => Strings.Get("FilterPending"),
+            "failed" => Strings.Get("FilterFailed"),
+            _ => Strings.Get("FilterAll")
+        };
+    }
+
     private void UpdateStatistics()
     {
         TotalCount = Entities.Count;
+        // 摘要跟着实体变化一起重算（导出/翻译/校对都会走到这里）。
+        OnPropertyChanged(nameof(HasEntityCategorySummary));
+        OnPropertyChanged(nameof(EntityCategorySummary));
         TranslatedCount = Entities.Count(e => e.Status == TranslationStatus.Translated ||
                                                 e.Status == TranslationStatus.Reviewed ||
                                                 e.Status == TranslationStatus.WritebackSuccess);

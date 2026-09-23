@@ -423,7 +423,28 @@
                     <Button Grid.Column="5" Content="导出图纸" Command="{Binding ExportDwgCommand}" Style="{StaticResource Button.Primary}"
                             MinWidth="136" IsEnabled="{Binding CanExportWorkspace}" ToolTip="导出当前队列的已勾选图纸；不需要先校对" />
                 </Grid>
-                <TextBlock Grid.Row="1" Text="Enter 确认单元格，Esc 取消；完成后保存更改。" Style="{StaticResource CaptionStyle}" Margin="{DynamicResource Spacing.BlockTop}" />
+                <Grid Grid.Row="1" Margin="{DynamicResource Spacing.BlockTop}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="Enter 确认单元格，Esc 取消；完成后保存更改。" Style="{StaticResource CaptionStyle}"
+                               VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                    <!-- 分类摘要 + 点一下即筛选（用户批注 2026-09-23：「把没有翻译的，还有替换了的，标记一下，
+                         让用户知道」）。计数直接读 Entities；筛选复用既有的 FilterStatusText 通道，
+                         所以这里只按钮不改过滤机制。 -->
+                    <StackPanel Grid.Column="1" Orientation="Horizontal"
+                                Visibility="{Binding HasEntityCategorySummary, Converter={StaticResource BoolToVis}}">
+                        <TextBlock Text="{Binding EntityCategorySummary}" Style="{StaticResource CaptionStyle}"
+                                   VerticalAlignment="Center" Margin="{DynamicResource Spacing.Inline}"
+                                   AutomationProperties.Name="实体分类摘要" />
+                        <Button Content="全部" Command="{Binding ApplyEntityFilterCommand}" CommandParameter="all" Style="{StaticResource Button.Tertiary}" Margin="{DynamicResource Spacing.Inline}" />
+                        <Button Content="未翻译" Command="{Binding ApplyEntityFilterCommand}" CommandParameter="skipped" Style="{StaticResource Button.Tertiary}" Margin="{DynamicResource Spacing.Inline}" />
+                        <Button Content="术语替换" Command="{Binding ApplyEntityFilterCommand}" CommandParameter="glossary" Style="{StaticResource Button.Tertiary}" Margin="{DynamicResource Spacing.Inline}" />
+                        <Button Content="待翻译" Command="{Binding ApplyEntityFilterCommand}" CommandParameter="pending" Style="{StaticResource Button.Tertiary}" Margin="{DynamicResource Spacing.Inline}" />
+                        <Button Content="失败" Command="{Binding ApplyEntityFilterCommand}" CommandParameter="failed" Style="{StaticResource Button.Tertiary}" />
+                    </StackPanel>
+                </Grid>
             </Grid>
             <Border Grid.Row="1" Background="{DynamicResource Brush.SurfaceSubtle}" Padding="10" Margin="{DynamicResource Spacing.Stack}" CornerRadius="6" VerticalAlignment="Top" Panel.ZIndex="2">                <Grid>
                     <Grid.RowDefinitions>
@@ -460,6 +481,37 @@
             <DataGrid Grid.Row="2" ToolTip="双击译文编辑；Enter 确认单元格，完成后保存更改。" ItemsSource="{Binding FilteredEntities}" AutoGenerateColumns="False" IsReadOnly="{Binding IsProcessing}" CellEditEnding="TranslationGrid_CellEditEnding" CanUserAddRows="False" BorderThickness="0" MinRowHeight="{DynamicResource Size.TableRow}" ColumnHeaderStyle="{StaticResource DataGridHeaderStyle}" CellStyle="{StaticResource DataGridCellStyle}" EnableRowVirtualization="True" EnableColumnVirtualization="True" VirtualizingPanel.VirtualizationMode="Recycling" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.CanContentScroll="True">
                 <DataGrid.Columns>
                     <DataGridTextColumn Header="句柄" ElementStyle="{StaticResource CenteredCellStyle}" IsReadOnly="True" Binding="{Binding Handle}" Width="90" />
+                    <!-- 用户批注（2026-09-23）：「把没有翻译的，还有替换了的，标记一下，让用户知道」——
+                         原来这张表只有 句柄/原文/译文，状态压根没显示，用户看不出哪些条目没译、哪些是术语替换。
+                         这一列把状态显示出来，并给两类关键情况专门的措辞与配色：
+                           已跳过 → 显示「未翻译」（源图无文字或被排版阶段跳过）
+                           术语命中 → 显示「术语替换」+ 琥珀底（译文来自术语库，不是模型产出） -->
+                    <DataGridTemplateColumn Header="状态" Width="112" IsReadOnly="True" SortMemberPath="StatusText">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <Border x:Name="StatusBadge" CornerRadius="4" Padding="6,2"
+                                        HorizontalAlignment="Center" VerticalAlignment="Center"
+                                        Background="{DynamicResource Brush.SurfaceSubtle}">
+                                    <TextBlock x:Name="StatusBadgeText" Text="{Binding StatusText}"
+                                               FontSize="{DynamicResource FontSize.Caption}"
+                                               Foreground="{DynamicResource Brush.TextMuted}" />
+                                </Border>
+                                <DataTemplate.Triggers>
+                                    <DataTrigger Binding="{Binding Status}" Value="Skipped">
+                                        <Setter TargetName="StatusBadgeText" Property="Text" Value="未翻译" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding Status}" Value="GlossaryMatched">
+                                        <Setter TargetName="StatusBadgeText" Property="Text" Value="术语替换" />
+                                        <Setter TargetName="StatusBadge" Property="Background" Value="{DynamicResource Brush.WarningLight}" />
+                                        <Setter TargetName="StatusBadgeText" Property="Foreground" Value="{DynamicResource Brush.Warning}" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding Status}" Value="TranslationFailed">
+                                        <Setter TargetName="StatusBadgeText" Property="FontWeight" Value="SemiBold" />
+                                    </DataTrigger>
+                                </DataTemplate.Triggers>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
                     <DataGridTextColumn Header="原文" IsReadOnly="True" Binding="{Binding PlainText}" Width="1.15*" MinWidth="300" ElementStyle="{StaticResource WrapCellStyle}" />
                     <DataGridTextColumn Header="译文" Binding="{Binding TranslatedText, Mode=TwoWay, UpdateSourceTrigger=Explicit}" Width="1.35*" MinWidth="360" ElementStyle="{StaticResource WrapCellStyle}" />
                 </DataGrid.Columns>
@@ -520,6 +572,15 @@
                                     Style="{StaticResource Button.Secondary}" Margin="{DynamicResource Spacing.4}"
                                     AutomationProperties.Name="从列表移除"
                                     ToolTip="只从列表移除该任务；图纸文件与项目归档都会保留" />
+                            <!-- 用户批注（2026-09-23）：「能让用户找到历史翻译的文件，可以修改校对，然后重新导出！」
+                                 已导出的图纸 HasOutput=true → NeedsExport=false → 原来的「导出此图纸」不再出现，
+                                 改完校对就没有再导出的入口。这里补一个显式的「重新导出」（覆盖输出）。 -->
+                            <Button Content="重新导出" Command="{Binding ExportSelectedDrawingCommand}"
+                                    CommandParameter="{Binding SelectedBatchTask}"
+                                    Visibility="{Binding SelectedBatchTask.HasOutput, Converter={StaticResource BoolToVis}}"
+                                    Style="{StaticResource Button.Primary}" Margin="{DynamicResource Spacing.4}"
+                                    AutomationProperties.Name="重新导出"
+                                    ToolTip="用最新校对结果覆盖导出该图纸" />
                             <Button Content="打开输出文件" Command="{Binding OpenDrawingOutputCommand}"
                                     CommandParameter="{Binding SelectedBatchTask}"
                                     Visibility="{Binding SelectedBatchTask.HasOutput, Converter={StaticResource BoolToVis}}"

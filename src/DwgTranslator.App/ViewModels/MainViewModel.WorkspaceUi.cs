@@ -265,7 +265,10 @@ public partial class MainViewModel
     [RelayCommand]
     private async Task ExportSelectedDrawingAsync(DrawingFileItem? item)
     {
-        if (item == null || !item.CanExport || IsProcessing) return;
+        // HasOutput 的图纸 CanExport 为 false（NeedsExport 要求"还没有输出"），但用户批注（2026-09-23）
+        // 「可以修改校对，然后重新导出」——改完校对必须能覆盖导出，所以这里放开到"可导出 或 已导出"。
+        // 单张导出的其它语义不变：临时只勾选这一行，导出后恢复原勾选。
+        if (item == null || (!item.CanExport && !item.HasOutput) || IsProcessing) return;
         var previousSelection = DrawingFiles.ToDictionary(row => row, row => row.IsIncludedForExport);
         try
         {
