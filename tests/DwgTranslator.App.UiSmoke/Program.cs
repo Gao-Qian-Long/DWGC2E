@@ -894,7 +894,7 @@ public sealed partial class SmokeApp : App
             await VerifyAnnouncementCaptionAsync(window, vm);
             await VerifyUpdatesAsync(window, vm);
             await VerifyWorkspaceUi(window, vm);
-            foreach (var layout in new[] { (1366d,768d,1d), (1920d,1080d,1d), (1920d,1080d,1.25d), (2560d,1440d,1.5d) })
+            foreach (var layout in new[] { (1366d,768d,1d), (1440d,900d,1d), (1920d,1080d,1d), (1920d,1080d,1.25d), (2560d,1440d,1.5d) })
                 foreach (var page in new[] { "translate", "batch", "glossary", "account", "settings" })
                 {
                     window.Width = layout.Item1 / layout.Item3; window.Height = layout.Item2 / layout.Item3;
@@ -931,14 +931,20 @@ public sealed partial class SmokeApp : App
                                 Check(footer.TranslatePoint(new Point(0, footer.ActualHeight), content).Y <= size.Height - 30, "settings footer stays reachable " + section);
                             }
                             CaptureLayout(window, size, $"matrix-settings-section-{section}-{layout.Item1}-{layout.Item3}");
+                            if (section == 5 && layout.Item1 == 1440d && layout.Item3 == 1d)
+                            {
+                                var aboutDetailsCard = (FrameworkElement)matrixSettingsPage.FindName("AboutDetailsCard");
+                                Check(Grid.GetRow(aboutDetailsCard) == 2 && Grid.GetColumn(aboutDetailsCard) == 0,
+                                    $"1440 settings about section stacks before shortcut copy clips (row={Grid.GetRow(aboutDetailsCard)}, column={Grid.GetColumn(aboutDetailsCard)}, pageWidth={matrixSettingsPage.ActualWidth:F1})");
+                            }
                         }
                     }
                 }
             // ── §G aboutStack 阈值在 1280 这一档的实拍证据（本批新增）──────────────────────────
             // f3 把「关于与帮助」分区两张卡的并排/堆叠分界从"仅 compact"放宽为
-            // SettingsPage.xaml.cs:94 `var aboutStack = compact || ActualWidth < 1200;`
+            // SettingsPage.xaml.cs keeps the About detail cards stacked while ActualWidth < 1256.
             // （换算窗口宽 < 1464，因为 ActualWidth = 窗口宽 - 侧栏 200 - Spacing.Page 左右 64）。
-            // matrix 清单是 1366/1920/1920@1.25/2560@1.5：1366 覆盖了堆叠态，但 1280 这一档没有，
+            // matrix 清单现在覆盖 1366/1440/1920/1920@1.25/2560@1.5；1280 仍作为更窄一档的独立证据，
             // 而 1280 恰是右卡可用宽最小、说明文字最容易被 CharacterEllipsis 截断的一档。
             // 这里补一条真实断言 + 一张真窗口实拍。刻意不用 CaptureLayout 做 detached 取证、也不把
             // 1280 加进 matrix 清单：那会把 matrix 的整片几何断言覆盖面悄悄扩大到 1280（5 页 × 6 分区），
