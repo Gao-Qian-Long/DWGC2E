@@ -329,6 +329,16 @@ public sealed partial class SmokeApp
                             Check(exported.CanOpenProofreading && exported.HasOutput && !exported.CanExport,
                                 "exported task exposes the existing output " + size);
 
+                            vm.SelectedBatchTask = exported;
+                            vm.IsTaskDetailOpen = true;
+                            await Dispatcher.InvokeAsync(() => {}, DispatcherPriority.ApplicationIdle);
+                            var exportedDrawer = (FrameworkElement)batch.FindName("TaskDetailDrawer");
+                            var exportedDrawerButtons = FindVisuals<Button>(exportedDrawer).Where(x => x.IsVisible).ToList();
+                            Check(exportedDrawerButtons.Count(x => Equals(x.Content, "打开输出文件")) == 1,
+                                "exported task drawer exposes exactly one open-output action " + size);
+                            Check(exportedDrawerButtons.Count(x => Equals(x.Content, "重新导出")) == 1,
+                                "exported task drawer exposes one explicit re-export action " + size);
+
                             vm.BatchSearch = "batch-";
                             vm.BatchStatusFilter = 3;
                             Check(vm.BatchView.Cast<object>().Contains(review) && !vm.BatchView.Cast<object>().Contains(completed),
