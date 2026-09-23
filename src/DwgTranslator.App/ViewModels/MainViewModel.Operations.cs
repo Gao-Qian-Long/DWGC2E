@@ -114,6 +114,48 @@ public partial class MainViewModel
         StatusMessage = $"已把 {item.FileName} 移出队列（文件本身未删除）。";
     }
 
+    /// <summary>
+    /// 一键清空"已结束"的行（用户批注 2026-09-23：「为什么不能删除任务」→ 选定语义"仅从列表移除"）。
+    /// 只摘任务记录、实体与队列行；**不删磁盘文件、不删 projects/ 项目归档**。
+    /// 判定见 <see cref="DrawingFileItem.IsCleanupFinished"/>：已导出 / 失败才清，待处理·翻译中·未校对·待导出
+    /// 一律保留 —— 用户还要继续处理的那批不能被顺手扫掉。
+    /// </summary>
+    public bool CanClearFinishedBatchTasks => !IsProcessing && !IsTranslating && !IsExporting
+        && DrawingFiles.Any(x => x.IsCleanupFinished);
+
+    [RelayCommand]
+    private void ClearFinishedBatchTasks()
+    {
+        if (IsProcessing) { ToastService.Warning("当前任务正在执行，完成或取消后再清空。"); return; }
+        var targets = DrawingFiles.Where(x => x.IsCleanupFinished && x.Task?.IsActive != true).ToList();
+        if (targets.Count == 0) { ToastService.Warning("没有可清空的已结束任务；待处理与待导出的图纸会保留。"); return; }
+
+        foreach (var item in targets)
+        {
+            if (item.Task != null) _taskManager.Remove(item.Task);
+            var key = NormalizeSourcePath(item.FullPath);
+            var stale = Entities.Where(e => string.Equals(
+                NormalizeSourcePath(e.SourceFilePath), key, StringComparison.OrdinalIgnoreCase)).ToList();
+            foreach (var entity in stale) { Entities.Remove(entity); FilteredEntities.Remove(entity); }
+            DrawingFiles.Remove(item);
+            DetachDrawingFileObserver(item);
+            if (SelectedBatchTask == item) { SelectedBatchTask = null; IsTaskDetailOpen = false; }
+        }
+        for (var i = 0; i < DrawingFiles.Count; i++) DrawingFiles[i].Index = i + 1;
+
+        InvalidateEntityIndex();
+        UpdateStatistics();
+        ApplyFilter();
+        RefreshBatch();
+        HasDrawingFiles = DrawingFiles.Count > 0;
+        HasMultipleDrawingFiles = DrawingFiles.Count > 1;
+        UpdateDrawingSelection();
+        RaiseWorkspaceSummaryProperties();
+        RaiseBatchSummaryProperties();
+        ScheduleWorkspaceSessionSave();
+        StatusMessage = $"已清空 {targets.Count} 张已结束任务；保留 {DrawingFiles.Count} 张仍需处理（只移除记录，未删除任何文件）。";
+    }
+
     partial void OnFilterStatusTextChanged(string value)
     {
         ApplyFilter();

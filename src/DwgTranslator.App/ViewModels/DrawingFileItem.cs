@@ -158,6 +158,14 @@ public partial class DrawingFileItem : ObservableObject
     public bool NeedsPendingExport => !HasOutput && _task?.Status == TranslationTaskStatus.Completed;
 
     /// <summary>
+    /// 「清空已结束任务」可以回收的行：已经有输出（已导出）或翻译失败。
+    /// 刻意**不用** TranslationTask.IsFinished —— 它把 ReadyForReview 也算"已结束"
+    /// （TranslationTask.cs:133），那会连"翻译完了还没导出"的行一起清掉，而那正是用户要回来继续处理的一批。
+    /// 已暂停（可能是主动暂停、准备继续）同样保留。
+    /// </summary>
+    public bool IsCleanupFinished => HasOutput || _task?.Status == TranslationTaskStatus.Failed;
+
+    /// <summary>
     /// 能否导出。判定只要求"翻译已产出内容且还没有输出文件"，**不再要求先校对**：
     /// 用户批注（2026-09-22）「校对不是必须的」。原来只有 Completed（保存过校对）才成立，
     /// 导致翻译完成的行没有导出入口。导出链路本身对状态没有检查（MainViewModel.ImportExport），

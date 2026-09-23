@@ -110,9 +110,19 @@
                             <ComboBoxItem Content="今天" />
                             <ComboBoxItem Content="最近七天" />
                         </ComboBox>
-                        <Button Grid.Column="3" Content="重试失败" IsEnabled="{Binding HasFailedDrawingTasks}"
-                                Command="{Binding RetryFailedCommand}" Style="{StaticResource Button.Secondary}"
-                                MinWidth="94" Margin="{DynamicResource Spacing.Inline}" ToolTip="仅重试失败或部分失败的图纸" />
+                        <!-- 用户批注（2026-09-23）「为什么不能删除任务！」：右上角给一键清空"已结束"的行。
+                             只摘记录，不删磁盘文件、不删项目归档；待处理·翻译中·未校对·待导出全部保留
+                             （判定见 DrawingFileItem.IsCleanupFinished）。 -->
+                        <StackPanel Grid.Column="3" Orientation="Horizontal">
+                            <Button Content="重试失败" IsEnabled="{Binding HasFailedDrawingTasks}"
+                                    Command="{Binding RetryFailedCommand}" Style="{StaticResource Button.Secondary}"
+                                    MinWidth="94" Margin="{DynamicResource Spacing.Inline}" ToolTip="仅重试失败或部分失败的图纸" />
+                            <Button Content="清空已结束任务" Command="{Binding ClearFinishedBatchTasksCommand}"
+                                    IsEnabled="{Binding CanClearFinishedBatchTasks}" Style="{StaticResource Button.Secondary}"
+                                    MinWidth="126" Margin="{DynamicResource Spacing.Inline}"
+                                    AutomationProperties.Name="清空已结束任务"
+                                    ToolTip="从列表移除「已导出」与「失败」的任务；不删除任何文件，待处理与待导出的图纸会保留" />
+                        </StackPanel>
                         <Button Grid.Column="4" Content="停止队列" Command="{Binding CancelTranslateCommand}"
                                 Style="{StaticResource Button.Danger}" MinWidth="94"
                                 Visibility="{Binding IsTranslating, Converter={StaticResource BoolToVis}}" />
@@ -502,6 +512,14 @@
                                     IsEnabled="{Binding SelectedBatchTask.CanOpenProofreading}"
                                     Style="{StaticResource Button.Secondary}" Margin="{DynamicResource Spacing.4}"
                                     ToolTip="可选：人工复核译文。不校对也可以直接导出" />
+                            <!-- 用户批注（2026-09-23）「为什么不能删除任务！」：抽屉里给出单行的移除入口。
+                                 复用 RemoveDrawingCommand —— 它只摘任务记录/实体/行，不删磁盘文件与项目归档，
+                                 且翻译中会拒绝并提示。 -->
+                            <Button Content="从列表移除" Command="{Binding RemoveDrawingCommand}"
+                                    CommandParameter="{Binding SelectedBatchTask}"
+                                    Style="{StaticResource Button.Secondary}" Margin="{DynamicResource Spacing.4}"
+                                    AutomationProperties.Name="从列表移除"
+                                    ToolTip="只从列表移除该任务；图纸文件与项目归档都会保留" />
                             <Button Content="打开输出文件" Command="{Binding OpenDrawingOutputCommand}"
                                     CommandParameter="{Binding SelectedBatchTask}"
                                     Visibility="{Binding SelectedBatchTask.HasOutput, Converter={StaticResource BoolToVis}}"

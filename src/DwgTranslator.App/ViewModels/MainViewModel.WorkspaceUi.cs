@@ -171,6 +171,8 @@ public partial class MainViewModel
         OnPropertyChanged(nameof(BatchFailedCount));
         OnPropertyChanged(nameof(BatchCountText));
         OnPropertyChanged(nameof(HasFailedDrawingTasks));
+        // 「清空已结束任务」的可用性依赖同一批数据（已导出/失败的行数），必须跟着一起重算。
+        OnPropertyChanged(nameof(CanClearFinishedBatchTasks));
     }
     private ListCollectionView CreateBatchView()
     {
