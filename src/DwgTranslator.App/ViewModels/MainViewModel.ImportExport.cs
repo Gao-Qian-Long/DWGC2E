@@ -77,6 +77,7 @@ public partial class MainViewModel
             StatusMessage = unsupported.Count > 0
                 ? Strings.Get("StatusDropUnsupported", string.Join(", ", unsupported.Take(3)))
                 : Strings.Get("StatusDropNothing");
+            DwgTranslator.App.Services.ToastService.Warning(StatusMessage);
             return;
         }
 
@@ -92,7 +93,12 @@ public partial class MainViewModel
         }
 
         if (unsupported.Count > 0)
+        {
+            var preview = string.Join("、", unsupported.Take(3));
+            var suffix = unsupported.Count > 3 ? $" 等 {unsupported.Count} 个" : string.Empty;
+            DwgTranslator.App.Services.ToastService.Warning($"已忽略不支持的文件：{preview}{suffix}。仅支持 DWG / DXF / XLSX。");
             Log.Warning("Dropped files ignored ({Count}): {Files}", unsupported.Count, string.Join("; ", unsupported));
+        }
     }
 
     /// <summary>
