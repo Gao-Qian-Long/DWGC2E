@@ -56,6 +56,16 @@ public sealed partial class SmokeApp
             // 用户要求（2026-09-19 截图反馈）：批量工具条不再随勾选出现/消失，改为始终占位、无选中时置灰。
             // 这里曾经断言 Collapsed，那是旧行为；该断言随需求一起更新，不是为了让冒烟变绿而放宽。
             Check(toolbar.Visibility==Visibility.Visible && !toolbar.IsEnabled,"unselected toolbar stays visible but disabled");
+            var uploadSelected=(Button)page.FindName("UploadSelectedButton");
+            var batchDirection=(Button)page.FindName("BatchDirectionButton");
+            var batchCategoryButton=(Button)page.FindName("BatchCategoryButton");
+            var deleteSelection=(Button)page.FindName("DeleteSelectionButton");
+            Check(!uploadSelected.IsEnabled && !batchDirection.IsEnabled && !batchCategoryButton.IsEnabled && !deleteSelection.IsEnabled,
+                "user-only glossary actions start disabled without selection");
+            table.SelectedItem=vm.TermDraft[1]; table.UpdateLayout();
+            Check(toolbar.IsEnabled && !uploadSelected.IsEnabled && !batchDirection.IsEnabled && !batchCategoryButton.IsEnabled && !deleteSelection.IsEnabled,
+                "system-only glossary selection keeps user-only actions disabled");
+            table.UnselectAll();
             for(var selectionIndex=0;selectionIndex<2;selectionIndex++)
             {
                 table.ScrollIntoView(vm.TermDraft[selectionIndex]); table.UpdateLayout();
@@ -64,6 +74,8 @@ public sealed partial class SmokeApp
                 checkbox.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice,Environment.TickCount,MouseButton.Left){RoutedEvent=UIElement.PreviewMouseLeftButtonDownEvent});
             }
             Check(table.SelectedItems.Count==2,"checkbox clicks accumulate arbitrary selection without Ctrl");
+            Check(uploadSelected.IsEnabled && batchDirection.IsEnabled && batchCategoryButton.IsEnabled && deleteSelection.IsEnabled,
+                "mixed glossary selection enables actions because it contains an editable user term");
             table.UnselectAll();
             Check(table.EnableRowVirtualization && table.EnableColumnVirtualization,"table virtualization enabled");
             table.SelectedItem=vm.TermDraft[0]; table.CurrentCell=new DataGridCellInfo(vm.TermDraft[0],table.Columns[2]);
