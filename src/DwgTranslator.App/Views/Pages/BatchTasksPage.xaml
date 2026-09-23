@@ -244,7 +244,8 @@
                           CellStyle="{StaticResource DataGridCellStyle}" EnableRowVirtualization="True"
                           EnableColumnVirtualization="True" VirtualizingPanel.VirtualizationMode="Recycling"
                           ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                          ScrollViewer.CanContentScroll="True" AutomationProperties.Name="任务列表">
+                          ScrollViewer.CanContentScroll="True" AutomationProperties.Name="任务列表"
+                          PreviewMouseRightButtonDown="TaskTable_PreviewMouseRightButtonDown">
                     <!-- §W1-D3 真正的行高杠杆：本表从 MainWindowStyles.xaml:419 继承 RowStyle=TranslationRowStyle，
                          而该样式 :381 自己写了 Setter Height=Size.TableRow(40)。行样式上的显式 Height 优先于
                          DataGrid.RowHeight / MinRowHeight —— 实测把 grid.RowHeight 设 48、把 MinRowHeight 设 90，
@@ -262,7 +263,7 @@
                     <!-- 行右键菜单（用户批注 2026-09-23「为什么不能删除任务！」）：挂在 DataGrid 上而不是每行的
                          RowStyle 里，是因为 ContextMenu 不在可视树里——挂在本表上时 PlacementTarget 就是本表，
                          其 DataContext 正好是页面 VM，命令可直接绑；挂到行上则要额外做 PlacementTarget 转发。
-                         右键会选中该行，所以 SelectedBatchTask 就是目标行。 -->
+                         右键命中的行由 PreviewMouseRightButtonDown 显式同步到 SelectedBatchTask，避免菜单误作用于旧选择。 -->
                     <DataGrid.ContextMenu>
                         <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
                             <MenuItem Header="查看详情" Command="{Binding ShowTaskDetailCommand}"
