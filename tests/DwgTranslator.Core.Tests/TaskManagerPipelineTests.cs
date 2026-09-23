@@ -176,6 +176,44 @@ public class TaskManagerPipelineTests : IDisposable
     }
 
     [Fact]
+    public async Task ResumingRecoveredTasks_ConsumesPendingRecoveryMarkers()
+    {
+        var store = new InMemoryTaskStore();
+        var source = CreateDrawing("recovered-pending.dwg");
+        store.Saved.Add(new TranslationTask(source) { Status = TranslationTaskStatus.Pending });
+
+        using var manager = CreateManager(new FakeReader(), new FakeTranslator(), new FakeWriter(), store, Config(), out _);
+        Assert.Single(manager.PendingFromLastRun);
+        manager.ConfigureRun("ZH", "EN");
+
+        await manager.RunAsync();
+
+        Assert.Empty(manager.PendingFromLastRun);
+        Assert.Equal(TranslationTaskStatus.ReadyForReview, Assert.Single(manager.Tasks).Status);
+    }
+
+    [Fact]
+    public async Task RetryingOneRecoveredTask_ConsumesOnlyItsRecoveryMarker()
+    {
+        var store = new InMemoryTaskStore();
+        var first = new TranslationTask(CreateDrawing("recovered-first.dwg")) { Status = TranslationTaskStatus.Pending };
+        var second = new TranslationTask(CreateDrawing("recovered-second.dwg")) { Status = TranslationTaskStatus.Pending };
+        store.Saved.Add(first);
+        store.Saved.Add(second);
+
+        using var manager = CreateManager(new FakeReader(), new FakeTranslator(), new FakeWriter(), store, Config(), out _);
+        var restoredFirst = manager.Tasks.Single(t => t.FilePath == first.FilePath);
+        manager.ConfigureRun("ZH", "EN");
+        Assert.Equal(2, manager.PendingFromLastRun.Count);
+
+        await manager.RetryTaskAsync(restoredFirst.Id);
+
+        Assert.Equal(TranslationTaskStatus.ReadyForReview, restoredFirst.Status);
+        var remaining = Assert.Single(manager.PendingFromLastRun);
+        Assert.Equal(second.FilePath, remaining.FilePath);
+    }
+
+    [Fact]
     public void FailedAccountSaveKeepsQueueAndDoesNotCommitNewSession()
     {
         var store = new DiagnosticTaskStore();
