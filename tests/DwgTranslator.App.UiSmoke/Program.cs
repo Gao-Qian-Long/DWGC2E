@@ -555,6 +555,20 @@ public sealed partial class SmokeApp : App
             Check(vm.Entities.Count == 1 && vm.Entities[0].TranslatedText == "Valve feedback",
                 "archived translation returns on startup instead of a blank workspace, count=" + vm.Entities.Count);
             Check(vm.ActiveTranslationProject?.Id == project.Id, "restored translation stays bound to its project");
+
+            // Historical project opened from the project library has no live TranslationTask.
+            // Session restore must still use ActiveProjectId instead of re-enqueueing it as new work.
+            vm.Entities.Clear();
+            vm.DrawingFiles.Remove(row);
+            row = new DrawingFileItem(fixture);
+            vm.DrawingFiles.Add(row);
+            typeof(MainViewModel).GetField("_restoredWorkspaceProjectId", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .SetValue(vm, project.Id);
+            await (Task)stage.Invoke(vm, null)!;
+            Check(row.Task == null && vm.Entities.Count == 1 && vm.Entities[0].TranslatedText == "Valve feedback",
+                "historical project session restores archived translation without manufacturing a pending task");
+            Check(vm.ActiveTranslationProject?.Id == project.Id,
+                "historical session restore keeps active project identity");
         }
         finally
         {
