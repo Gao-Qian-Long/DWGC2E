@@ -16,6 +16,11 @@ public partial class MainViewModel
             ToastService.Warning("当前任务正在执行，完成或取消后再导入图纸。");
             return;
         }
+        if (IsLoggingIn)
+        {
+            ToastService.Info("账户正在切换，请稍后再导入图纸。");
+            return;
+        }
         await ImportDwgCommand.ExecuteAsync(null);
     }
 
