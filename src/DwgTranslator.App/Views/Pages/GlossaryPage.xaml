@@ -37,17 +37,17 @@
    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
    <!-- 用户反馈「移到上面去啊」：批量操作条常驻工具区首行（原先排在常规工具条之下），
         整条不再插入/移除；无选中项或忙时仍由 SelectionToolbarState 统一置灰。 -->
-   <Grid x:Name="SelectionToolbar" Grid.Row="0" Margin="{DynamicResource Spacing.BlockTopTight}" Style="{StaticResource SelectionToolbarState}">
+   <Grid x:Name="SelectionToolbar" Grid.Row="0" Margin="{DynamicResource Spacing.BlockTopTight}" Style="{StaticResource SelectionToolbarState}" Tag="Empty">
     <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="120"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
     <TextBlock x:Name="SelectionCount" Grid.Column="0" VerticalAlignment="Center" Margin="{DynamicResource Spacing.InlineWide}"/>
-    <Button Grid.Column="1" Content="上传所选" Click="UploadSelected_Click" Style="{StaticResource Button.Compact.Secondary}" Margin="{DynamicResource Spacing.InlineTight}"/>
-    <Button Grid.Column="2" Content="指定方向" Click="BatchDirection_Click" Style="{StaticResource Button.Compact.Secondary}" Margin="{DynamicResource Spacing.InlineTight}"/>
+    <Button x:Name="UploadSelectedButton" Grid.Column="1" Content="上传所选" Click="UploadSelected_Click" Style="{StaticResource Button.Compact.Secondary}" Margin="{DynamicResource Spacing.InlineTight}" IsEnabled="False"/>
+    <Button x:Name="BatchDirectionButton" Grid.Column="2" Content="指定方向" Click="BatchDirection_Click" Style="{StaticResource Button.Compact.Secondary}" Margin="{DynamicResource Spacing.InlineTight}" IsEnabled="False"/>
     <Button Grid.Column="3" Content="启用" Tag="True" Click="BatchEnabled_Click" Style="{StaticResource Button.Compact.Secondary}" Margin="{DynamicResource Spacing.InlineTight}"/>
     <Button Grid.Column="4" Content="停用" Tag="False" Click="BatchEnabled_Click" Style="{StaticResource Button.Compact.Secondary}" Margin="{DynamicResource Spacing.InlineTight}"/>
     <!-- 用户反馈批量条里的分类显示成「custom-c…」：分类名允许到 128 字（MainViewModel.GlossaryStorage.cs:29），
      任何固定宽度都装不下，所以让它优雅降级——选中框按可用宽省略号截断，悬停给出完整名称。 -->
     <ComboBox x:Name="BatchCategory" Grid.Column="5" SelectedIndex="0" ItemsSource="{Binding TermCategories}" ToolTip="选择或输入分类" Margin="{DynamicResource Spacing.InlineTight}"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding}" TextTrimming="CharacterEllipsis" ToolTip="{Binding}"/></DataTemplate></ComboBox.ItemTemplate></ComboBox>
-    <Button Grid.Column="6" Content="修改分类" Click="BatchCategory_Click" Style="{StaticResource Button.Compact.Secondary}" Margin="{DynamicResource Spacing.InlineTight}"/>
+    <Button x:Name="BatchCategoryButton" Grid.Column="6" Content="修改分类" Click="BatchCategory_Click" Style="{StaticResource Button.Compact.Secondary}" Margin="{DynamicResource Spacing.InlineTight}" IsEnabled="False"/>
     <Button Grid.Column="7" Content="导出所选" Click="ExportSelected_Click" Style="{StaticResource Button.Compact.Secondary}" Margin="{DynamicResource Spacing.InlineTight}" ToolTip="仅导出当前选中的术语"/>
     <!-- §L12 「删除本机」是破坏性操作（移除本机术语），用危险色；「停用」不是 -->
     <Button Grid.Column="8" x:Name="DeleteSelectionButton" Content="删除本机" Click="Delete_Click" Style="{StaticResource Button.SecondaryDanger}" Margin="{DynamicResource Spacing.InlineTight}"/>
