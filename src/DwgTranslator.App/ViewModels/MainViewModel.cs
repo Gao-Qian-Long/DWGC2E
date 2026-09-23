@@ -68,6 +68,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty] private string _licenseStatusText = Strings.Get("LicenseNotActivated");
     [ObservableProperty] private bool _isLicensingEnabled;
     [ObservableProperty] private DrawingFileItem? _selectedDrawingFile;
+    [ObservableProperty] private DrawingFileItem? _selectedQueueDrawing;
     [ObservableProperty] private bool _hasMultipleDrawingFiles;
     [ObservableProperty] private bool _isAllDrawingsSelected = true;
     private bool _updatingDrawingSelection;
