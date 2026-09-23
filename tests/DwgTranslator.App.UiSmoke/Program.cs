@@ -330,6 +330,11 @@ public sealed partial class SmokeApp : App
         Check(!FindVisual<System.Windows.Controls.DataGrid>(translate).HasItems, "empty drawing table");
         Check(((FrameworkElement)translate.FindName("EmptyDropZone")).ActualHeight <= 360, "empty drop zone capped at 360 DIP");
         Check(!vm.HasFailedDrawingTasks,"retry disabled without failed tasks");
+        var historicalOnly = new DrawingFileItem(Path.Combine(AppDataDir, "历史项目-无运行任务.dwg"));
+        vm.DrawingFiles.Add(historicalOnly);
+        Check(!vm.CanStartWorkspaceTranslation,
+            "a historical/project row without a task does not advertise translation start");
+        vm.DrawingFiles.Remove(historicalOnly);
         Capture(window, "workspace-empty");
         var pageHost = (FrameworkElement)window.FindName("PageHost");
         Console.WriteLine($"PAGE_LAYOUT hostActual={pageHost.ActualWidth}x{pageHost.ActualHeight} desired={pageHost.DesiredSize.Width}x{pageHost.DesiredSize.Height} maxWidth={pageHost.MaxWidth}");
