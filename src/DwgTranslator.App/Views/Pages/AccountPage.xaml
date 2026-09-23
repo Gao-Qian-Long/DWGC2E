@@ -280,7 +280,8 @@
             <Path Style="{StaticResource Deco.WaveRule}" Width="224" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="{DynamicResource Spacing.48}" Opacity="0.5" IsHitTestVisible="False"/>
             <Path Style="{StaticResource Deco.Spark}" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="{DynamicResource Spacing.40}" Opacity="0.55" IsHitTestVisible="False"/>
             <Path Style="{StaticResource Deco.Spark.Small}" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="{DynamicResource Spacing.20}" Opacity="0.6" IsHitTestVisible="False"/>
-            <Border Style="{StaticResource Section.Surface}" Width="560" MaxWidth="560" HorizontalAlignment="Center" VerticalAlignment="Center">
+            <Grid x:Name="LoginCardHost" MaxWidth="600" HorizontalAlignment="Stretch" VerticalAlignment="Center">
+                <Border x:Name="LoginCard" Style="{StaticResource Section.Surface}" Margin="20,0" HorizontalAlignment="Stretch">
                 <StackPanel>
                     <TextBlock Text="登录账号" FontFamily="{DynamicResource FontFamily.Display}" FontSize="16" FontWeight="SemiBold" Margin="{DynamicResource Spacing.Stack}" />
                     <TextBlock Text="可以先浏览软件；云端翻译需要登录。" TextWrapping="Wrap" Margin="{DynamicResource Spacing.StackSection}" />
@@ -313,7 +314,8 @@
                     </Border>
                     <Button x:Name="SavedSessionRecoveryButton" Content="{Binding SavedSessionRecoveryButtonText}" Command="{Binding RefreshAccountCommand}" Style="{StaticResource Button.Tertiary}" HorizontalAlignment="Left" Margin="{DynamicResource Spacing.BlockTop}" IsEnabled="{Binding IsAccountRefreshing, Converter={StaticResource InverseBoolConverter}}" Visibility="{Binding HasSavedAccountSession, Converter={StaticResource BoolToVis}}" />
                 </StackPanel>
-            </Border>
+                </Border>
+            </Grid>
         </Grid>
         <!-- §D11 用户批注「不要这个加载条」：原先这里有一条 x:Name="AccountRefreshIndicator"
              的 2 DIP 琥珀细线（内层 4 DIP 琥珀 Border + 外层透明底衬），作为刷新覆盖层贴顶显示。
