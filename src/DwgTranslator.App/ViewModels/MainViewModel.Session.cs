@@ -17,6 +17,7 @@ public partial class MainViewModel
     private const string WorkspaceSessionFileName = "workspace-session.json";
 
     private CancellationTokenSource? _workspaceSessionSaveCts;
+    private string? _restoredWorkspaceProjectId;
     /// <summary>恢复过程本身会改 DrawingFiles；这些改动不需要再回写一份一模一样的记录。</summary>
     private bool _restoringWorkspace;
 
@@ -57,6 +58,20 @@ public partial class MainViewModel
         if (snapshot == null) return;
 
         RestoreLanguagePairIfConfigFailed(snapshot);
+        _restoredWorkspaceProjectId = null;
+        if (!string.IsNullOrWhiteSpace(snapshot.ActiveProjectId))
+        {
+            try
+            {
+                // Validate the lightweight project record now. If it disappeared/corrupted, fall
+                // back to the legacy path below and enqueue the source drawings normally.
+                _restoredWorkspaceProjectId = ProjectStore.Load(snapshot.ActiveProjectId.Trim()).Id;
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "上次工作区关联的历史项目无法读取，将按普通图纸恢复：{ProjectId}", snapshot.ActiveProjectId);
+            }
+        }
 
         var available = new List<string>();
         var missing = new List<string>();
@@ -90,6 +105,10 @@ public partial class MainViewModel
             foreach (var path in available)
             {
                 if (HasTaskFor(path)) continue;
+                // Historical projects already contain completed translations. Do not turn their
+                // source drawings back into Pending tasks on restart; the project restore stage
+                // below will rehydrate the archived translations instead.
+                if (_restoredWorkspaceProjectId != null) continue;
                 try { _taskManager.Enqueue(path); }
                 catch (Exception ex) { Log.Warning(ex, "恢复工作区时入队失败：{File}", Path.GetFileName(path)); }
             }
@@ -155,6 +174,7 @@ public partial class MainViewModel
             {
                 SourceLanguage = CurrentSourceLang,
                 TargetLanguage = CurrentTargetLang,
+                ActiveProjectId = ActiveTranslationProject?.Id ?? string.Empty,
                 Drawings = DrawingFiles
                     .Select(row => row.FullPath)
                     .Where(path => !string.IsNullOrWhiteSpace(path))
