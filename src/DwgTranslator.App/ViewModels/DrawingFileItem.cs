@@ -163,7 +163,8 @@ public partial class DrawingFileItem : ObservableObject
     /// （TranslationTask.cs:133），那会连"翻译完了还没导出"的行一起清掉，而那正是用户要回来继续处理的一批。
     /// 已暂停（可能是主动暂停、准备继续）同样保留。
     /// </summary>
-    public bool IsCleanupFinished => HasOutput || _task?.Status == TranslationTaskStatus.Failed;
+    public bool IsCleanupFinished => HasOutput
+        || _task?.Status is TranslationTaskStatus.Failed or TranslationTaskStatus.PartiallyCompleted;
 
     /// <summary>
     /// 能否导出。判定只要求"翻译已产出内容且还没有输出文件"，**不再要求先校对**：
@@ -297,7 +298,11 @@ public partial class DrawingFileItem : ObservableObject
     /// </summary>
     public bool HasOutput => !string.IsNullOrWhiteSpace(OutputPath) && File.Exists(OutputPath);
 
-    public string OutputPathText => string.IsNullOrWhiteSpace(OutputPath) ? "尚未导出" : OutputPath!;
+    public string OutputPathText => HasOutput
+        ? OutputPath!
+        : string.IsNullOrWhiteSpace(OutputPath)
+            ? "尚未导出"
+            : "原输出文件已移动或删除，请重新导出";
 
     public string SummaryText => _task != null
         ? $"{_task.TextCount} 条 · 已译 {_task.TranslatedCount} · 失败 {_task.FailedCount}"
