@@ -43,7 +43,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     [ObservableProperty] private string _statusMessage = Strings.Get("StatusReady");
     [ObservableProperty] private double _progressValue;
-    [ObservableProperty] private bool _isProcessing;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanImportFiles))]
+    private bool _isProcessing;
     [ObservableProperty] private string _selectedFilePath = string.Empty;
     [ObservableProperty] private int _totalCount;
     [ObservableProperty] private int _translatedCount;
@@ -77,6 +79,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     public LogViewModel LogViewModel => _logViewModel ??= new LogViewModel(
         _injectedLogStore ?? App.LogStore ?? new InMemoryLogStore());
+
+    public bool CanImportFiles => !IsProcessing && !IsLoggingIn;
 
     public ObservableCollection<TextEntity> Entities { get; } = [];
     public ObservableCollection<TextEntity> FilteredEntities { get; } = [];
