@@ -362,6 +362,29 @@ public sealed partial class SmokeApp : App
         vm.RemoveDrawingCommand.Execute(removable);
         await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
         Check(!vm.DrawingFiles.Contains(removable) && vm.DrawingFiles.Count == 6, "queue removal drops only the targeted row");
+
+        // A failed replacement import must be fail-closed: keep the existing workspace intact.
+        // This protects a populated queue when the user accidentally drops a corrupt DWG.
+        var beforeFailedImportPaths = vm.DrawingFiles.Select(x => x.FullPath).ToArray();
+        var beforeFailedImportEntityCount = vm.Entities.Count;
+        var corruptImport = Path.Combine(AppDataDir, "corrupt-import-smoke.dwg");
+        File.WriteAllText(corruptImport, "this is intentionally not a DWG");
+        var importDialogCloser = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(50) };
+        importDialogCloser.Tick += (_, _) =>
+        {
+            var dialog = Windows.OfType<PromptDialog>().FirstOrDefault();
+            if (dialog == null) return;
+            importDialogCloser.Stop();
+            dialog.Close();
+        };
+        importDialogCloser.Start();
+        await vm.ImportCadFilesAsync(new[] { corruptImport });
+        importDialogCloser.Stop();
+        Check(vm.DrawingFiles.Select(x => x.FullPath).SequenceEqual(beforeFailedImportPaths)
+              && vm.Entities.Count == beforeFailedImportEntityCount,
+            "fully failed CAD import preserves the existing workspace");
+        File.Delete(corruptImport);
+
         var output = Path.Combine(AppDataDir, "test-output.dwg"); File.WriteAllText(output, "controlled fixture, not a real drawing");
         vm.DrawingFiles[3].Task!.LastExportPath = output;
         Check(vm.DrawingFiles[3].HasOutput, "existing output enables result action");
