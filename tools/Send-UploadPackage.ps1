@@ -31,7 +31,7 @@ function Resolve-SourceDirectory {
         try {
             $json = Get-Content -LiteralPath $manifest -Raw -Encoding UTF8 | ConvertFrom-Json
             if ($json.publicDirectory) {
-                $candidate = [IO.Path]::GetFullPath((if ([IO.Path]::IsPathRooted($json.publicDirectory)) { $json.publicDirectory } else { Join-Path $Root $json.publicDirectory }))
+                $candidate = [IO.Path]::GetFullPath($(if ([IO.Path]::IsPathRooted($json.publicDirectory)) { $json.publicDirectory } else { Join-Path $Root $json.publicDirectory }))
                 if (Test-Path -LiteralPath (Join-Path $candidate 'SHA256SUMS.txt')) { return $candidate }
             }
         } catch {
