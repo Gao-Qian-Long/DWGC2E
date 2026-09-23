@@ -5,7 +5,7 @@
 param([string]$ManifestPath,[string]$ResultPath)
 $ErrorActionPreference='Stop'
 $root=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..')).TrimEnd('\')
-if(-not $ManifestPath){$ManifestPath=Join-Path $root 'docs/architecture/project-moves.json'}
+if(-not $ManifestPath){$ManifestPath=Join-Path $root 'tools/project-moves.json'}
 $manifest=Get-Content -LiteralPath $ManifestPath -Raw -Encoding UTF8|ConvertFrom-Json
 function GitValue([string[]]$Arguments){
     $value=& git -C $root @Arguments

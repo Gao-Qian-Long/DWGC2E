@@ -107,4 +107,4 @@ npx wrangler tail --format pretty
 
 ## 易支付测试版
 
-支付配置、增量迁移、发布顺序与真实验收见 `../docs/EZFPY_CF_SETUP.md`。现已向所有已登录用户开放购买 0.19 / 0.29 元的 Pro 7 天套餐；不再使用测试邮箱白名单。不要将全量 schema.sql 或本地烟测 SQL 导入现有生产库。
+支付配置、增量迁移、发布顺序与真实验收见 `EZFPY_CF_SETUP.md`。现已向所有已登录用户开放购买 0.19 / 0.29 元的 Pro 7 天套餐；不再使用测试邮箱白名单。不要将全量 schema.sql 或本地烟测 SQL 导入现有生产库。

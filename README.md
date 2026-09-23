@@ -6,7 +6,7 @@
 
 用户只需最新 Setup.exe；安装器自动释放必需文件，不需要脚本或开发工具。维护者运行 publish.bat 后，从 artifacts/current-release.json 的 publicDirectory 取得网盘文件，不能直接上传个人 release 目录。
 
-本机仅启动用 start.bat；dev.bat 保留“完整发布后启动”的开发兼容用途。详细管理规则见 [桌面发布手册](docs/deployment/desktop-release-management.md)，文档入口见 [docs/README.md](docs/README.md)。
+本机仅启动用 start.bat；dev.bat 保留“完整发布后启动”的开发兼容用途。详细管理规则见 桌面发布手册，
 
 ## 本机已安装版本运行
 
@@ -124,7 +124,7 @@ ISCC /DPublishDir="D:\DWGC2E\artifacts\publish-<时间戳>" installer/QLCAD.iss
 
 UI 冒烟使用隔离数据和受控接口，不等同于真实登录、付款或宿主 CAD 图纸验收。LicenseGenerator 当前仅提示离线签发已退休并返回失败，保留兼容入口，不生成授权码。
 
-架构与依赖规则：[docs/architecture/overview.md](docs/architecture/overview.md)。逐文件整理及验证：[历史清单](docs/history/desktop-20260916/cleanup-report.md)。
+架构与依赖规则见各 csproj 与 Directory.Build.props。逐文件整理及验证：历史清单。
 
 ### 安装链回归
 
@@ -134,7 +134,7 @@ UI 冒烟使用隔离数据和受控接口，不等同于真实登录、付款�
 
 便携安装包的 `卸载.cmd` 调用 `Uninstall.ps1`，输入 `UNINSTALL` 后仅移除安装清单登记且哈希未改变的程序文件。个人配置、词库、提示词、导出、日志、未知文件及已修改资源保留；不会终止进程或递归清空安装目录。可用 `-Preview` 预览。快捷方式仅在已登记、哈希未改变、指向本安装且没有自定义参数时清理。
 
-2026-09-16恢复验证结果：便携安装/卸载65项、快捷方式创建函数10项、StartMenu真实卸载进程30项、运行实例/根路径联接18项、最新Inno安装/修复/卸载及路径保护45项。各组范围不同，不相加当作业务验收。Desktop本机实际卸载已有8场景27项验证，但不覆盖全部重定向环境；便携安装中途故障事务回滚仍未完成；既有跨构建升级也不等于跨语义版本迁移。可重复命令和范围见 [安装测试说明](docs/deployment/installer-tests.md)，最新证据见 `artifacts/installer-safety-20260916-resumed/report.md`。
+2026-09-16恢复验证结果：便携安装/卸载65项、快捷方式创建函数10项、StartMenu真实卸载进程30项、运行实例/根路径联接18项、最新Inno安装/修复/卸载及路径保护45项。各组范围不同，不相加当作业务验收。Desktop本机实际卸载已有8场景27项验证，但不覆盖全部重定向环境；便携安装中途故障事务回滚仍未完成；既有跨构建升级也不等于跨语义版本迁移。可重复命令和范围见 安装测试说明，最新证据见 `artifacts/installer-safety-20260916-resumed/report.md`。
 
 ### 首次安装目录（2026-09-16）
 
@@ -142,9 +142,9 @@ Inno 与便携安装脚本默认选择 D:\QLCAD；D:\ 不可用时选择 C:\QLCA
 
 ### 本轮治理交接
 
-- 工程整理交付报告：[`docs/architecture/governance-current-delivery.md`](docs/architecture/governance-current-delivery.md)。
-- 39项当前状态与已知边界：[`docs/architecture/governance-completion-audit.md`](docs/architecture/governance-completion-audit.md)。旧阶段报告只作历史证据。
-- 后续人工验收清单：[`docs/architecture/manual-acceptance.md`](docs/architecture/manual-acceptance.md)。2026-09-16用户决定测试验收后续自行进行，不据此记为通过。
+
+
+
 - 只读重新盘点：`powershell -NoProfile -File tools/Get-ProjectInventory.ps1 -OutputDir "artifacts/<本任务>/inventory-<新时间戳>"`。输出文件分类与显式工程依赖，不据名称自动删除文件。
 - 未经逐项审查不要执行 `git add .`：当前工作区同时包含桌面UI、后端与本次整理变更。移动文件在未暂存时可能显示旧路径删除、新路径未跟踪，不能只提交其中一半。
 ### 核对工程搬迁清单（不构建）
@@ -153,8 +153,8 @@ Inno 与便携安装脚本默认选择 D:\QLCAD；D:\ 不可用时选择 C:\QLCA
 powershell -NoProfile -ExecutionPolicy Bypass -File tools/Verify-ProjectMoves.ps1 -ResultPath artifacts/governance-review/moves.json
 ```
 
-结果路径必须为尚不存在的artifacts文件。检查以 `docs/architecture/project-moves.json` 的固定Git基线为准，核对资源去重、文件去向及3项已单独审查的内容变动；不修改源码、Git暂存区或release。不替代业务测试，后续有意修改已登记文件时须重新审查而非直接刷新哈希。
-配置提交前可运行 `powershell -NoProfile -ExecutionPolicy Bypass -File tests/BuildPipeline/Test-SourceConfiguration.ps1`：核对默认配置没有非空凭据、发布输入不读取本地settings、Git忽略与Worker秘密边界。该检查不读取本地秘密、不构建、不访问网络。范围说明见 `docs/architecture/configuration-security-review.md`。
+结果路径必须为尚不存在的artifacts文件。检查以 `tools/project-moves.json` 的固定Git基线为准，核对资源去重、文件去向及3项已单独审查的内容变动；不修改源码、Git暂存区或release。不替代业务测试，后续有意修改已登记文件时须重新审查而非直接刷新哈希。
+配置提交前可运行 `powershell -NoProfile -ExecutionPolicy Bypass -File tests/BuildPipeline/Test-SourceConfiguration.ps1`：核对默认配置没有非空凭据、发布输入不读取本地settings、Git忽略与Worker秘密边界。该检查不读取本地秘密、不构建、不访问网络。
 ### 发布并发保护
 
 `tools/Publish-Desktop.ps1` 从第一项验证开始直到发布/清理结束持有工作区独占锁。第二个发布进程会在构建前直接拒绝，不等待并覆盖另一任务的结果。锁文件为 `artifacts/.desktop-publish.lock`；文件存在本身不代表仍被占用，以操作系统打开的文件句柄为准，正常结束或进程退出后可以再次获取。不要删除锁文件来强行解锁，也不要在发布时另行执行绕过入口的构建、清理或源码修改。
@@ -172,19 +172,19 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools/Verify-ProjectMoves.ps
 
 ### 截图辅助工具安全规则
 
-`tools/Capture-AllPages.ps1`、`tools/Capture-Dialogs.ps1` 不再强制结束正在运行的 APP。检测到已有实例时默认拒绝启动；只有显式 `-NoLaunch` 才复用窗口。复用仍会切换页面/对话框，须先保存工作。用途、参数与风险见 [截图工具说明](docs/deployment/capture-tools.md)。隔离回归入口：`tests/BuildPipeline/Test-CaptureLaunchSafety.ps1`，不操作真实用户窗口。
+`tools/Capture-AllPages.ps1`、`tools/Capture-Dialogs.ps1` 不再强制结束正在运行的 APP。检测到已有实例时默认拒绝启动；只有显式 `-NoLaunch` 才复用窗口。复用仍会切换页面/对话框，须先保存工作。用途、参数与风险见 截图工具说明。隔离回归入口：`tests/BuildPipeline/Test-CaptureLaunchSafety.ps1`，不操作真实用户窗口。
 
 ### 构建与诊断工具导航
 
-[工具目录与副作用说明](docs/deployment/tool-catalog.md)覆盖tools根目录的26个脚本，区分本地交付、离线验证、联网诊断、交互截图及一次性历史清理。维护者应先确认目标环境，不要把线上探针当离线测试运行。
+工具目录与副作用说明覆盖tools根目录的26个脚本，区分本地交付、离线验证、联网诊断、交互截图及一次性历史清理。维护者应先确认目标环境，不要把线上探针当离线测试运行。
 
 工程结构回归：`powershell -NoProfile -File tests/BuildPipeline/Test-ProjectStructure.ps1`。仅评估Core双目标及App的源文件、依赖边界和资源映射，不构建APP，不改release；详细范围见架构文档。
 
-CAD私有依赖交付契约、清单与隔离回归见 [cad-payload-manifest](docs/deployment/cad-payload-manifest.md)。2026-09-16已通过统一完整构建并交付本地release（182234）；真实CAD/业务验收仍待用户后续进行，当前交付状态见 docs/architecture/governance-current-delivery.md。
+CAD私有依赖交付契约、清单与隔离回归见 cad-payload-manifest。2026-09-16已通过统一完整构建并交付本地release（182234）；真实CAD/业务验收仍待用户后续进行，
 
 ### 编译资源与动态依赖审计
 
-[动态依赖复核](docs/architecture/dynamic-dependency-review.md)记录CAD宿主入口、内嵌插件、WPF资源及运行路径。独立入口 `tests/ArchitectureAudit/ArchitectureAudit.csproj` 读取既有编译产物与release，不构建APP；正式发布在替换release前对新候选包强制执行同一审计；配套 `tests/BuildPipeline/Test-ArchitectureAudit.ps1` 包含8个用例，验证正常样本、候选选择和5种预期拒绝结果。运行方法、证据和未覆盖范围见文档。
+动态依赖复核记录CAD宿主入口、内嵌插件、WPF资源及运行路径。独立入口 `tests/ArchitectureAudit/ArchitectureAudit.csproj` 读取既有编译产物与release，不构建APP；正式发布在替换release前对新候选包强制执行同一审计；配套 `tests/BuildPipeline/Test-ArchitectureAudit.ps1` 包含8个用例，验证正常样本、候选选择和5种预期拒绝结果。运行方法、证据和未覆盖范围见文档。
 
 ### 忽略规则检查
 

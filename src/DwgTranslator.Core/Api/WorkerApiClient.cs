@@ -15,7 +15,7 @@ namespace DwgTranslator.Core.Api;
 
 /// <summary>
 /// <see cref="IApiClient"/> 的正式实现：所有请求都走 Cloudflare Worker（端点与报文见
-/// docs/CF_BACKEND_CONTRACT.md），DeepSeek Key 只存在于 Worker，客户端不再持有任何模型凭据。
+/// cf-worker/CF_BACKEND_CONTRACT.md），DeepSeek Key 只存在于 Worker，客户端不再持有任何模型凭据。
 ///
 /// 为什么要在本文件里另写一套 wire 模型，而不是直接序列化 ApiContracts 里的公开 DTO：
 ///   · 公开 DTO 的属性名是 PascalCase，而契约 §二 的线上报文是 snake_case；
@@ -123,7 +123,7 @@ public sealed partial class WorkerApiClient : IApiClient, IAccountSessionClient,
     public string ModeName => "worker";
 
     // ────────────────────────────────────────────────────────────────────────
-    // 端点映射（与 docs/CF_BACKEND_CONTRACT.md §一 一一对应）
+    // 端点映射（与 cf-worker/CF_BACKEND_CONTRACT.md §一 一一对应）
     //   POST /v1/auth/login     登录          POST /v1/translate   批量翻译
     //   GET  /v1/profile        账户信息      POST /v1/devices/bind 设备绑定
     //   GET  /v1/subscription   套餐权益      GET  /v1/version?current=x 版本检查
@@ -730,7 +730,7 @@ public sealed partial class WorkerApiClient : IApiClient, IAccountSessionClient,
     };
 
     // ────────────────────────────────────────────────────────────────────────
-    // 私有 wire 模型 —— 字段名与 docs/CF_BACKEND_CONTRACT.md §二 的 JSON 示例逐字对应。
+    // 私有 wire 模型 —— 字段名与 cf-worker/CF_BACKEND_CONTRACT.md §二 的 JSON 示例逐字对应。
     // 所有字段在响应侧都声明为可空：字段缺失（比如服务端只回 error_code）时不会被读成
     // 0/false 这种"看起来正常"的值，映射时再各自兜底。
     // ────────────────────────────────────────────────────────────────────────

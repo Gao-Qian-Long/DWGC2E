@@ -5,7 +5,7 @@
 [CmdletBinding(SupportsShouldProcess)]
 param()
 $ErrorActionPreference='Stop'
-if(Test-Path -LiteralPath (Join-Path $PSScriptRoot '../docs/artifacts-cleanup-20260916.json')){throw 'First-release cleanup already completed; use the normal bounded cleanup workflow.'}
+if(Test-Path -LiteralPath (Join-Path $PSScriptRoot 'first-release-cleanup-20260916.json')){throw 'First-release cleanup already completed; use the normal bounded cleanup workflow.'}
 $root=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../artifacts'))
 if($root -ne 'D:\DWGC2E\artifacts'){throw 'Unexpected workspace'}
 if((Get-Item -LiteralPath $root -Force).Attributes -band [IO.FileAttributes]::ReparsePoint){throw 'Linked root'}
@@ -48,5 +48,5 @@ foreach($item in $targets){
  }
 }
 $report=[pscustomobject]@{At=(Get-Date -Format o);Release=$info.version;Removed=$deleted.Count;BytesFreed=$bytes;Deleted=$deleted;Protected=$retained;Remaining=@(Get-ChildItem -LiteralPath $root -Force|Select-Object -ExpandProperty Name)}
-if(!$WhatIfPreference){$report|ConvertTo-Json -Depth 5|Set-Content -LiteralPath (Join-Path $PSScriptRoot '../docs/artifacts-cleanup-20260916.json') -Encoding UTF8}
+if(!$WhatIfPreference){$report|ConvertTo-Json -Depth 5|Set-Content -LiteralPath (Join-Path $PSScriptRoot 'first-release-cleanup-20260916.json') -Encoding UTF8}
 $report

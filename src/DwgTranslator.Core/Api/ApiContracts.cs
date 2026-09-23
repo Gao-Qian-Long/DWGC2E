@@ -166,7 +166,7 @@ public sealed class VersionInfo
 
 /// <summary>
 /// 客户端唯一的后端入口。两种实现：
-///   · WorkerApiClient —— 走 Cloudflare Worker（正式形态，见 docs/CF_BACKEND_CONTRACT.md）
+///   · WorkerApiClient —— 走 Cloudflare Worker（正式形态，见 cf-worker/CF_BACKEND_CONTRACT.md）
 ///   · DirectApiClient  —— 直连模式（过渡形态：客户端持 Key，仅内测用）
 /// UI 与 CAD 插件只认这个接口，切换后端不改上层代码。
 /// </summary>

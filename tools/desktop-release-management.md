@@ -35,8 +35,8 @@
 | assets/prompts/deepl_context.txt | 已退役的客户端提示词资源，仅作历史保留。Release 构建不再编译 TranslationPrompt.cs，打包门禁会拒绝任何 prompts/ 目录，安装器会删除遗留的 `{app}\prompts\deepl_context.txt`；不要重新塞回发布产物 |
 | assets/glossaries、assets/icons | 保留规范资源；安装器释放运行所需资源，图标编入 EXE |
 | AGENTS.md / 开发代理规则 | 仅工作区规则，gitignore；不进入用户包，不因“AI”字样盲删 |
-| docs/history/desktop-20260916 | 旧 UI 方案、旧交付记录、旧治理清单已归档；只作追溯，不当当前操作手册 |
-| docs/architecture、docs/deployment | 保留现行架构、操作及安全边界；历史报告中的“当前”只指原日期 |
+| （原 docs/history/desktop-20260916） | 已于 2026-09-23 随 docs 目录一并删除；旧 UI 方案与交付记录不再保留 |
+| （原 docs/architecture、docs/deployment） | 已于 2026-09-23 删除；现行操作手册即本文件与 tools/README.md |
 | cf-worker | 产品后端源码，不能因为桌面安装器不需要就删除；单独维护、单独授权部署 |
 | bin、obj、node_modules | 可再生成的开发输出；不进安装器。首发期间不靠全删依赖目录节省小量空间 |
 | artifacts | 构建/测试/盘点证据。只按已验证所有权清理，不按文件名含 test/backup 盲删 |

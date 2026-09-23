@@ -31,7 +31,7 @@ while($stack.Count){
             '^assets/' {$class='RESOURCE';$evidence='Central resource tree';break}
             '^installer/' {$class='INSTALLER';$evidence='Installer source and distribution helpers';break}
             '^tools/' {$class='DEVELOPMENT_OR_BUILD_TOOL';$evidence='Tool tree; age/name does not prove unused';break}
-            '^docs/|(^|/)(README|CHANGELOG|AGENTS)\.md$|^cleanup-report\.md$' {$class='DOCUMENTATION';$evidence='Documentation path';break}
+            '(^|/)(README|CHANGELOG|AGENTS)\.md$|^cleanup-report\.md$' {$class='DOCUMENTATION';$evidence='Documentation path';break}
             '^cf-worker/(package(-lock)?\.json|wrangler\.toml)$' {$class='BACKEND_CONFIGURATION';$evidence='Reviewed package/deployment entry; preserve, not a secret-content audit';break}
             '^cf-worker/(schema\.sql|upgrades/[^/]+\.sql)$' {$class='BACKEND_SCHEMA_OR_UPGRADE';$evidence='Database schema or explicit upgrade input; never execute or delete as cleanup';break}
             '^cf-worker/(CF_BACKEND_CONTRACT\.md|ops/[^/]+\.md)$' {$class='DOCUMENTATION';$evidence='Backend contract or operational record';break}

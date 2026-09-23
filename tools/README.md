@@ -2,7 +2,7 @@
 
 本目录保留现有入口，不再建立重复的 scripts 目录。以下清单按当前源码说明用途，**不是已执行所有工具的证明**。路径相对仓库根目录；从根目录操作。正式自动测试在 `tests/`，手动截图和在线探针不能替代业务验收。
 
-当前日常操作及网盘上传流程见 docs/deployment/desktop-release-management.md。正式发布已包含 Setup 构建、隔离安装验收和 current-release.json 更新。
+当前日常操作及网盘上传流程见 desktop-release-management.md。正式发布已包含 Setup 构建、隔离安装验收和 current-release.json 更新。
 
 ## 日常交付与内部辅助
 
