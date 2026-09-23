@@ -414,8 +414,13 @@ public sealed partial class SmokeApp : App
         var output = Path.Combine(AppDataDir, "test-output.dwg"); File.WriteAllText(output, "controlled fixture, not a real drawing");
         vm.DrawingFiles[3].Task!.LastExportPath = output;
         Check(vm.DrawingFiles[3].HasOutput, "existing output enables result action");
+        vm.SelectedDrawingFile = vm.DrawingFiles[3];
+        Check(!vm.DrawingFiles[3].CanExport && vm.CanExportSelectedDrawing,
+            "already-exported current drawing remains eligible for proofreading re-export");
         File.Delete(output);
         Check(!vm.DrawingFiles[3].HasOutput, "removed output disables result action");
+        Check(vm.CanExportSelectedDrawing,
+            "current completed drawing remains exportable after its prior output is removed");
         var count = vm.BatchView.Cast<object>().Count(); Check(count == 6, "batch view contains all tasks");
         vm.BatchStatusFilter = 6; Check(vm.BatchView.Cast<object>().Count() == 1, "failure filter");
         vm.BatchStatusFilter = 1; Check(vm.BatchView.Cast<object>().Count() == 1, "running filter");
