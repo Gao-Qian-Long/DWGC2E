@@ -283,12 +283,12 @@ public partial class MainViewModel
 
     [RelayCommand] private void BackToTaskList() { if (ConfirmLeaveProofreading()) IsProofreading = false; }
 
-    private readonly Dictionary<DwgTranslator.Core.Models.TextEntity, (string? Text, DwgTranslator.Core.Models.TranslationStatus Status)> _proofreadingOriginals = new();
+    private readonly Dictionary<DwgTranslator.Core.Models.TextEntity, (string? Text, DwgTranslator.Core.Models.TranslationStatus Status, bool GlossaryHit)> _proofreadingOriginals = new();
     public bool HasUnsavedProofreading => _proofreadingOriginals.Count > 0;
     public void TrackProofreadingEdit(DwgTranslator.Core.Models.TextEntity entity)
     {
         _proofreadingWorkspaceVersion++;
-        _proofreadingOriginals.TryAdd(entity, (entity.TranslatedText, entity.Status));
+        _proofreadingOriginals.TryAdd(entity, (entity.TranslatedText, entity.Status, entity.GlossaryHit));
         OnPropertyChanged(nameof(HasUnsavedProofreading));
     }
     [RelayCommand]
@@ -314,7 +314,12 @@ public partial class MainViewModel
 
     private void DiscardProofreadingCore()
     {
-        foreach (var pair in _proofreadingOriginals) { pair.Key.TranslatedText = pair.Value.Text ?? ""; pair.Key.Status = pair.Value.Status; }
+        foreach (var pair in _proofreadingOriginals)
+        {
+            pair.Key.TranslatedText = pair.Value.Text ?? "";
+            pair.Key.Status = pair.Value.Status;
+            pair.Key.GlossaryHit = pair.Value.GlossaryHit;
+        }
         _proofreadingOriginals.Clear();
         OnPropertyChanged(nameof(HasUnsavedProofreading));
         UpdateStatistics(); ApplyFilter();
