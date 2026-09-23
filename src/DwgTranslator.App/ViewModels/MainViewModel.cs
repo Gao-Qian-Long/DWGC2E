@@ -217,7 +217,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         await RunStartupStageAsync("翻译项目", degraded, () => { RefreshTranslationProjects(); return Task.CompletedTask; });
         StatusMessage = Strings.Get("StatusReady");
 
-        // 上次运行没跑完的任务：问用户是否继续（选"否"则清掉记录）。
+        // 上次运行没跑完的任务：恢复为等待状态，并在任务中心提示用户继续或清除，不用启动模态框打断。
         await RunStartupStageAsync("上次校对记录", degraded, RestoreSavedProofreadingAsync);
         await RunStartupStageAsync("未完成任务", degraded, () => { ResumePendingTasks(); return Task.CompletedTask; });
         await RunStartupStageAsync("上次工作区", degraded, () => { RestoreLastWorkspace(); return Task.CompletedTask; });
