@@ -40,7 +40,7 @@ public partial class SettingsPage : UserControl
                 LiveLogList.ScrollIntoView(LiveLogList.Items[^1]);
         };
         _liveLogScrollTimer.Start();
-        LiveLogList.Loaded += (_, _) => { if (LiveLogList.IsVisible && LiveLogList.Items.Count > 0) LiveLogList.ScrollIntoView(LiveLogList.Items[^1]); };
+        LiveLogList.Loaded += (_, _) => { _liveLogScrollTimer?.Start(); if (LiveLogList.IsVisible && LiveLogList.Items.Count > 0) LiveLogList.ScrollIntoView(LiveLogList.Items[^1]); };
         LiveLogList.Unloaded += (_, _) => { _liveLogScrollTimer?.Stop(); };
     }
     private void UpdateLayoutMode()
@@ -100,15 +100,8 @@ public partial class SettingsPage : UserControl
         //         70 = 格内 cols 50/*/20 的两侧；8 = 中层 StackPanel 的 Spacing.Inline 右距）。
         //   ⇒ 完全不截断需 inner ≥ 966 ⇔ ActualWidth ≥ 1256 ⇔ 窗口宽 ≥ 1456
         //     （t3 写的 974 / 1200 / 1464 中，974 是把 1280 改前的可用 inner 误当成了需求值，实际只需 966）。
-        //   而代码条件是 ActualWidth < 1200 ⇔ 窗口宽 < 1400，故存在 1400 ≤ 窗口宽 < 1456 的残留带：
-        //     带内走并排、说明仍差 0~28 DIP（≈0~2 字）被 CharacterEllipsis 吃掉；
-        //     四个冒烟尺寸里只有 1440×900 落在此带（ActualWidth=1240，可用 161 / 需 169，差 8 DIP≈末字），
-        //     1280(1080) 与 1366(1166) 均已 < 1200 → 堆叠 → 全文；1920(1720) ≥ 1256 → 并排 → 全文。
-        //   t7 按队长指示只修注释与换算数字，aboutStack 条件行为一字不动。若要彻底消除该残留带，
-        //     把下面的 1200 改成 1256 即可（单常量、零新增布局代码）——是否收口留待队长 / ui-auditor 裁决。
-        //     S5 复核：用户要求的 D7/D8「拆成两张卡 + 更新块放到右边」改动**没有**改变本段的横向算术，
-        //     故残留带不自解——快捷入口列宽链（396 = 版本详情列 380 + 槽 16）与改前逐字节相同，
-        //     1440×900 仍差约 8 DIP。按队长「不得顺手改」，1200 保持原值，仅在此记录结论。
+        //   以 ActualWidth < 1256 作为堆叠阈值，窗口宽约 <1456 时统一进入堆叠态；
+        //   这样 1280、1366、1440 三档都不会把快捷入口说明截断，1920 及更宽窗口仍保持并排布局。
         // 不会自激振荡：堆叠只改内容高度，ActualWidth 由 PageHost 决定；SettingsScroll 的纵向滚动条
         //          只影响 SettingsContent 宽度、不影响本 UserControl 的 ActualWidth，故不会反复触发 SizeChanged。
         // 影响面只有 AboutDetails* 三个元素；AboutUpdate*（更新状态卡）仍按 compact 走，
@@ -119,7 +112,7 @@ public partial class SettingsPage : UserControl
         // 并断言其在 1280 窄窗下 Grid.GetRow==2 && Grid.GetColumn==0（堆叠槽 row2）。四个快捷入口按钮确实无断言引用。
         // 因此 AboutDetailsCard 的 x:Name 与本分支的行/列归属都是**被冒烟守住的契约**，不可删改。
         // （该错误陈述经 git show HEAD: 溯源，来自上一批的提交 c334969，非本批引入。）
-        var aboutStack = compact || ActualWidth < 1200;
+        var aboutStack = compact || ActualWidth < 1256;
         if (AboutDetailsCard != null && AboutDetailsColumn != null && AboutDetailsGap != null)
         {
             // 快捷入口与版本详情并排铺满横向空间；横向空间不足时落回堆叠，避免两张卡都被挤到不可读。
