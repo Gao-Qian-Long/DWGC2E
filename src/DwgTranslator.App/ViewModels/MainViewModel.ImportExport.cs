@@ -16,7 +16,8 @@ public partial class MainViewModel
     [RelayCommand]
     private async Task ImportDwgAsync()
     {
-        if (IsProcessing || IsLoggingIn) return;
+        if (IsProcessing) { DwgTranslator.App.Services.ToastService.Warning("当前任务正在执行，完成或取消后再添加图纸。"); return; }
+        if (IsLoggingIn) { DwgTranslator.App.Services.ToastService.Info("账户正在切换，请稍后再添加图纸。"); return; }
 
         var dialog = new OpenFileDialog
         {
@@ -54,7 +55,8 @@ public partial class MainViewModel
     /// </summary>
     public async Task ImportDroppedFilesAsync(IReadOnlyList<string> paths)
     {
-        if (IsProcessing || IsLoggingIn) return;
+        if (IsProcessing) { DwgTranslator.App.Services.ToastService.Warning("当前任务正在执行，已忽略本次拖入；完成或取消后再添加图纸。"); return; }
+        if (IsLoggingIn) { DwgTranslator.App.Services.ToastService.Info("账户正在切换，已忽略本次拖入；请稍后重试。"); return; }
 
         var cadFiles = new List<string>();
         var excelFiles = new List<string>();
