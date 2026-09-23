@@ -3,12 +3,20 @@ name: app-ci
 on:
   push:
     branches: [pro]
+    paths-ignore:
+      - "cf-worker/**"
   pull_request:
     branches: [pro]
+    paths-ignore:
+      - "cf-worker/**"
   workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: app-ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build-and-test:
