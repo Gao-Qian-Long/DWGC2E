@@ -81,15 +81,25 @@ public partial class MainViewModel
             return;
         }
 
+        var cadWorkspaceCommitted = true;
         if (cadFiles.Count > 0)
-            await ImportCadFilesAsync(cadFiles).ConfigureAwait(true);
+            cadWorkspaceCommitted = await ImportCadFilesAsync(cadFiles).ConfigureAwait(true);
 
-        // Excel translations are matched against the entities that were just imported, so
-        // they always run after the CAD pass.
-        foreach (var excelFile in excelFiles)
+        // XLSX is a review overlay for the CAD workspace from the same drop. If every CAD file
+        // failed, applying the spreadsheet to the previously open workspace could corrupt unrelated
+        // translations when handles happen to overlap.
+        if (excelFiles.Count > 0 && cadFiles.Count > 0 && !cadWorkspaceCommitted)
         {
-            if (IsProcessing || IsLoggingIn) break;
-            await ImportExcelFilesAsync(excelFile).ConfigureAwait(true);
+            DwgTranslator.App.Services.ToastService.Warning(
+                "本次图纸导入全部失败，未将同批 XLSX 套用到原工作区。请修复图纸后重新拖入。");
+        }
+        else
+        {
+            foreach (var excelFile in excelFiles)
+            {
+                if (IsProcessing || IsLoggingIn) break;
+                await ImportExcelFilesAsync(excelFile).ConfigureAwait(true);
+            }
         }
 
         if (unsupported.Count > 0)
@@ -104,12 +114,12 @@ public partial class MainViewModel
     /// <summary>
     /// Imports one or more DWG/DXF files. Shared by the toolbar dialog and drag-and-drop.
     /// </summary>
-    public async Task ImportCadFilesAsync(IReadOnlyList<string> filePaths)
+    public async Task<bool> ImportCadFilesAsync(IReadOnlyList<string> filePaths)
     {
-        if (!ConfirmLeaveProofreading()) return;
-        if (IsProcessing || IsLoggingIn) return;
-        if (filePaths.Count == 0) return;
-        _proofreadingWorkspaceVersion++;
+        if (!ConfirmLeaveProofreading()) return false;
+        if (IsProcessing || IsLoggingIn) return false;
+        if (filePaths.Count == 0) return false;
+        var workspaceCommitted = false;
 
         // Resolve DXF reader before entering background thread（构造函数注入，不再走静态服务定位）
         var dxfReader = _dxfReader;
@@ -161,6 +171,8 @@ public partial class MainViewModel
                 return;
             }
 
+            _proofreadingWorkspaceVersion++;
+
             // Replace workspace semantics: old queued drawings must not execute against hidden rows.
             _taskManager.Clear(includeUnfinished: true);
             Entities.Clear();
@@ -176,6 +188,7 @@ public partial class MainViewModel
             AttachTasksToRows();
             ApplyFilter();
             UpdateStatistics();
+            workspaceCommitted = true;
 
             if (importErrors.Count > 0)
             {
@@ -188,6 +201,7 @@ public partial class MainViewModel
                 StatusMessage = Strings.Get("StatusImported", allEntities.Count, successfulPaths.Count);
             }
         }, Strings.Get("OperationImporting"), "StatusCadImportFailed", "MsgCadImportError");
+        return workspaceCommitted;
     }
 
     #endregion
