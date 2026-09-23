@@ -146,9 +146,12 @@
                         <TextBox Grid.Column="1" Style="{StaticResource Search.Input}" Tag="搜索项目"
                                  Text="{Binding ProjectSearch, UpdateSourceTrigger=PropertyChanged}"
                                  AutomationProperties.Name="搜索翻译项目" Margin="{DynamicResource Spacing.Inline}" />
+                        <!-- 显示文案带 张数 与 最后修改时间（用户批注 2026-09-23：「能让用户找到历史翻译的文件」）：
+                             原来只显示项目名，名字相近的历史批次分不清。见 TranslationProjectSummary.DisplayLabel。 -->
                         <ComboBox Grid.Column="2" ItemsSource="{Binding TranslationProjects}"
-                                  SelectedItem="{Binding SelectedTranslationProject}" DisplayMemberPath="Name"
-                                  AutomationProperties.Name="历史翻译项目" Margin="{DynamicResource Spacing.Inline}" />
+                                  SelectedItem="{Binding SelectedTranslationProject}" DisplayMemberPath="DisplayLabel"
+                                  AutomationProperties.Name="历史翻译项目" Margin="{DynamicResource Spacing.Inline}"
+                                  ToolTip="历史翻译项目：名称 · 图纸张数 · 最后修改时间；选中后点「打开项目」即可改校对并重新导出" />
                         <Button Grid.Column="3" Content="打开项目" Command="{Binding OpenTranslationProjectCommand}"
                                 CommandParameter="{Binding SelectedTranslationProject}" Style="{StaticResource Button.Secondary}" />
                         <!-- 竖线把「选历史项目」（左）与「改当前项目名」（右）分成两组，
@@ -255,6 +258,19 @@
                             <Setter Property="MinHeight" Value="48" />
                         </Style>
                     </DataGrid.RowStyle>
+                    <!-- 行右键菜单（用户批注 2026-09-23「为什么不能删除任务！」）：挂在 DataGrid 上而不是每行的
+                         RowStyle 里，是因为 ContextMenu 不在可视树里——挂在本表上时 PlacementTarget 就是本表，
+                         其 DataContext 正好是页面 VM，命令可直接绑；挂到行上则要额外做 PlacementTarget 转发。
+                         右键会选中该行，所以 SelectedBatchTask 就是目标行。 -->
+                    <DataGrid.ContextMenu>
+                        <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
+                            <MenuItem Header="查看详情" Command="{Binding ShowTaskDetailCommand}"
+                                      CommandParameter="{Binding SelectedBatchTask}" />
+                            <MenuItem Header="从列表移除" Command="{Binding RemoveDrawingCommand}"
+                                      CommandParameter="{Binding SelectedBatchTask}"
+                                      ToolTip="只从列表移除该任务；图纸文件与项目归档都会保留" />
+                        </ContextMenu>
+                    </DataGrid.ContextMenu>
                     <DataGrid.Columns>
                         <!-- F11d 列宽重分配。用户批注：「任务/图纸」过宽、「最近更新」过窄导致时间被截成 2026-09-20 14:2…。
                      像素取证（用户截图 1950x1119 @150%，1 DIP=1.5px；比例由「查看详情」按钮实测 112px

@@ -73,4 +73,18 @@ public sealed class TranslationProjectSummary
     public int DrawingCount { get; set; }
     public string SourceLanguage { get; set; } = string.Empty;
     public string TargetLanguage { get; set; } = string.Empty;
+
+    /// <summary>
+    /// 项目下拉里显示的文案（用户批注 2026-09-23：「能让用户找到历史翻译的文件，可以修改校对，然后重新导出」）。
+    /// 原来下拉只显示 Name，多个批次名字相近时分不清哪个是要找的历史项目；
+    /// 这里补上张数与最后修改时间，便于一眼认出历史批次。
+    /// </summary>
+    public string DisplayLabel
+    {
+        get
+        {
+            var when = ModifiedAtUtc == default ? string.Empty : $" · {ModifiedAtUtc.ToLocalTime():MM-dd HH:mm}";
+            return $"{Name} · {DrawingCount} 张{when}";
+        }
+    }
 }
