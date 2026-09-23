@@ -147,8 +147,12 @@ public sealed partial class SmokeApp
                             // 未校对（ReadyForReview）与已校对（Completed）现在都是"待导出"：两者都能立即导出。
                             Check(review.WorkflowStatusText == "待导出" && completed.WorkflowStatusText == "待导出",
                                 "translated rows read as export-ready whether or not they were proofread " + size);
-                            Check(vm.WorkspaceReviewCount == 1 && vm.WorkspacePendingExportCount == 2 && vm.WorkspaceFailedCount == 1,
+                            // 七格互斥（2026-09-23）：未校对 = 已翻译·未校对·未导出（fixture 里是 review 行），
+                            // 待导出 = 已校对·未导出（completed 行）。两者不再重叠，导出后同时清零。
+                            Check(vm.WorkspaceReviewCount == 1 && vm.WorkspacePendingExportCount == 1 && vm.WorkspaceFailedCount == 1,
                                 "translation summary follows drawing collection changes " + size);
+                            Check(vm.WorkspaceExportableCount == 2,
+                                "export capability still covers both unproofread and proofread rows " + size);
 
                             var export = (Button)translate.FindName("ExportSelectionButton");
                             var retry = (Button)translate.FindName("RetryFailedButton");

@@ -43,8 +43,13 @@ public partial class MainViewModel
     public int WorkspaceActiveCount => DrawingFiles.Count(x => x.IsActive);
     public int WorkspaceSuccessfulCount => DrawingFiles.Count(x => x.IsTranslationSuccessful);
     public int WorkspaceFailedCount => DrawingFiles.Count(IsFailedTask);
+    // 七格统计互斥（2026-09-23 用户决策）：未校对 = 已翻译·未校对·未导出；待导出 = 已校对·未导出；
+    // 已导出 = 有输出。三者由 NeedsReview/NeedsPendingExport/HasOutput 保证不重叠。
+    // "能不能导出"是另一件事，单列 WorkspaceExportableCount（= NeedsExport 的并集），
+    // 这样"翻译完没校对也能直接导出"不会被统计口径切掉。
     public int WorkspaceReviewCount => DrawingFiles.Count(x => x.NeedsReview);
-    public int WorkspacePendingExportCount => DrawingFiles.Count(x => x.NeedsExport);
+    public int WorkspacePendingExportCount => DrawingFiles.Count(x => x.NeedsPendingExport);
+    public int WorkspaceExportableCount => DrawingFiles.Count(x => x.NeedsExport);
     public int WorkspaceExportedCount => DrawingFiles.Count(x => x.HasOutput);
     public double WorkspaceOverallProgress => DrawingFiles.Count == 0
         ? 0
@@ -58,7 +63,7 @@ public partial class MainViewModel
                 ? "需要处理"
                 // 校对不再是流程节点（2026-09-22 用户批注「校对不是必须的」）：不再出现"等待校对"，
                 // 翻译完成直接进入"等待导出"。
-                : WorkspacePendingExportCount > 0
+                : WorkspaceExportableCount > 0
                     ? "等待导出"
                         : WorkspaceExportedCount > 0 && WorkspaceExportedCount == WorkspaceFileCount
                             ? "已全部导出"
@@ -72,10 +77,12 @@ public partial class MainViewModel
             if (WorkspaceFailedCount > 0) return $"下一步：先重试 {WorkspaceFailedCount} 张失败图纸，或在任务中心查看原因。";
             // 校对是可选的（2026-09-22 用户批注「校对不是必须的」「不要让用户都不知道怎么操作」）：
             // 翻译完成就直接告诉用户去导出，未校对只作为括号里的可选提示，不再挡在前面当一道门。
-            if (WorkspacePendingExportCount > 0)
+            // 提示用"可导出"的并集（未校对 + 待导出），统计格才分家：否则"翻译完没校对"的行
+            // 会既不在未校对格、也不在待导出格，用户反而看不到该做什么。
+            if (WorkspaceExportableCount > 0)
                 return WorkspaceReviewCount > 0
-                    ? $"下一步：导出 {WorkspacePendingExportCount} 张图纸（其中 {WorkspaceReviewCount} 张未校对，可选）。"
-                    : $"下一步：导出 {WorkspacePendingExportCount} 张图纸。";
+                    ? $"下一步：导出 {WorkspaceExportableCount} 张图纸（其中 {WorkspaceReviewCount} 张未校对，可选）。"
+                    : $"下一步：导出 {WorkspaceExportableCount} 张图纸。";
             if (WorkspaceExportedCount > 0) return $"已导出 {WorkspaceExportedCount} 张图纸，可继续添加新图纸。";
             return CanStartWorkspaceTranslation ? "下一步：开始翻译。" : "当前队列没有可执行任务。";
         }
@@ -112,6 +119,7 @@ public partial class MainViewModel
         OnPropertyChanged(nameof(WorkspaceFailedCount));
         OnPropertyChanged(nameof(WorkspaceReviewCount));
         OnPropertyChanged(nameof(WorkspacePendingExportCount));
+        OnPropertyChanged(nameof(WorkspaceExportableCount));
         OnPropertyChanged(nameof(WorkspaceExportedCount));
         OnPropertyChanged(nameof(WorkspaceOverallProgress));
         OnPropertyChanged(nameof(WorkspaceProgressText));
@@ -145,7 +153,7 @@ public partial class MainViewModel
     public int BatchPendingCount => DrawingFiles.Count(x => x.Task?.Status == TranslationTaskStatus.Pending
         || x.Task == null && !x.IsActive && !x.IsFinished && !x.HasError);
     public int BatchReviewCount => DrawingFiles.Count(x => x.NeedsReview);
-    public int BatchPendingExportCount => DrawingFiles.Count(x => x.NeedsExport);
+    public int BatchPendingExportCount => DrawingFiles.Count(x => x.NeedsPendingExport);
     public int BatchExportedCount => DrawingFiles.Count(x => x.HasOutput);
     public int BatchCompletedCount => BatchPendingExportCount + BatchExportedCount;
     public int BatchFailedCount => DrawingFiles.Count(IsFailedTask);

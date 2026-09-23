@@ -68,6 +68,7 @@ public partial class DrawingFileItem : ObservableObject
         OnPropertyChanged(nameof(IsTranslationSuccessful));
         OnPropertyChanged(nameof(NeedsReview));
         OnPropertyChanged(nameof(NeedsExport));
+        OnPropertyChanged(nameof(NeedsPendingExport));
         OnPropertyChanged(nameof(ProgressPercent));
         OnPropertyChanged(nameof(ProgressText));
         OnPropertyChanged(nameof(ElapsedText));
@@ -139,8 +140,22 @@ public partial class DrawingFileItem : ObservableObject
         || _task?.Status is TranslationTaskStatus.ReadyForReview or TranslationTaskStatus.Completed
         || _task == null && IsFinished && !HasError;
 
-    /// <summary>还没人工校对过。**只用于展示"可选的校对进度"**，不参与任何导出可用性判定。</summary>
-    public bool NeedsReview => _task?.Status == TranslationTaskStatus.ReadyForReview;
+    /// <summary>
+    /// 统计口径的「未校对」：翻译完成、**还没人工校对、也还没导出**。
+    /// 用户批注（2026-09-23）：「导出后不再计未校对」——原来只判 task 状态，于是同一行会同时是
+    /// 「已导出」和「未校对」，统计与表格互相矛盾（截图证据：11 行全"已导出"，指标却写
+    /// "未校对 11 / 待导出 0"）。加 !HasOutput 后 未校对 / 待导出 / 已导出 三格互斥、导出即清零。
+    /// 它仍然**不参与**导出可用性判定（那是 <see cref="NeedsExport"/>）。
+    /// </summary>
+    public bool NeedsReview => !HasOutput && _task?.Status == TranslationTaskStatus.ReadyForReview;
+
+    /// <summary>
+    /// 统计口径的「待导出」：**已人工校对**但还没输出。
+    /// 与 <see cref="NeedsReview"/> 互斥（都带 !HasOutput，task 状态一个 Completed、一个 ReadyForReview）。
+    /// 与 <see cref="NeedsExport"/> 刻意分开：那个是"能不能导出"的能力判定（两者都算），
+    /// 用在按钮可用性与"下一步"提示上；这里是"统计应该记在哪一格"。
+    /// </summary>
+    public bool NeedsPendingExport => !HasOutput && _task?.Status == TranslationTaskStatus.Completed;
 
     /// <summary>
     /// 能否导出。判定只要求"翻译已产出内容且还没有输出文件"，**不再要求先校对**：
