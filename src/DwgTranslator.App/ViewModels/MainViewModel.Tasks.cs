@@ -307,12 +307,17 @@ public partial class MainViewModel
                 ? $"正在重试 {runnable.Count} 张失败的图纸…"
                 : $"队列开始：{runnable.Count} 张图纸（本地并发 {_taskManager.Options.LocalWorkerCount}，单图纸 AI 并发 {_taskManager.Options.AiConcurrency}）";
 
-            if (onlyTaskId != null)
-                await _taskManager.RetryTaskAsync(onlyTaskId, _cts.Token).ConfigureAwait(true);
-            else if (retryFailedFirst)
-                await _taskManager.RetryFailedAsync(_cts.Token).ConfigureAwait(true);
-            else
-                await _taskManager.RunAsync(_cts.Token).ConfigureAwait(true);
+            Task runTask = onlyTaskId != null
+                ? _taskManager.RetryTaskAsync(onlyTaskId, _cts.Token)
+                : retryFailedFirst
+                    ? _taskManager.RetryFailedAsync(_cts.Token)
+                    : _taskManager.RunAsync(_cts.Token);
+
+            // RunAsync consumes any recovered-task markers synchronously before its first await.
+            // Refresh immediately so the navigation red dot/banner disappear as soon as the user
+            // chooses to continue, rather than lingering until another unrelated workspace change.
+            RefreshTaskRecoveryNotice();
+            await runTask.ConfigureAwait(true);
 
             ArchiveTranslationRun(runnable);
             StatusMessage = BuildQueueSummary();
@@ -343,6 +348,7 @@ public partial class MainViewModel
             UpdateStatistics();
             ApplyFilter();
             RefreshPageStatistics();
+            RefreshTaskRecoveryNotice();
         }
     }
 
