@@ -353,10 +353,13 @@ public sealed partial class SmokeApp : App
         var queueGrid=(System.Windows.Controls.DataGrid)translate.FindName("DrawingQueue");
         Check(queueGrid.SelectionMode == DataGridSelectionMode.Single,
             "translate queue uses one contextual row selection; export batching stays on checkboxes");
+        vm.SelectedDrawingFile = null;
         queueGrid.SelectedItem = vm.DrawingFiles[1];
         await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
-        Check(ReferenceEquals(vm.SelectedDrawingFile, vm.DrawingFiles[1]),
-            "translate queue selection stays synchronized with SelectedDrawingFile");
+        Check(ReferenceEquals(vm.SelectedQueueDrawing, vm.DrawingFiles[1]),
+            "translate queue selection stays synchronized with its contextual selection");
+        Check(vm.SelectedDrawingFile == null,
+            "translate queue selection does not change proofreading/entity filter scope");
         var inRowExports=FindVisuals<System.Windows.Controls.Button>(queueGrid)
             .Where(b=>b.IsVisible&&Equals(b.Content,"导出")).ToArray();
         // 校对降级为可选后（2026-09-22 用户批注「校对不是必须的」），未校对（ReadyForReview）
