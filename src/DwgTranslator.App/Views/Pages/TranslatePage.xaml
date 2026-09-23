@@ -236,7 +236,7 @@
                                         <MenuItem Header="取消全部导出选择" Command="{Binding ClearDrawingOutputsCommand}" />
                                         <Separator />
                                         <MenuItem Header="移除所选文件" Command="{Binding RemoveDrawingCommand}"
-                                                  CommandParameter="{Binding SelectedDrawingFile}"
+                                                  CommandParameter="{Binding SelectedQueueDrawing}"
                                                   ToolTip="从队列移除选中的图纸（不删除文件）" />
                                         <MenuItem Header="清空队列…" Command="{Binding ClearAllCommand}"
                                                   Foreground="{DynamicResource Brush.Danger}" />
@@ -249,7 +249,7 @@
                         </DockPanel>
 
                         <DataGrid Grid.Row="1" x:Name="DrawingQueue" ItemsSource="{Binding DrawingFiles}"
-                                  SelectedItem="{Binding SelectedDrawingFile, Mode=TwoWay}"
+                                  SelectedItem="{Binding SelectedQueueDrawing, Mode=TwoWay}"
                                   AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="False"
                                   HeadersVisibility="Column" RowHeight="{DynamicResource Size.TableRow}" FontSize="13"
                                   GridLinesVisibility="Horizontal" BorderThickness="0"
