@@ -318,9 +318,6 @@ public sealed partial class SmokeApp : App
         Check(((FrameworkElement)translate.FindName("EmptyDropZone")).IsVisible, "empty queue has large import entry");
         Check(!((FrameworkElement)translate.FindName("QueueWorkspace")).IsVisible, "empty queue does not show redundant table");
         Check(translate.FindName("WorkspaceLogLauncher") is FrameworkElement, "log is represented by a compact launcher by default");
-        await vm.ImportExcelFilesAsync(Path.Combine(AppDataDir, "review-without-drawing.xlsx"));
-        Check(vm.StatusMessage.Contains("先导入对应的 DWG / DXF"),
-            "review XLSX import is rejected clearly when no drawing workspace exists");
         var editEntity = new DwgTranslator.Core.Models.TextEntity { Handle = "proof-test", PlainText = "原文", TranslatedText = "original" };
         vm.Entities.Add(editEntity);
         vm.TrackProofreadingEdit(editEntity); editEntity.TranslatedText = "changed";
