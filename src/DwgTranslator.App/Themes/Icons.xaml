@@ -32,7 +32,8 @@
     <PathGeometry x:Key="Icon.Check" Figures="M 1.6,7.4 L 5.4,11.2 L 12.6,2.4" />
 
     <!-- Retry: circular arrow -->
-    <PathGeometry x:Key="Icon.Refresh"
+    <!-- 归一化见 Icon.HelpRing 上方说明：主轴 12、中心 (8,8)。 -->
+    <PathGeometry x:Key="Icon.Refresh" Transform="1.111,0,0,1.111,0.22,0.22"
                   Figures="M 12.4,7 A 5.4,5.4 0 1 0 7,12.4 M 12.4,2.2 L 12.4,7.4 L 7.2,7.4" />
 
     <!-- Spreadsheet -->
@@ -45,9 +46,16 @@
                   Figures="M 1,1.6 L 13,1.6 L 13,12.4 L 1,12.4 Z M 1,4.6 L 13,4.6 M 3,7.2 L 11,7.2 M 3,9.8 L 8,9.8" />
 
     <!-- Help: circled question mark stem -->
-    <PathGeometry x:Key="Icon.HelpRing"
+    <!-- 用户批注（2026-09-23）：「这四个图标没对齐。请优化！」——四个几何原本在**完全不同的坐标系**里
+         （HelpRing 12×12、HelpMark 2.2×6.5、Monitor 12×10.6、Refresh 10.8×10.8），而卡片上用
+         Stretch="Uniform"，它按各自包围盒撑满图标框：圆环铺满 18×18，问号被放大后只剩约 6px 宽，
+         于是外框齐了、字形大小却差一倍。
+         统一做法：给每个几何加 Transform，归一到**同一个 16×16 设计网格**——主轴缩放到 12、
+         包围盒中心平移到 (8,8)。这样 Stretch="Uniform" 才会保留它们之间的相对大小。
+         新增图标请照此约一律（主轴 12 / 中心 8,8），否则会重新出现大小不一。 -->
+    <PathGeometry x:Key="Icon.HelpRing" Transform="1,0,0,1,1,1"
                   Figures="M 7,1 A 6,6 0 1 1 6.99,1 Z" />
-    <PathGeometry x:Key="Icon.HelpMark"
+    <PathGeometry x:Key="Icon.HelpMark" Transform="1.846,0,0,1.846,-3.08,-7.97"
                   Figures="M 4.9,5.4 A 2.1,2.1 0 1 1 7.1,7.6 L 7.1,8.7 M 7.1,11 L 7.1,11.9" />
 
     <!-- Clear: trash can -->
@@ -112,7 +120,8 @@
     <PathGeometry x:Key="Icon.StatPie" Figures="M 7,1 L 13,7 L 7,13 Z M 7,1 A 6,6 0 0 0 1,7 L 7,7 Z" />
     <PathGeometry x:Key="Icon.StatPin"
                   Figures="M 7,1.2 L 9.4,5.6 L 12.8,6.2 L 10.4,8.6 L 11,12.8 L 7,10.8 L 3,12.8 L 3.6,8.6 L 1.2,6.2 L 4.6,5.6 Z" />
-    <PathGeometry x:Key="Icon.Monitor"
+    <!-- 归一化见 Icon.HelpRing 上方说明：主轴 12、中心 (8,8)。 -->
+    <PathGeometry x:Key="Icon.Monitor" Transform="1,0,0,1,1,0.7"
                   Figures="M 1,2 L 13,2 L 13,10.4 L 1,10.4 Z M 4.6,12.6 L 9.4,12.6 M 7,10.4 L 7,12.6" />
     <PathGeometry x:Key="Icon.Clock"
                   Figures="M 7,1 A 6,6 0 1 1 6.99,1 Z M 7,3.4 L 7,7.4 L 9.8,8.8" />
