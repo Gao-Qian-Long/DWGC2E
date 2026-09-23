@@ -161,6 +161,7 @@ public partial class MainViewModel
     {
         if (summary == null || IsProcessing || IsExporting || !ConfirmLeaveProofreading()) return;
         var openVersion = ++_projectOpenVersion;
+        var workspaceVersion = _proofreadingWorkspaceVersion;
         try
         {
             var project = ProjectStore.Load(summary.Id);
@@ -171,8 +172,12 @@ public partial class MainViewModel
                 return;
             }
             var loaded = await LoadProjectEntitiesAsync(project, project.Drawings);
-            // 用户在解析期间又选了另一个项目：旧请求不能晚到后覆盖新选择。
-            if (openVersion != _projectOpenVersion) return;
+            // 用户在解析期间又选了另一个项目、导入了新图纸或开始了其它工作：
+            // 旧请求不能晚到后把当前工作区整批覆盖。
+            if (openVersion != _projectOpenVersion
+                || workspaceVersion != _proofreadingWorkspaceVersion
+                || IsProcessing || IsExporting || _taskManager.IsRunning)
+                return;
             Entities.Clear(); foreach (var entity in loaded) Entities.Add(entity); InvalidateEntityIndex();
             RebuildDrawingFileList(project.Drawings.Select(d => d.SourcePath).ToArray());
             ActiveTranslationProject = project; CurrentSourceLang = project.SourceLanguage; CurrentTargetLang = project.TargetLanguage;
