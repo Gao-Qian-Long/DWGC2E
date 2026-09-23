@@ -244,12 +244,13 @@
                         </DockPanel>
 
                         <DataGrid Grid.Row="1" x:Name="DrawingQueue" ItemsSource="{Binding DrawingFiles}"
+                                  SelectedItem="{Binding SelectedDrawingFile, Mode=TwoWay}"
                                   AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="False"
                                   HeadersVisibility="Column" RowHeight="{DynamicResource Size.TableRow}" FontSize="13"
                                   GridLinesVisibility="Horizontal" BorderThickness="0"
                                   ColumnHeaderStyle="{StaticResource DataGridHeaderStyle}"
                                   CellStyle="{StaticResource DataGridCellStyle}"
-                                  SelectionMode="Extended" SelectionUnit="FullRow"
+                                  SelectionMode="Single" SelectionUnit="FullRow"
                                   CanUserResizeColumns="False" CanUserSortColumns="True"
                                   EnableRowVirtualization="True" EnableColumnVirtualization="True"
                                   ScrollViewer.VerticalScrollBarVisibility="Auto"
