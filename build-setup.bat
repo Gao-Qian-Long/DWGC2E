@@ -15,10 +15,13 @@ echo        先 DryRun 预览用：build-setup.bat -DryRun
 echo ============================================================
 echo.
 
-call "%~dp0build-release.bat"
+call "%~dp0build-release.bat" %*
 if errorlevel 1 exit /b 1
 
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\Send-UploadPackage.ps1" %*
+rem 参数分流：构建参数（如 -SkipUi）转给发布脚本，投递只认 -DryRun（否则会把未知开关传给投递工具）。
+set "UPLOAD_ARGS="
+echo %* | findstr /i /c:"-DryRun" >nul && set "UPLOAD_ARGS=-DryRun"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\Send-UploadPackage.ps1" %UPLOAD_ARGS%
 if errorlevel 1 (
   echo.
   echo FAILED: upload 投递失败（release 已更新）。见上方错误。

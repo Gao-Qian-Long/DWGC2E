@@ -22,7 +22,7 @@
 | `Verify-ExecutableIcon.ps1` | 读取 EXE 图标资源并与标准 ICO 比较，不启动 EXE。 |
 | `Refresh-DesktopShellIcon.ps1` | 通知 Windows Shell 刷新图标；不是图标生成器，不杀 Explorer、不清图标缓存。 |
 
-根目录 `build-release.bat` 转发正式发布入口（构建并更新 release）；`build-setup.bat` 在此基础上把交付目录的安装包投递到 upload\（只增不删，可加 -DryRun 预览）。本地交付不等于网站下载更新、开放购买或真实支付验收。
+根目录 `build-release.bat` 转发正式发布入口（构建并更新 release）；`build-setup.bat` 在此基础上把交付目录的安装包投递到 upload\（只增不删，可加 -DryRun 预览）。两者都支持 `-SkipUi`：只跳过 WPF UI 冒烟，其余门禁照跑，产物 `build-info.json` 与 SUCCESS 摘要会标记 `uiSmoke=skipped`（用户明确自测界面时使用，别当默认）。本地交付不等于网站下载更新、开放购买或真实支付验收。
 
 ## 盘点、维护与兼容入口
 

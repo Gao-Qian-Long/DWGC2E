@@ -3,13 +3,18 @@
 # Usage: .\tools\Publish-Desktop.ps1 (normal delivery includes regression tests).
 # -Compiler: optional ISCC.exe path; normal delivery otherwise probes the per-user and machine-wide
 # Inno Setup 6 locations in that order.
-param([switch]$BuildOnly, [switch]$SkipTests, [switch]$Clean, [string]$Compiler)
+param([switch]$BuildOnly, [switch]$SkipTests, [switch]$Clean, [switch]$SkipUi, [string]$Compiler)
 $ErrorActionPreference = 'Stop'
 # Canonical delivery must always pass regression/UI gates. BuildOnly is an explicit
 # isolated diagnostic mode, never a substitute for a verified release update.
 if ($SkipTests -and -not $BuildOnly) {
     throw 'RELEASE_REQUIRES_TESTS: Skipping tests cannot update release. Use the normal verified delivery; BuildOnly is for explicitly requested isolated diagnostics only.'
 }
+# -SkipUi 是比 -SkipTests 窄得多的口子（2026-09-23 用户要求：「加，我自己会测试UI」）：
+# 只跳过 WPF UI 冒烟，其余门禁（内核回归、安装器事务、包内容、架构审计、排版回归、CAD 部署）
+# 全部照跑。它不豁免记录：产物 build-info.json 会写 uiSmoke=skipped，SUCCESS 摘要也会明示，
+# 所以"这一版没跑 UI 冒烟"是可追溯的，不会被后续误当成已验证。
+$uiSmokeStatus = if ($SkipTests) { 'skipped-with-tests' } elseif ($SkipUi) { 'skipped' } else { 'pending' }
 $root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 Set-Location -LiteralPath $root
 $release = Join-Path $root 'release'
@@ -138,9 +143,15 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Drawing layout regression failed' }
     & dotnet fsi (Join-Path $root 'tests/CadIntegration/Test-CadPluginInstaller.fsx')
     if ($LASTEXITCODE -ne 0) { throw 'CAD deployment regression failed' }
-    $env:DWGC2E_UI_SMOKE_OUTPUT=Join-Path $deliveryDir 'ui-smoke'
-    & dotnet run --project (Join-Path $root 'tests/DwgTranslator.App.UiSmoke/DwgTranslator.App.UiSmoke.csproj') -c Release
-    if ($LASTEXITCODE -ne 0) { throw 'Desktop UI smoke tests failed' }
+    if ($SkipUi) {
+        Write-Warning 'SKIP_UI_SMOKE: 本次交付未运行 WPF UI 冒烟（调用方显式要求 -SkipUi）。布局/资源/交互类回归不会在这里被发现；本版产物已标记 uiSmoke=skipped，请自行确认界面。'
+        $uiSmokeStatus = 'skipped'
+    } else {
+        $env:DWGC2E_UI_SMOKE_OUTPUT=Join-Path $deliveryDir 'ui-smoke'
+        & dotnet run --project (Join-Path $root 'tests/DwgTranslator.App.UiSmoke/DwgTranslator.App.UiSmoke.csproj') -c Release
+        if ($LASTEXITCODE -ne 0) { throw 'Desktop UI smoke tests failed' }
+        $uiSmokeStatus = 'passed'
+    }
     } else { Write-Host 'TESTS_SKIPPED: explicitly requested; build and package checks still run.' }
     $revision = (& git rev-parse --short HEAD).Trim()
     $version = "2.1.1+ui.$stamp.$revision"
@@ -163,7 +174,7 @@ try {
         if ($LASTEXITCODE -ne 0) { throw 'Shell icon refresh regression failed' }
     }
     $hash = (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash
-    @{ version=$version; revision=$revision; builtAt=(Get-Date -Format o); sha256=$hash } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $stage 'build-info.json') -Encoding UTF8
+    @{ version=$version; revision=$revision; builtAt=(Get-Date -Format o); sha256=$hash; uiSmoke=$uiSmokeStatus } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $stage 'build-info.json') -Encoding UTF8
     # Audit the freshly published candidate, never the previous installed release.
     # A failed dependency/resource/hash check stops before ZIP creation or release replacement.
     $auditReport = Join-Path $deliveryDir 'architecture-audit.json'
@@ -289,6 +300,7 @@ try {
     Write-Host "SUCCESS: $version"
     Write-Host "Build: $exe"
     Write-Host "SHA256: $hash"
+    Write-Host "UI_SMOKE: $uiSmokeStatus"
     if (-not $BuildOnly) {
         Write-Host "Internal portable ZIP (not the primary download): $zip"
         Write-Host "UPLOAD_THIS_SETUP: $($installer.installerPath)"
