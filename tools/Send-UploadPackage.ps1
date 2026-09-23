@@ -1,4 +1,4 @@
-# 把一次完整交付产出的"网盘三件套"投递到 upload\：
+﻿# 把一次完整交付产出的"网盘三件套"投递到 upload\：
 #   <版本>-...-Setup.exe / SHA256SUMS.txt / 开始使用.txt
 #
 # 来源只认交付记录，不猜：
@@ -31,7 +31,7 @@ function Resolve-SourceDirectory {
         try {
             $json = Get-Content -LiteralPath $manifest -Raw -Encoding UTF8 | ConvertFrom-Json
             if ($json.publicDirectory) {
-                $candidate = [IO.Path]::GetFullPath((Join-Path $Root $json.publicDirectory))
+                $candidate = [IO.Path]::GetFullPath((if ([IO.Path]::IsPathRooted($json.publicDirectory)) { $json.publicDirectory } else { Join-Path $Root $json.publicDirectory }))
                 if (Test-Path -LiteralPath (Join-Path $candidate 'SHA256SUMS.txt')) { return $candidate }
             }
         } catch {
