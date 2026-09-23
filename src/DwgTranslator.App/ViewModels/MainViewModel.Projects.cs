@@ -45,16 +45,51 @@ public partial class MainViewModel
         if (value != null) ProjectRenameName = value.Name;
     }
 
+    /// <summary>
+    /// 选中即打开（用户批注 2026-09-23：「选择之后不会立即刷新列表」）。
+    /// 原来下拉只是个选择器：选完必须再点「打开项目」才会加载，界面上看着像"没反应"。
+    /// 现在选中就直接走同一条打开链路（含未保存校对的确认与原记录保留策略）；
+    /// _projectSelectionLocked 用来区分程序性回填（刷新列表、打开后重选），那种绝不能触发加载。
+    /// </summary>
     partial void OnSelectedTranslationProjectChanged(TranslationProjectSummary? value)
     {
         if (value != null) ProjectRenameName = value.Name;
+        if (_projectSelectionLocked || value == null) return;
+        if (IsProcessing || IsTranslating || IsExporting) return;
+        OpenTranslationProjectCommand.Execute(value);
+        // 用户没确认（例如有未保存校对时点了「取消」）→ 工作区没变，把选择拨回真正打开的项目，
+        // 否则下拉显示的项目与实际工作区不一致，比"不刷新"更难理解。
+        if (ActiveTranslationProject?.Id != value.Id) SelectTranslationProject(ActiveTranslationProject?.Id);
+    }
+
+    private bool _projectSelectionLocked;
+
+    /// <summary>程序性回填项目选择（不触发加载）。</summary>
+    private void SelectTranslationProject(string? id)
+    {
+        _projectSelectionLocked = true;
+        try
+        {
+            SelectedTranslationProject = id == null
+                ? null
+                : TranslationProjects.FirstOrDefault(p => string.Equals(p.Id, id, StringComparison.Ordinal));
+        }
+        finally { _projectSelectionLocked = false; }
     }
     partial void OnProjectSearchChanged(string value) => RefreshTranslationProjects();
 
     private void RefreshTranslationProjects()
     {
-        TranslationProjects.Clear();
-        foreach (var item in ProjectStore.List(ProjectSearch)) TranslationProjects.Add(item);
+        // 刷新会清空再填充，SelectedItem 随之中间变为 null——必须上锁，否则会被当成"用户改选"而触发加载。
+        _projectSelectionLocked = true;
+        try
+        {
+            TranslationProjects.Clear();
+            foreach (var item in ProjectStore.List(ProjectSearch)) TranslationProjects.Add(item);
+        }
+        finally { _projectSelectionLocked = false; }
+        // 刷新后保持"当前真正打开的项目"为选中项，让下拉与工作区始终一致。
+        if (ActiveTranslationProject != null) SelectTranslationProject(ActiveTranslationProject.Id);
     }
 
     private void ArchiveTranslationRun(IReadOnlyCollection<TranslationTask> tasks)

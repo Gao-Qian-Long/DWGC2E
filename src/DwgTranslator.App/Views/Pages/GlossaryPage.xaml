@@ -72,7 +72,11 @@
         把它提到工具区首行，常规工具条顺次下移一行。两条工具条的置灰都由各自 Style 决定。 -->
    <Grid x:Name="NormalToolbar" Grid.Row="2" Margin="{DynamicResource Spacing.BlockTop}" Style="{StaticResource WorkspaceToolbarState}">
     <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-    <Button Grid.Column="0" Content="导入" Command="{Binding ImportGlossaryCommand}" Style="{StaticResource Button.Secondary}" Margin="{DynamicResource Spacing.Inline}"/>
+    <!-- 用户批注（2026-09-23）：「术语库导入的 json 格式或者表格格式你应该提醒用户！」
+         导入支持两种文件，格式要求直接挂在按钮上（ToolTip 换行用 &#x0a;），并限制 1000 条、原文/译文不能为空。 -->
+    <Button Grid.Column="0" Content="导入（JSON / Excel）" Command="{Binding ImportGlossaryCommand}" Style="{StaticResource Button.Secondary}" Margin="{DynamicResource Spacing.Inline}"
+            AutomationProperties.Name="导入术语库"
+            ToolTip="支持 JSON 与 Excel(.xlsx) 两种文件，最多 1000 条，原文与译文都不能为空；错误行会被跳过，不替换已有词条。&#x0a;&#x0a;【JSON】顶层是数组，每个元素一个词条，至少要有 Source 与 Target：&#x0a;[&#x0a;  { &quot;Source&quot;: &quot;轴承座&quot;, &quot;Target&quot;: &quot;Bearing Housing&quot;, &quot;Category&quot;: &quot;机械&quot; },&#x0a;  { &quot;Source&quot;: &quot;螺栓&quot;, &quot;Target&quot;: &quot;Bolt&quot; }&#x0a;]&#x0a;可选字段：SourceLang / TargetLang（留空则方向待确认）、CloudNote 备注、Enabled 启用。&#x0a;&#x0a;【Excel】首个工作表，从第 1 行开始，列顺序固定：&#x0a;A=原文(必填) B=译文(必填) C=分类 D=源语言 E=目标语言 F=备注 G=启用&#x0a;若第 1 行是表头（原文/Source/源语言/中文）会自动跳过。" />
     <Button Grid.Column="1" Content="导出" Click="Export_Click" Style="{StaticResource Button.Secondary}" Margin="{DynamicResource Spacing.Inline}"/>
     <!-- §L12 工具栏按钮补显式样式，避免落到隐式兜底 Button.Tertiary -->
     <Button Grid.Column="2" Content="分类管理" Click="Categories_Click" Style="{StaticResource Button.Secondary}" Margin="{DynamicResource Spacing.Inline}"/>

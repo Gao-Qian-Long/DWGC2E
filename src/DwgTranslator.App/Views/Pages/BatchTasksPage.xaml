@@ -524,7 +524,9 @@
                                     <DataTrigger Binding="{Binding Status}" Value="Skipped">
                                         <Setter TargetName="StatusBadgeText" Property="Text" Value="未翻译" />
                                     </DataTrigger>
-                                    <DataTrigger Binding="{Binding Status}" Value="GlossaryMatched">
+                                    <!-- 术语替换判的是 GlossaryHit 标志位而不是 Status：应用术语只换译文并打标志，
+                                         状态仍是已翻译/已审阅。放在 Skipped 之后，保证同一条命中时以术语替换呈现。 -->
+                                    <DataTrigger Binding="{Binding GlossaryHit}" Value="True">
                                         <Setter TargetName="StatusBadgeText" Property="Text" Value="术语替换" />
                                         <Setter TargetName="StatusBadge" Property="Background" Value="{DynamicResource Brush.WarningLight}" />
                                         <Setter TargetName="StatusBadgeText" Property="Foreground" Value="{DynamicResource Brush.Warning}" />

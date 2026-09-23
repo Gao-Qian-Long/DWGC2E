@@ -228,7 +228,11 @@ public partial class MainViewModel
         {
             if (Entities.Count == 0) return string.Empty;
             var skipped = Entities.Count(e => e.Status == TranslationStatus.Skipped);
-            var glossary = Entities.Count(e => e.Status == TranslationStatus.GlossaryMatched);
+            // 术语命中读的是 GlossaryHit **标志位**，不是 Status 枚举：
+            // 应用术语（含"应用术语到当前项目"）只把译文换成术语库的值并打上 GlossaryHit，
+            // 状态仍是已翻译/已审阅。既有筛选器（Operations.cs:201）与 GlossaryHitCount 都用这个标志，
+            // 我先前按 Status==GlossaryMatched 统计，导致界面上明明做了替换却显示"术语命中 0"（用户截图 2026-09-23）。
+            var glossary = Entities.Count(e => e.GlossaryHit);
             var pending = Entities.Count(e => e.Status == TranslationStatus.Pending);
             var failed = Entities.Count(e => e.Status == TranslationStatus.TranslationFailed);
             return $"本张 {Entities.Count} 条 · 未翻译 {skipped} · 术语命中 {glossary} · 待翻译 {pending} · 失败 {failed}";
