@@ -55,14 +55,27 @@ public partial class MainViewModel
     {
         if (value != null) ProjectRenameName = value.Name;
         if (_projectSelectionLocked || value == null) return;
-        if (IsProcessing || IsTranslating || IsExporting) return;
-        OpenTranslationProjectCommand.Execute(value);
-        // 用户没确认（例如有未保存校对时点了「取消」）→ 工作区没变，把选择拨回真正打开的项目，
-        // 否则下拉显示的项目与实际工作区不一致，比"不刷新"更难理解。
-        if (ActiveTranslationProject?.Id != value.Id) SelectTranslationProject(ActiveTranslationProject?.Id);
+        if (IsProcessing || IsTranslating || IsExporting)
+        {
+            SelectTranslationProject(ActiveTranslationProject?.Id);
+            return;
+        }
+
+        // 选中即打开，但必须等待异步解析完成后再判断是否成功。旧实现通过 AsyncRelayCommand
+        // 启动加载后立刻检查 ActiveTranslationProject，几乎必然仍是旧项目，于是下拉框会马上回跳。
+        _ = OpenSelectedTranslationProjectAsync(value);
+    }
+
+    private async Task OpenSelectedTranslationProjectAsync(TranslationProjectSummary summary)
+    {
+        await OpenTranslationProjectAsync(summary);
+        // 打开失败/用户取消时才拨回真正打开的项目；成功时也用程序性选择锁保持 UI 与工作区一致。
+        if (ReferenceEquals(SelectedTranslationProject, summary))
+            SelectTranslationProject(ActiveTranslationProject?.Id);
     }
 
     private bool _projectSelectionLocked;
+    private int _projectOpenVersion;
 
     /// <summary>程序性回填项目选择（不触发加载）。</summary>
     private void SelectTranslationProject(string? id)
@@ -147,6 +160,7 @@ public partial class MainViewModel
     private async Task OpenTranslationProjectAsync(TranslationProjectSummary? summary)
     {
         if (summary == null || IsProcessing || IsExporting || !ConfirmLeaveProofreading()) return;
+        var openVersion = ++_projectOpenVersion;
         try
         {
             var project = ProjectStore.Load(summary.Id);
@@ -157,13 +171,22 @@ public partial class MainViewModel
                 return;
             }
             var loaded = await LoadProjectEntitiesAsync(project, project.Drawings);
+            // 用户在解析期间又选了另一个项目：旧请求不能晚到后覆盖新选择。
+            if (openVersion != _projectOpenVersion) return;
             Entities.Clear(); foreach (var entity in loaded) Entities.Add(entity); InvalidateEntityIndex();
             RebuildDrawingFileList(project.Drawings.Select(d => d.SourcePath).ToArray());
             ActiveTranslationProject = project; CurrentSourceLang = project.SourceLanguage; CurrentTargetLang = project.TargetLanguage;
             ApplyFilter(); UpdateStatistics(); IsProofreading = true;
             StatusMessage = $"已打开项目“{project.Name}”，共 {loaded.Count} 条译文。";
         }
-        catch (Exception ex) { Log.Warning(ex, "打开翻译项目失败"); StatusMessage = "翻译项目无法打开，原记录已保留。"; }
+        catch (Exception ex)
+        {
+            if (openVersion == _projectOpenVersion)
+            {
+                Log.Warning(ex, "打开翻译项目失败");
+                StatusMessage = "翻译项目无法打开，原记录已保留。";
+            }
+        }
     }
 
     /// <summary>
