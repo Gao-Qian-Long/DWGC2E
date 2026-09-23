@@ -368,6 +368,7 @@ public partial class MainViewModel
         SelectedFilePath = value == null
             ? (DrawingFiles.Count > 1 ? "全部文件" : DrawingFiles.FirstOrDefault()?.FileName ?? string.Empty)
             : value.FileName;
+        OnPropertyChanged(nameof(CanExportSelectedDrawing));
         ApplyFilter();
     }
 
