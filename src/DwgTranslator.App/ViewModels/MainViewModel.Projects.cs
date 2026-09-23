@@ -160,6 +160,17 @@ public partial class MainViewModel
     private async Task OpenTranslationProjectAsync(TranslationProjectSummary? summary)
     {
         if (summary == null || IsProcessing || IsExporting || !ConfirmLeaveProofreading()) return;
+
+        // Opening a historical project replaces the visible workspace. Never hide a runnable queue
+        // behind that project: RunAsync operates on TaskManager state, not on whatever rows happen to
+        // be visible, so a hidden Pending/Paused task could otherwise be started by F5 later.
+        if (_taskManager.Tasks.Any(t => t.Status is TranslationTaskStatus.Pending or TranslationTaskStatus.Paused))
+        {
+            StatusMessage = "当前还有待处理或已暂停的翻译任务。请先完成、取消或清除这些任务，再打开历史项目。";
+            DwgTranslator.App.Services.ToastService.Warning(StatusMessage);
+            return;
+        }
+
         var openVersion = ++_projectOpenVersion;
         var workspaceVersion = _proofreadingWorkspaceVersion;
         try
