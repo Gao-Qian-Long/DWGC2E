@@ -498,7 +498,7 @@ public sealed class TaskManager : ITaskManager, ITaskRecoveryDiagnostics, IRunti
                 return;
             }
 
-            RaiseProgressMessage($"[0/{StageCount}] 队列开始：{queue.Count} 张图纸，本地并发 {LocalWorkerCount}，单图纸 AI 并发 {AiConcurrency}");
+            RaiseProgressMessage($"[0/{StageCount}] 队列开始：{queue.Count} 张图纸，本地并发 {LocalWorkerCount}；翻译请求批次与上游并发由云端服务统一调度");
 
             // 整段调度都在线程池线程上：RunAsync 返回的 Task 可以给 UI await，
             // 但 UI 线程永远不执行解析 / 翻译 / 写回本身。
