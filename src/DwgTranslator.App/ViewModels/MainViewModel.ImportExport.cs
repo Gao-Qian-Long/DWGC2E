@@ -139,6 +139,20 @@ public partial class MainViewModel
                 return result;
             });
 
+            var successfulPaths = filePaths.Where(p => !importErrors.ContainsKey(p)).ToList();
+
+            // Replace-workspace semantics are intentional, but replacement must be transactional:
+            // a completely failed import must never destroy the user's existing queue/entities.
+            // Only commit the new workspace after at least one requested drawing was parsed successfully.
+            if (successfulPaths.Count == 0)
+            {
+                StatusMessage = Strings.Get("StatusCadImportFailed");
+                Log.Warning("CAD import failed for every requested file ({Count}): {Errors}", importErrors.Count,
+                    string.Join("; ", importErrors.Select(pair => $"{Path.GetFileName(pair.Key)}: {pair.Value}")));
+                DwgTranslator.App.Views.PromptDialog.Show(Strings.Get("MsgCadImportError"), Strings.Get("MsgTitleError"), MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
+
             // Replace workspace semantics: old queued drawings must not execute against hidden rows.
             _taskManager.Clear(includeUnfinished: true);
             Entities.Clear();
@@ -149,26 +163,21 @@ public partial class MainViewModel
             RebuildDrawingFileList(filePaths, importErrors);
             // 导入即入队：任务层是主链路的唯一入口。同一张图纸重复入队会被任务层合并，
             // 不会重复跑；导入失败的文件不入队（否则队列里会出现一张必然失败的图纸）。
-            foreach (var path in filePaths.Where(p => !importErrors.ContainsKey(p)))
+            foreach (var path in successfulPaths)
                 _taskManager.Enqueue(path);
             AttachTasksToRows();
             ApplyFilter();
             UpdateStatistics();
 
-            if (importErrors.Count > 0 && allEntities.Count > 0)
+            if (importErrors.Count > 0)
             {
                 StatusMessage = Strings.Get("StatusImportPartialFail", allEntities.Count, importErrors.Count);
                 Log.Warning("Import errors ({Count}): {Errors}", importErrors.Count,
                     string.Join("; ", importErrors.Select(pair => $"{Path.GetFileName(pair.Key)}: {pair.Value}")));
             }
-            else if (importErrors.Count > 0)
-            {
-                StatusMessage = Strings.Get("StatusCadImportFailed");
-                DwgTranslator.App.Views.PromptDialog.Show(Strings.Get("MsgCadImportError"), Strings.Get("MsgTitleError"), MessageBoxButton.OK, MessageBoxImage.Error);
-            }
             else
             {
-                StatusMessage = Strings.Get("StatusImported", allEntities.Count, filePaths.Count);
+                StatusMessage = Strings.Get("StatusImported", allEntities.Count, successfulPaths.Count);
             }
         }, Strings.Get("OperationImporting"), "StatusCadImportFailed", "MsgCadImportError");
     }
