@@ -237,6 +237,7 @@
                                         <Separator />
                                         <MenuItem Header="移除所选文件" Command="{Binding RemoveDrawingCommand}"
                                                   CommandParameter="{Binding SelectedQueueDrawing}"
+                                                  IsEnabled="{Binding HasSelectedQueueDrawing}"
                                                   ToolTip="从队列移除选中的图纸（不删除文件）" />
                                         <MenuItem Header="清空队列…" Command="{Binding ClearAllCommand}"
                                                   Foreground="{DynamicResource Brush.Danger}" />
