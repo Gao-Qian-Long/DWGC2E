@@ -211,9 +211,9 @@ public sealed class TaskManager : ITaskManager, ITaskRecoveryDiagnostics, IRunti
 
     /// <summary>
     /// 上次运行遗留、可供继续的任务（构造时从 <see cref="ITaskStore"/> 恢复）。
-    /// UI 用它弹"检测到 N 张未完成，是否继续"：这些任务已经在 <see cref="Tasks"/> 里显示为
-    /// 等待中，但不会自己开跑——只有调用 <see cref="RunAsync"/> 才执行；用户选"不继续"时
-    /// 调 <see cref="Clear"/> 清掉即可。
+    /// UI 用它显示任务中心恢复提示：这些任务已经在 <see cref="Tasks"/> 里显示为等待中，
+    /// 但不会自己开跑。用户显式续跑后对应标记会被消费；选择清除时由 <see cref="Remove"/>
+    /// 或 <see cref="Clear"/> 同步移除。
     /// </summary>
     public IReadOnlyList<TranslationTask> PendingFromLastRun
     {
@@ -496,6 +496,16 @@ public sealed class TaskManager : ITaskManager, ITaskRecoveryDiagnostics, IRunti
             {
                 Log.Information("队列里没有待处理的图纸");
                 return;
+            }
+
+            // PendingFromLastRun means "recovered and still awaiting the user's decision".
+            // Once the user explicitly starts these rows they are no longer pending recovery,
+            // even if this new run is later cancelled. A future process restart will rebuild the
+            // recovery snapshot from persisted unfinished task state when appropriate.
+            lock (_gate)
+            {
+                var startedIds = queue.Select(t => t.Id).ToHashSet(StringComparer.Ordinal);
+                _pendingFromLastRun.RemoveAll(t => startedIds.Contains(t.Id));
             }
 
             RaiseProgressMessage($"[0/{StageCount}] 队列开始：{queue.Count} 张图纸，本地并发 {LocalWorkerCount}；翻译请求批次与上游并发由云端服务统一调度");
