@@ -237,9 +237,10 @@
                                         <Separator />
                                         <MenuItem Header="移除所选文件" Command="{Binding RemoveDrawingCommand}"
                                                   CommandParameter="{Binding SelectedQueueDrawing}"
-                                                  IsEnabled="{Binding HasSelectedQueueDrawing}"
+                                                  IsEnabled="{Binding CanRemoveSelectedQueueDrawing}"
                                                   ToolTip="从队列移除选中的图纸（不删除文件）" />
                                         <MenuItem Header="清空队列…" Command="{Binding ClearAllCommand}"
+                                                  IsEnabled="{Binding IsProcessing, Converter={StaticResource InverseBoolConverter}}"
                                                   Foreground="{DynamicResource Brush.Danger}" />
                                     </ContextMenu>
                                 </Button.ContextMenu>
@@ -374,6 +375,7 @@
                                                 <Button Content="移除" Style="{StaticResource Button.Compact.Secondary}" MinWidth="44" Padding="8,0" Margin="4,0,0,0"
                                                         Command="{Binding DataContext.RemoveDrawingCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
                                                         CommandParameter="{Binding}" AutomationProperties.Name="把该图纸移出队列"
+                                                        IsEnabled="{Binding DataContext.IsProcessing, RelativeSource={RelativeSource AncestorType=DataGrid}, Converter={StaticResource InverseBoolConverter}}"
                                                         ToolTip="从队列移除该图纸（不删除文件）；翻译进行中时不可移除" />
                                             </StackPanel>
                                         </DataTemplate>
