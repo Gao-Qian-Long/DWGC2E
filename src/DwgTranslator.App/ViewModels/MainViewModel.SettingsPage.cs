@@ -105,7 +105,7 @@ public partial class MainViewModel
     private bool _settingsRestartRequired;
     private AppConfig? _settingsBaseline;
     public AppConfig SettingsDraft => _settingsDraft ??= BeginSettingsEdit();
-    private static readonly string[] EditableSettings = ["Language", "StartWithWindows", "RestoreLastWorkspace", "AutoCheckUpdate", "OpenOutputFolderAfterExport", "ProtectDimensions", "ProtectTolerances", "ProtectModels", "GlossaryFirst", "MaxTranslationConcurrency", "LocalWorkerCount", "AiConcurrency", "MemoryOptimization", "MaxRetryCount", "ExportDirectory", "OutputNamingPattern", "DuplicatePolicy", "BackupSourceBeforeWrite", "AutoCadInstallPath", "CadPluginPath", "MinimumLogLevel"];
+    private static readonly string[] EditableSettings = ["Language", "StartWithWindows", "RestoreLastWorkspace", "AutoCheckUpdate", "OpenOutputFolderAfterExport", "ProtectDimensions", "ProtectTolerances", "ProtectModels", "GlossaryFirst", "LocalWorkerCount", "MemoryOptimization", "MaxRetryCount", "ExportDirectory", "OutputNamingPattern", "DuplicatePolicy", "BackupSourceBeforeWrite", "AutoCadInstallPath", "CadPluginPath", "MinimumLogLevel"];
 
     public bool HasSettingsValidationErrors => !_settingsInputsValid;
     public bool HasPendingSettingsApplication => _settingsPendingApply;
@@ -156,7 +156,7 @@ public partial class MainViewModel
     {
         if (ValidateSettingsInputs?.Invoke() == false || !_settingsInputsValid) { SettingsFeedback = "请修正标红的输入项后保存。"; NotifySettingsStateChanged(); return false; }
         var c = SettingsDraft;
-        if (c.LocalWorkerCount is < 1 or > 6 || c.AiConcurrency is < 1 or > 8 || c.MaxRetryCount is < 0 or > 5 || c.MaxTranslationConcurrency is < 1 or > 20) { SettingsFeedback = "并发或重试次数超出允许范围。"; return false; }
+        if (c.LocalWorkerCount is < 1 or > 6 || c.MaxRetryCount is < 0 or > 5) { SettingsFeedback = "图纸并发或重试次数超出允许范围。"; return false; }
         if (!TryValidateOutputNamingPattern(c.OutputNamingPattern, out var namingError)) { SettingsFeedback = namingError; return false; }
         var startupChanged = c.StartWithWindows != _settingsBaseline!.StartWithWindows;
         var languageChanged = !string.Equals(c.Language, _settingsBaseline.Language, StringComparison.OrdinalIgnoreCase);
