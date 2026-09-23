@@ -32,6 +32,7 @@ public partial class GlossaryPage : UserControl
     {
         if(Vm is not {} vm)return;
         var terms=Selection().Where(t=>t.SourceKind==GlossarySource.User).ToList();
+        if (terms.Count == 0) { vm.TermFeedback = "只有用户术语可以指定翻译方向。"; return; }
         var pair=GlossaryManagementWindow.ChooseDirection(); if(pair==null)return;
         await vm.CommitWorkspaceChangeAsync(()=>{foreach(var t in terms){t.SourceLang=pair.Value.Source;t.TargetLang=pair.Value.Target;}});
     }
@@ -42,9 +43,13 @@ public partial class GlossaryPage : UserControl
     {
         if (NormalToolbar == null) return;
         var count = TermList.SelectedItems.Count;
+        var hasUserSelection = Selection().Any(t => t.SourceKind == GlossarySource.User);
         SelectionToolbar.Tag = count > 0 ? null : EmptySelectionTag;
         SelectionCount.Text = count > 0 ? $"已选择 {count} 项" : "未选择术语";
-        DeleteSelectionButton.IsEnabled = Selection().Any(t => t.SourceKind == GlossarySource.User);
+        UploadSelectedButton.IsEnabled = hasUserSelection;
+        BatchDirectionButton.IsEnabled = hasUserSelection;
+        BatchCategoryButton.IsEnabled = hasUserSelection;
+        DeleteSelectionButton.IsEnabled = hasUserSelection;
         SelectAll.IsChecked = count == 0 ? false : count == TermList.Items.Count ? true : null;
     }
     private void ToggleCheckboxSelection(object sender)
