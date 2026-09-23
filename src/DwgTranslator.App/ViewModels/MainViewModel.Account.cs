@@ -341,9 +341,14 @@ public partial class MainViewModel
 
     public async Task SubmitLoginAsync(string password)
     {
-        if (IsLoggingIn || IsAccountRefreshing || IsExporting || IsGlossaryLoading || IsProcessing) return;
+        if (IsLoggingIn || IsAccountRefreshing) return;
+        if (IsExporting || IsGlossaryLoading || IsProcessing)
+        {
+            AccountFeedback = "当前有任务或数据操作正在进行，请完成后再切换账号。";
+            ToastService.Info(AccountFeedback);
+            return;
+        }
         if (!ConfirmLeaveProofreading() || !await ConfirmLeaveGlossaryAsync()) return;
-        if (IsProcessing) { AccountFeedback = "任务正在执行，请完成或停止任务后再切换账号。"; return; }
         if (!_apiClient.IsConfigured) { AccountState = AccountSessionState.ConfigurationError; AccountFeedback = "服务配置异常，请联系管理员修复安装配置后重试。"; return; }
         if (string.IsNullOrWhiteSpace(LoginName) || string.IsNullOrEmpty(password)) { AccountFeedback = "请输入账号和密码。"; return; }
         IsLoggingIn = true;
@@ -379,9 +384,14 @@ public partial class MainViewModel
     [RelayCommand]
     private async Task LogoutAccountAsync()
     {
-        if (IsLoggingIn || IsAccountRefreshing || IsExporting || IsGlossaryLoading || IsProcessing) return;
+        if (IsLoggingIn || IsAccountRefreshing) return;
+        if (IsExporting || IsGlossaryLoading || IsProcessing)
+        {
+            AccountFeedback = "当前有任务或数据操作正在进行，请完成后再退出登录。";
+            ToastService.Info(AccountFeedback);
+            return;
+        }
         if (!ConfirmLeaveProofreading() || !await ConfirmLeaveGlossaryAsync()) return;
-        if (IsProcessing) { AccountFeedback = "任务正在执行，完成或停止任务后可以退出登录。"; return; }
         IsLoggingIn = true;
         var logoutCredential = _config.AuthTokenEncrypted;
         var remoteLogoutConfirmed = false;
