@@ -54,7 +54,8 @@
 
   <!-- A solution build already builds Cad first through the .sln dependency below. Standalone App
        builds/publishes still invoke it here so the packaged plugin is never stale. -->
-  <Target Name="BuildCadPlugin" BeforeTargets="AssignTargetPaths" Condition="'$(BuildingSolutionFile)' != 'true'">
+  <Target Name="BuildCadPlugin" BeforeTargets="AssignTargetPaths"
+          Condition="'$(BuildingSolutionFile)' != 'true' And '$(SkipCadPluginBuild)' != 'true'">
     <MSBuild Projects="..\DwgTranslator.Cad\DwgTranslator.Cad.csproj"
              Targets="Build"
              RemoveProperties="RuntimeIdentifier;SelfContained;PublishSingleFile;PublishDir"
@@ -63,7 +64,8 @@
 
   <!-- Use this build's complete private plugin payload, never a manually copied source DLL.
        Add items after the plugin build so clean builds can discover generated files. -->
-  <Target Name="EmbedCurrentCadPlugin" BeforeTargets="AssignTargetPaths" DependsOnTargets="BuildCadPlugin">
+  <Target Name="EmbedCurrentCadPlugin" BeforeTargets="AssignTargetPaths" DependsOnTargets="BuildCadPlugin"
+          Condition="'$(SkipCadPluginBuild)' != 'true'">
     <ItemGroup>
       <_CadEmbeddedPayload Include="..\DwgTranslator.Cad\bin\$(Configuration)\$(CadPluginTargetFramework)\**\*"
                         Exclude="..\DwgTranslator.Cad\bin\$(Configuration)\$(CadPluginTargetFramework)\**\*.pdb" />
@@ -77,7 +79,8 @@
     <Error Condition="!Exists('..\DwgTranslator.Cad\bin\$(Configuration)\$(CadPluginTargetFramework)\DwgTranslator.Core.dll')" Text="CAD plugin private dependencies are missing." />
   </Target>
 
-  <Target Name="CopyCadPluginToBuildOutput" AfterTargets="Build">
+  <Target Name="CopyCadPluginToBuildOutput" AfterTargets="Build"
+          Condition="'$(SkipCadPluginBuild)' != 'true'">
     <ItemGroup>
       <_CadPluginBuildFiles Include="..\DwgTranslator.Cad\bin\$(Configuration)\$(CadPluginTargetFramework)\**\*"
                             Exclude="..\DwgTranslator.Cad\bin\$(Configuration)\$(CadPluginTargetFramework)\**\*.pdb" />
@@ -88,7 +91,8 @@
           SkipUnchangedFiles="true" />
   </Target>
 
-  <Target Name="CopyCadPluginToPublishOutput" AfterTargets="Publish">
+  <Target Name="CopyCadPluginToPublishOutput" AfterTargets="Publish"
+          Condition="'$(SkipCadPluginBuild)' != 'true'">
     <ItemGroup>
       <_CadPluginPublishFiles Include="..\DwgTranslator.Cad\bin\$(Configuration)\$(CadPluginTargetFramework)\**\*"
                               Exclude="..\DwgTranslator.Cad\bin\$(Configuration)\$(CadPluginTargetFramework)\**\*.pdb" />
