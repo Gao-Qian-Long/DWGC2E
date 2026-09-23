@@ -48,6 +48,7 @@ public partial class MainViewModel
         _projectAutosaveCts?.Dispose();
         _projectAutosaveCts = null;
         _projectOpenVersion++;
+        _restoredWorkspaceProjectId = null;
         ActiveTranslationProject = null;
         SelectTranslationProject(null);
         ProjectRenameName = string.Empty;
@@ -266,22 +267,35 @@ public partial class MainViewModel
 
         // 只认"翻译已经结束"的行：待处理/已暂停的图纸点"继续处理"会重新产出译文，
         // 先灌一份旧的进去只会让两个来源打架。归档时也只给这些状态的任务挂过 ProjectId。
-        var settled = DrawingFiles
-            .Where(row => row.Task is { ProjectId: not null } task
-                && task.Status is TranslationTaskStatus.ReadyForReview or TranslationTaskStatus.Completed)
-            .ToArray();
-        if (settled.Length == 0) return;
+        string? projectId = _restoredWorkspaceProjectId;
+        HashSet<string> wanted;
 
-        var projectId = settled.OrderByDescending(row => row.Task!.UpdatedAt)
-            .Select(row => row.Task!.ProjectId!.Trim()).First();
+        if (!string.IsNullOrWhiteSpace(projectId))
+        {
+            projectId = projectId.Trim();
+            wanted = DrawingFiles.Select(row => NormalizeSourcePath(row.FullPath))
+                .Where(path => !string.IsNullOrWhiteSpace(path))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        }
+        else
+        {
+            var settled = DrawingFiles
+                .Where(row => row.Task is { ProjectId: not null } task
+                    && task.Status is TranslationTaskStatus.ReadyForReview or TranslationTaskStatus.Completed)
+                .ToArray();
+            if (settled.Length == 0) return;
+
+            projectId = settled.OrderByDescending(row => row.Task!.UpdatedAt)
+                .Select(row => row.Task!.ProjectId!.Trim()).First();
+            wanted = settled
+                .Where(row => string.Equals(row.Task!.ProjectId!.Trim(), projectId, StringComparison.Ordinal))
+                .Select(row => NormalizeSourcePath(row.FullPath))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        }
+
         TranslationProject project;
         try { project = ProjectStore.Load(projectId); }
         catch (Exception ex) { Log.Warning(ex, "启动恢复译文失败：项目 {ProjectId} 无法读取", projectId); return; }
-
-        var wanted = settled
-            .Where(row => string.Equals(row.Task!.ProjectId!.Trim(), projectId, StringComparison.Ordinal))
-            .Select(row => NormalizeSourcePath(row.FullPath))
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var candidates = project.Drawings.Where(d => wanted.Contains(NormalizeSourcePath(d.SourcePath))).ToArray();
         // 源图缺失或已被改写时不套用旧句柄（与用户主动"打开项目"同一道校验），但只跳过这几张，
         // 不像主动打开那样整单拒绝 —— 否则用户又会看到"译文全没了"。
@@ -297,6 +311,7 @@ public partial class MainViewModel
 
         Entities.Clear(); foreach (var entity in loaded) Entities.Add(entity); InvalidateEntityIndex();
         ActiveTranslationProject = project;
+        _restoredWorkspaceProjectId = null;
         CurrentSourceLang = project.SourceLanguage; CurrentTargetLang = project.TargetLanguage;
         ApplyFilter(); UpdateStatistics();
 
