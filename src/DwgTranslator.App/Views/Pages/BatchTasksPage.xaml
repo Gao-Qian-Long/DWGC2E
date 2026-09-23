@@ -446,8 +446,11 @@
                     <Button Grid.Column="4" Content="取消编辑" Command="{Binding DiscardProofreadingCommand}" IsEnabled="{Binding HasUnsavedProofreading}" Style="{StaticResource Button.Secondary}" Margin="{DynamicResource Spacing.Inline}" />
                     <!-- §L13 与 TranslatePage 的同名按钮保持一致的 Primary/MinWidth/可用性；本页仅此一个 Primary。
                          文案由"导出已校对图纸"改成中性的"导出图纸"：校对不是前置条件（2026-09-22）。 -->
-                    <Button Grid.Column="5" Content="导出图纸" Command="{Binding ExportDwgCommand}" Style="{StaticResource Button.Primary}"
-                            MinWidth="136" IsEnabled="{Binding CanExportWorkspace}" ToolTip="导出当前队列的已勾选图纸；不需要先校对" />
+                    <Button Grid.Column="5" x:Name="ProofreadingExportButton" Content="导出图纸"
+                            Command="{Binding ExportSelectedDrawingCommand}" CommandParameter="{Binding SelectedDrawingFile}"
+                            Style="{StaticResource Button.Primary}" MinWidth="136"
+                            IsEnabled="{Binding CanExportSelectedDrawing}"
+                            ToolTip="导出当前校对图纸；已有输出时会用最新校对结果重新导出" />
                 </Grid>
                 <Grid Grid.Row="1" Margin="{DynamicResource Spacing.BlockTop}">
                     <Grid.ColumnDefinitions>
