@@ -39,6 +39,20 @@ public partial class MainViewModel
     [ObservableProperty] private string _projectRenameName = string.Empty;
     public bool HasActiveTranslationProject => ActiveTranslationProject != null;
 
+    private void ClearActiveTranslationProjectContext()
+    {
+        // A debounced save captures no account/path; if it fires after an account/workspace switch,
+        // ProjectStore would resolve against the NEW account directory and could persist the old
+        // project's data under the wrong owner. Cancel it whenever workspace ownership changes.
+        _projectAutosaveCts?.Cancel();
+        _projectAutosaveCts?.Dispose();
+        _projectAutosaveCts = null;
+        _projectOpenVersion++;
+        ActiveTranslationProject = null;
+        SelectTranslationProject(null);
+        ProjectRenameName = string.Empty;
+    }
+
     partial void OnActiveTranslationProjectChanged(TranslationProject? value)
     {
         OnPropertyChanged(nameof(HasActiveTranslationProject));
