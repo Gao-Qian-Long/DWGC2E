@@ -22,7 +22,7 @@
 | `Verify-ExecutableIcon.ps1` | 读取 EXE 图标资源并与标准 ICO 比较，不启动 EXE。 |
 | `Refresh-DesktopShellIcon.ps1` | 通知 Windows Shell 刷新图标；不是图标生成器，不杀 Explorer、不清图标缓存。 |
 
-根目录 `start.bat` 只启动当前 release；`publish.bat` 转发正式发布入口；`dev.bat` 仅在发布成功后启动 release。本地交付不等于网站下载更新、开放购买或真实支付验收。
+根目录 `build-release.bat` 转发正式发布入口（构建并更新 release）；`build-setup.bat` 在此基础上把交付目录的安装包投递到 upload\（只增不删，可加 -DryRun 预览）。本地交付不等于网站下载更新、开放购买或真实支付验收。
 
 ## 盘点、维护与兼容入口
 

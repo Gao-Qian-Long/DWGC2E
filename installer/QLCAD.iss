@@ -1,6 +1,6 @@
 ; QLCAD — Inno Setup 6.x script
 ;
-; Build the publish output first (publish.bat), then compile this script with ISCC.
+; Build the publish output first (build-release.bat), then compile this script with ISCC.
 ; On a machine without Inno Setup use tools\New-ReleasePackage.ps1 instead: it produces the same
 ; deliverable as a portable folder plus a one-click 安装.cmd bootstrap.
 ;

@@ -4,8 +4,8 @@
 $ErrorActionPreference='Stop'
 $root=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 $cases=@(
-    @{Path='dev.bat';Ignored=$false},
-    @{Path='publish.bat';Ignored=$false},
+    @{Path='build-release.bat';Ignored=$false},
+    @{Path='build-setup.bat';Ignored=$false},
     @{Path='DwgTranslator.sln';Ignored=$false},
     @{Path='Directory.Build.props';Ignored=$false},
     @{Path='settings.json.example';Ignored=$false},

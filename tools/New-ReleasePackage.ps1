@@ -39,7 +39,7 @@ $packageLock = & (Join-Path $scriptRoot 'Enter-DesktopPublishLock.ps1') -Workspa
 try {
 $buildInfo = & (Join-Path $scriptRoot 'Assert-CleanPackageInput.ps1') -PublishDir $publish
 $exe = Join-Path $publish 'QLCAD.exe'
-if (-not (Test-Path -LiteralPath $exe)) { throw "发布产物不完整：未找到 $exe（请先运行 publish.bat 或 dotnet publish）" }
+if (-not (Test-Path -LiteralPath $exe)) { throw "发布产物不完整：未找到 $exe（请先运行 build-release.bat 或 dotnet publish）" }
 
 # InformationalVersion ("2.1.0") is what the product advertises; FileVersion carries the extra
 # revision component ("2.1.0.0"), which only makes the download name look odd.

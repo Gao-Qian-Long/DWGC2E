@@ -36,7 +36,7 @@
 ## 跑法
 
 ```powershell
-# 全部门禁（等价于发版前校验；正常交付请直接用 publish.bat）
+# 全部门禁（等价于发版前校验；正常交付请直接用 build-release.bat）
 dotnet test tests/DwgTranslator.Core.Tests -c Release
 
 # 单个门禁脚本
