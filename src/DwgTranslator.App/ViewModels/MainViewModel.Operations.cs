@@ -295,6 +295,8 @@ public partial class MainViewModel
         HasMultipleDrawingFiles = DrawingFiles.Count > 1;
         if (SelectedDrawingFile != null && !DrawingFiles.Contains(SelectedDrawingFile))
             SelectedDrawingFile = null;
+        if (SelectedQueueDrawing != null && !DrawingFiles.Contains(SelectedQueueDrawing))
+            SelectedQueueDrawing = null;
         if (SelectedBatchTask != null && !DrawingFiles.Contains(SelectedBatchTask))
         {
             SelectedBatchTask = null;
