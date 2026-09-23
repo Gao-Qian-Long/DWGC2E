@@ -106,6 +106,13 @@ public partial class MainViewModel
             ToastService.Info("当前任务正在执行，请勿重复启动。");
             return;
         }
+        if (!CanStartWorkspaceTranslation)
+        {
+            ToastService.Info(ActiveTranslationProject != null
+                ? "当前是历史翻译项目，可继续校对或重新导出；如需重新翻译，请重新导入源图纸。"
+                : "当前工作区没有待处理或已暂停的翻译任务。");
+            return;
+        }
         await TranslateCommand.ExecuteAsync(null);
     }
 }
