@@ -2,11 +2,29 @@
 
 面向机械工程 CAD 图纸的 Windows 桌面翻译工具，可提取并翻译 DWG/DXF 中的文字标注，再将译文回写到图纸。支持离线文件处理，也支持通过宿主专用插件在线回写。
 
+## 仓库目录地图
+
+日常只需要记住第一行那三个入口，其余是"按需查看"的实现细节。
+
+| 目录 | 是什么 | 你多久会碰一次 |
+|---|---|---|
+| `src/` | 桌面程序源码，三个工程：`DwgTranslator.App`（WPF 界面）、`DwgTranslator.Core`（内核：API/翻译/任务/账户/更新）、`DwgTranslator.Cad`（装进 CAD 的写回插件） | 改功能时 |
+| `installer/` | 安装与卸载：`QLCAD.iss`（Inno Setup 编译成 Setup.exe）、`Install.ps1`/`Uninstall.ps1`/`InstallTransaction.ps1`（免管理员安装、按清单精确卸载、失败回滚）、`安装.cmd`/`使用说明.txt`（给用户的入口与说明）。**对编译 APP 本身没有作用** | 动安装行为/安装目录/快捷方式时 |
+| `tools/` | 交付链与运维脚本（发布、打包、安装器编译、包校验、品牌图标生成、截图取证）。分类索引见 [`tools/README.md`](./tools/README.md) | 发版时（`publish.bat` 走的就是这里） |
+| `tests/` | 测试与探针：哪些会在发版时拦你、哪些是手工跑，见 [`tests/README.md`](./tests/README.md) | 改完代码验证时 |
+| `assets/` | 打包进程序的资源：`icons/`（品牌 SVG 与 ICO）、`glossaries/`（默认术语库）、`prompts/`（已退役提示词，仅作为"安装器要删除的历史路径"存在） | 换图标/改默认术语时 |
+| `cf-worker/` | **另一个技术栈**：Cloudflare Worker + D1（登录、会员额度、翻译代理、支付、管理后台）。有自己的 `package.json`/`wrangler.toml`/`migrations`/`tests`，与桌面应用的构建互不影响 | 改后端时 |
+| `release/` | **本机可运行版本**（`QLCAD.exe`），由 `publish.bat` 产出并替换。位置被约定钉死，不要挪 | 只双击启动 |
+| `artifacts/` | 本地产物：构建候选、安装包、交付记录、回滚备份、历次任务证据。**不入仓库**（见 `.gitignore`），保留策略见 AGENTS.md | 排障时看 |
+| `upload/` | 上传网盘用的临时目录。**不入仓库** | 上传时 |
+
+根目录那几个"散"文件其实各有约定位置：`DwgTranslator.sln`（工程入口）、`Directory.Build.props`（CAD SDK 定位，决定插件编译成 net48 还是 net8.0）、`settings.json.example`（配置模板，会被打进包，**包内那份必须与它逐字节一致**；本地 `settings.json` 不参与打包）、`start.bat`/`publish.bat`/`dev.bat`（启动 / 发布 / 发布后启动）、`README.md`（本文）、`AGENTS.md`（协作与交付规则，不入仓库）。
+
 ## 用户安装与维护入口
 
 用户只需最新 Setup.exe；安装器自动释放必需文件，不需要脚本或开发工具。维护者运行 publish.bat 后，从 artifacts/current-release.json 的 publicDirectory 取得网盘文件，不能直接上传个人 release 目录。
 
-本机仅启动用 start.bat；dev.bat 保留“完整发布后启动”的开发兼容用途。详细管理规则见 桌面发布手册，
+本机仅启动用 start.bat；dev.bat 保留“完整发布后启动”的开发兼容用途。详细管理规则见 [桌面发布手册](tools/desktop-release-management.md)。
 
 ## 本机已安装版本运行
 
