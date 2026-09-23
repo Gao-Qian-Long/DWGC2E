@@ -26,6 +26,7 @@ public class WorkspaceSessionStoreTests
             {
                 SourceLanguage = "ZH",
                 TargetLanguage = "JA",
+                ActiveProjectId = "project-history-001",
                 Drawings = new() { @"C:\drawings\a.dwg", @"C:\drawings\b.dxf" }
             });
 
@@ -33,8 +34,32 @@ public class WorkspaceSessionStoreTests
             Assert.NotNull(snapshot);
             Assert.Equal("ZH", snapshot!.SourceLanguage);
             Assert.Equal("JA", snapshot.TargetLanguage);
+            Assert.Equal("project-history-001", snapshot.ActiveProjectId);
             Assert.Equal(new[] { @"C:\drawings\a.dwg", @"C:\drawings\b.dxf" }, snapshot.Drawings);
             Assert.Equal(WorkspaceSessionStore.SchemaVersion, snapshot.Version);
+        }
+        finally { Cleanup(path); }
+    }
+
+    [Fact]
+    public void SchemaV1WithoutProjectIdRemainsBackwardCompatible()
+    {
+        var path = TempFile();
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllText(path, JsonSerializer.Serialize(new
+            {
+                Version = WorkspaceSessionStore.SchemaVersion,
+                SourceLanguage = "ZH",
+                TargetLanguage = "EN",
+                Drawings = new[] { @"C:\drawings\legacy.dwg" }
+            }));
+
+            var snapshot = new WorkspaceSessionStore(path).Read();
+            Assert.NotNull(snapshot);
+            Assert.Equal(string.Empty, snapshot!.ActiveProjectId);
+            Assert.Equal(new[] { @"C:\drawings\legacy.dwg" }, snapshot.Drawings);
         }
         finally { Cleanup(path); }
     }
