@@ -411,8 +411,9 @@ public sealed partial class SmokeApp : App
             dialog.Close();
         };
         importDialogCloser.Start();
-        await vm.ImportCadFilesAsync(new[] { corruptImport });
+        var failedImportCommitted = await vm.ImportCadFilesAsync(new[] { corruptImport });
         importDialogCloser.Stop();
+        Check(!failedImportCommitted, "fully failed CAD import reports that no replacement workspace was committed");
         Check(vm.DrawingFiles.Select(x => x.FullPath).SequenceEqual(beforeFailedImportPaths)
               && vm.Entities.Count == beforeFailedImportEntityCount,
             "fully failed CAD import preserves the existing workspace");
