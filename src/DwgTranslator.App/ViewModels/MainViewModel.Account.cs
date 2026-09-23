@@ -24,7 +24,9 @@ public partial class MainViewModel
     public ObservableCollection<DeviceInfo> OnlineDevices { get; } = new();
     [ObservableProperty] private string _loginName = string.Empty;
     [ObservableProperty] private string _accountFeedback = "可先浏览软件，使用云端翻译前请登录。";
-    [ObservableProperty] private bool _isLoggingIn;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanImportFiles))]
+    private bool _isLoggingIn;
     [ObservableProperty] private AccountSessionState _accountState = AccountSessionState.SignedOut;
     private bool _sessionVerified;
     private bool _devicesSynced;
