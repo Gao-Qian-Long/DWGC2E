@@ -104,13 +104,34 @@ public partial class GlossaryPage : UserControl
         if (PromptDialog.Show($"仅删除本机所选 {terms.Count} 条用户术语，云端副本保留。系统及企业术语不变。", "删除术语", MessageBoxButton.YesNo) != MessageBoxResult.Yes) return;
         await vm.CommitWorkspaceChangeAsync(() => terms.ForEach(t => vm.TermDraft.Remove(t)));
     }
-    private void Export_Click(object s, RoutedEventArgs e)
+    private void ExportSelected_Click(object s, RoutedEventArgs e)
     {
         if (Vm is not { } vm) return;
-        var terms = Selection(); if (terms.Count == 0) terms = vm.TermView.Cast<GlossaryEntry>().ToList();
-        var dialog = new Microsoft.Win32.SaveFileDialog { Filter = "JSON 术语库|*.json", FileName = "glossary.json" };
+        var terms = Selection();
+        if (terms.Count == 0) { vm.TermFeedback = "请先选择要导出的术语。"; return; }
+        ExportTerms(vm, terms, "glossary-selected.json");
+    }
+
+    private void ExportCurrentView_Click(object s, RoutedEventArgs e)
+    {
+        if (Vm is not { } vm) return;
+        var terms = vm.TermView.Cast<GlossaryEntry>().ToList();
+        if (terms.Count == 0) { vm.TermFeedback = "当前筛选结果为空，没有可导出的术语。"; return; }
+        ExportTerms(vm, terms, "glossary.json");
+    }
+
+    private static void ExportTerms(MainViewModel vm, IReadOnlyCollection<GlossaryEntry> terms, string fileName)
+    {
+        var dialog = new Microsoft.Win32.SaveFileDialog { Filter = "JSON 术语库|*.json", FileName = fileName };
         if (dialog.ShowDialog() != true) return;
-        try { File.WriteAllText(dialog.FileName, JsonSerializer.Serialize(terms.Select(t => new { t.Source, t.Target, t.Category, t.SourceLang, t.TargetLang, t.Folder, t.CloudNote, t.Enabled }), AppConfigJson.WriteOptions)); vm.TermFeedback = $"已导出 {terms.Count} 条术语。"; } catch (IOException) { vm.TermFeedback = "导出失败，请检查文件权限。"; } catch (UnauthorizedAccessException) { vm.TermFeedback = "导出失败，请检查文件权限。"; }
+        try
+        {
+            File.WriteAllText(dialog.FileName,
+                JsonSerializer.Serialize(terms.Select(t => new { t.Source, t.Target, t.Category, t.SourceLang, t.TargetLang, t.Folder, t.CloudNote, t.Enabled }), AppConfigJson.WriteOptions));
+            vm.TermFeedback = $"已导出 {terms.Count} 条术语。";
+        }
+        catch (IOException) { vm.TermFeedback = "导出失败，请检查文件权限。"; }
+        catch (UnauthorizedAccessException) { vm.TermFeedback = "导出失败，请检查文件权限。"; }
     }
     private void Edit_Click(object s, RoutedEventArgs e) { if (((FrameworkElement)s).DataContext is GlossaryEntry t) Vm?.OpenTermDrawer(t); }
     private void Copy_Click(object s, RoutedEventArgs e) { if (((FrameworkElement)s).DataContext is GlossaryEntry t) Vm?.CopyTermToDrawer(t); }
