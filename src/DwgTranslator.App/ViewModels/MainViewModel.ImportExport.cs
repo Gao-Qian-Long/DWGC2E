@@ -396,8 +396,25 @@ public partial class MainViewModel
                             or TranslationStatus.GlossaryMatched);
                     if (unfinished > 0)
                     {
-                        skipped.Add($"{name}（仍有 {unfinished} 条未完成翻译）");
-                        Log.Warning("Batch export skipped {File}: {Count} unfinished entities", name, unfinished);
+                        // 用户批注（2026-09-23）：只报"3 条未完成"没用——用户不知道是哪 3 条、该去改什么。
+                        // 这里按分类计数并列出句柄（最多 6 个，其余折叠），日志里给全量。
+                        var blockers = Entities.Where(e =>
+                            string.Equals(NormalizeSourcePath(e.SourceFilePath), source, StringComparison.OrdinalIgnoreCase) &&
+                            e.Status is TranslationStatus.Pending or TranslationStatus.TranslationFailed
+                                or TranslationStatus.GlossaryMatched).ToList();
+                        var pendingCount = blockers.Count(e => e.Status == TranslationStatus.Pending);
+                        var failedCount = blockers.Count(e => e.Status == TranslationStatus.TranslationFailed);
+                        var glossaryCount = blockers.Count(e => e.Status == TranslationStatus.GlossaryMatched);
+                        var parts = new List<string>();
+                        if (pendingCount > 0) parts.Add($"待翻译 {pendingCount}");
+                        if (failedCount > 0) parts.Add($"翻译失败 {failedCount}");
+                        if (glossaryCount > 0) parts.Add($"术语命中待确认 {glossaryCount}");
+                        var handles = string.Join("、", blockers.Take(6).Select(e => "#" + e.Handle));
+                        if (blockers.Count > 6) handles += $"…等 {blockers.Count} 条";
+                        skipped.Add($"{name}（{string.Join("，", parts)}：{handles}）");
+                        Log.Warning("Batch export skipped {File}: {Count} unfinished entities ({Detail}) handles: {Handles}",
+                            name, unfinished, string.Join(",", parts),
+                            string.Join(", ", blockers.Select(e => $"{e.Handle}[{e.Status}]")));
                         ProgressValue = (index + 1) * step;
                         continue;
                     }
