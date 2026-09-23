@@ -721,6 +721,12 @@ public partial class MainViewModel
     public async Task ImportExcelFilesAsync(string filePath)
     {
         if (IsProcessing || IsLoggingIn) return;
+        if (Entities.Count == 0)
+        {
+            StatusMessage = "请先导入对应的 DWG / DXF 图纸，再导入校对后的 XLSX 译文表。";
+            DwgTranslator.App.Services.ToastService.Warning(StatusMessage);
+            return;
+        }
 
         await RunWithProgress(async () =>
         {
@@ -761,7 +767,15 @@ public partial class MainViewModel
             }
             ApplyFilter();
             UpdateStatistics();
-            StatusMessage = Strings.Get("StatusExcelImported", updatedCount);
+            if (updatedCount == 0)
+            {
+                StatusMessage = "XLSX 已读取，但没有找到与当前图纸匹配的文本条目。请确认它来自当前图纸及相同版本。";
+                DwgTranslator.App.Services.ToastService.Warning(StatusMessage);
+            }
+            else
+            {
+                StatusMessage = Strings.Get("StatusExcelImported", updatedCount);
+            }
         }, Strings.Get("OperationImportExcel"), "StatusExcelImportFailed", "ExcelImportFormatError");
     }
 
