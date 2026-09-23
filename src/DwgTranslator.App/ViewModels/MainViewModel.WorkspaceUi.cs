@@ -88,7 +88,7 @@ public partial class MainViewModel
         }
     }
     public bool CanStartWorkspaceTranslation => !IsProcessing && !IsTranslating && !IsExporting
-        && DrawingFiles.Any(x => x.Task == null || x.Task.Status is TranslationTaskStatus.Pending or TranslationTaskStatus.Paused);
+        && DrawingFiles.Any(x => x.Task?.Status is TranslationTaskStatus.Pending or TranslationTaskStatus.Paused);
     public bool CanRetryFailedDrawingTasks => !IsProcessing && !IsTranslating && !IsExporting && HasFailedDrawingTasks;
     public bool CanExportWorkspace => !IsProcessing && !IsTranslating && !IsExporting
         && DrawingFiles.Any(x => x.IsIncludedForExport && x.NeedsExport);
