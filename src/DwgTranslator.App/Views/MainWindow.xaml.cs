@@ -368,9 +368,10 @@ public partial class MainWindow : Window
 
     private void OnPreviewDragOver(object sender, DragEventArgs e)
     {
-        if (!TryGetDroppedFiles(e.Data, out var files))
+        if (!TryGetDroppedFiles(e.Data, out var files) || !_viewModel.CanImportFiles)
         {
-            // Not a file drop: leave it alone so text selection drags inside the grid keep working.
+            // Never advertise a copy drop that the import layer will reject. During translation,
+            // export or account switching the cursor stays "not allowed" and the overlay stays hidden.
             e.Effects = DragDropEffects.None;
             e.Handled = true;
             DropOverlay.Visibility = Visibility.Collapsed;
@@ -391,6 +392,13 @@ public partial class MainWindow : Window
         if (!TryGetDroppedFiles(e.Data, out var files)) return;
 
         e.Handled = true;
+        if (!_viewModel.CanImportFiles)
+        {
+            Services.ToastService.Warning(_viewModel.IsLoggingIn
+                ? "账户正在切换，请完成后再导入图纸。"
+                : "当前任务正在执行，完成或取消后再导入图纸。");
+            return;
+        }
         await _viewModel.ImportDroppedFilesAsync(files);
     }
 
