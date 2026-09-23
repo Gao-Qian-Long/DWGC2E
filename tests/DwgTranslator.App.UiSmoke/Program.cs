@@ -392,6 +392,13 @@ public sealed partial class SmokeApp : App
         taskTable.ScrollIntoView(vm.DrawingFiles[0]);
         taskTable.UpdateLayout();
         var detailRow = (System.Windows.Controls.DataGridRow)taskTable.ItemContainerGenerator.ContainerFromItem(vm.DrawingFiles[0]);
+        taskTable.SelectedItem = vm.DrawingFiles[1];
+        detailRow.RaiseEvent(new System.Windows.Input.MouseButtonEventArgs(System.Windows.Input.Mouse.PrimaryDevice, Environment.TickCount, System.Windows.Input.MouseButton.Right)
+        {
+            RoutedEvent = UIElement.PreviewMouseRightButtonDownEvent
+        });
+        await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+        Check(vm.SelectedBatchTask == vm.DrawingFiles[0], "right-clicking a task row retargets context actions to that row");
         var detailButton = FindVisual<System.Windows.Controls.Button>(detailRow);
         Check(detailButton != null && detailButton.IsVisible && detailButton.IsEnabled, "task detail button visible and enabled");
         var detailPeer = new System.Windows.Automation.Peers.ButtonAutomationPeer(detailButton!);
