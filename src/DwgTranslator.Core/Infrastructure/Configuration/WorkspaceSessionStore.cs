@@ -37,6 +37,9 @@ public sealed class WorkspaceSessionStore
         public DateTimeOffset SavedAtUtc { get; set; } = DateTimeOffset.UtcNow;
         public string SourceLanguage { get; set; } = string.Empty;
         public string TargetLanguage { get; set; } = string.Empty;
+        // Optional/additive field: older schema-v1 files simply deserialize this as empty,
+        // so historical-project continuity can be added without invalidating existing sessions.
+        public string ActiveProjectId { get; set; } = string.Empty;
         public List<string> Drawings { get; set; } = new();
     }
 
