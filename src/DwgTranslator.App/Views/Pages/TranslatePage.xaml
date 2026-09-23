@@ -15,13 +15,20 @@
         <controls:PageHeader x:Name="WorkspaceHeader"
                              Header="图纸翻译"
                              Description="添加图纸 → 翻译 → 导出。校对是可选的，翻译完成就可以直接出图。">
-            <Button Content="添加图纸" Command="{Binding ImportDwgCommand}">
+            <Button x:Name="AddDrawingButton" Content="添加图纸" Command="{Binding ImportDwgCommand}">
                 <Button.Style>
                     <Style TargetType="Button" BasedOn="{StaticResource Button.Secondary}">
+                        <Setter Property="IsEnabled" Value="True" />
                         <Style.Triggers>
                             <DataTrigger Binding="{Binding HasDrawingFiles}" Value="False">
                                 <Setter Property="Background" Value="{DynamicResource Brush.Primary}" />
                                 <Setter Property="Foreground" Value="White" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding IsProcessing}" Value="True">
+                                <Setter Property="IsEnabled" Value="False" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding IsLoggingIn}" Value="True">
+                                <Setter Property="IsEnabled" Value="False" />
                             </DataTrigger>
                         </Style.Triggers>
                     </Style>
@@ -212,7 +219,17 @@
                                        Style="{StaticResource CaptionStyle}" TextAlignment="Center" Margin="0,7,0,14" />
                             <Button x:Name="EmptySelectFileButton" Grid.Row="3" Content="选择文件"
                                     HorizontalAlignment="Center" MinWidth="120" Command="{Binding ImportDwgCommand}"
-                                    Style="{StaticResource Button.Secondary}" AutomationProperties.Name="选择文件" />
+                                    AutomationProperties.Name="选择文件">
+                                <Button.Style>
+                                    <Style TargetType="Button" BasedOn="{StaticResource Button.Secondary}">
+                                        <Setter Property="IsEnabled" Value="True" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsProcessing}" Value="True"><Setter Property="IsEnabled" Value="False" /></DataTrigger>
+                                            <DataTrigger Binding="{Binding IsLoggingIn}" Value="True"><Setter Property="IsEnabled" Value="False" /></DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
                         </Grid>
                     </Border>
 
