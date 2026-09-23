@@ -116,11 +116,18 @@ AGENTS.md
 # Obsolete manually copied plugin; builds embed the freshly built CAD payload instead.
 /src/DwgTranslator.App/Embedded/CadPlugin/
 
-# ===== Local tool residue / test output / release uploads =====
+# ===== Local tool residue / test output =====
 # Produced locally; never part of the repository.
 .dsh-vision-toolkit/
 tests/**/TestResults/
 *.trx
+
+# ===== upload/ —— 用户准备上传网盘的暂存目录，不是垃圾！=====
+# 用户把要发给客户的 Setup.exe、使用说明与 SHA256SUMS.txt 放在这里，等待上传网盘。
+# 它被忽略只是因为"本地产物不进仓库"，**不代表它可以被清理**：
+# 里面的文件往往是唯一副本，删掉要重新等一次构建。
+# 2026-09-23 曾因把它和上面的"残留/测试输出"归为一组而被误清空，事后从回收站还原。
+# 任何清理流程都不得删除或清空本目录。
 upload/
 
 .agent-teams/
