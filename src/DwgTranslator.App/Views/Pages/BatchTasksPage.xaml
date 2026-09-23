@@ -134,7 +134,10 @@
                             <ColumnDefinition Width="150" />
                             <ColumnDefinition Width="220" />
                             <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="16" />
+                            <!-- 用户批注（2026-09-23）「这里筛选的逻辑有点混乱」：原来 16px 空隙把
+                             「选历史项目」和「改当前项目名」两组动作挤成一条，看不出是两件事。
+                             这处分隔改成真正的竖线（由下面 项目名称 标签的左边框承担），列宽归零。 -->
+                        <ColumnDefinition Width="0" />
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
@@ -148,18 +151,23 @@
                                   AutomationProperties.Name="历史翻译项目" Margin="{DynamicResource Spacing.Inline}" />
                         <Button Grid.Column="3" Content="打开项目" Command="{Binding OpenTranslationProjectCommand}"
                                 CommandParameter="{Binding SelectedTranslationProject}" Style="{StaticResource Button.Secondary}" />
-                        <TextBlock Grid.Column="5" Text="项目名称" VerticalAlignment="Center" Margin="{DynamicResource Spacing.Inline}">
-                            <TextBlock.Style>
-                                <Style TargetType="TextBlock">
-                                    <Setter Property="Visibility" Value="Visible" />
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding SelectedTranslationProject}" Value="{x:Null}">
-                                            <Setter Property="Visibility" Value="Collapsed" />
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </TextBlock.Style>
-                        </TextBlock>
+                        <!-- 竖线把「选历史项目」（左）与「改当前项目名」（右）分成两组，
+                             用户批注 2026-09-23：「这里筛选的逻辑有点混乱啊」。 -->
+                        <Border Grid.Column="5" BorderBrush="{DynamicResource Brush.BorderLight}" BorderThickness="1,0,0,0"
+                                Padding="12,0,0,0" Margin="{DynamicResource Spacing.Inline}">
+                            <TextBlock Text="项目名称" VerticalAlignment="Center">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding SelectedTranslationProject}" Value="{x:Null}">
+                                                <Setter Property="Visibility" Value="Collapsed" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </Border>
                         <TextBox Grid.Column="6" Tag="当前项目名称" Text="{Binding ProjectRenameName, UpdateSourceTrigger=PropertyChanged}"
                                  AutomationProperties.Name="项目名称" Margin="{DynamicResource Spacing.Inline}">
                             <TextBox.Style>
