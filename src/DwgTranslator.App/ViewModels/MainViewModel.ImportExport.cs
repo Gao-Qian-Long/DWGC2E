@@ -172,6 +172,7 @@ public partial class MainViewModel
             }
 
             _proofreadingWorkspaceVersion++;
+            ClearActiveTranslationProjectContext();
 
             // Replace workspace semantics: old queued drawings must not execute against hidden rows.
             _taskManager.Clear(includeUnfinished: true);
