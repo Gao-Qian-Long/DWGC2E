@@ -45,6 +45,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty] private double _progressValue;
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanImportFiles))]
+    [NotifyPropertyChangedFor(nameof(CanRemoveSelectedQueueDrawing))]
     private bool _isProcessing;
     [ObservableProperty] private string _selectedFilePath = string.Empty;
     [ObservableProperty] private int _totalCount;
@@ -70,6 +71,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty] private DrawingFileItem? _selectedDrawingFile;
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasSelectedQueueDrawing))]
+    [NotifyPropertyChangedFor(nameof(CanRemoveSelectedQueueDrawing))]
     private DrawingFileItem? _selectedQueueDrawing;
     [ObservableProperty] private bool _hasMultipleDrawingFiles;
     [ObservableProperty] private bool _isAllDrawingsSelected = true;
@@ -86,6 +88,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
     public bool CanImportFiles => !IsProcessing && !IsLoggingIn;
 
     public bool HasSelectedQueueDrawing => SelectedQueueDrawing != null;
+
+    public bool CanRemoveSelectedQueueDrawing => !IsProcessing && SelectedQueueDrawing != null;
 
     public ObservableCollection<TextEntity> Entities { get; } = [];
     public ObservableCollection<TextEntity> FilteredEntities { get; } = [];
