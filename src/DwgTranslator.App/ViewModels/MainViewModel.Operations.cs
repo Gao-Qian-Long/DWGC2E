@@ -53,6 +53,7 @@ public partial class MainViewModel
             confirmText: "清空", danger: true);
         if (!confirmed || !TryClearSavedProofreading()) return;
 
+        ClearActiveTranslationProjectContext();
         Entities.Clear();
         FilteredEntities.Clear();
         DrawingFiles.Clear();
