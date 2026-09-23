@@ -1,0 +1,37 @@
+name: app-ci
+
+on:
+  push:
+    branches: [pro]
+  pull_request:
+    branches: [pro]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: windows-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore core tests
+        run: dotnet restore tests/DwgTranslator.Core.Tests/DwgTranslator.Core.Tests.csproj -p:NuGetAudit=false
+
+      - name: Run core tests
+        run: dotnet test tests/DwgTranslator.Core.Tests/DwgTranslator.Core.Tests.csproj --configuration Debug --no-restore --verbosity normal
+
+      - name: Build layout regression tool
+        run: dotnet build tests/DwgTranslator.LayoutRegression/LayoutRegression.csproj --configuration Debug -p:NuGetAudit=false --verbosity minimal
+
+      - name: Build WPF app and UI smoke
+        run: dotnet build tests/DwgTranslator.App.UiSmoke/DwgTranslator.App.UiSmoke.csproj --configuration Debug -p:SkipCadPluginBuild=true -p:NuGetAudit=false --verbosity minimal
