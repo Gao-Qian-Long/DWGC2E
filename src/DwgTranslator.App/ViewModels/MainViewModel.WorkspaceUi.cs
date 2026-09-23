@@ -93,6 +93,12 @@ public partial class MainViewModel
     public bool CanExportWorkspace => !IsProcessing && !IsTranslating && !IsExporting
         && DrawingFiles.Any(x => x.IsIncludedForExport && x.NeedsExport);
 
+    // Proofreading is scoped to one drawing. That drawing may already have an output file;
+    // after editing it must still be possible to overwrite/re-export the current drawing.
+    public bool CanExportSelectedDrawing => !IsProcessing && !IsTranslating && !IsExporting
+        && SelectedDrawingFile is { } selected
+        && (selected.CanExport || selected.HasOutput);
+
     /// <summary>
     /// 输出目录的人话版本。未导出过时说明默认规则（落到源图纸旁边），导出过一次后显示真实目录，
     /// 所以这一行在"还没有目录"时也不是空白（空白会让整块区域上下跳动）。
@@ -132,6 +138,7 @@ public partial class MainViewModel
         OnPropertyChanged(nameof(CanStartWorkspaceTranslation));
         OnPropertyChanged(nameof(CanRetryFailedDrawingTasks));
         OnPropertyChanged(nameof(CanExportWorkspace));
+        OnPropertyChanged(nameof(CanExportSelectedDrawing));
     }
 
     partial void OnIsProcessingChanged(bool value)
