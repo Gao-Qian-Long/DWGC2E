@@ -291,6 +291,23 @@ public sealed partial class SmokeApp : App
         Capture(window, "titlebar-unpinned");
         Check(!vm.HasDrawingFiles, "empty workspace fixture");
         Check(!((System.Windows.Controls.Button)translate.FindName("ExportSelectionButton")).IsEnabled, "empty or untranslated selection cannot export");
+        var headerImport = (System.Windows.Controls.Button)translate.FindName("AddDrawingButton");
+        var emptyImport = (System.Windows.Controls.Button)translate.FindName("EmptySelectFileButton");
+        Check(vm.CanImportFiles && headerImport.IsEnabled && emptyImport.IsEnabled,
+            "drawing import entries are available while the workspace is idle");
+        vm.IsProcessing = true;
+        await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+        Check(!vm.CanImportFiles && !headerImport.IsEnabled && !emptyImport.IsEnabled,
+            "drawing import entries disable while a workspace operation is running");
+        vm.IsProcessing = false;
+        vm.IsLoggingIn = true;
+        await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+        Check(!vm.CanImportFiles && !headerImport.IsEnabled && !emptyImport.IsEnabled,
+            "drawing import entries disable while the account is switching");
+        vm.IsLoggingIn = false;
+        await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+        Check(vm.CanImportFiles && headerImport.IsEnabled && emptyImport.IsEnabled,
+            "drawing import availability restores after busy states clear");
         var center = (FrameworkElement)translate.FindName("DropZoneCenter");
         var drop = (FrameworkElement)translate.FindName("EmptyDropZone");
         var centerOrigin = center.TranslatePoint(new Point(0, 0), drop);
