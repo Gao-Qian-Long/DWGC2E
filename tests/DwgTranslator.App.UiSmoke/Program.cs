@@ -318,6 +318,9 @@ public sealed partial class SmokeApp : App
         Check(((FrameworkElement)translate.FindName("EmptyDropZone")).IsVisible, "empty queue has large import entry");
         Check(!((FrameworkElement)translate.FindName("QueueWorkspace")).IsVisible, "empty queue does not show redundant table");
         Check(translate.FindName("WorkspaceLogLauncher") is FrameworkElement, "log is represented by a compact launcher by default");
+        await vm.ImportExcelFilesAsync(Path.Combine(AppDataDir, "review-without-drawing.xlsx"));
+        Check(vm.StatusMessage.Contains("先导入对应的 DWG / DXF"),
+            "review XLSX import is rejected clearly when no drawing workspace exists");
         var editEntity = new DwgTranslator.Core.Models.TextEntity { Handle = "proof-test", PlainText = "原文", TranslatedText = "original" };
         vm.Entities.Add(editEntity);
         vm.TrackProofreadingEdit(editEntity); editEntity.TranslatedText = "changed";
@@ -360,6 +363,13 @@ public sealed partial class SmokeApp : App
             "translate queue selection stays synchronized with its contextual selection");
         Check(vm.SelectedDrawingFile == null,
             "translate queue selection does not change proofreading/entity filter scope");
+        Check(vm.CanRemoveSelectedQueueDrawing, "selected idle queue row can be removed");
+        vm.IsProcessing = true;
+        await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+        Check(!vm.CanRemoveSelectedQueueDrawing, "queue removal disables while processing");
+        vm.IsProcessing = false;
+        await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+        Check(vm.CanRemoveSelectedQueueDrawing, "queue removal restores when processing finishes");
         var inRowExports=FindVisuals<System.Windows.Controls.Button>(queueGrid)
             .Where(b=>b.IsVisible&&Equals(b.Content,"导出")).ToArray();
         // 校对降级为可选后（2026-09-22 用户批注「校对不是必须的」），未校对（ReadyForReview）
