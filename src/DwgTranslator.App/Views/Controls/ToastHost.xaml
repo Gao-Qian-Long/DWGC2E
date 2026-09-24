@@ -10,10 +10,8 @@
                 <Border ToolTip="{Binding Message}" Background="{DynamicResource Brush.Surface}"
                         BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1"
                         CornerRadius="{DynamicResource CornerRadius.Medium}"
-                        Padding="12,8" Margin="{DynamicResource Spacing.Stack}" MaxWidth="340">
-                    <Border.Effect>
-                        <DropShadowEffect BlurRadius="14" ShadowDepth="3" Opacity="0.14" Color="#0F1F3A"/>
-                    </Border.Effect>
+                        Padding="12,8" Margin="{DynamicResource Spacing.Stack}" MaxWidth="340"
+                        Effect="{StaticResource Shadow.Popup}">
                     <StackPanel Orientation="Horizontal">
                         <Ellipse Width="8" Height="8" Margin="{DynamicResource Spacing.Inline}" VerticalAlignment="Center"
                                  Fill="{Binding Accent}"/>

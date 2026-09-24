@@ -32,10 +32,14 @@
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Brush.InkAlt}" />
+                                <Setter TargetName="Bd" Property="Effect" Value="{StaticResource Shadow.OnInkHover}" />
+                                <Setter TargetName="Bd" Property="RenderTransform"><Setter.Value><TranslateTransform Y="-1" /></Setter.Value></Setter>
                                 <Setter Property="Foreground" Value="{DynamicResource Brush.OnInk}" />
                             </Trigger>
                             <Trigger Property="IsSelected" Value="True">
                                 <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Brush.InkAlt}" />
+                                <Setter TargetName="Bd" Property="Effect" Value="{x:Null}" />
+                                <Setter TargetName="Bd" Property="RenderTransform"><Setter.Value><TranslateTransform Y="0" /></Setter.Value></Setter>
                                 <Setter TargetName="Accent" Property="Background" Value="{DynamicResource Brush.Amber}" />
                                 <Setter Property="Foreground" Value="{DynamicResource Brush.OnInk}" />
                                 <Setter Property="FontWeight" Value="SemiBold" />
@@ -82,7 +86,7 @@
                          「查看套餐」改成墨底琥珀链接按钮，整块看起来像一张会员卡片，信息密度不变但更收敛。
                          未登录（IsAccountLoggedIn=false）或还没拿到额度快照（OnlineUsage=null）时整块收起。
                          整个 chip 标记为可命中，否则它在 44 DIP 拖拽标题栏里只当作拖动区，按钮点不动。 -->
-                    <Border x:Name="ShellQuotaChip" Height="28" Padding="10,0" CornerRadius="3" Margin="{DynamicResource Spacing.InlineWide}" ToolTip="{Binding OnlineQuotaText}" WindowChrome.IsHitTestVisibleInChrome="True">
+                    <Border x:Name="ShellQuotaChip" Height="28" Padding="10,0" CornerRadius="{DynamicResource CornerRadius.Small}" Margin="{DynamicResource Spacing.InlineWide}" ToolTip="{Binding OnlineQuotaText}" WindowChrome.IsHitTestVisibleInChrome="True">
                         <Border.Style>
                             <Style TargetType="Border">
                                 <Setter Property="Visibility" Value="Visible" />
@@ -397,7 +401,7 @@
              底部对齐 + Spacing.Stack 让它停在状态栏正上方：既不遮住状态栏文本，也不挤压页面。
              声明位置保持在 ModalScrim 之前、内容列之后，绘制层级与改造前一致。 -->
         <controls:ToastHost x:Name="Toasts" Grid.Row="1" Grid.Column="1" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="{DynamicResource Spacing.Stack}" MaximumVisible="1" />
-        <Border x:Name="ModalScrim" Grid.RowSpan="3" Grid.ColumnSpan="2" Background="#660F172A" Panel.ZIndex="99" Visibility="Collapsed" />
+        <Border x:Name="ModalScrim" Grid.RowSpan="3" Grid.ColumnSpan="2" Background="{DynamicResource Brush.Overlay}" Panel.ZIndex="99" Visibility="Collapsed" />
 
 
         <!-- 拖入提示覆盖层（IsHitTestVisible=False 保证拖放事件回到窗口本身） -->

@@ -21,24 +21,28 @@
                             <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                             <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
                             <StackPanel VerticalAlignment="Center" Margin="0,0,16,0">
-                                <!-- 品牌签名：衬线页标题 + 琥珀手绘波浪线（暖色手作杂志风） -->
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="{TemplateBinding Header}" Style="{StaticResource PageTitleStyle}" />
-                                    <Path x:Name="HeaderWaveInline" Data="{StaticResource Icon.Deco.Wave}" Width="56" Height="5" Stretch="Fill"
-                                          Stroke="{DynamicResource Brush.Amber}" StrokeThickness="1.6"
-                                          StrokeStartLineCap="Round" StrokeEndLineCap="Round"
-                                          VerticalAlignment="Bottom" Margin="12,0,0,7" IsHitTestVisible="False" />
-                                </StackPanel>
+                                <!-- 五个页面共用标题排版和琥珀下划线，只保留各页选择的波形节奏。 -->
+                                <TextBlock Text="{TemplateBinding Header}" Style="{StaticResource PageTitleStyle}" />
+                                <Path x:Name="HeaderWave" Style="{StaticResource Deco.WaveRule}" Width="56" Margin="2,3,0,1" IsHitTestVisible="False" />
                                 <!-- 副标题强制单行：它的长度随运行状态变化（TranslatePage 是 MultiBinding），
                                      换行会顶破 MinHeight 定下的页头节奏；省略号 + ToolTip 既保高度也不吞信息。 -->
                                 <TextBlock x:Name="HeaderDescription" Text="{TemplateBinding Description}" Style="{StaticResource PageSubtitleStyle}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" ToolTip="{TemplateBinding Description}" />
-                                <!-- 品牌签名：标题下的琥珀手绘波浪线（暖色手作杂志风） -->
-                                <Path x:Name="HeaderWave" Style="{StaticResource Deco.WaveRule}" Width="56" Margin="2,5,0,0" />
                             </StackPanel>
                             <ContentPresenter x:Name="HeaderActions" Grid.Column="1" VerticalAlignment="Center" ContentSource="Content" />
                         </Grid>
                     </Border>
-                    <ControlTemplate.Triggers><DataTrigger Binding="{Binding Path=IsStacked, RelativeSource={RelativeSource Self}}" Value="True"><Setter TargetName="HeaderActions" Property="Grid.Row" Value="1"/><Setter TargetName="HeaderActions" Property="Grid.Column" Value="0"/><Setter TargetName="HeaderActions" Property="Grid.ColumnSpan" Value="2"/><Setter TargetName="HeaderActions" Property="Margin" Value="0,8,0,0"/></DataTrigger><DataTrigger Binding="{Binding Path=(controls:ResponsiveLayout.IsShort), RelativeSource={RelativeSource Self}}" Value="True"><Setter Property="MinHeight" Value="40"/><Setter Property="Margin" Value="0,0,0,8"/><Setter TargetName="HeaderDescription" Property="Visibility" Value="Collapsed"/><Setter TargetName="HeaderBorder" Property="Padding" Value="0,0,0,8"/></DataTrigger><DataTrigger Binding="{Binding Path=WaveVariant, RelativeSource={RelativeSource Self}}" Value="2"><Setter TargetName="HeaderWaveInline" Property="Data" Value="{StaticResource Icon.Deco.Wave2}"/><Setter TargetName="HeaderWave" Property="Data" Value="{StaticResource Icon.Deco.Wave2}"/></DataTrigger><DataTrigger Binding="{Binding Path=WaveVariant, RelativeSource={RelativeSource Self}}" Value="3"><Setter TargetName="HeaderWaveInline" Property="Data" Value="{StaticResource Icon.Deco.Wave3}"/><Setter TargetName="HeaderWave" Property="Data" Value="{StaticResource Icon.Deco.Wave3}"/></DataTrigger><DataTrigger Binding="{Binding Path=WaveVariant, RelativeSource={RelativeSource Self}}" Value="4"><Setter TargetName="HeaderWaveInline" Property="Data" Value="{StaticResource Icon.Deco.Wave4}"/><Setter TargetName="HeaderWave" Property="Data" Value="{StaticResource Icon.Deco.Wave4}"/></DataTrigger><DataTrigger Binding="{Binding Path=WaveVariant, RelativeSource={RelativeSource Self}}" Value="5"><Setter TargetName="HeaderWaveInline" Property="Data" Value="{StaticResource Icon.Deco.Wave5}"/><Setter TargetName="HeaderWave" Property="Data" Value="{StaticResource Icon.Deco.Wave5}"/></DataTrigger></ControlTemplate.Triggers>
+                    <ControlTemplate.Triggers>
+                        <DataTrigger Binding="{Binding Path=IsStacked, RelativeSource={RelativeSource Self}}" Value="True">
+                            <Setter TargetName="HeaderActions" Property="Grid.Row" Value="1"/><Setter TargetName="HeaderActions" Property="Grid.Column" Value="0"/><Setter TargetName="HeaderActions" Property="Grid.ColumnSpan" Value="2"/><Setter TargetName="HeaderActions" Property="Margin" Value="0,8,0,0"/>
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding Path=(controls:ResponsiveLayout.IsShort), RelativeSource={RelativeSource Self}}" Value="True">
+                            <Setter Property="MinHeight" Value="40"/><Setter Property="Margin" Value="0,0,0,8"/><Setter TargetName="HeaderDescription" Property="Visibility" Value="Collapsed"/><Setter TargetName="HeaderBorder" Property="Padding" Value="0,0,0,8"/>
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding Path=WaveVariant, RelativeSource={RelativeSource Self}}" Value="2"><Setter TargetName="HeaderWave" Property="Data" Value="{StaticResource Icon.Deco.Wave2}"/></DataTrigger>
+                        <DataTrigger Binding="{Binding Path=WaveVariant, RelativeSource={RelativeSource Self}}" Value="3"><Setter TargetName="HeaderWave" Property="Data" Value="{StaticResource Icon.Deco.Wave3}"/></DataTrigger>
+                        <DataTrigger Binding="{Binding Path=WaveVariant, RelativeSource={RelativeSource Self}}" Value="4"><Setter TargetName="HeaderWave" Property="Data" Value="{StaticResource Icon.Deco.Wave4}"/></DataTrigger>
+                        <DataTrigger Binding="{Binding Path=WaveVariant, RelativeSource={RelativeSource Self}}" Value="5"><Setter TargetName="HeaderWave" Property="Data" Value="{StaticResource Icon.Deco.Wave5}"/></DataTrigger>
+                    </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
@@ -60,6 +64,13 @@
         <Setter Property="TextOptions.TextFormattingMode" Value="Display" />
         <Setter Property="UseLayoutRounding" Value="True" />
     </Style>
+    <Style TargetType="Window">
+        <Setter Property="FontFamily" Value="{DynamicResource FontFamily.Body}" />
+        <Setter Property="FontSize" Value="{DynamicResource FontSize.Body}" />
+        <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}" />
+        <Setter Property="Background" Value="{DynamicResource Brush.Surface}" />
+        <Setter Property="UseLayoutRounding" Value="True" />
+    </Style>
     <Style TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{DynamicResource FontFamily.Body}" />
     </Style>
@@ -68,15 +79,16 @@
     <conv:InverseBoolConverter x:Key="InverseBoolConverter" />
     <conv:IndexToVisibilityConverter x:Key="IndexToVis" />
     <conv:StatusToBrushConverter x:Key="StatusBrush" />
-    <DropShadowEffect x:Key="CardShadow" BlurRadius="10" ShadowDepth="2" Opacity="0.10" Color="#0F1F3A" />
-    <!-- 覆盖式抽屉的页面级阴影（2026-09-21「没有层次感」）：比 CardShadow 更大半径 + 更深偏移，
-         让悬浮抽屉与底下内容拉开一个层级；柔影而非硬边——硬边是"印刷卡片"的身份，
-         悬浮层（ToolTip/Toast/抽屉）在本项目约定里一直用柔影。方向 270°=朝左投影，
-         与"从右滑入、停在右侧"的抽屉方位一致。 -->
-    <DropShadowEffect x:Key="DrawerShadow" BlurRadius="28" ShadowDepth="8" Direction="270" Opacity="0.22" Color="#0F1F3A" />
+    <!-- 纸面浮层统一使用暖墨色硬偏移；卡片与弹层的差异来自偏移距离，而不是模糊半径。 -->
+    <DropShadowEffect x:Key="CardShadow" BlurRadius="0" ShadowDepth="2" Direction="315" Opacity="0.55" Color="#DED2BC" />
+    <DropShadowEffect x:Key="Shadow.Popup" BlurRadius="0" ShadowDepth="3" Direction="315" Opacity="0.48" Color="#544D3B" />
+    <DropShadowEffect x:Key="DrawerShadow" BlurRadius="0" ShadowDepth="6" Direction="270" Opacity="0.42" Color="#403B30" />
+    <DropShadowEffect x:Key="Shadow.HardHover" BlurRadius="0" ShadowDepth="3" Direction="315" Opacity="0.78" Color="#B7AB96" />
+    <DropShadowEffect x:Key="Shadow.HardPrimaryHover" BlurRadius="0" ShadowDepth="3" Direction="315" Opacity="0.82" Color="#262521" />
+    <DropShadowEffect x:Key="Shadow.OnInkHover" BlurRadius="0" ShadowDepth="2" Direction="315" Opacity="0.72" Color="#D97728" />
     <!-- 网站的立体感来自硬边偏移阴影（css/theme.css 的 box-shadow:3px 3px 0），而不是模糊柔影。
          卡片与控件用沙色，主按钮用墨色，与 .btn / .btn-primary 对应。
-         CardShadow 以上那一个留给浮层（ToolTip / ContextMenu / Toast）——那里柔影才是对的。
+         浮层用更深的硬偏移，避免蓝灰色和模糊阴影。
 
          §H 全局柔化（用户批注：「这种立体式卡片的效果好像并不好，能全局优化下吗？」）。
          审计用 before / after（只动这两个令牌即全局生效：Shadow.Hard 被 Card / CardNoPad /
@@ -86,7 +98,7 @@
            Shadow.Hard         after  BlurRadius 0 / ShadowDepth 2 / Direction 315 / #DED2BC / Opacity 0.55
            Shadow.HardPrimary  before BlurRadius 0 / ShadowDepth 4 / Direction 315 / #262521 / Opacity 1
            Shadow.HardPrimary  after  BlurRadius 0 / ShadowDepth 2 / Direction 315 / #262521 / Opacity 0.55
-           CardShadow          不动（10 / 2 / 0.10 / #0F1F3A，在档约定只留给浮层）
+           CardShadow          暖沙色硬偏移（0 / 2 / 0.55 / #DED2BC）
          三个取舍理由：
          ① 保留 BlurRadius=0 —— 硬边偏移是本项目"印刷卡片"的身份语言（对齐网站 box-shadow:3px 3px 0）。
             加模糊会把身份从硬边印刷换成 Material 柔影，那是比用户诉求大得多的一次改版，且模糊会让阴影
@@ -135,7 +147,6 @@
                         </Trigger>
                         <Trigger Property="IsKeyboardFocused" Value="True">
                             <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource Brush.Primary}" />
-                            <Setter TargetName="Bd" Property="BorderThickness" Value="2" />
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
                             <Setter TargetName="Bd" Property="Opacity" Value="0.84" />
@@ -154,6 +165,17 @@
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Effect" Value="{StaticResource Shadow.HardHover}" />
+            </Trigger>
+            <Trigger Property="IsPressed" Value="True">
+                <Setter Property="Effect" Value="{x:Null}" />
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="Effect" Value="{x:Null}" />
+            </Trigger>
+        </Style.Triggers>
     </Style>
     <!-- Primary：一个页面最多一个 -->
     <!-- 主按钮与次按钮同高：同一个工具栏里不出现两种高度（§27），权重差异只靠颜色与字重 -->
@@ -172,7 +194,11 @@
                     <Condition Property="IsMouseOver" Value="True" />
                 </MultiTrigger.Conditions>
                 <Setter Property="Background" Value="{DynamicResource Brush.PrimaryHover}" />
+                <Setter Property="Effect" Value="{StaticResource Shadow.HardPrimaryHover}" />
             </MultiTrigger>
+            <Trigger Property="IsPressed" Value="True">
+                <Setter Property="Effect" Value="{x:Null}" />
+            </Trigger>
             <Trigger Property="IsEnabled" Value="False">
                 <Setter Property="Effect" Value="{x:Null}" />
             </Trigger>
@@ -215,7 +241,7 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
-                    <Border x:Name="IconSurface" CornerRadius="4" Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}">
+                    <Border x:Name="IconSurface" CornerRadius="{DynamicResource CornerRadius.Small}" Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}">
                         <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Border>
                     <ControlTemplate.Triggers>
@@ -573,10 +599,7 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ToolTip">
-                    <Border Background="{DynamicResource Brush.Surface}" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1" CornerRadius="{DynamicResource CornerRadius.Small}" Padding="10,6">
-                        <Border.Effect>
-                            <DropShadowEffect BlurRadius="10" ShadowDepth="2" Opacity="0.10" Color="#0F1F3A" />
-                        </Border.Effect>
+                    <Border Background="{DynamicResource Brush.Surface}" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1" CornerRadius="{DynamicResource CornerRadius.Small}" Padding="10,6" Effect="{StaticResource Shadow.Popup}">
                         <ContentPresenter />
                     </Border>
                 </ControlTemplate>
@@ -588,10 +611,7 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ContextMenu">
-                    <Border Background="{DynamicResource Brush.Surface}" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1" CornerRadius="{DynamicResource CornerRadius.Medium}" Padding="4">
-                        <Border.Effect>
-                            <DropShadowEffect BlurRadius="14" ShadowDepth="3" Opacity="0.12" Color="#0F1F3A" />
-                        </Border.Effect>
+                    <Border Background="{DynamicResource Brush.Surface}" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1" CornerRadius="{DynamicResource CornerRadius.Medium}" Padding="4" Effect="{StaticResource Shadow.Popup}">
                         <ItemsPresenter />
                     </Border>
                 </ControlTemplate>
@@ -612,7 +632,7 @@
         <Setter Property="Padding" Value="12,6" />
         <Setter Property="FocusVisualStyle" Value="{DynamicResource Focus.Outline}" />
         <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="MenuItem">
-            <Border x:Name="MenuSurface" Background="Transparent" CornerRadius="4" Padding="{TemplateBinding Padding}">
+            <Border x:Name="MenuSurface" Background="Transparent" CornerRadius="{DynamicResource CornerRadius.Small}" Padding="{TemplateBinding Padding}">
                 <ContentPresenter ContentSource="Header" RecognizesAccessKey="True" VerticalAlignment="Center" />
             </Border>
             <ControlTemplate.Triggers>
@@ -634,14 +654,14 @@
         <Setter Property="ItemContainerStyle" Value="{StaticResource Menu.Command}" />
         <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="MenuItem">
             <Grid>
-                <Border x:Name="DropdownSurface" Background="{DynamicResource Brush.Surface}" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1" CornerRadius="4" Padding="{TemplateBinding Padding}">
+                <Border x:Name="DropdownSurface" Background="{DynamicResource Brush.Surface}" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1" CornerRadius="{DynamicResource CornerRadius.Small}" Padding="{TemplateBinding Padding}">
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                         <ContentPresenter ContentSource="Header" RecognizesAccessKey="True" />
                         <Path Data="M 0 0 L 4 4 L 8 0" Stroke="{TemplateBinding Foreground}" StrokeThickness="1.2" Width="8" Height="4" Margin="10,0,0,0" VerticalAlignment="Center" />
                     </StackPanel>
                 </Border>
                 <Popup x:Name="PART_Popup" Placement="Bottom" VerticalOffset="4" AllowsTransparency="True" Focusable="False" IsOpen="{Binding IsSubmenuOpen, RelativeSource={RelativeSource TemplatedParent}}" PopupAnimation="None">
-                    <Border x:Name="DropdownPanel" MinWidth="160" Background="{DynamicResource Brush.Surface}" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1" CornerRadius="6" Padding="4">
+                    <Border x:Name="DropdownPanel" MinWidth="160" Background="{DynamicResource Brush.Surface}" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1" CornerRadius="{DynamicResource CornerRadius.Small}" Padding="4">
                         <ItemsPresenter KeyboardNavigation.DirectionalNavigation="Cycle" KeyboardNavigation.TabNavigation="Cycle" />
                     </Border>
                 </Popup>
@@ -689,7 +709,7 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Thumb">
-                    <Border x:Name="Bd" Background="{DynamicResource Brush.ScrollThumb}" CornerRadius="4" Margin="2,0" SnapsToDevicePixels="True" />
+                    <Border x:Name="Bd" Background="{DynamicResource Brush.ScrollThumb}" CornerRadius="{DynamicResource CornerRadius.Small}" Margin="2,0" SnapsToDevicePixels="True" />
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Brush.TextDisabled}" />
@@ -766,9 +786,7 @@
         <Setter Property="Background" Value="{DynamicResource Brush.Surface}" />
         <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border}" />
         <Setter Property="BorderThickness" Value="1,0,0,0" />
-        <!-- 用户批注（2026-09-21 抽屉「没有层次感」）：覆盖式抽屉悬浮在页面内容之上，
-             用大半径柔影与内容拉开层次；CardShadow(Blur 10/Depth 2) 是卡片级，
-             抽屉是页面级表面，阴影强度介于 CardShadow 与全屏遮罩之间。 -->
+        <!-- 抽屉以更长的左向硬偏移体现层级，与纸面卡片保持相同的印刷阴影语言。 -->
         <Setter Property="Effect" Value="{StaticResource DrawerShadow}" />
         <Setter Property="Padding" Value="24" />
         <Setter Property="HorizontalAlignment" Value="Right" />
@@ -818,7 +836,7 @@
     <Setter Property="Padding" Value="0,0,10,0" />
     <Setter Property="Template"><Setter.Value>
         <ControlTemplate TargetType="TextBox">
-            <Border x:Name="SearchBorder" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" CornerRadius="4">
+            <Border x:Name="SearchBorder" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" CornerRadius="{DynamicResource CornerRadius.Small}">
                 <Grid>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="34"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                     <Path Data="{StaticResource Icon.Search}" Width="14" Height="14" Stretch="Uniform" Stroke="{DynamicResource Brush.TextMuted}" StrokeThickness="1.5" IsHitTestVisible="False"/>

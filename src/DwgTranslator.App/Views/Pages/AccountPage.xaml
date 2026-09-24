@@ -5,12 +5,8 @@
         <!-- 「本周期额度重置时间」文案：后台未给 ResetAt 时返回空串，
              由该 TextBlock 自己的 DataTrigger（Text == ""）整行收起，不显示占位符。 -->
         <pages:QuotaResetTextConverter x:Key="Account.QuotaResetText"/>
-        <Style x:Key="Account.Card" TargetType="Border">
-            <Setter Property="Background" Value="{DynamicResource Brush.Surface}"/>
-            <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border}"/>
-            <Setter Property="BorderThickness" Value="1"/><Setter Property="CornerRadius" Value="{DynamicResource CornerRadius.Medium}"/>
+        <Style x:Key="Account.Card" TargetType="Border" BasedOn="{StaticResource Card}">
             <Setter Property="Padding" Value="{DynamicResource Spacing.16}"/>
-            <Setter Property="Effect" Value="{StaticResource Shadow.Hard}"/>
         </Style>
         <!-- 墨色反白会员横幅（暖色手作杂志风·深色反白区块）：墨底 + 墨色硬影 + 琥珀高光 -->
         <Style x:Key="Account.InkCard" TargetType="Border">
@@ -27,8 +23,7 @@
              （Brush.OnInkAccent #E8933F，即色板中专用于墨底的琥珀），次操作沿用同一形状但降到
              Brush.OnInkMuted / Brush.InkBorder，于是"同一风格、主次分明"；圆角走 CornerRadius.Medium
              令牌，两者同高（Size.ButtonCompact）同 MinWidth，热区一致。
-             模板刻意不含 RenderTransform 与 BorderThickness 触发器 —— Button.Base 的悬停抬升(Y=-2)
-             与聚焦描边加粗(0→2)会改变按钮几何，正是 §A2 要根除的跳动源。 -->
+             悬停反馈仅使用 RenderTransform 与硬偏移阴影：视觉抬升不参与测量，不会改变按钮热区或挤动相邻内容。 -->
         <Style x:Key="Account.InkButton" TargetType="Button">
             <Setter Property="Height" Value="{DynamicResource Size.ButtonCompact}"/>
             <Setter Property="MinHeight" Value="{DynamicResource Size.ButtonCompact}"/>
@@ -51,8 +46,16 @@
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" RecognizesAccessKey="True"/>
                         </Border>
                         <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="InkBd" Property="Background" Value="{DynamicResource Brush.OnInkTrack}"/></Trigger>
-                            <Trigger Property="IsPressed" Value="True"><Setter TargetName="InkBd" Property="Opacity" Value="0.8"/></Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="InkBd" Property="Background" Value="{DynamicResource Brush.OnInkTrack}"/>
+                                <Setter TargetName="InkBd" Property="Effect" Value="{StaticResource Shadow.OnInkHover}"/>
+                                <Setter TargetName="InkBd" Property="RenderTransform"><Setter.Value><TranslateTransform Y="-2"/></Setter.Value></Setter>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="InkBd" Property="Opacity" Value="0.8"/>
+                                <Setter TargetName="InkBd" Property="Effect" Value="{x:Null}"/>
+                                <Setter TargetName="InkBd" Property="RenderTransform"><Setter.Value><TranslateTransform X="2" Y="2"/></Setter.Value></Setter>
+                            </Trigger>
                             <Trigger Property="IsEnabled" Value="False"><Setter TargetName="InkBd" Property="Opacity" Value="0.45"/><Setter Property="Cursor" Value="Arrow"/></Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -79,7 +82,15 @@
                             <ContentPresenter HorizontalAlignment="Stretch" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Tile" Property="Background" Value="{DynamicResource Brush.BackgroundAlt}"/></Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Tile" Property="Background" Value="{DynamicResource Brush.BackgroundAlt}"/>
+                                <Setter TargetName="Tile" Property="Effect" Value="{StaticResource Shadow.HardHover}"/>
+                                <Setter TargetName="Tile" Property="RenderTransform"><Setter.Value><TranslateTransform Y="-2"/></Setter.Value></Setter>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Tile" Property="Effect" Value="{x:Null}"/>
+                                <Setter TargetName="Tile" Property="RenderTransform"><Setter.Value><TranslateTransform X="2" Y="2"/></Setter.Value></Setter>
+                            </Trigger>
                             <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.5"/></Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>

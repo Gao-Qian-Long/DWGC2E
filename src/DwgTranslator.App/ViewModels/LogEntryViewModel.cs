@@ -27,20 +27,20 @@ public class LogEntryViewModel
 
     public string LevelColor => _entry.Level switch
     {
-        LogLevel.Verbose => "#9E9E9E",
-        LogLevel.Debug => "#78909C",
-        LogLevel.Information => "#65615A",
-        LogLevel.Warning => "#986E30",
+        LogLevel.Verbose => "#6E675D",
+        LogLevel.Debug => "#6E675D",
+        LogLevel.Information => "#60594F",
+        LogLevel.Warning => "#835D27",
         LogLevel.Error => "#A34E49",
         LogLevel.Fatal => "#A34E49",
-        _ => "#757575"
+        _ => "#6E675D"
     };
 
     public string SourceColor => _entry.LogSource switch
     {
-        LogSource.CadPlugin => "#65615A",
-        LogSource.Translation => "#65615A",
-        _ => "#65615A"
+        LogSource.CadPlugin => "#60594F",
+        LogSource.Translation => "#60594F",
+        _ => "#60594F"
     };
 
     public string RowBackground => _entry.Level switch

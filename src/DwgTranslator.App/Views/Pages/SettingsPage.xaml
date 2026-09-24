@@ -42,10 +42,14 @@
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="Surface" Property="Background" Value="{DynamicResource Brush.BackgroundAlt}" />
+                                <Setter TargetName="Surface" Property="Effect" Value="{StaticResource Shadow.HardHover}" />
+                                <Setter TargetName="Surface" Property="RenderTransform"><Setter.Value><TranslateTransform Y="-1" /></Setter.Value></Setter>
                             </Trigger>
                             <Trigger Property="IsSelected" Value="True">
                                 <Setter TargetName="Surface" Property="Background" Value="{DynamicResource Brush.PrimaryLight}" />
                                 <Setter TargetName="Surface" Property="BorderBrush" Value="{DynamicResource Brush.Primary}" />
+                                <Setter TargetName="Surface" Property="Effect" Value="{x:Null}" />
+                                <Setter TargetName="Surface" Property="RenderTransform"><Setter.Value><TranslateTransform Y="0" /></Setter.Value></Setter>
                                 <Setter Property="Foreground" Value="{DynamicResource Brush.Primary}" />
                                 <!-- 选中态只靠底色与描边强调：改字重会让行盒变高，6 格里"当前那一格"就比
                                      其余 5 格高出一点，正是用户报的高度不一致。 -->
@@ -83,7 +87,7 @@
             <Setter Property="VerticalAlignment" Value="Center" />
             <Style.Triggers>
                 <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True">
-                    <Setter Property="Foreground" Value="{DynamicResource Brush.Ink}" />
+                    <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}" />
                     <Setter Property="FontWeight" Value="SemiBold" />
                 </DataTrigger>
             </Style.Triggers>

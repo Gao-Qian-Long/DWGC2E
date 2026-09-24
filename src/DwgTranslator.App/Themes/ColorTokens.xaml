@@ -40,7 +40,8 @@
     <!-- 状态色（只表达状态，不做装饰） -->
     <SolidColorBrush x:Key="Brush.Success" Color="#4E765E" />
     <SolidColorBrush x:Key="Brush.SuccessLight" Color="#EAF0E9" />
-    <Color x:Key="Color.Warning">#986E30</Color>
+    <!-- Deep enough to stay readable on paper and warning-light surfaces. -->
+    <Color x:Key="Color.Warning">#835D27</Color>
     <SolidColorBrush x:Key="Brush.Warning" Color="{DynamicResource Color.Warning}" />
     <SolidColorBrush x:Key="Brush.WarningLight" Color="#F3ECDF" />
     <SolidColorBrush x:Key="Brush.Danger" Color="#A34E49" />
@@ -56,11 +57,10 @@
     <Color x:Key="Color.DropScrim">#262521</Color>
     <SolidColorBrush x:Key="Brush.TitleBarBackground" Color="#FFFCF5" />
     <SolidColorBrush x:Key="Brush.DataGridHeader" Color="#F7F5F0" />
-    <!-- 圆角对齐网站 css/theme.css 的 border-radius:2px。网站是印刷工坊式的方角，
-         之前 6/8 DIP 的圆角是「不像卡片」的原因之一。 -->
+    <!-- 全局统一为 2px 纸卡方角，与网站印刷式轮廓一致。 -->
     <CornerRadius x:Key="CornerRadius.Small" TopLeft="2" TopRight="2" BottomLeft="2" BottomRight="2" />
     <CornerRadius x:Key="CornerRadius.Medium" TopLeft="2" TopRight="2" BottomLeft="2" BottomRight="2" />
-    <CornerRadius x:Key="CornerRadius.Large" TopLeft="3" TopRight="3" BottomLeft="3" BottomRight="3" />
+    <CornerRadius x:Key="CornerRadius.Large" TopLeft="2" TopRight="2" BottomLeft="2" BottomRight="2" />
     <CornerRadius x:Key="CornerRadius.Pill" TopLeft="2" TopRight="2" BottomLeft="2" BottomRight="2" />
 
     <!-- ═══════════════════════════════════════════════════════════════════════

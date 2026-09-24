@@ -8,7 +8,7 @@
     <StackPanel>
       <DockPanel Margin="{DynamicResource Spacing.StackLoose}">
         <Button DockPanel.Dock="Right" Content="×" ToolTip="取消并关闭" Width="34" Height="34" Click="Cancel_Click" Style="{StaticResource Button.Tertiary}" WindowChrome.IsHitTestVisibleInChrome="True" />
-        <TextBlock x:Name="HeaderText" Text="选择图纸导出方式" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
+        <TextBlock x:Name="HeaderText" Text="选择图纸导出方式" FontFamily="{DynamicResource FontFamily.Display}" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
       </DockPanel>
       <TextBlock x:Name="SubtitleText" Text="确认导出方式后继续。不会修改当前图纸队列。" TextWrapping="Wrap" Margin="{DynamicResource Spacing.StackLoose}" />
       <!-- The mode group is a real choice only when a CAD host is installed. The dialog is still

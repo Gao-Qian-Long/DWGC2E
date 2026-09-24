@@ -15,7 +15,7 @@
             <Grid>
                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                 <StackPanel>
-                    <TextBlock Text="帮助中心" FontSize="22" FontWeight="SemiBold" Foreground="{DynamicResource Brush.TextPrimary}"/>
+                    <TextBlock Text="帮助中心" FontFamily="{DynamicResource FontFamily.Display}" FontSize="22" FontWeight="SemiBold" Foreground="{DynamicResource Brush.TextPrimary}"/>
                     <TextBlock Text="使用说明、常见操作与问题排查" Style="{StaticResource CaptionStyle}" Margin="{DynamicResource Spacing.BlockTopTight}"/>
                 </StackPanel>
                 <Button Grid.Column="1" Content="关闭" Click="Close_Click" Style="{StaticResource Button.Secondary}" VerticalAlignment="Center"/>

@@ -66,7 +66,7 @@ public partial class MainViewModel
     public string AccountEmailText => OnlineProfile?.Email ?? string.Empty;
     public string OnlinePlanText => string.IsNullOrWhiteSpace(OnlineSubscription?.PlanName) ? "未同步套餐" : OnlineSubscription.PlanName;
     public string MembershipTierColor => (OnlineSubscription?.PlanName ?? "").ToLowerInvariant() switch
-    { "max" => "#A66B12", "pro" => "#974719", "go" => "#188568", _ => "#6E6B64" };
+    { "max" => "#805719", "pro" => "#974719", "go" => "#A95724", _ => "#6E675D" };
     public bool HasPaidTier => OnlineSubscription?.PlanName?.ToLowerInvariant() is "pro" or "max" or "go";
     partial void OnOnlineSubscriptionChanged(SubscriptionInfo? value)
     {

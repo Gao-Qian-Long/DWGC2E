@@ -7,14 +7,14 @@
         ResizeMode="NoResize"
         ShowInTaskbar="False"
         Background="{DynamicResource Brush.Background}"
-        FontFamily="Microsoft YaHei UI, Segoe UI"
+        FontFamily="{DynamicResource FontFamily.Body}"
         FontSize="{DynamicResource FontSize.Body}">
 
     <Border Padding="22,20,22,18">
         <!-- Width is fixed on the window, which keeps the measure constraint finite for the picker
              grid; the content therefore sizes itself instead of carrying a magic width. -->
         <StackPanel>
-            <TextBlock Text="翻译语言" FontSize="17" FontWeight="SemiBold"
+            <TextBlock Text="翻译语言" FontFamily="{DynamicResource FontFamily.Display}" FontSize="17" FontWeight="SemiBold"
                        Foreground="{DynamicResource Brush.TextPrimary}" />
             <TextBlock Text="选择图纸上的原文语言，以及要翻译成的目标语言。"
                        Margin="{DynamicResource Spacing.BlockTopTight}" TextWrapping="Wrap"
@@ -80,7 +80,7 @@
             <Border x:Name="PreviewBorder"
                     Margin="{DynamicResource Spacing.BlockTopLoose}"
                     Padding="14,11"
-                    CornerRadius="8"
+                    CornerRadius="{DynamicResource CornerRadius.Medium}"
                     Background="{DynamicResource Brush.PrimaryLight}">
                 <StackPanel Orientation="Horizontal">
                     <Path Data="M 9,0 A 9,9 0 1 1 8.99,0 Z M 9,2.6 A 6.4,6.4 0 1 0 9.01,2.6 Z M 9,0 A 4.2,9 0 0 1 9,18 A 4.2,9 0 0 1 9,0 Z M 0.6,6.4 L 17.4,6.4 L 17.4,8.4 L 0.6,8.4 Z"
@@ -103,7 +103,7 @@
 
             <Border Margin="{DynamicResource Spacing.BlockTopLoose}"
                     Padding="13,11"
-                    CornerRadius="8"
+                    CornerRadius="{DynamicResource CornerRadius.Medium}"
                     Background="{DynamicResource Brush.WarningLight}">
                 <TextBlock TextWrapping="Wrap"
                            Foreground="{DynamicResource Brush.TextSecondary}"

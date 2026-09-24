@@ -52,7 +52,7 @@ public partial class LicenseDialog : Window
             ActivationCodeBox.IsEnabled = false;
             ActivateButton.IsEnabled = false;
             ActivationCodeBox.Text = Strings.Get("LicenseAlreadyActivated");
-            ActivationCodeBox.Foreground = System.Windows.Media.Brushes.Green;
+            ActivationCodeBox.Foreground = (System.Windows.Media.Brush)FindResource("Brush.Success");
         }
     }
 
@@ -62,13 +62,13 @@ public partial class LicenseDialog : Window
         if (string.IsNullOrEmpty(code))
         {
             ResultText.Text = Strings.Get("LicenseEnterCodePrompt");
-            ResultText.Foreground = System.Windows.Media.Brushes.Red;
+            ResultText.Foreground = (System.Windows.Media.Brush)FindResource("Brush.Danger");
             return;
         }
 
         var (success, message) = _licenseService.Activate(code);
         ResultText.Text = message;
-        ResultText.Foreground = success ? System.Windows.Media.Brushes.Green : System.Windows.Media.Brushes.Red;
+        ResultText.Foreground = (System.Windows.Media.Brush)FindResource(success ? "Brush.Success" : "Brush.Danger");
 
         if (success)
         {
@@ -81,7 +81,7 @@ public partial class LicenseDialog : Window
     {
         Clipboard.SetText(MachineIdBox.Text);
         ResultText.Text = Strings.Get("LicenseMachineIdCopied");
-        ResultText.Foreground = System.Windows.Media.Brushes.Green;
+        ResultText.Foreground = (System.Windows.Media.Brush)FindResource("Brush.Success");
     }
 
     private void Close_Click(object sender, RoutedEventArgs e)

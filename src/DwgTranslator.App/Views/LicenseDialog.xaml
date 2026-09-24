@@ -6,6 +6,8 @@
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize"
         Background="{DynamicResource Brush.Background}"
+        FontFamily="{DynamicResource FontFamily.Body}"
+        FontSize="{DynamicResource FontSize.Body}"
         MaxHeight="700">
     <Grid Margin="{DynamicResource Spacing.20}">
         <Grid.RowDefinitions>
@@ -16,7 +18,7 @@
 
         <!-- Header -->
         <StackPanel Grid.Row="0" Margin="{DynamicResource Spacing.StackWide}">
-            <TextBlock Text="{conv:Localize LicenseHeader}" FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource Brush.TextPrimary}"/>
+            <TextBlock Text="{conv:Localize LicenseHeader}" FontFamily="{DynamicResource FontFamily.Display}" FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource Brush.TextPrimary}"/>
             <TextBlock Text="{conv:Localize LicenseManageDesc}" FontSize="{DynamicResource FontSize.Secondary}" Foreground="{DynamicResource Brush.TextMuted}" Margin="{DynamicResource Spacing.BlockTopTight}"/>
         </StackPanel>
 
@@ -24,7 +26,7 @@
         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="{DynamicResource Spacing.StackWide}">
             <StackPanel>
                 <!-- Current Status Panel -->
-                <Border Background="{DynamicResource Brush.Surface}" CornerRadius="6" Padding="14" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1" Margin="{DynamicResource Spacing.Stack}">
+                <Border Style="{StaticResource Card}" Padding="14" Margin="{DynamicResource Spacing.Stack}">
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
@@ -40,7 +42,7 @@
                         <TextBlock Grid.Row="0" Grid.Column="1" x:Name="StatusText" Text="{conv:Localize LicenseLoading}" Foreground="{DynamicResource Brush.Primary}" FontWeight="Bold" FontSize="{DynamicResource FontSize.Body}" Margin="{DynamicResource Spacing.StackTight}" VerticalAlignment="Center"/>
 
                         <TextBlock Grid.Row="1" Grid.Column="0" Text="{conv:Localize LicenseMachineId}" FontWeight="SemiBold" Margin="{DynamicResource Spacing.Inline}" VerticalAlignment="Center" Foreground="{DynamicResource Brush.TextSecondary}"/>
-                        <TextBox Grid.Row="1" Grid.Column="1" x:Name="MachineIdBox" IsReadOnly="True" Background="{DynamicResource Brush.BackgroundAlt}" Padding="4,2" FontFamily="Consolas" FontSize="{DynamicResource FontSize.Secondary}" Margin="{DynamicResource Spacing.StackTight}" VerticalAlignment="Center" BorderBrush="{DynamicResource Brush.Border}"/>
+                        <TextBox Grid.Row="1" Grid.Column="1" x:Name="MachineIdBox" IsReadOnly="True" Background="{DynamicResource Brush.BackgroundAlt}" Padding="4,2" FontFamily="{DynamicResource FontFamily.Mono}" FontSize="{DynamicResource FontSize.Secondary}" Margin="{DynamicResource Spacing.StackTight}" VerticalAlignment="Center" BorderBrush="{DynamicResource Brush.Border}"/>
 
                         <TextBlock Grid.Row="2" Grid.Column="0" Text="{conv:Localize LicenseTrialRemaining}" FontWeight="SemiBold" Margin="{DynamicResource Spacing.Inline}" VerticalAlignment="Center" Foreground="{DynamicResource Brush.TextSecondary}"/>
                         <TextBlock Grid.Row="2" Grid.Column="1" x:Name="TrialText" Text="-" Margin="{DynamicResource Spacing.StackTight}" VerticalAlignment="Center"/>
@@ -51,10 +53,10 @@
                 </Border>
 
                 <!-- Activation Input -->
-                <Border Background="{DynamicResource Brush.Surface}" CornerRadius="6" Padding="14" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1" Margin="{DynamicResource Spacing.Stack}">
+                <Border Style="{StaticResource Card}" Padding="14" Margin="{DynamicResource Spacing.Stack}">
                     <StackPanel>
                         <TextBlock Text="{conv:Localize LicenseEnterCode}" FontWeight="Bold" Margin="{DynamicResource Spacing.StackTight}" Foreground="{DynamicResource Brush.TextPrimary}"/>
-                        <TextBox x:Name="ActivationCodeBox" Padding="8,6" FontSize="{DynamicResource FontSize.Body}" FontFamily="Consolas"
+                        <TextBox x:Name="ActivationCodeBox" Padding="8,6" FontSize="{DynamicResource FontSize.Body}" FontFamily="{DynamicResource FontFamily.Mono}"
                                  TextWrapping="NoWrap" AcceptsReturn="False" BorderBrush="{DynamicResource Brush.Border}"
                                  ToolTip="输入 gql119871 或 DwgTranslator-P-XXXX..."/>
                         <TextBlock x:Name="ResultText" Text="" Margin="{DynamicResource Spacing.BlockTopTight}" FontSize="{DynamicResource FontSize.Secondary}" TextWrapping="Wrap"/>
@@ -62,7 +64,7 @@
                 </Border>
 
                 <!-- Pricing Info -->
-                <Border Background="{DynamicResource Brush.InfoLight}" CornerRadius="4" Padding="12">
+                <Border Style="{StaticResource Card.Inset}" Background="{DynamicResource Brush.InfoLight}" Padding="12">
                     <TextBlock TextWrapping="Wrap" FontSize="{DynamicResource FontSize.Secondary}" Foreground="{DynamicResource Brush.Info}" LineHeight="17">
                         <Run FontWeight="Bold" Text="{conv:Localize LicensePricing}"/><LineBreak/>
                         <Run Text="{conv:Localize LicenseTrialDesc}"/><LineBreak/>
@@ -76,15 +78,11 @@
 
         <!-- Buttons - ALWAYS VISIBLE at bottom -->
         <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
-            <Button x:Name="CopyMachineIdButton" Content="{conv:Localize BtnCopyMachineId}" Padding="12,6" Margin="{DynamicResource Spacing.Inline}"
-                    Click="CopyMachineId_Click" FontSize="{DynamicResource FontSize.Secondary}" Background="{DynamicResource Brush.BackgroundAlt}" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1"
-                    Cursor="Hand"/>
-            <Button x:Name="ActivateButton" Content="{conv:Localize BtnActivate}" Padding="12,6" Margin="{DynamicResource Spacing.Inline}"
-                    Background="{DynamicResource Brush.Primary}" Foreground="White" FontWeight="Bold" FontSize="{DynamicResource FontSize.Secondary}"
-                    Click="Activate_Click" Cursor="Hand" BorderThickness="0"/>
-            <Button Content="{conv:Localize BtnOk}" Padding="12,6" FontSize="{DynamicResource FontSize.Secondary}" FontWeight="SemiBold"
-                    Click="Close_Click" IsDefault="True" Background="{DynamicResource Brush.BackgroundAlt}" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1"
-                    Cursor="Hand"/>
+            <Button x:Name="CopyMachineIdButton" Content="{conv:Localize BtnCopyMachineId}" Margin="{DynamicResource Spacing.Inline}"
+                    Click="CopyMachineId_Click" Style="{StaticResource Button.Secondary}" />
+            <Button x:Name="ActivateButton" Content="{conv:Localize BtnActivate}" Margin="{DynamicResource Spacing.Inline}"
+                    Click="Activate_Click" Style="{StaticResource Button.Primary}" />
+            <Button Content="{conv:Localize BtnOk}" Click="Close_Click" IsDefault="True" Style="{StaticResource Button.Secondary}" />
         </StackPanel>
     </Grid>
 </Window>

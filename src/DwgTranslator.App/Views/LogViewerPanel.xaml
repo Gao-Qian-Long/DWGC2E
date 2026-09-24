@@ -57,7 +57,7 @@
                 <StackPanel Grid.Row="0" Orientation="Horizontal" HorizontalAlignment="Left">
                     <TextBlock Text="运行日志" Foreground="{DynamicResource Brush.TextSecondary}" FontSize="{DynamicResource FontSize.Secondary}" FontWeight="Bold"
                                VerticalAlignment="Center" Margin="{DynamicResource Spacing.InlineWide}"
-                               FontFamily="Cascadia Code, Consolas"/>
+                               FontFamily="{DynamicResource FontFamily.Mono}"/>
 
                     <ComboBox ItemsSource="{Binding LevelFilters}"
                               SelectedItem="{Binding SelectedLevelFilter}"
@@ -89,7 +89,7 @@
                 <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="{DynamicResource Spacing.BlockTopTight}">
                     <TextBlock Text="{Binding LevelSummary}" Foreground="{DynamicResource Brush.TextSecondary}" FontSize="{DynamicResource FontSize.Secondary}"
                                VerticalAlignment="Center" Margin="{DynamicResource Spacing.InlineWide}"
-                               FontFamily="Cascadia Code, Consolas"/>
+                               FontFamily="{DynamicResource FontFamily.Mono}"/>
                     <TextBlock Text="{Binding TotalLogCount, StringFormat='共 {0} 条'}"
                                Foreground="{DynamicResource Brush.TextMuted}" FontSize="{DynamicResource FontSize.Secondary}" VerticalAlignment="Center"
                                Margin="{DynamicResource Spacing.InlineWide}"/>
@@ -157,7 +157,7 @@
                         <!-- Timestamp -->
                         <TextBlock Grid.Column="0" Text="{Binding Timestamp}"
                                    Foreground="{DynamicResource Brush.TextMuted}" FontSize="{DynamicResource FontSize.Secondary}"
-                                   FontFamily="Cascadia Code, Consolas"
+                                   FontFamily="{DynamicResource FontFamily.Mono}"
                                    VerticalAlignment="Center" Margin="{DynamicResource Spacing.Inline}"/>
 
                         <!-- Level badge -->
@@ -165,7 +165,7 @@
                                 Background="{Binding LevelColor}">
                             <TextBlock Text="{Binding LevelTag}" FontSize="{DynamicResource FontSize.Secondary}" FontWeight="Bold"
                                        Foreground="White" HorizontalAlignment="Center"
-                                       FontFamily="Cascadia Code, Consolas"/>
+                                       FontFamily="{DynamicResource FontFamily.Mono}"/>
                         </Border>
 
                         <!-- Source badge (hidden for APP to reduce noise) -->
@@ -174,13 +174,13 @@
                                 Visibility="{Binding LogSource, Converter={StaticResource SourceFilterVis}}">
                             <TextBlock Text="{Binding SourceTag}" FontSize="9" FontWeight="Bold"
                                        Foreground="White" HorizontalAlignment="Center"
-                                       FontFamily="Cascadia Code, Consolas"/>
+                                       FontFamily="{DynamicResource FontFamily.Mono}"/>
                         </Border>
 
                         <!-- Category (if present) -->
                         <TextBlock Grid.Column="3" Text="{Binding Category}"
                                    Foreground="{DynamicResource Brush.Info}" FontSize="{DynamicResource FontSize.Secondary}"
-                                   FontFamily="Cascadia Code, Consolas"
+                                   FontFamily="{DynamicResource FontFamily.Mono}"
                                    VerticalAlignment="Center" Margin="{DynamicResource Spacing.Inline}"
                                    Visibility="{Binding Category, Converter={StaticResource CategoryVis}}"/>
 
@@ -195,7 +195,7 @@
                             </Grid.ColumnDefinitions>
                             <TextBlock Grid.Column="0" Text="{Binding Message}" Style="{StaticResource LogText}" ToolTip="{Binding Message}"/>
                             <TextBlock Grid.Column="1" Foreground="{DynamicResource Brush.TextMuted}" FontSize="{DynamicResource FontSize.Secondary}"
-                                       FontFamily="Cascadia Code, Consolas" VerticalAlignment="Center"
+                                       FontFamily="{DynamicResource FontFamily.Mono}" VerticalAlignment="Center"
                                        Margin="{DynamicResource Spacing.LeftGap}">
                                 <TextBlock.Style>
                                     <Style TargetType="TextBlock">
@@ -217,7 +217,7 @@
 
                         <!-- Exception -->
                         <TextBlock Grid.Column="5" Text="{Binding Exception}" Foreground="{DynamicResource Brush.Danger}" FontSize="{DynamicResource FontSize.Secondary}"
-                                   FontFamily="Cascadia Code, Consolas" VerticalAlignment="Center"
+                                   FontFamily="{DynamicResource FontFamily.Mono}" VerticalAlignment="Center"
                                    Margin="{DynamicResource Spacing.LeftGap}"
                                    MaxWidth="480" TextTrimming="CharacterEllipsis"
                                    ToolTip="{Binding Exception}"
