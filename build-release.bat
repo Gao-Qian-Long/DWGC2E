@@ -20,7 +20,7 @@ set RC=%ERRORLEVEL%
 if not "%RC%"=="0" (
   echo.
   echo FAILED: release 未被更新，上面有具体失败项。
-  echo         门禁未通过时不会替换 release，正在运行的旧版本仍然可用。
+  echo         The previous release remains available.
   pause
   exit /b %RC%
 )

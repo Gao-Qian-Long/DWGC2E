@@ -339,6 +339,14 @@ public sealed partial class SmokeApp
                             Check(exportedDrawerButtons.Count(x => Equals(x.Content, "重新导出")) == 1,
                                 "exported task drawer exposes one explicit re-export action " + size);
 
+                            // The focus test below must exercise an actual hidden -> visible transition.
+                            // Keep the exported-task assertions independent, then close this drawer so
+                            // opening the failed task queues a fresh FocusOnOpen callback.
+                            vm.IsTaskDetailOpen = false;
+                            await WaitUntil(
+                                () => !vm.IsTaskDetailOpen && !exportedDrawer.IsVisible,
+                                "exported task drawer did not close before the focus regression fixture");
+
                             vm.BatchSearch = "batch-";
                             vm.BatchStatusFilter = 3;
                             Check(vm.BatchView.Cast<object>().Contains(review) && !vm.BatchView.Cast<object>().Contains(completed),
@@ -386,6 +394,9 @@ public sealed partial class SmokeApp
                             if (size.Width == 1280)
                             {
                                 var closeButton = (Button)batch.FindName("TaskDrawerCloseButton");
+                                await WaitUntil(
+                                    () => ReferenceEquals(Keyboard.FocusedElement, closeButton),
+                                    "task drawer did not move keyboard focus to its close action");
                                 Check(ReferenceEquals(Keyboard.FocusedElement, closeButton),
                                     "task drawer moves keyboard focus to its close action");
                                 var closePeer = new System.Windows.Automation.Peers.ButtonAutomationPeer(closeButton);
