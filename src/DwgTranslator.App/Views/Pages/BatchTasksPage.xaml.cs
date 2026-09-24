@@ -18,15 +18,17 @@ public partial class BatchTasksPage : UserControl
 
     private void ClearFilters_Click(object sender, RoutedEventArgs e) { if(DataContext is MainViewModel vm) { vm.BatchSearch=""; vm.BatchStatusFilter=0; vm.BatchDateFilter=0; } }
 
-    private void TaskTable_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
+    private void TaskTable_MouseRightButtonDown(object sender, MouseButtonEventArgs e)
     {
         if (sender is not DataGrid table || e.OriginalSource is not DependencyObject source) return;
         if (ItemsControl.ContainerFromElement(table, source) is not DataGridRow row) return;
 
-        // WPF does not guarantee that right-click changes DataGrid selection. Context-menu
-        // commands bind to SelectedBatchTask, so explicitly synchronize the clicked row first.
-        table.SelectedItem = row.Item;
+        // A right-click does not reliably change DataGrid selection. Context-menu commands bind
+        // to SelectedBatchTask, so update both the grid and its view model to the clicked row.
         row.Focus();
+        table.SelectedItem = row.Item;
+        if (table.DataContext is MainViewModel vm && row.Item is DrawingFileItem task)
+            vm.SelectedBatchTask = task;
     }
     /// <summary>Explicit source updates keep Escape from changing the saved translation.</summary>
     private void TranslationGrid_CellEditEnding(object sender, DataGridCellEditEndingEventArgs e)
