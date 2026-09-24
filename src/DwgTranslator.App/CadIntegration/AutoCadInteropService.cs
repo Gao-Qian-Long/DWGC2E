@@ -9,8 +9,8 @@ using Serilog;
 namespace DwgTranslator.App.Services;
 
 /// <summary>
-/// Handles AutoCAD COM interop for precise DWG writeback.
-/// Orchestrates: COM connection -> config serialization -> LISP script -> signal polling.
+/// Orchestrates writeback through the bundled CAD-host plugin.
+/// Uses CAD COM when available and falls back to a batch host process when COM is unavailable.
 /// </summary>
 public class AutoCadInteropService : IAutoCadInteropService, IDisposable
 {
@@ -28,12 +28,6 @@ public class AutoCadInteropService : IAutoCadInteropService, IDisposable
         "AutoCAD.Application.24",      // 2022
         "AutoCAD.Application.23",      // 2021
         "AutoCAD.Application.22",      // 2020
-        "AutoCADLT.Application",
-        "AutoCADLT.Application.25",
-        "AutoCADLT.Application.24.3",
-        "AutoCADLT.Application.24.2",
-        "AutoCADLT.Application.24.1",
-        "AutoCADLT.Application.24",
     ];
 
     private static readonly System.Text.Json.JsonSerializerOptions ConfigJsonOptions = new()
@@ -69,7 +63,7 @@ public class AutoCadInteropService : IAutoCadInteropService, IDisposable
     }
 
     /// <summary>
-    /// Execute writeback of translated entities via AutoCAD COM interop.
+    /// Execute writeback of translated entities through the CAD-host plugin.
     /// Heavy operations run on the calling thread; the caller is responsible
     /// for offloading to a background thread via Task.Run.
     /// </summary>
@@ -417,7 +411,7 @@ DwgTranslator: done."")
         startInfo.ArgumentList.Add("/b");
         startInfo.ArgumentList.Add(scriptPath);
 
-        progress?.Report("正在通过CAD批处理执行在线回写…");
+        progress?.Report("正在通过 CAD 宿主插件处理图纸…");
         using var process = new Process { StartInfo = startInfo };
         try
         {
@@ -733,7 +727,6 @@ DwgTranslator: done."")
         try
         {
             if (Process.GetProcessesByName("acad").Length > 0) return true;
-            if (Process.GetProcessesByName("acadlt").Length > 0) return true;
             if (Process.GetProcessesByName("gcad").Length > 0) return true;
         }
         catch { }

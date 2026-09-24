@@ -1,6 +1,6 @@
 ﻿# QLCAD（图纸翻译工作台）
 
-面向机械工程 CAD 图纸的 Windows 桌面翻译工具，可提取并翻译 DWG/DXF 中的文字标注，再将译文回写到图纸。支持离线文件处理，也支持通过宿主专用插件在线回写。
+面向机械工程 CAD 图纸的 Windows 桌面工具，可提取 DWG/DXF 文字、调用云端 AI 翻译，再把译文写入新图纸。写回有两种方式：本机直接写文件（无需 CAD）和由受支持 CAD 宿主插件处理。“离线”只指本机文件写回，不代表可以离线调用 AI 翻译。
 
 ## 仓库目录地图
 
@@ -30,7 +30,7 @@
 
 1. 打开 [`release`](./release/) 目录。
 2. 双击 `QLCAD.exe`。
-3. 首次运行后直接登录账户；翻译服务由 Cloudflare Worker 管理，不需要在 APP 中填写 DeepSeek API Key。
+3. 首次运行后联网登录账户；AI 翻译由 Cloudflare Worker 管理，不需要在 APP 中填写 DeepSeek API Key。桌面 APP 是 Windows x64 自包含发布，目标电脑无需另装 .NET Runtime。
 4. 可一次拖入多张 DWG/DXF：左侧按文件显示，双击图纸进入译文列表并直接编辑。
 5. 勾选需要输出的图纸后点击“导出”，只选择一次输出文件夹即可批量生成 `*_translated.dwg/.dxf`，无需再次选择源文件。
 
@@ -42,8 +42,9 @@
 - 中文与英文互译，支持工程术语表
 - 保留常用 MText 格式代码
 - 自适应文字缩放与碰撞检测
-- 支持离线 DWG/DXF 写回
-- 支持浩辰 GstarCAD 2024 或 AutoCAD 2025+ 的宿主专用 `NETLOAD` 插件在线写回
+- 支持不依赖 CAD 的本机 DWG/DXF 写回（ACadSharp）
+- 支持浩辰 GstarCAD 2024 或 AutoCAD 2025+ 的宿主专用 `NETLOAD` 插件写回；写回在本机 CAD 进程中完成，不是云端修改图纸
+- AI 翻译始终走云端服务；本机写回不等于离线 AI 翻译。手工编辑或已有译文可以不再请求翻译服务，直接本机写回
 - 翻译缓存、日志查看与失败重试
 
 ## 运行目录
@@ -61,16 +62,20 @@ release/
 
 运行时的个人配置、日志、术语表和导出文件保存在 `%APPDATA%\DwgTranslator\`。私人 API Key 和运行日志不会提交到仓库。
 
-## CAD 插件
+## CAD 插件与依赖
 
-1. 检查 `CadPlugin/cad-platform.txt` 中的平台与 CAD 宿主一致；包名未必包含平台，不同宿主的插件 DLL 不通用。
-2. 启动对应 CAD，输入 `NETLOAD`。
-3. 选择 `release\CadPlugin\DwgTranslator.Cad.dll`。
-4. 在桌面程序中使用在线写回，或在 CAD 中调用插件命令。
+`DwgTranslator.Cad.dll` 是随 APP 一起打包的 CAD 扩展程序集，配有 `DwgTranslator.Core.dll`、运行依赖和 `cad-platform.txt`。它调用宿主 CAD 的托管图形 API 完成写回；不是另一个独立软件，也不需要单独下载。当前交付支持浩辰 GstarCAD 2024（宿主使用 .NET Framework 4.8）或 AutoCAD 2025+（宿主使用 .NET 8）。插件包一次针对一个 CAD 平台构建，`cad-platform.txt` 必须与宿主一致；AutoCAD LT 不支持此插件。
+
+普通用户运行发布版需要 Windows x64 和可联网的账号（仅使用 AI 翻译时需要网络）。主程序自包含，不要求另外安装 .NET Runtime。没有 CAD 也可以用“本机直接写回”；如果使用 CAD 插件写回，则必须安装受支持的 CAD 版本及匹配插件。碰撞避让取决于文字类型和图纸结构，块属性、复杂嵌套块和特殊字体需在 CAD 中复核。
+
+1. 在 APP「更多 → 环境自检与安装」查看检测结果；插件随 APP 内置，可从该页面安装或修复（修复前需关闭 CAD）。
+2. 核对 `CadPlugin/cad-platform.txt` 与 CAD 宿主一致；AutoCAD 与 GstarCAD 的插件 DLL 不通用。
+3. 如需手动加载，在对应 CAD 中运行 `NETLOAD`，选择 `release\CadPlugin\DwgTranslator.Cad.dll`。
+4. 通过 APP 选择“CAD 宿主插件写回”，或在 CAD 中运行 `DwgTranslateWrite` 命令。
 
 ## 从源码构建
 
-环境要求：Windows、.NET 8 SDK；构建 CAD 插件还需要对应宿主的托管 SDK。当前支持 GstarCAD 2024（.NET Framework 4.8）和 AutoCAD 2025+（.NET 8）。
+源码构建环境：Windows、.NET 8 SDK；构建 CAD 插件还需要对应宿主的托管 SDK。当前支持 GstarCAD 2024（插件目标 .NET Framework 4.8）和 AutoCAD 2025+（插件目标 .NET 8）。发布包在构建机上确定 CAD 平台并将其写入 `cad-platform.txt`。
 
 ```powershell
 .\tools\Publish-Desktop.ps1

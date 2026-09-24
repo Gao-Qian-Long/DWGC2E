@@ -582,7 +582,7 @@ public partial class MainViewModel
         var cadPath = ResolveCadInstallPath();
         if (string.IsNullOrWhiteSpace(cadPath))
         {
-            var choice = Views.PromptDialog.Show("未找到可用 CAD。选择“是”改用离线导出，选择“取消”返回。", "CAD 精准回写不可用", MessageBoxButton.OKCancel, MessageBoxImage.Warning);
+            var choice = Views.PromptDialog.Show("未找到可用 CAD。选择“是”改用本机直接写回，选择“取消”返回。", "CAD 宿主插件写回不可用", MessageBoxButton.OKCancel, MessageBoxImage.Warning);
             return choice == MessageBoxResult.OK ? CadPreflightOutcome.UseOffline : CadPreflightOutcome.Cancelled;
         }
         while (true)
@@ -592,13 +592,13 @@ public partial class MainViewModel
             var running = new[] { "acad", "acadlt", "gcad" }.Any(name => System.Diagnostics.Process.GetProcessesByName(name).Length > 0);
             if (running)
             {
-                var choice = Views.PromptDialog.Show("CAD 插件缺失、过期或自动加载配置异常，且检测到 CAD 正在运行。\n\n请先保存图纸并关闭 CAD。\n“是”＝重新检测；“否”＝改用离线导出；“取消”＝停止导出。\nAPP 不会强制关闭 CAD。",
+                var choice = Views.PromptDialog.Show("CAD 插件缺失、过期或自动加载配置异常，且检测到 CAD 正在运行。\n\n请先保存图纸并关闭 CAD。\n“是”＝重新检测；“否”＝改用本机直接写回；“取消”＝停止导出。\nAPP 不会强制关闭 CAD。",
                     "CAD 插件预检", MessageBoxButton.YesNoCancel, MessageBoxImage.Warning);
                 if (choice == MessageBoxResult.No) return CadPreflightOutcome.UseOffline;
                 if (choice != MessageBoxResult.Yes) return CadPreflightOutcome.Cancelled;
                 continue;
             }
-            var repair = Views.PromptDialog.Show("CAD 已关闭。精准回写需要修复插件并重新校验版本、文件哈希和自动加载配置。\n\n“是”＝立即修复；“否”＝改用离线导出；“取消”＝停止导出。",
+            var repair = Views.PromptDialog.Show("CAD 已关闭。宿主插件写回需要修复插件并重新校验版本、文件哈希和自动加载配置。\n\n“是”＝立即修复；“否”＝改用本机直接写回；“取消”＝停止导出。",
                 "修复 CAD 插件", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
             if (repair == MessageBoxResult.No) return CadPreflightOutcome.UseOffline;
             if (repair != MessageBoxResult.Yes) return CadPreflightOutcome.Cancelled;
@@ -606,7 +606,7 @@ public partial class MainViewModel
             if (!result.Success)
             {
                 Log.Error("CAD plugin repair failed: {Summary}; {Error}; Steps={Steps}", result.Summary, result.Error, string.Join(" | ", result.Steps));
-                var failure = Views.PromptDialog.Show("插件修复失败：" + result.Summary + "\n\n" + result.Error + "\n失败步骤：" + string.Join(" → ", result.Steps) + "\n日志目录：" + LogDirectory + "\n\n“是”＝重新检测；“否”＝改用离线导出；“取消”＝停止导出。",
+                var failure = Views.PromptDialog.Show("插件修复失败：" + result.Summary + "\n\n" + result.Error + "\n失败步骤：" + string.Join(" → ", result.Steps) + "\n日志目录：" + LogDirectory + "\n\n“是”＝重新检测；“否”＝改用本机直接写回；“取消”＝停止导出。",
                     "CAD 插件修复失败", MessageBoxButton.YesNoCancel, MessageBoxImage.Error);
                 if (failure == MessageBoxResult.No) return CadPreflightOutcome.UseOffline;
                 if (failure != MessageBoxResult.Yes) return CadPreflightOutcome.Cancelled;
@@ -614,7 +614,7 @@ public partial class MainViewModel
             }
             status = CadPluginInstaller.Inspect(cadPath, CadPluginDirectory);
             if (status.Ready) return CadPreflightOutcome.Ready;
-            var recheck = Views.PromptDialog.Show("插件文件已复制，但版本、哈希或自动加载配置复检仍未通过。\n日志目录：" + LogDirectory + "\n\n“是”＝重新检测；“否”＝改用离线导出；“取消”＝停止导出。",
+            var recheck = Views.PromptDialog.Show("插件文件已复制，但版本、哈希或自动加载配置复检仍未通过。\n日志目录：" + LogDirectory + "\n\n“是”＝重新检测；“否”＝改用本机直接写回；“取消”＝停止导出。",
                 "CAD 插件复检失败", MessageBoxButton.YesNoCancel, MessageBoxImage.Error);
             if (recheck == MessageBoxResult.No) return CadPreflightOutcome.UseOffline;
             if (recheck != MessageBoxResult.Yes) return CadPreflightOutcome.Cancelled;

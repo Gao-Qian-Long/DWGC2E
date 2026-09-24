@@ -10,11 +10,15 @@ public partial class ExportModeDialog : Window
     public ExportModeDialog(bool autoCadAvailable, bool isTranslation = false)
     {
         InitializeComponent();
-        if (isTranslation) OfflineHint.Text = "离线写回按在线模式的 30% 消耗字符额度（不是套餐价格打折）。AI 翻译仍需联网。同一任务重试沿用首次计费模式；导出已有译文不重复扣费。";
         CadOption.IsEnabled = autoCadAvailable;
         CadOption.IsChecked = autoCadAvailable;
         OfflineOption.IsChecked = !autoCadAvailable;
-        CadStatus.Text = autoCadAvailable ? "CAD 环境可用。" : "CAD 环境不可用，可在设置 → CAD 与环境中检查。";
+        SubtitleText.Text = isTranslation
+            ? "这里选择已有译文如何写入 DWG/DXF；需要 AI 翻译时，仍须登录并联网。"
+            : "这里选择如何将文字写入 DWG/DXF。AI 翻译由云端服务完成，需要登录并联网。";
+        CadStatus.Text = autoCadAvailable
+            ? "检测到 CAD。导出前会核对宿主插件版本，并在需要时提示安装或修复。"
+            : "未检测到支持的 CAD，可在设置 → CAD 与环境中检查；也可直接使用本机写回。";
         if (!autoCadAvailable)
         {
             // Offline is the only reachable mode, so the radio group would be a choice that is not
@@ -22,7 +26,7 @@ public partial class ExportModeDialog : Window
             // directory option below is a real decision that offline exports still need.
             ModeSection.Visibility = Visibility.Collapsed;
             HeaderText.Text = "选择导出目录";
-            SubtitleText.Text = "CAD 环境不可用，将使用离线导出。可在设置 → CAD 与环境中检查。";
+            SubtitleText.Text = "未检测到支持的 CAD，将使用本机直接写回。云端 AI 翻译仍需登录并联网。";
         }
         Loaded += (_, _) => SetScrim(Visibility.Visible);
         Closed += (_, _) => SetScrim(Visibility.Collapsed);

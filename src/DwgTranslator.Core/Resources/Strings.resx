@@ -224,7 +224,7 @@
     <value>查看授权状态或输入激活码</value>
   </data>
   <data name="TipSettings" xml:space="preserve">
-    <value>配置 API、浩辰CAD 路径和在线回写插件</value>
+    <value>配置服务连接、CAD 路径和宿主写回插件</value>
   </data>
   <data name="TipLog" xml:space="preserve">
     <value>显示/隐藏日志查看器</value>
@@ -461,7 +461,7 @@
     <value>模型:</value>
   </data>
   <data name="SettingsAutoCadSection" xml:space="preserve">
-    <value>CAD 在线回写配置（已适配浩辰CAD 2024）</value>
+    <value>CAD 宿主插件写回配置（适配浩辰 CAD / AutoCAD）</value>
   </data>
   <data name="SettingsInstallPath" xml:space="preserve">
     <value>安装路径:</value>
@@ -494,7 +494,7 @@
     <value>未检测到浩辰CAD或 AutoCAD。请手动选择包含 gcad.exe / acad.exe 的安装目录。</value>
   </data>
   <data name="SettingsPathNotConfigured" xml:space="preserve">
-    <value>未配置 CAD 路径 — 在线精确回写不可用，可继续使用离线回写</value>
+    <value>未配置 CAD 路径 — CAD 宿主插件写回不可用，可继续本机直接写回</value>
   </data>
   <data name="SettingsPathValid" xml:space="preserve">
     <value>CAD 路径有效（已找到 gcad.exe / acad.exe）</value>
@@ -527,7 +527,7 @@
     <value>根据您的环境选择合适的回写方式</value>
   </data>
   <data name="ExportModeAutoCad" xml:space="preserve">
-    <value>CAD 在线精确回写</value>
+    <value>CAD 宿主插件写回</value>
   </data>
   <data name="ExportModeRecommended" xml:space="preserve">
     <value>推荐</value>
@@ -539,25 +539,25 @@
     <value>• 自动检测图框，防止文字溢出</value>
   </data>
   <data name="ExportModeAutoCadFeature3" xml:space="preserve">
-    <value>• 碰撞检测，避免与其他图形干涉</value>
+    <value>• 尝试检测文字与图形干涉并进行避让</value>
   </data>
   <data name="ExportModeAutoCadFeature4" xml:space="preserve">
     <value>• 智能调整文字宽度和字高</value>
   </data>
   <data name="ExportModeAutoCadWarning" xml:space="preserve">
-    <value>已安装 CAD 即可；软件会自动启动并加载内置插件</value>
+    <value>需要受支持的 CAD 版本和匹配的内置插件；导出前会检查并提示修复</value>
   </data>
   <data name="ExportModeOffline" xml:space="preserve">
-    <value>离线回写</value>
+    <value>本机直接写回</value>
   </data>
   <data name="ExportModeNoAutoCad" xml:space="preserve">
     <value>无需启动 CAD</value>
   </data>
   <data name="ExportModeOfflineFeature1" xml:space="preserve">
-    <value>• 直接修改 DWG 文件，无需启动 CAD</value>
+    <value>• 本机直接修改 DWG/DXF，无需启动 CAD</value>
   </data>
   <data name="ExportModeOfflineFeature2" xml:space="preserve">
-    <value>• 排版为估算值，可能需要微调</value>
+    <value>• 使用本地几何估算避让，块属性和复杂嵌套块需复核</value>
   </data>
   <data name="ExportModeOfflineFeature3" xml:space="preserve">
     <value>• 适合未安装 CAD 或批量快速处理的场景</value>
@@ -758,7 +758,7 @@
 提示：在译文列双击可直接编辑翻译。</value>
   </data>
   <data name="MsgAutoCadSecurity" xml:space="preserve">
-    <value>即将通过 AutoCAD COM 进行精确回写。
+    <value>即将调用匹配的 CAD 宿主插件写回图纸。
 
 重要提示：
 AutoCAD 可能会弹出「是否加载来自非信任路径的程序集」安全对话框。
@@ -822,7 +822,7 @@ AutoCAD 可能会弹出「是否加载来自非信任路径的程序集」安全
 2. AutoCAD 的 COM 支持未启用（某些精简版/OEM 版本不支持 COM）
 3. 使用的是 AutoCAD LT（不支持 .NET 插件 NETLOAD）
 
-建议：使用「离线导出 DWG」功能，无需 AutoCAD 运行。</value>
+建议：使用「本机直接写回 DWG」功能，无需 AutoCAD 运行。</value>
   </data>
   <data name="AutoCadNoActiveDoc" xml:space="preserve">
     <value>AutoCAD 没有活动文档</value>
@@ -875,22 +875,22 @@ AutoCAD 可能会弹出「是否加载来自非信任路径的程序集」安全
     <value>二、回写模式说明</value>
   </data>
   <data name="HelpAutoCadMode" xml:space="preserve">
-    <value>AutoCAD 精确回写（推荐）</value>
+    <value>CAD 宿主插件写回</value>
   </data>
   <data name="HelpAutoCadModeDesc" xml:space="preserve">
-    <value>在 AutoCAD 进程内完成精确的文字替换，支持图框检测、几何碰撞避免、智能宽度调整和自动缩放排版。</value>
+    <value>通过适配当前宿主的内置插件调用 CAD 图形接口写回。支持浩辰 GstarCAD 2024 或 AutoCAD 2025+；插件平台必须与 CAD 匹配。碰撞避让不能保证所有复杂图纸都无重叠。</value>
   </data>
   <data name="HelpAutoCadImportant" xml:space="preserve">
-    <value>⚠ 重要：AutoCAD 必须提前启动！</value>
+    <value>⚠ 需要安装受支持的完整 CAD 宿主；AutoCAD LT 不支持此插件。</value>
   </data>
   <data name="HelpAutoCadComNote" xml:space="preserve">
-    <value>程序通过 COM 控制正在运行的 AutoCAD 进程。</value>
+    <value>程序优先连接已运行的 CAD；必要时通过批处理方式启动宿主并加载插件。写回本身在本机完成。</value>
   </data>
   <data name="HelpOfflineMode" xml:space="preserve">
-    <value>离线回写</value>
+    <value>本机直接写回</value>
   </data>
   <data name="HelpOfflineModeDesc" xml:space="preserve">
-    <value>不需要 AutoCAD。使用 ACadSharp 库直接修改 DWG 文件。包含智能宽度和字高缩放，但无法进行碰撞检测。适用于没有安装 AutoCAD 的电脑。</value>
+    <value>不需要 CAD。使用 ACadSharp 直接读写 DWG/DXF，并尝试对普通文字做包围盒避让和字号调整；块属性、复杂嵌套块及特殊字体需要在 CAD 中复核。此模式不提供离线 AI 翻译。</value>
   </data>
   <data name="HelpSection3" xml:space="preserve">
     <value>三、文字排版优化</value>
@@ -905,7 +905,7 @@ AutoCAD 可能会弹出「是否加载来自非信任路径的程序集」安全
     <value>• 自由宽度 MText：保守设置宽度，保持紧凑排列</value>
   </data>
   <data name="HelpLayoutCollision" xml:space="preserve">
-    <value>• 碰撞检测：自动检测翻译后文字与线条/图形的干涉，缩小字高避免重叠</value>
+    <value>• 碰撞避让：按图纸实体与宿主能力尝试调整；复杂块图纸仍需检查</value>
   </data>
   <data name="HelpLayoutFrame" xml:space="preserve">
     <value>• 图框约束：在图框内自动寻找最佳字高，防止溢出</value>
@@ -947,7 +947,7 @@ AutoCAD 可能会弹出「是否加载来自非信任路径的程序集」安全
     <value>Q: 翻译后文字与线条重叠怎么办？</value>
   </data>
   <data name="HelpFaq2A" xml:space="preserve">
-    <value>A: AutoCAD 精确回写模式下，程序会自动检测碰撞并缩小字高。离线模式暂不支持碰撞检测，建议使用 AutoCAD 模式。</value>
+    <value>A: 两种写回模式都会尝试避让，但识别能力受实体类型、块变换和字体影响，不能保证所有区域无碰撞。复杂块图纸建议使用匹配的 CAD 插件写回，并在 CAD 中检查导出结果。</value>
   </data>
   <data name="HelpFaq3Q" xml:space="preserve">
     <value>Q: 导出 DWG 时提示「找不到 DwgTranslator.Cad.dll」？</value>

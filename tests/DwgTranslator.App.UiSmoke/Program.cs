@@ -1032,6 +1032,46 @@ public sealed partial class SmokeApp : App
                                 Check(footer.TranslatePoint(new Point(0, footer.ActualHeight), content).Y <= size.Height - 30, "settings footer stays reachable " + section);
                             }
                             CaptureLayout(window, size, $"matrix-settings-section-{section}-{layout.Item1}-{layout.Item3}");
+                            if (section == 5)
+                            {
+                                var aboutCardStacked = DwgTranslator.App.Views.Controls.ResponsiveLayout.GetIsCompact(window)
+                                    || matrixSettingsPage.ActualWidth < 1256;
+                                var identityCard = (FrameworkElement)matrixSettingsPage.FindName("AboutIdentityCard");
+                                var updateCard = (FrameworkElement)matrixSettingsPage.FindName("AboutUpdateCard");
+                                Check(Grid.GetRow(identityCard) == 0 && Grid.GetColumn(identityCard) == 0,
+                                    "about identity card stays in the leading slot");
+                                Check(Grid.GetRow(updateCard) == (aboutCardStacked ? 1 : 0)
+                                    && Grid.GetColumn(updateCard) == (aboutCardStacked ? 0 : 2)
+                                    && Grid.GetColumnSpan(updateCard) == (aboutCardStacked ? 3 : 1),
+                                    $"about update card follows the responsive layout ({(aboutCardStacked ? "stacked" : "side-by-side")}, width={matrixSettingsPage.ActualWidth:F1})");
+
+                                var helpShortcut = FindVisuals<System.Windows.Controls.Button>(matrixSettingsPage).Single(b => System.Windows.Automation.AutomationProperties.GetName(b) == "使用帮助");
+                                var websiteShortcut = FindVisuals<System.Windows.Controls.Button>(matrixSettingsPage).Single(b => System.Windows.Automation.AutomationProperties.GetName(b) == "官方网站");
+                                var feedbackShortcut = FindVisuals<System.Windows.Controls.Button>(matrixSettingsPage).Single(b => System.Windows.Automation.AutomationProperties.GetName(b) == "问题反馈");
+                                var serviceShortcut = FindVisuals<System.Windows.Controls.Button>(matrixSettingsPage).Single(b => System.Windows.Automation.AutomationProperties.GetName(b) == "服务状态");
+                                static (Border Box, System.Windows.Shapes.Path Glyph, Point Center, double ButtonCenterY) ShortcutIcon(System.Windows.Controls.Button button)
+                                {
+                                    var box = FindVisuals<Border>(button).Single(b => Math.Abs(b.ActualWidth - 34) < 0.5 && Math.Abs(b.ActualHeight - 34) < 0.5);
+                                    var glyph = FindVisuals<System.Windows.Shapes.Path>(button).Single();
+                                    return (box, glyph, box.TranslatePoint(new Point(box.ActualWidth / 2, box.ActualHeight / 2), button), button.ActualHeight / 2);
+                                }
+                                var helpIcon = ShortcutIcon(helpShortcut);
+                                var websiteIcon = ShortcutIcon(websiteShortcut);
+                                var feedbackIcon = ShortcutIcon(feedbackShortcut);
+                                var serviceIcon = ShortcutIcon(serviceShortcut);
+                                Check(Math.Abs(helpIcon.Center.X - websiteIcon.Center.X) < 0.5
+                                    && Math.Abs(feedbackIcon.Center.X - serviceIcon.Center.X) < 0.5,
+                                    "about shortcut icon columns align across both rows");
+                                foreach (var icon in new[] { helpIcon, websiteIcon, feedbackIcon, serviceIcon })
+                                {
+                                    Check(Math.Abs(icon.Center.Y - icon.ButtonCenterY) < 0.5,
+                                        "about shortcut icon boxes are vertically centered in their buttons");
+                                    var glyphCenter = icon.Glyph.TranslatePoint(new Point(icon.Glyph.ActualWidth / 2, icon.Glyph.ActualHeight / 2), icon.Box);
+                                    Check(Math.Abs(glyphCenter.X - icon.Box.ActualWidth / 2) < 0.5
+                                        && Math.Abs(glyphCenter.Y - icon.Box.ActualHeight / 2) < 0.5,
+                                        "about shortcut glyph is centered in its icon box");
+                                }
+                            }
                             if (section == 5 && layout.Item1 == 1440d && layout.Item3 == 1d)
                             {
                                 var aboutDetailsCard = (FrameworkElement)matrixSettingsPage.FindName("AboutDetailsCard");

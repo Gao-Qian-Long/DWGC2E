@@ -37,7 +37,7 @@ public sealed partial class SmokeApp
         await VerifyImportAvailabilityAsync(owner, vm);
         await Surface(new LanguagePairDialog("ZH", "EN"), "language-pair");
         await Surface(new ExportModeDialog(true), "export-cad-available");
-        await Surface(new ExportModeDialog(false, true), "translation-offline-option");
+        await Surface(new ExportModeDialog(false, true), "translation-writeback-mode");
         await Surface(new LicenseDialog(App.Services!.GetRequiredService<ILicenseService>()), "license-status");
         await Surface(new SavedOutputsWindow(new[] { System.IO.Path.Combine(AppDataDir, "isolated-output-fixture.dwg") }), "saved-outputs");
         await Surface(new Window { Width = 820, Height = 600, Content = new HelpPanel(), Title = "帮助（隔离测试）" }, "help");

@@ -66,20 +66,22 @@ public partial class SettingsPage : UserControl
             // S5 · D7/D8：更新状态块已从身份卡内部移到独立的 AboutUpdateCard（Grid 列 2，槽列 1 为 Size.CardGutter）。
             // 因此行/列归属改设在**卡片**上——AboutUpdatePanel 现在是卡片内的 StackPanel，
             // 对它调用 Grid.SetColumn 已无意义（不再是 Grid 的直接子元素）。
-            // 窄窗（compact）把右列收为 0、整卡落到身份卡下方独占整行，回到"上下堆叠"。
+            // 中等宽度也上下堆叠：固定宽度的更新卡会挤窄身份卡，常见 1280–1440 窗口尤其明显。
+            // 与下方快捷入口/版本详情共用 1256 DIP 阈值，使关于页在同一宽度切换为纵向版式。
+            var aboutCardsStack = compact || ActualWidth < 1256;
             var aboutUpdateWidth = TryFindResource("Size.AboutUpdateColumn") as GridLength? ?? new GridLength(236);
-            AboutUpdateColumn.Width = compact ? new GridLength(0) : aboutUpdateWidth;
-            Grid.SetColumn(AboutUpdateCard, compact ? 0 : 2);
-            Grid.SetColumnSpan(AboutUpdateCard, compact ? 3 : 1);
-            Grid.SetRow(AboutUpdateCard, compact ? 1 : 0);
-            AboutUpdateCard.Margin = compact ? new Thickness(0, 12, 0, 0) : new Thickness(0);
+            AboutUpdateColumn.Width = aboutCardsStack ? new GridLength(0) : aboutUpdateWidth;
+            Grid.SetColumn(AboutUpdateCard, aboutCardsStack ? 0 : 2);
+            Grid.SetColumnSpan(AboutUpdateCard, aboutCardsStack ? 3 : 1);
+            Grid.SetRow(AboutUpdateCard, aboutCardsStack ? 1 : 0);
+            AboutUpdateCard.Margin = aboutCardsStack ? new Thickness(0, 12, 0, 0) : new Thickness(0);
             // 堆叠时身份卡也跨满 3 列、槽列收 0，否则右边会留一条 16 DIP 的空槽（两卡宽度不一致）。
-            if (AboutIdentityCard != null) Grid.SetColumnSpan(AboutIdentityCard, compact ? 3 : 1);
-            if (AboutIdentityGutter != null) AboutIdentityGutter.Width = compact ? new GridLength(0) : (TryFindResource("Size.CardGutter") as GridLength? ?? new GridLength(16));
-            AboutUpdatePanel.Orientation = compact ? Orientation.Horizontal : Orientation.Vertical;
-            AboutStatusPanel.Margin = compact ? new Thickness(0,0,14,0) : new Thickness(0,0,0,10);
-            AboutUpdatePanel.Margin = compact ? new Thickness(0,10,20,0) : new Thickness(0);
-            AboutUpdatePanel.HorizontalAlignment = compact ? HorizontalAlignment.Left : HorizontalAlignment.Stretch;
+            if (AboutIdentityCard != null) Grid.SetColumnSpan(AboutIdentityCard, aboutCardsStack ? 3 : 1);
+            if (AboutIdentityGutter != null) AboutIdentityGutter.Width = aboutCardsStack ? new GridLength(0) : (TryFindResource("Size.CardGutter") as GridLength? ?? new GridLength(16));
+            AboutUpdatePanel.Orientation = aboutCardsStack ? Orientation.Horizontal : Orientation.Vertical;
+            AboutStatusPanel.Margin = aboutCardsStack ? new Thickness(0,0,14,0) : new Thickness(0,0,0,10);
+            AboutUpdatePanel.Margin = aboutCardsStack ? new Thickness(0,10,20,0) : new Thickness(0);
+            AboutUpdatePanel.HorizontalAlignment = aboutCardsStack ? HorizontalAlignment.Left : HorizontalAlignment.Stretch;
         }
         // §G 副作用收敛（必须与上面新增的左卡配套看）：左卡 + 槽列固定占去 168 + 16 = 184 DIP，
         // 于是右卡在 1280~1440 这些主流笔记本宽度下比改前窄 184 DIP；窗口 ≥1528 时右卡已被
@@ -104,8 +106,8 @@ public partial class SettingsPage : UserControl
         //   这样 1280、1366、1440 三档都不会把快捷入口说明截断，1920 及更宽窗口仍保持并排布局。
         // 不会自激振荡：堆叠只改内容高度，ActualWidth 由 PageHost 决定；SettingsScroll 的纵向滚动条
         //          只影响 SettingsContent 宽度、不影响本 UserControl 的 ActualWidth，故不会反复触发 SizeChanged。
-        // 影响面只有 AboutDetails* 三个元素；AboutUpdate*（更新状态卡）仍按 compact 走，
-        // UpdateNotificationSmoke.cs:29-30 断言的 AboutUpdatePanel / AboutUpdateButton 行为不变。
+        // AboutDetails* 与上方身份/更新卡共用同一堆叠阈值；UpdateNotificationSmoke.cs:29-30
+        // 断言的 AboutUpdatePanel / AboutUpdateButton 命名及绑定行为不变。
         // **更正（S5 实测，替换改前此处的一句错误陈述）**：改前注释称"tests\ 全库 grep 证实无任何断言
         // 引用 AboutDetailsCard / AboutDetailsColumn / AboutDetailsGap"，该陈述**为假**——
         // tests\DwgTranslator.App.UiSmoke\Program.cs:764-766 明确按 x:Name 取用 AboutDetailsCard，

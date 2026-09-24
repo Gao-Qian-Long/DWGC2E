@@ -1,4 +1,4 @@
-<Window x:Class="DwgTranslator.App.Views.ExportModeDialog" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="选择图纸导出方式" Width="480" SizeToContent="Height" WindowStartupLocation="CenterOwner" WindowStyle="None" ResizeMode="NoResize" ShowInTaskbar="False" Background="{DynamicResource Brush.Surface}">
+<Window x:Class="DwgTranslator.App.Views.ExportModeDialog" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="选择图纸写回方式" Width="480" SizeToContent="Height" WindowStartupLocation="CenterOwner" WindowStyle="None" ResizeMode="NoResize" ShowInTaskbar="False" Background="{DynamicResource Brush.Surface}">
   <!-- CaptionHeight covers the 24px border padding plus the 34px title row, so the whole top strip
        drags the dialog; the close button opts back into hit testing. -->
   <WindowChrome.WindowChrome>
@@ -8,17 +8,17 @@
     <StackPanel>
       <DockPanel Margin="{DynamicResource Spacing.StackLoose}">
         <Button DockPanel.Dock="Right" Content="×" ToolTip="取消并关闭" Width="34" Height="34" Click="Cancel_Click" Style="{StaticResource Button.Tertiary}" WindowChrome.IsHitTestVisibleInChrome="True" />
-        <TextBlock x:Name="HeaderText" Text="选择图纸导出方式" FontFamily="{DynamicResource FontFamily.Display}" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
+      <TextBlock x:Name="HeaderText" Text="选择图纸写回方式" FontFamily="{DynamicResource FontFamily.Display}" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
       </DockPanel>
-      <TextBlock x:Name="SubtitleText" Text="确认导出方式后继续。不会修改当前图纸队列。" TextWrapping="Wrap" Margin="{DynamicResource Spacing.StackLoose}" />
+      <TextBlock x:Name="SubtitleText" Text="这里选择译文如何写入 DWG/DXF；AI 翻译仍由云端服务完成，需要登录并联网。" TextWrapping="Wrap" Margin="{DynamicResource Spacing.StackLoose}" />
       <!-- The mode group is a real choice only when a CAD host is installed. The dialog is still
            shown without one because the temporary export directory option below stays relevant,
            so the constructor collapses this group and the dialog narrows to that single decision. -->
       <StackPanel x:Name="ModeSection">
-        <RadioButton x:Name="CadOption" Content="使用 CAD 精确写回" GroupName="Mode" Margin="{DynamicResource Spacing.Vertical}" />
+        <RadioButton x:Name="CadOption" Content="使用 CAD 宿主插件写回" GroupName="Mode" Margin="{DynamicResource Spacing.Vertical}" />
         <TextBlock x:Name="CadStatus" TextWrapping="Wrap" Margin="{DynamicResource Spacing.LeftIndent}" Foreground="{DynamicResource Brush.TextSecondary}" />
-        <RadioButton x:Name="OfflineOption" Content="离线导出" GroupName="Mode" Margin="{DynamicResource Spacing.BlockTopWide}" />
-        <TextBlock x:Name="OfflineHint" Text="不启动 CAD；复杂图纸建议使用 CAD 精确写回。" TextWrapping="Wrap" Margin="{DynamicResource Spacing.LeftIndent}" Foreground="{DynamicResource Brush.TextSecondary}" />
+        <RadioButton x:Name="OfflineOption" Content="本机直接写回（无需 CAD）" GroupName="Mode" Margin="{DynamicResource Spacing.BlockTopWide}" />
+        <TextBlock x:Name="OfflineHint" Text="直接读写 DWG/DXF；排版使用本地几何估算。块属性和复杂嵌套块请在 CAD 中复核。" TextWrapping="Wrap" Margin="{DynamicResource Spacing.LeftIndent}" Foreground="{DynamicResource Brush.TextSecondary}" />
       </StackPanel>
       <CheckBox x:Name="TemporaryDirectoryOption" Content="本批次使用临时导出目录（不修改账号默认目录）" Margin="{DynamicResource Spacing.BlockTopLoose}" />
       <TextBlock Text="高级选项：确认后选择本批次目录，下次仍使用账号默认目录。" TextWrapping="Wrap" Margin="{DynamicResource Spacing.LeftIndent}" Foreground="{DynamicResource Brush.TextSecondary}" />

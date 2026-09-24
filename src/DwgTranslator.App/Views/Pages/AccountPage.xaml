@@ -148,7 +148,7 @@
                                 <TextBlock Grid.Column="1" Text="{Binding OnlinePlanText}" FontFamily="{DynamicResource FontFamily.Display}" FontSize="{DynamicResource FontSize.SectionTitle}" FontWeight="SemiBold" Foreground="{DynamicResource Brush.Amber}" TextTrimming="CharacterEllipsis" ToolTip="以当前账号同步权益为准" VerticalAlignment="Center"/>
                                 <TextBlock Grid.Row="1" Text="字符额度" Style="{StaticResource InfoLabel}" Foreground="{DynamicResource Brush.OnInkMuted}" VerticalAlignment="Top" Margin="{DynamicResource Spacing.InlineLoose}"/>
                                 <StackPanel Grid.Row="1" Grid.Column="1">
-                                    <TextBlock Text="{Binding OnlineQuotaText}" FontFamily="{DynamicResource FontFamily.Display}" FontSize="{DynamicResource FontSize.SectionTitle}" FontWeight="SemiBold" Foreground="{DynamicResource Brush.OnInk}" TextTrimming="CharacterEllipsis" ToolTip="离线翻译按原文字符的 30% 计量" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{Binding OnlineQuotaText}" FontFamily="{DynamicResource FontFamily.Display}" FontSize="{DynamicResource FontSize.SectionTitle}" FontWeight="SemiBold" Foreground="{DynamicResource Brush.OnInk}" TextTrimming="CharacterEllipsis" ToolTip="此处显示云端 AI 翻译额度；本机写回方式不代表可以离线调用 AI。" VerticalAlignment="Center"/>
                                     <!-- 额度条固定 360 DIP 并靠左：ProgressBar 自身 desired width 近 0，
                                          必须由外层给出确定宽度，否则轨道会被压成 0 宽。 -->
                                     <Grid Width="360" HorizontalAlignment="Left" Margin="{DynamicResource Spacing.BlockTopTight}">

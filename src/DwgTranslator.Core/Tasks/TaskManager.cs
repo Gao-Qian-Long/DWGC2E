@@ -14,15 +14,15 @@ using Serilog.Events;
 namespace DwgTranslator.Core.Tasks;
 
 /// <summary>
-/// 写回方式，对应导出时让用户选的"离线写回 / AutoCAD 写回"两种模式。
+/// 写回方式，对应导出时让用户选的"本机直接写回 / CAD 宿主插件写回"两种模式。
 /// 任务层不弹对话框，因此由调用方（UI）在提交任务前把它设好。
 /// </summary>
 public enum TaskWritebackMode
 {
-    /// <summary>离线写回（ACadSharp），不要求装 CAD，批量跑最稳。</summary>
+    /// <summary>本机直接写回（ACadSharp），不要求安装或启动 CAD。</summary>
     Offline,
 
-    /// <summary>AutoCAD COM 互操作写回，排版最接近原图，但要求 CAD 可用。</summary>
+    /// <summary>通过 CAD 宿主插件写回，要求安装受支持且平台匹配的 CAD。</summary>
     AutoCad
 }
 
