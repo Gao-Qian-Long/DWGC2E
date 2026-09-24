@@ -26,6 +26,8 @@ public partial class MainViewModel
     [ObservableProperty] private string _accountFeedback = "可先浏览软件，使用云端翻译前请登录。";
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanImportFiles))]
+    [NotifyCanExecuteChangedFor(nameof(ImportDwgCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ImportExcelCommand))]
     private bool _isLoggingIn;
     [ObservableProperty] private AccountSessionState _accountState = AccountSessionState.SignedOut;
     private bool _sessionVerified;

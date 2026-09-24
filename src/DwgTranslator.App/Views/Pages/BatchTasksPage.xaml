@@ -410,7 +410,7 @@
                         </Style>
                     </controls:EmptyState.Style>
                     <StackPanel Orientation="Horizontal">
-                        <Button Content="添加图纸" Command="{Binding ImportDwgCommand}" Style="{StaticResource Button.Primary}"
+                        <Button Content="添加图纸" Command="{Binding ImportDwgCommand}" IsEnabled="{Binding CanImportFiles}" Style="{StaticResource Button.Primary}"
                                 Visibility="{Binding HasDrawingFiles, Converter={StaticResource BoolToVis}, ConverterParameter=false}" />
                         <Button Content="清除筛选" Click="ClearFilters_Click" Style="{StaticResource Button.Secondary}"
                                 Visibility="{Binding HasDrawingFiles, Converter={StaticResource BoolToVis}}" />

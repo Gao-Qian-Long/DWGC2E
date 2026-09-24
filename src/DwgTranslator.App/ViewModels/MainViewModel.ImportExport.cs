@@ -13,7 +13,7 @@ public partial class MainViewModel
 {
     #region DWG/DXF Import
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanImportFiles))]
     private async Task ImportDwgAsync()
     {
         if (IsProcessing) { DwgTranslator.App.Services.ToastService.Warning("当前任务正在执行，完成或取消后再添加图纸。"); return; }
@@ -721,7 +721,7 @@ public partial class MainViewModel
         }, Strings.Get("OperationExportExcel"), "StatusExcelExportFailed", "ExcelExportError");
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanImportFiles))]
     private async Task ImportExcelAsync()
     {
         if (IsProcessing || IsLoggingIn) return;

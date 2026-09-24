@@ -45,6 +45,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty] private double _progressValue;
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanImportFiles))]
+    [NotifyCanExecuteChangedFor(nameof(ImportDwgCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ImportExcelCommand))]
     [NotifyPropertyChangedFor(nameof(CanRemoveSelectedQueueDrawing))]
     private bool _isProcessing;
     [ObservableProperty] private string _selectedFilePath = string.Empty;

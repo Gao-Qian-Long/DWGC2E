@@ -34,6 +34,7 @@ public sealed partial class SmokeApp
             }
             finally { dialog.Close(); }
         }
+        await VerifyImportAvailabilityAsync(owner, vm);
         await Surface(new LanguagePairDialog("ZH", "EN"), "language-pair");
         await Surface(new ExportModeDialog(true), "export-cad-available");
         await Surface(new ExportModeDialog(false, true), "translation-offline-option");
@@ -89,6 +90,45 @@ public sealed partial class SmokeApp
         banner.IsOpen = true;
         await Dispatcher.InvokeAsync(() => {}, DispatcherPriority.ApplicationIdle);
         Capture(Application.Current.Windows.OfType<AnnouncementWindow>().Single(), "popup-announcement-details"); banner.IsOpen = false;
+    }
+
+    private async Task VerifyImportAvailabilityAsync(MainWindow owner, MainViewModel vm)
+    {
+        var previousPage = vm.CurrentPage;
+        try
+        {
+            vm.CurrentPage = MainViewModel.PageBatch;
+            await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+            var page = FindVisual<DwgTranslator.App.Views.Pages.BatchTasksPage>(owner);
+            var addDrawing = FindVisuals<Button>(page).Single(button => Equals(button.Content, "添加图纸"));
+            Check(addDrawing.IsVisible && addDrawing.IsEnabled && vm.CanImportFiles,
+                "empty batch-task state exposes an enabled drawing import action");
+            Check(vm.ImportDwgCommand.CanExecute(null) && vm.ImportExcelCommand.CanExecute(null),
+                "CAD and spreadsheet import commands start available");
+
+            vm.IsProcessing = true;
+            await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+            Check(!addDrawing.IsEnabled && !vm.ImportDwgCommand.CanExecute(null) && !vm.ImportExcelCommand.CanExecute(null),
+                "batch-task import action and commands disable during an operation");
+
+            vm.IsProcessing = false;
+            vm.IsLoggingIn = true;
+            await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+            Check(!addDrawing.IsEnabled && !vm.ImportDwgCommand.CanExecute(null) && !vm.ImportExcelCommand.CanExecute(null),
+                "batch-task import action and commands disable during account switching");
+
+            vm.IsLoggingIn = false;
+            await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+            Check(addDrawing.IsEnabled && vm.ImportDwgCommand.CanExecute(null) && vm.ImportExcelCommand.CanExecute(null),
+                "batch-task import availability restores after busy states clear");
+        }
+        finally
+        {
+            vm.IsProcessing = false;
+            vm.IsLoggingIn = false;
+            vm.CurrentPage = previousPage;
+            await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+        }
     }
 }
 
