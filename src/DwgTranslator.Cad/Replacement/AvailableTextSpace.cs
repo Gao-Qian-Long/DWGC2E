@@ -75,8 +75,10 @@ internal static class AvailableTextSpace
             var parent=OpenOwnerBlock(tr,reference.OwnerId);
             if(parent==null || parent.IsFromExternalReference || parent.IsFromOverlayReference)continue;
 
-            // Keep the multiplication order identical to GetObstacles' nested-block traversal.
-            var transform=accumulated*reference.BlockTransform;
+            // We are walking from the inner definition outward. Point3d.TransformBy composes
+            // nested inserts as outer * inner, matching GetObstacles' top-down traversal.
+            // Therefore the newly discovered parent transform must PREPEND the accumulated path.
+            var transform=reference.BlockTransform*accumulated;
             var ink=localInk;
             ink.TransformBy(transform);
 
