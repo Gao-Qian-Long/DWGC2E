@@ -43,3 +43,6 @@ jobs:
 
       - name: Build WPF app and UI smoke
         run: dotnet build tests/DwgTranslator.App.UiSmoke/DwgTranslator.App.UiSmoke.csproj --configuration Debug -p:SkipCadPluginBuild=true -p:NuGetAudit=false --verbosity minimal
+
+      - name: Run WPF UI smoke
+        run: dotnet run --project tests/DwgTranslator.App.UiSmoke/DwgTranslator.App.UiSmoke.csproj --configuration Debug --no-build -p:SkipCadPluginBuild=true
