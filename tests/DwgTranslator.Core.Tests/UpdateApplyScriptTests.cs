@@ -21,7 +21,8 @@ public sealed class UpdateApplyScriptTests : IDisposable
         var path = UpdateApplyScript.Write(_root);
         Assert.True(File.Exists(path));
         var script = File.ReadAllText(path);
-        Assert.Contains("Wait-Process -Id $AppPid", script);
+        Assert.Contains("Get-Process -Id $AppPid -ErrorAction SilentlyContinue", script);
+        Assert.Contains("$appProcess.WaitForExit(600000)", script);
         Assert.Contains("Get-Process acad,acadlt,gcad", script);
         Assert.Contains("[string]$PackageSha256", script);
         Assert.Contains("Copy-Item -LiteralPath $package -Destination $verifiedPackage", script);
@@ -137,6 +138,9 @@ public sealed class UpdateApplyScriptTests : IDisposable
             CreateNoWindow = true,
             ArgumentList = { "-NoProfile", "-NonInteractive", "-Command", "Start-Sleep -Milliseconds 500" }
         })!;
+        // The updater may not reach its process check until after a short-lived app has exited.
+        // Passing an already-exited PID must be treated as ready, not as a ten-minute timeout.
+        sleeper.WaitForExit();
         using var updater = Process.Start(new ProcessStartInfo("powershell.exe")
         {
             UseShellExecute = false,

@@ -93,7 +93,7 @@ $work=$null;$applyRoot=$null;$verifiedPackage=$null;$rollback=$null
 $created=New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
 $backed=@{};$tempFiles=New-Object System.Collections.Generic.List[string]
 try{
- Write-Log '等待 APP 退出';try{Wait-Process -Id $AppPid -Timeout 600 -ErrorAction Stop}catch{throw 'APP 未能在十分钟内退出'}
+ Write-Log '等待 APP 退出';$appProcess=Get-Process -Id $AppPid -ErrorAction SilentlyContinue;if($appProcess){$appExited=$appProcess.WaitForExit(600000);if(-not $appExited){throw 'APP 未能在十分钟内退出'}}
  if(Get-Process acad,acadlt,gcad -ErrorAction SilentlyContinue){throw '检测到 CAD 仍在运行，取消更新'}
  $package=(Resolve-Path -LiteralPath $Package).Path;$install=(Resolve-Path -LiteralPath $Install).Path
  if($PackageSha256 -notmatch '^[0-9a-fA-F]{64}$'){throw '预期更新包哈希格式无效'}
