@@ -160,7 +160,7 @@ internal static class AvailableTextSpace
             var x=new Point3d(1,0,0).TransformBy(transform);
             var y=new Point3d(0,1,0).TransformBy(transform);
             var scale=Math.Max(origin.DistanceTo(x),origin.DistanceTo(y));
-            return double.IsFinite(scale) && scale>1e-9 ? scale : 1.0;
+            return !double.IsNaN(scale) && !double.IsInfinity(scale) && scale>1e-9 ? scale : 1.0;
         }
         catch { return 1.0; }
     }
