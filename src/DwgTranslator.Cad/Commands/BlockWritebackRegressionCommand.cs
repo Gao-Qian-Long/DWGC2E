@@ -34,6 +34,8 @@ public class BlockWritebackRegressionCommand
             var expected = new Dictionary<string,string>();
             string? instanceGuardTextHandle = null;
             double instanceGuardX = double.NaN;
+            Point3d? scaledGuardStart = null;
+            Point3d? scaledGuardEnd = null;
             using (var db = new Database(true, true))
             {
                 using (var tr = db.TransactionManager.StartTransaction())
@@ -79,6 +81,23 @@ public class BlockWritebackRegressionCommand
                                     new Point3d(instanceGuardX, bounds.MaxPoint.Y + 1, 0));
                                 parent.AppendEntity(guard);
                                 tr.AddNewlyCreatedDBObject(guard, true);
+
+                                // A second guard is intentionally placed just OUTSIDE the translated
+                                // glyphs, not overlapping them. Once the parent block is inserted at
+                                // 2x scale this gap is smaller than the required rendered clearance.
+                                // The post-pass must therefore preserve the line as a hard boundary
+                                // through rotation and scale, then shrink the definition text.
+                                if (text is DBText probeSource)
+                                {
+                                    using var probe = (DBText)probeSource.Clone();
+                                    probe.TextString = translations[i];
+                                    probe.RecordGraphicsModified(true);
+                                    var translatedBounds = CollisionDetector.GetCorrectedBounds(probe, false);
+                                    var localClearance = DwgTranslator.Core.Models.WritebackConstants.GeometryClearance(height);
+                                    var guardX = translatedBounds.MaxPoint.X + localClearance * 0.75;
+                                    scaledGuardStart = new Point3d(guardX, translatedBounds.MinPoint.Y - 1, 0);
+                                    scaledGuardEnd = new Point3d(guardX, translatedBounds.MaxPoint.Y + 1, 0);
+                                }
                             }
                             var allowed = AvailableTextSpace.Measure(text,bounds,tr,false,out var length);
                             if (!narrow && !title && i == 0 && length <= bounds.MaxPoint.X-bounds.MinPoint.X+1)
@@ -93,11 +112,24 @@ public class BlockWritebackRegressionCommand
                         var nested = new BlockReference(new Point3d(title?600:narrow?200:name=="*U"?100:0,0,0),block.ObjectId);
                         parent.AppendEntity(nested); tr.AddNewlyCreatedDBObject(nested,true);
                     }
-                    foreach (var rotation in new[] {0.0, Math.PI/2})
+                    foreach (var instance in new[]
                     {
-                        var insert = new BlockReference(new Point3d(rotation==0?0:400,0,0),parent.ObjectId)
-                            { Rotation=rotation, ScaleFactors=new Scale3d(rotation==0?1:2) };
+                        (X:0.0, Rotation:0.0, Scale:1.0, AddScaledGuard:false),
+                        (X:400.0, Rotation:Math.PI/2, Scale:2.0, AddScaledGuard:false),
+                        (X:800.0, Rotation:Math.PI/6, Scale:2.0, AddScaledGuard:true)
+                    })
+                    {
+                        var insert = new BlockReference(new Point3d(instance.X,0,0),parent.ObjectId)
+                            { Rotation=instance.Rotation, ScaleFactors=new Scale3d(instance.Scale) };
                         model.AppendEntity(insert); tr.AddNewlyCreatedDBObject(insert,true);
+                        if(instance.AddScaledGuard && scaledGuardStart.HasValue && scaledGuardEnd.HasValue)
+                        {
+                            var guard = new Line(
+                                scaledGuardStart.Value.TransformBy(insert.BlockTransform),
+                                scaledGuardEnd.Value.TransformBy(insert.BlockTransform));
+                            model.AppendEntity(guard);
+                            tr.AddNewlyCreatedDBObject(guard,true);
+                        }
                     }
                     tr.Commit();
                 }
@@ -126,6 +158,8 @@ public class BlockWritebackRegressionCommand
                         report.Add("INSTANCE_COLLISION_CLEAR=" + item.Handle);
                     }
                     if(AvailableTextSpace.FindIntersections(text,tr).Any()) throw new InvalidOperationException("Block collision: "+item.Handle);
+                    if (item.Handle == instanceGuardTextHandle && scaledGuardStart.HasValue)
+                        report.Add("SCALED_ROTATED_INSTANCE_CLEAR=" + item.Handle);
                     if (item.OriginalHeight == 200 && text is MText titleText)
                     {
                         if (titleText.TextHeight < 80) throw new InvalidOperationException("Title text below height floor");
