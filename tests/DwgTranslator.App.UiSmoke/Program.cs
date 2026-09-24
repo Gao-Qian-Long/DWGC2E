@@ -746,7 +746,10 @@ public sealed partial class SmokeApp : App
             await VerifySidebarToastStabilityAsync(window, vm);
             await VerifyRefinementAsync(window, vm);
             await VerifySmallSurfacesAsync(window, vm);
-            VerifyEmbeddedCadPlugin();
+            if (Environment.GetEnvironmentVariable("DWGC2E_SKIP_CAD_PLUGIN_SMOKE") == "1")
+                Console.WriteLine("SKIP embedded CAD plugin checks: CI build intentionally skips the CAD plugin SDK target.");
+            else
+                VerifyEmbeddedCadPlugin();
             VerifyPluginSourceConsistency(vm);
             await VerifyTaskRecoveryNoticeAsync(window, vm);
             VerifyRecoveryDecision(vm);

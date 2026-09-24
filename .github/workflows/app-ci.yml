@@ -46,3 +46,5 @@ jobs:
 
       - name: Run WPF UI smoke
         run: dotnet run --project tests/DwgTranslator.App.UiSmoke/DwgTranslator.App.UiSmoke.csproj --configuration Debug --no-build -p:SkipCadPluginBuild=true
+        env:
+          DWGC2E_SKIP_CAD_PLUGIN_SMOKE: "1"
