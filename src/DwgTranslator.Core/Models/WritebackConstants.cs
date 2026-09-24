@@ -54,6 +54,18 @@ public static class WritebackConstants
         Math.Max(Math.Abs(textHeight) * GeometryClearanceRatio, MinGeometryClearance);
 
     /// <summary>
+    /// Preferred minimum visible gap between separately rendered text objects. A gap around
+    /// two-fifths of the text height gives adjacent labels and values room to breathe after
+    /// translations expand into the source drawing's whitespace.
+    /// </summary>
+    public const double InterTextClearanceRatio = 0.40;
+
+    public const double MinInterTextClearance = 0.05;
+
+    public static double InterTextClearance(double textHeight) =>
+        Math.Max(Math.Abs(textHeight) * InterTextClearanceRatio, MinInterTextClearance);
+
+    /// <summary>
     /// Binary-search iterations for height reduction.
     /// </summary>
     public const int MaxBinarySearchIterations = 16;

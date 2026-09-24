@@ -6,19 +6,22 @@ using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.Geometry;
 #endif
 using System.Runtime.CompilerServices;
+using DwgTranslator.Core.Services;
 using WBC = DwgTranslator.Core.Models.WritebackConstants;
 namespace DwgTranslator.Cad.Replacement;
 internal static class AvailableTextSpace
 {
     private sealed class Obstacle
     {
-        public ObjectId Id; public Extents3d Box; public Extents3d Ink; public bool Text; public bool HardBoundary; public string Content="";
+        public ObjectId Id; public Extents3d Box; public Extents3d Ink; public bool Text; public string Content="";
         public Point3d? SegmentStart; public Point3d? SegmentEnd;
+        public double TextHeight;
         /// <summary>
         /// True when the source geometry itself is a straight frame/cell boundary. Keep this semantic
         /// flag before transforms: a vertical line rotated with its block has a fat axis-aligned box,
         /// but it is still a hard boundary and must retain clearance.
         /// </summary>
+        public bool HardBoundary;
         /// <summary>Rendered rectangle corners in world coordinates, when reconstructable.</summary>
         public Point3d[]? Corners;
     }
@@ -26,9 +29,9 @@ internal static class AvailableTextSpace
     /// <summary>An obstacle reduced to the two axes of the measurement frame.</summary>
     private readonly struct Span
     {
-        public readonly double NearU, FarU, NearV, FarV; public readonly bool Text;
-        public Span(double nearU, double farU, double nearV, double farV, bool text)
-        { NearU = nearU; FarU = farU; NearV = nearV; FarV = farV; Text = text; }
+        public readonly double NearU, FarU, NearV, FarV; public readonly bool Text; public readonly double Clearance;
+        public Span(double nearU, double farU, double nearV, double farV, bool text, double clearance)
+        { NearU = nearU; FarU = farU; NearV = nearV; FarV = farV; Text = text; Clearance = clearance; }
     }
 
     private static readonly ConditionalWeakTable<Transaction, Dictionary<ObjectId,List<Obstacle>>> Snapshots = new();
@@ -188,20 +191,30 @@ internal static class AvailableTextSpace
 
             double textHeight=(text is DBText heightDb?heightDb.Height
                 :text is MText heightMText?heightMText.TextHeight:0)*Math.Max(clearanceScale,1e-9);
-            double clearance=hardBoundary?WBC.GeometryClearance(textHeight):0;
+            double clearance=obstacle.Text
+                ? WBC.InterTextClearance(Math.Max(textHeight,obstacle.TextHeight))
+                : hardBoundary?WBC.GeometryClearance(textHeight):0;
             bool overlaps;
             if(hardBoundary && obstacle.SegmentStart.HasValue && obstacle.SegmentEnd.HasValue)
             {
-                // Compare the actual transformed segment with visible ink, not with the segment's
-                // axis-aligned bounding rectangle. A 45-degree frame line can have a huge AABB
-                // containing lots of empty space; treating that whole box as solid geometry causes
-                // false shrink/revert decisions.
+                // Compare a transformed line segment with visible ink instead of treating its
+                // axis-aligned bounding rectangle as filled geometry.
                 overlaps=CollisionDetector.SegmentWithinClearance(
                     obstacle.SegmentStart.Value,obstacle.SegmentEnd.Value,BoxCorners(ink),clearance);
             }
             else
             {
-                bool inkOverlaps=!hardBoundary
+                bool inkOverlaps;
+                if(obstacle.Text)
+                {
+                    // Keep a visible gap between distinct labels, using visible ink rather than an
+                    // MText layout rectangle that may include empty paragraphs.
+                    double inkDistance=CollisionDetector.MinimumDistance2D(ink,box,null,null);
+                    double renderedDistance=CollisionDetector.MinimumDistance2D(ink,box,ownCorners,obstacle.Corners);
+                    inkOverlaps=TextEnvelopeGeometry.ViolatesClearance(inkDistance,clearance)
+                        && TextEnvelopeGeometry.ViolatesClearance(renderedDistance,clearance);
+                }
+                else inkOverlaps=!hardBoundary
                     ?!(box.MaxPoint.X<ink.MinPoint.X+.01 || box.MinPoint.X>ink.MaxPoint.X-.01 ||
                        box.MaxPoint.Y<ink.MinPoint.Y+.01 || box.MinPoint.Y>ink.MaxPoint.Y-.01)
                     :!(box.MaxPoint.X<ink.MinPoint.X-clearance || box.MinPoint.X>ink.MaxPoint.X+clearance ||
@@ -247,6 +260,22 @@ internal static class AvailableTextSpace
             owner=tr.GetObject(insert.OwnerId,OpenMode.ForRead);
         return owner as BlockTableRecord;
     }
+
+    private static double GetTextHeight(Entity entity) => entity switch
+    {
+        DBText dbText => Math.Abs(dbText.Height),
+        MText mtext => Math.Abs(mtext.TextHeight),
+        _ => 0
+    };
+
+    private static double GetPlanarScale(Matrix3d transform)
+    {
+        var origin=Point3d.Origin.TransformBy(transform);
+        var xUnit=new Point3d(1,0,0).TransformBy(transform);
+        var yUnit=new Point3d(0,1,0).TransformBy(transform);
+        return Math.Max(origin.DistanceTo(xUnit),origin.DistanceTo(yUnit));
+    }
+
     private static List<Obstacle> GetObstacles(BlockTableRecord owner, Transaction tr)
     {
         var cache=Snapshots.GetOrCreateValue(tr);
@@ -294,7 +323,14 @@ internal static class AvailableTextSpace
             {
                 // Keep a conservative host rectangle if decomposition failed;
                 // never mistake a failed glyph measurement for empty space.
-                try { var box=e.GeometricExtents;box.TransformBy(transform);list.Add(new Obstacle{Id=root,Box=box,Ink=box,HardBoundary=e is Line}); }
+                try
+                {
+                    var box=e.GeometricExtents;box.TransformBy(transform);
+                    bool isText=e is DBText || e is MText;
+                    list.Add(new Obstacle{Id=root,Box=box,Ink=box,Text=isText,HardBoundary=e is Line,
+                        TextHeight=isText?GetTextHeight(e)*GetPlanarScale(transform):0,
+                        Content=e is DBText d?d.TextString:e is MText m?m.Text:""});
+                }
                 catch { Log.DebugCategorized("Layout", "No extents for object {Handle}: {Detail}", e.Handle, ex.Message); }
             }
             void AddSegment(Point3d p,Point3d q)
@@ -309,10 +345,12 @@ internal static class AvailableTextSpace
             void Add(Extents3d box,bool text,bool hardBoundary=false){
                 var ink=text?CollisionDetector.GetCorrectedBounds(e,false):box;
                 var corners=text?CollisionDetector.TryGetOrientedCorners(e):null;
+                double textHeight=text?GetTextHeight(e)*GetPlanarScale(transform):0;
                 box.TransformBy(transform);ink.TransformBy(transform);
                 if(corners!=null)
                     for(int i=0;i<corners.Length;i++) corners[i]=corners[i].TransformBy(transform);
-                list.Add(new Obstacle{Id=root,Box=box,Ink=ink,Text=text,HardBoundary=hardBoundary,Content=e is DBText d?d.TextString:e is MText m?m.Text:"" ,Corners=corners});
+                list.Add(new Obstacle{Id=root,Box=box,Ink=ink,Text=text,HardBoundary=hardBoundary,
+                    TextHeight=textHeight,Content=e is DBText d?d.TextString:e is MText m?m.Text:"" ,Corners=corners});
             }
         }
     }
@@ -358,9 +396,11 @@ internal static class AvailableTextSpace
         {
             if(obstacle.Id==text.ObjectId)continue;
             var box=obstacle.Box;
+            double clearance=obstacle.Text
+                ? WBC.InterTextClearance(Math.Max(h,obstacle.TextHeight)) : 0;
             spans.Add(vertical
-                ? new Span(box.MinPoint.Y,box.MaxPoint.Y,box.MinPoint.X,box.MaxPoint.X,obstacle.Text)
-                : new Span(box.MinPoint.X,box.MaxPoint.X,box.MinPoint.Y,box.MaxPoint.Y,obstacle.Text));
+                ? new Span(box.MinPoint.Y,box.MaxPoint.Y,box.MinPoint.X,box.MaxPoint.X,obstacle.Text,clearance)
+                : new Span(box.MinPoint.X,box.MaxPoint.X,box.MinPoint.Y,box.MaxPoint.Y,obstacle.Text,clearance));
         }
 
         var (uMin,uMax,vMin,vMax)=ComputeCorridor(text,lo,hi,cLo,cHi,h,spans);
@@ -427,7 +467,9 @@ internal static class AvailableTextSpace
         {
             if(obstacle.Id==text.ObjectId)continue;
             var box=LocalBox(obstacle.Corners ?? BoxCorners(obstacle.Box));
-            spans.Add(new Span(box.uMin,box.uMax,box.vMin,box.vMax,obstacle.Text));
+            double clearance=obstacle.Text
+                ? WBC.InterTextClearance(Math.Max(h,obstacle.TextHeight)) : 0;
+            spans.Add(new Span(box.uMin,box.uMax,box.vMin,box.vMax,obstacle.Text,clearance));
         }
 
         // A collapsed corridor here must not fail the whole job: before this measurement existed
@@ -527,9 +569,9 @@ internal static class AvailableTextSpace
             if(obstacle.Text && (t<=cLo+.001 || b>=cHi-.001))continue;
             if(t<cLo-margin || b>cHi+margin)continue;
             if(far<=lo+.001)
-                left=Math.Max(left,obstacle.Text ? (far+lo)/2+margin/2 : far+Math.Max(h*.15,.05));
+                left=Math.Max(left,obstacle.Text ? (far+lo)/2+obstacle.Clearance/2 : far+Math.Max(h*.15,.05));
             else if(near>=hi-.001)
-                right=Math.Min(right,obstacle.Text ? (near+hi)/2-margin/2 : near-Math.Max(h*.15,.05));
+                right=Math.Min(right,obstacle.Text ? (near+hi)/2-obstacle.Clearance/2 : near-Math.Max(h*.15,.05));
             else if(!obstacle.Text && far-near<.001)
             {
                 if(far<mid)left=Math.Max(left,far+Math.Max(h*.15,.05));else right=Math.Min(right,near-Math.Max(h*.15,.05));
@@ -539,8 +581,8 @@ internal static class AvailableTextSpace
             {
                 // A separate page number lives in the original whitespace.
                 // Do not translate across that reserved numeric slot.
-                if(label.TextString.StartsWith("共"))left=Math.Max(left,far+margin);
-                else right=Math.Min(right,near-margin);
+                if(label.TextString.StartsWith("共"))left=Math.Max(left,far+obstacle.Clearance);
+                else right=Math.Min(right,near-obstacle.Clearance);
             }
             else {left=Math.Max(left,lo);right=Math.Min(right,hi);}
         }

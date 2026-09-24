@@ -9,6 +9,7 @@ using Gssoft.Gscad.Geometry;
 using Autodesk.AutoCAD.Geometry;
 #endif
 using WBC = DwgTranslator.Core.Models.WritebackConstants;
+using DwgTranslator.Core.Services;
 
 namespace DwgTranslator.Cad.Replacement;
 
@@ -120,6 +121,42 @@ public static class CollisionDetector
         => a.Length >= 3 && b.Length >= 3
            && !HasSeparatingAxis(a, b, tolerance)
            && !HasSeparatingAxis(b, a, tolerance);
+
+    /// <summary>
+    /// Shortest rendered-shape separation in the drawing plane. When both oriented rectangles are
+    /// available, use their actual edges; otherwise retain the conservative extents fallback.
+    /// </summary>
+    public static double MinimumDistance2D(
+        Extents3d a, Extents3d b, Point3d[]? cornersA, Point3d[]? cornersB)
+    {
+        if (cornersA == null || cornersB == null || cornersA.Length < 3 || cornersB.Length < 3)
+            return TextEnvelopeGeometry.AxisAlignedDistance2D(
+                a.MinPoint.X,a.MinPoint.Y,a.MaxPoint.X,a.MaxPoint.Y,
+                b.MinPoint.X,b.MinPoint.Y,b.MaxPoint.X,b.MaxPoint.Y);
+
+        if (QuadsOverlap(cornersA,cornersB,0)) return 0;
+        double minDistanceSquared=double.PositiveInfinity;
+        for (int i=0;i<cornersA.Length;i++)
+            for (int j=0;j<cornersB.Length;j++)
+            {
+                minDistanceSquared=Math.Min(minDistanceSquared,
+                    PointSegmentDistanceSquared(cornersA[i],cornersB[j],cornersB[(j+1)%cornersB.Length]));
+                minDistanceSquared=Math.Min(minDistanceSquared,
+                    PointSegmentDistanceSquared(cornersB[j],cornersA[i],cornersA[(i+1)%cornersA.Length]));
+            }
+        return Math.Sqrt(minDistanceSquared);
+    }
+
+    private static double PointSegmentDistanceSquared(Point3d point,Point3d start,Point3d end)
+    {
+        double dx=end.X-start.X, dy=end.Y-start.Y;
+        double lengthSquared=dx*dx+dy*dy;
+        double t=lengthSquared<=1e-20?0:
+            Math.Max(0,Math.Min(1,((point.X-start.X)*dx+(point.Y-start.Y)*dy)/lengthSquared));
+        double px=start.X+t*dx, py=start.Y+t*dy;
+        double ox=point.X-px, oy=point.Y-py;
+        return ox*ox+oy*oy;
+    }
 
     /// <summary>
     /// True when a finite 2D segment intersects a polygon or comes within the requested clearance.

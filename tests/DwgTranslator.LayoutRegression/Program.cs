@@ -51,6 +51,13 @@ var cases=new Dictionary<string,bool>
         && !serializedConfig.Contains("\"apiMode\"",StringComparison.OrdinalIgnoreCase)
     ,["cell border clearance scales with text height"]=Math.Abs(WritebackConstants.GeometryClearance(10)-.4)<1e-9
     ,["cell border clearance has absolute floor"]=Math.Abs(WritebackConstants.GeometryClearance(.1)-.02)<1e-9
+    ,["inter-text clearance scales to two-fifths the text height"]=Math.Abs(WritebackConstants.InterTextClearance(10)-4)<1e-9
+    ,["inter-text clearance has an absolute floor"]=Math.Abs(WritebackConstants.InterTextClearance(.1)-.05)<1e-9
+    ,["overlapping text rectangles have zero separation"]=TextEnvelopeGeometry.AxisAlignedDistance2D(0,0,10,10,9,2,12,8)==0
+    ,["horizontal text gap is measured accurately"]=Math.Abs(TextEnvelopeGeometry.AxisAlignedDistance2D(0,0,10,10,12,2,20,8)-2)<1e-9
+    ,["diagonal text gap uses Euclidean distance"]=Math.Abs(TextEnvelopeGeometry.AxisAlignedDistance2D(0,0,10,10,13,14,20,20)-5)<1e-9
+    ,["text gap below the minimum is rejected"]=TextEnvelopeGeometry.ViolatesClearance(.2,.4)
+    ,["text gap at the minimum is accepted"]=!TextEnvelopeGeometry.ViolatesClearance(.4,.4)
 };
 foreach(var pair in cases.Where(p=>!p.Value))Console.WriteLine("FAIL="+pair.Key);
 Console.WriteLine($"LAYOUT_CASES={cases.Count(p=>p.Value)}/{cases.Count}");
