@@ -37,8 +37,18 @@ public sealed partial class SmokeApp
         await NavIdleAsync();
         window.Width = 1280; window.Height = 720;
         await WaitForStableAsync(() => window.ActualWidth, "window width 1280x720");
-        Check(!ResponsiveLayout.GetIsCompact(window), "leaving the minimum restores the full sidebar");
-        foreach (var size in new[] { new Size(1280,720), new Size(1366,768), new Size(1440,900), new Size(1920,1080) })
+        var workAreaWidth = SystemParameters.WorkArea.Width;
+        if (workAreaWidth >= 1152)
+            Check(!ResponsiveLayout.GetIsCompact(window), "leaving the minimum restores the full sidebar");
+        else
+        {
+            Check(ResponsiveLayout.GetIsCompact(window), "compact layout remains active when the display cannot fit its expanded breakpoint");
+            Console.WriteLine($"SKIP expanded-sidebar native resize checks: work area is {workAreaWidth:F1} DIP wide");
+        }
+        var nativeLayoutSizes = workAreaWidth >= 1280
+            ? new[] { new Size(1280,720), new Size(1366,768), new Size(1440,900), new Size(1920,1080) }
+            : Array.Empty<Size>();
+        foreach (var size in nativeLayoutSizes)
         {
             window.Width = size.Width; window.Height = size.Height;
             // 窗口尺寸由 OS/合成器异步生效：必须等客户区真正稳定后再量，否则会读到旧尺寸。
