@@ -13,6 +13,7 @@ internal static class AvailableTextSpace
     private sealed class Obstacle
     {
         public ObjectId Id; public Extents3d Box; public Extents3d Ink; public bool Text; public bool HardBoundary; public string Content="";
+        public Point3d? SegmentStart; public Point3d? SegmentEnd;
         /// <summary>
         /// True when the source geometry itself is a straight frame/cell boundary. Keep this semantic
         /// flag before transforms: a vertical line rotated with its block has a fat axis-aligned box,
@@ -188,13 +189,26 @@ internal static class AvailableTextSpace
             double textHeight=(text is DBText heightDb?heightDb.Height
                 :text is MText heightMText?heightMText.TextHeight:0)*Math.Max(clearanceScale,1e-9);
             double clearance=hardBoundary?WBC.GeometryClearance(textHeight):0;
-            bool inkOverlaps=!hardBoundary
-                ?!(box.MaxPoint.X<ink.MinPoint.X+.01 || box.MinPoint.X>ink.MaxPoint.X-.01 ||
-                   box.MaxPoint.Y<ink.MinPoint.Y+.01 || box.MinPoint.Y>ink.MaxPoint.Y-.01)
-                :!(box.MaxPoint.X<ink.MinPoint.X-clearance || box.MinPoint.X>ink.MaxPoint.X+clearance ||
-                   box.MaxPoint.Y<ink.MinPoint.Y-clearance || box.MinPoint.Y>ink.MaxPoint.Y+clearance);
-            bool overlaps=inkOverlaps && (ownCorners==null || obstacle.Corners==null
-                || CollisionDetector.QuadsOverlap(ownCorners,obstacle.Corners));
+            bool overlaps;
+            if(hardBoundary && obstacle.SegmentStart.HasValue && obstacle.SegmentEnd.HasValue)
+            {
+                // Compare the actual transformed segment with visible ink, not with the segment's
+                // axis-aligned bounding rectangle. A 45-degree frame line can have a huge AABB
+                // containing lots of empty space; treating that whole box as solid geometry causes
+                // false shrink/revert decisions.
+                overlaps=CollisionDetector.SegmentWithinClearance(
+                    obstacle.SegmentStart.Value,obstacle.SegmentEnd.Value,BoxCorners(ink),clearance);
+            }
+            else
+            {
+                bool inkOverlaps=!hardBoundary
+                    ?!(box.MaxPoint.X<ink.MinPoint.X+.01 || box.MinPoint.X>ink.MaxPoint.X-.01 ||
+                       box.MaxPoint.Y<ink.MinPoint.Y+.01 || box.MinPoint.Y>ink.MaxPoint.Y-.01)
+                    :!(box.MaxPoint.X<ink.MinPoint.X-clearance || box.MinPoint.X>ink.MaxPoint.X+clearance ||
+                       box.MaxPoint.Y<ink.MinPoint.Y-clearance || box.MinPoint.Y>ink.MaxPoint.Y+clearance);
+                overlaps=inkOverlaps && (ownCorners==null || obstacle.Corners==null
+                    || CollisionDetector.QuadsOverlap(ownCorners,obstacle.Corners));
+            }
             if(!overlaps)continue;
 
             string content=text is DBText d?d.TextString:text is MText m?m.Text:"";
@@ -290,7 +304,7 @@ internal static class AvailableTextSpace
                 var box=new Extents3d(
                     new Point3d(Math.Min(a.X,b.X),Math.Min(a.Y,b.Y),Math.Min(a.Z,b.Z)),
                     new Point3d(Math.Max(a.X,b.X),Math.Max(a.Y,b.Y),Math.Max(a.Z,b.Z)));
-                list.Add(new Obstacle{Id=root,Box=box,Ink=box,HardBoundary=true});
+                list.Add(new Obstacle{Id=root,Box=box,Ink=box,HardBoundary=true,SegmentStart=a,SegmentEnd=b});
             }
             void Add(Extents3d box,bool text,bool hardBoundary=false){
                 var ink=text?CollisionDetector.GetCorrectedBounds(e,false):box;

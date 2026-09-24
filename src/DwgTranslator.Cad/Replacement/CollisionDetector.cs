@@ -121,6 +121,88 @@ public static class CollisionDetector
            && !HasSeparatingAxis(a, b, tolerance)
            && !HasSeparatingAxis(b, a, tolerance);
 
+    /// <summary>
+    /// True when a finite 2D segment intersects a polygon or comes within the requested clearance.
+    /// Used for rendered frame/cell boundaries after nested block transforms. Unlike an AABB test,
+    /// this does not turn a diagonal line into a filled rectangle.
+    /// </summary>
+    public static bool SegmentWithinClearance(Point3d a, Point3d b, Point3d[] polygon, double clearance)
+    {
+        if (polygon == null || polygon.Length < 3) return false;
+        if (PointInPolygon2D(a, polygon) || PointInPolygon2D(b, polygon)) return true;
+
+        double limit = Math.Max(0, clearance);
+        for (int i = 0; i < polygon.Length; i++)
+        {
+            var c = polygon[i];
+            var d = polygon[(i + 1) % polygon.Length];
+            if (SegmentsIntersect2D(a, b, c, d)) return true;
+            if (SegmentDistance2D(a, b, c, d) <= limit) return true;
+        }
+        return false;
+    }
+
+    private static bool PointInPolygon2D(Point3d p, Point3d[] polygon)
+    {
+        bool inside = false;
+        for (int i = 0, j = polygon.Length - 1; i < polygon.Length; j = i++)
+        {
+            var a = polygon[i];
+            var b = polygon[j];
+            bool crosses = (a.Y > p.Y) != (b.Y > p.Y);
+            if (!crosses) continue;
+            double denominator = b.Y - a.Y;
+            if (Math.Abs(denominator) < 1e-12) continue;
+            double x = (b.X - a.X) * (p.Y - a.Y) / denominator + a.X;
+            if (p.X < x) inside = !inside;
+        }
+        return inside;
+    }
+
+    private static bool SegmentsIntersect2D(Point3d a, Point3d b, Point3d c, Point3d d)
+    {
+        const double eps = 1e-10;
+        double abC = Cross2D(a, b, c), abD = Cross2D(a, b, d);
+        double cdA = Cross2D(c, d, a), cdB = Cross2D(c, d, b);
+        if (((abC > eps && abD < -eps) || (abC < -eps && abD > eps)) &&
+            ((cdA > eps && cdB < -eps) || (cdA < -eps && cdB > eps))) return true;
+        return Math.Abs(abC) <= eps && PointOnSegment2D(c, a, b, eps)
+            || Math.Abs(abD) <= eps && PointOnSegment2D(d, a, b, eps)
+            || Math.Abs(cdA) <= eps && PointOnSegment2D(a, c, d, eps)
+            || Math.Abs(cdB) <= eps && PointOnSegment2D(b, c, d, eps);
+    }
+
+    private static double Cross2D(Point3d a, Point3d b, Point3d p) =>
+        (b.X - a.X) * (p.Y - a.Y) - (b.Y - a.Y) * (p.X - a.X);
+
+    private static bool PointOnSegment2D(Point3d p, Point3d a, Point3d b, double eps) =>
+        p.X >= Math.Min(a.X, b.X) - eps && p.X <= Math.Max(a.X, b.X) + eps &&
+        p.Y >= Math.Min(a.Y, b.Y) - eps && p.Y <= Math.Max(a.Y, b.Y) + eps;
+
+    private static double SegmentDistance2D(Point3d a, Point3d b, Point3d c, Point3d d)
+    {
+        if (SegmentsIntersect2D(a, b, c, d)) return 0;
+        return Math.Min(
+            Math.Min(PointSegmentDistance2D(a, c, d), PointSegmentDistance2D(b, c, d)),
+            Math.Min(PointSegmentDistance2D(c, a, b), PointSegmentDistance2D(d, a, b)));
+    }
+
+    private static double PointSegmentDistance2D(Point3d p, Point3d a, Point3d b)
+    {
+        double dx = b.X - a.X, dy = b.Y - a.Y;
+        double length2 = dx * dx + dy * dy;
+        if (length2 <= 1e-20)
+        {
+            double px = p.X - a.X, py = p.Y - a.Y;
+            return Math.Sqrt(px * px + py * py);
+        }
+        double t = ((p.X - a.X) * dx + (p.Y - a.Y) * dy) / length2;
+        if (t < 0) t = 0; else if (t > 1) t = 1;
+        double qx = a.X + t * dx, qy = a.Y + t * dy;
+        double ex = p.X - qx, ey = p.Y - qy;
+        return Math.Sqrt(ex * ex + ey * ey);
+    }
+
     private static bool HasSeparatingAxis(Point3d[] from, Point3d[] other, double tolerance)
     {
         for (int i = 0; i < from.Length; i++)
