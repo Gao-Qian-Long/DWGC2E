@@ -462,7 +462,7 @@ public sealed partial class SmokeApp : App
         taskTable.SelectedItem = vm.DrawingFiles[1];
         detailRow.RaiseEvent(new System.Windows.Input.MouseButtonEventArgs(System.Windows.Input.Mouse.PrimaryDevice, Environment.TickCount, System.Windows.Input.MouseButton.Right)
         {
-            RoutedEvent = UIElement.PreviewMouseRightButtonDownEvent
+            RoutedEvent = UIElement.PreviewMouseDownEvent
         });
         await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
         Check(vm.SelectedBatchTask == vm.DrawingFiles[0] && taskTable.SelectedItem == vm.DrawingFiles[0],

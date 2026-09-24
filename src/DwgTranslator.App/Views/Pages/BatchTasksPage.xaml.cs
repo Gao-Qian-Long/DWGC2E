@@ -18,8 +18,9 @@ public partial class BatchTasksPage : UserControl
 
     private void ClearFilters_Click(object sender, RoutedEventArgs e) { if(DataContext is MainViewModel vm) { vm.BatchSearch=""; vm.BatchStatusFilter=0; vm.BatchDateFilter=0; } }
 
-    private void TaskTable_MouseRightButtonDown(object sender, MouseButtonEventArgs e)
+    private void TaskTable_MouseDown(object sender, MouseButtonEventArgs e)
     {
+        if (e.ChangedButton != MouseButton.Right) return;
         if (sender is not DataGrid table || e.OriginalSource is not DependencyObject source) return;
         if (ItemsControl.ContainerFromElement(table, source) is not DataGridRow row) return;
 
