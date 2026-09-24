@@ -12,7 +12,12 @@ internal static class AvailableTextSpace
 {
     private sealed class Obstacle
     {
-        public ObjectId Id; public Extents3d Box; public Extents3d Ink; public bool Text; public string Content="";
+        public ObjectId Id; public Extents3d Box; public Extents3d Ink; public bool Text; public bool HardBoundary; public string Content="";
+        /// <summary>
+        /// True when the source geometry itself is a straight frame/cell boundary. Keep this semantic
+        /// flag before transforms: a vertical line rotated with its block has a fat axis-aligned box,
+        /// but it is still a hard boundary and must retain clearance.
+        /// </summary>
         /// <summary>Rendered rectangle corners in world coordinates, when reconstructable.</summary>
         public Point3d[]? Corners;
     }
@@ -50,7 +55,7 @@ internal static class AvailableTextSpace
         var (ink,ownCorners)=measured.Value;
 
         foreach(var issue in FindIntersectionsAgainstOwner(
-                    text,owner,tr,ink,ownCorners,baseline,text.ObjectId,null))
+                    text,owner,tr,ink,ownCorners,baseline,text.ObjectId,null,1.0))
             yield return issue;
 
         if(owner.IsLayout)yield break;
@@ -103,7 +108,7 @@ internal static class AvailableTextSpace
             // independently visible because GetObstacles records them by their own ObjectId.
             string context="|INSTANCE="+reference.Handle+"|OWNER="+parent.Handle;
             foreach(var issue in FindIntersectionsAgainstOwner(
-                        text,parent,tr,ink,corners,transformedBaseline,reference.ObjectId,context))
+                        text,parent,tr,ink,corners,transformedBaseline,reference.ObjectId,context,PlanarScale(transform)))
                 yield return issue;
 
             if(parent.IsLayout || !path.Add(parent.ObjectId))continue;
@@ -142,17 +147,35 @@ internal static class AvailableTextSpace
         catch{return null;}
     }
 
+    /// <summary>
+    /// Effective XY scale of a nested INSERT path. Clearance is expressed in rendered/world units,
+    /// so a block scaled 2x must also keep 2x the source text's local clearance. Using the larger
+    /// axis is intentionally conservative for non-uniformly scaled blocks.
+    /// </summary>
+    private static double PlanarScale(Matrix3d transform)
+    {
+        try
+        {
+            var origin=new Point3d(0,0,0).TransformBy(transform);
+            var x=new Point3d(1,0,0).TransformBy(transform);
+            var y=new Point3d(0,1,0).TransformBy(transform);
+            var scale=Math.Max(origin.DistanceTo(x),origin.DistanceTo(y));
+            return double.IsFinite(scale) && scale>1e-9 ? scale : 1.0;
+        }
+        catch { return 1.0; }
+    }
+
     private static IEnumerable<string> FindIntersectionsAgainstOwner(
         Entity text,BlockTableRecord owner,Transaction tr,
         Extents3d ink,Point3d[]? ownCorners,Extents3d? baseline,
-        ObjectId excludedRoot,string? context)
+        ObjectId excludedRoot,string? context,double clearanceScale)
     {
         foreach(var obstacle in GetObstacles(owner,tr))
         {
             if(obstacle.Id==excludedRoot)continue;
             var box=obstacle.Ink;
-            bool hardBoundary=!obstacle.Text &&
-                (box.MaxPoint.X-box.MinPoint.X<.001 || box.MaxPoint.Y-box.MinPoint.Y<.001);
+            bool hardBoundary=obstacle.HardBoundary || (!obstacle.Text &&
+                (box.MaxPoint.X-box.MinPoint.X<.001 || box.MaxPoint.Y-box.MinPoint.Y<.001));
 
             // Existing overlap with labels or symbols may be intentional, but a straight cell or
             // frame line is a hard boundary. Let those thin boundaries reach the shrink resolver
@@ -162,8 +185,8 @@ internal static class AvailableTextSpace
                box.MaxPoint.Y>baseline.Value.MinPoint.Y+.01 && box.MinPoint.Y<baseline.Value.MaxPoint.Y-.01)
                 continue;
 
-            double textHeight=text is DBText heightDb?heightDb.Height
-                :text is MText heightMText?heightMText.TextHeight:0;
+            double textHeight=(text is DBText heightDb?heightDb.Height
+                :text is MText heightMText?heightMText.TextHeight:0)*Math.Max(clearanceScale,1e-9);
             double clearance=hardBoundary?WBC.GeometryClearance(textHeight):0;
             bool inkOverlaps=!hardBoundary
                 ?!(box.MaxPoint.X<ink.MinPoint.X+.01 || box.MinPoint.X>ink.MaxPoint.X-.01 ||
@@ -245,25 +268,25 @@ internal static class AvailableTextSpace
                     {
                         if(Math.Abs(poly.GetBulgeAt(i))>1e-6){Add(e.GeometricExtents,false);return;}
                         var p=poly.GetPoint3dAt(i);var q=poly.GetPoint3dAt((i+1)%poly.NumberOfVertices);
-                        Add(new Extents3d(new Point3d(Math.Min(p.X,q.X),Math.Min(p.Y,q.Y),Math.Min(p.Z,q.Z)),new Point3d(Math.Max(p.X,q.X),Math.Max(p.Y,q.Y),Math.Max(p.Z,q.Z))),false);
+                        Add(new Extents3d(new Point3d(Math.Min(p.X,q.X),Math.Min(p.Y,q.Y),Math.Min(p.Z,q.Z)),new Point3d(Math.Max(p.X,q.X),Math.Max(p.Y,q.Y),Math.Max(p.Z,q.Z))),false,true);
                     }
                 }
-                else Add(CollisionDetector.GetCorrectedBounds(e),e is DBText || e is MText);
+                else Add(CollisionDetector.GetCorrectedBounds(e),e is DBText || e is MText,e is Line);
             }
             catch (Exception ex)
             {
                 // Keep a conservative host rectangle if decomposition failed;
                 // never mistake a failed glyph measurement for empty space.
-                try { var box=e.GeometricExtents;box.TransformBy(transform);list.Add(new Obstacle{Id=root,Box=box,Ink=box}); }
+                try { var box=e.GeometricExtents;box.TransformBy(transform);list.Add(new Obstacle{Id=root,Box=box,Ink=box,HardBoundary=e is Line}); }
                 catch { Log.DebugCategorized("Layout", "No extents for object {Handle}: {Detail}", e.Handle, ex.Message); }
             }
-            void Add(Extents3d box,bool text){
+            void Add(Extents3d box,bool text,bool hardBoundary=false){
                 var ink=text?CollisionDetector.GetCorrectedBounds(e,false):box;
                 var corners=text?CollisionDetector.TryGetOrientedCorners(e):null;
                 box.TransformBy(transform);ink.TransformBy(transform);
                 if(corners!=null)
                     for(int i=0;i<corners.Length;i++) corners[i]=corners[i].TransformBy(transform);
-                list.Add(new Obstacle{Id=root,Box=box,Ink=ink,Text=text,Content=e is DBText d?d.TextString:e is MText m?m.Text:"" ,Corners=corners});
+                list.Add(new Obstacle{Id=root,Box=box,Ink=ink,Text=text,HardBoundary=hardBoundary,Content=e is DBText d?d.TextString:e is MText m?m.Text:"" ,Corners=corners});
             }
         }
     }
