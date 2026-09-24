@@ -261,17 +261,20 @@ internal static class AvailableTextSpace
             }
             try
             {
-                if(e is Polyline poly)
+                if(e is Line line)
+                {
+                    AddSegment(line.StartPoint,line.EndPoint);
+                }
+                else if(e is Polyline poly)
                 {
                     int count=poly.Closed ? poly.NumberOfVertices : poly.NumberOfVertices-1;
                     for(int i=0;i<count;i++)
                     {
                         if(Math.Abs(poly.GetBulgeAt(i))>1e-6){Add(e.GeometricExtents,false);return;}
-                        var p=poly.GetPoint3dAt(i);var q=poly.GetPoint3dAt((i+1)%poly.NumberOfVertices);
-                        Add(new Extents3d(new Point3d(Math.Min(p.X,q.X),Math.Min(p.Y,q.Y),Math.Min(p.Z,q.Z)),new Point3d(Math.Max(p.X,q.X),Math.Max(p.Y,q.Y),Math.Max(p.Z,q.Z))),false,true);
+                        AddSegment(poly.GetPoint3dAt(i),poly.GetPoint3dAt((i+1)%poly.NumberOfVertices));
                     }
                 }
-                else Add(CollisionDetector.GetCorrectedBounds(e),e is DBText || e is MText,e is Line);
+                else Add(CollisionDetector.GetCorrectedBounds(e),e is DBText || e is MText);
             }
             catch (Exception ex)
             {
@@ -279,6 +282,15 @@ internal static class AvailableTextSpace
                 // never mistake a failed glyph measurement for empty space.
                 try { var box=e.GeometricExtents;box.TransformBy(transform);list.Add(new Obstacle{Id=root,Box=box,Ink=box,HardBoundary=e is Line}); }
                 catch { Log.DebugCategorized("Layout", "No extents for object {Handle}: {Detail}", e.Handle, ex.Message); }
+            }
+            void AddSegment(Point3d p,Point3d q)
+            {
+                var a=p.TransformBy(transform);
+                var b=q.TransformBy(transform);
+                var box=new Extents3d(
+                    new Point3d(Math.Min(a.X,b.X),Math.Min(a.Y,b.Y),Math.Min(a.Z,b.Z)),
+                    new Point3d(Math.Max(a.X,b.X),Math.Max(a.Y,b.Y),Math.Max(a.Z,b.Z)));
+                list.Add(new Obstacle{Id=root,Box=box,Ink=box,HardBoundary=true});
             }
             void Add(Extents3d box,bool text,bool hardBoundary=false){
                 var ink=text?CollisionDetector.GetCorrectedBounds(e,false):box;
