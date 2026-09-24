@@ -245,7 +245,7 @@
                           EnableColumnVirtualization="True" VirtualizingPanel.VirtualizationMode="Recycling"
                           ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                           ScrollViewer.CanContentScroll="True" AutomationProperties.Name="任务列表"
-                          MouseRightButtonDown="TaskTable_MouseRightButtonDown">
+                          PreviewMouseRightButtonDown="TaskTable_MouseRightButtonDown">
                     <!-- §W1-D3 真正的行高杠杆：本表从 MainWindowStyles.xaml:419 继承 RowStyle=TranslationRowStyle，
                          而该样式 :381 自己写了 Setter Height=Size.TableRow(40)。行样式上的显式 Height 优先于
                          DataGrid.RowHeight / MinRowHeight —— 实测把 grid.RowHeight 设 48、把 MinRowHeight 设 90，
