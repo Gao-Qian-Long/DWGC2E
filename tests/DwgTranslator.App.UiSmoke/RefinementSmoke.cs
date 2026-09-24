@@ -487,13 +487,18 @@ public sealed partial class SmokeApp
         toastWindow.Show();
         try
         {
+            await WaitForStableAsync(() => toastWindow.ActualHeight, "isolated toast window height");
+            var expectedToastCapacity = Math.Clamp(Math.Min(toast.MaximumVisible,
+                toastWindow.ActualHeight < 600 ? 1 : toastWindow.ActualHeight < 900 ? 2 : 3), 1, 3);
             for (var i = 0; i < 5; i++) toast.Show("测试反馈 " + i, Brushes.Brown);
             toast.Show("测试反馈 0", Brushes.Brown);
-            Check(toast.VisibleCount == 3 && toast.PendingCount == 2, "toast maximum three and duplicate merge");
+            Check(toast.VisibleCount == expectedToastCapacity && toast.PendingCount == 5 - expectedToastCapacity,
+                "toast respects viewport capacity and merges duplicate messages");
             paused = true; await Task.Delay(300);
             Check(toast.Visibility == Visibility.Collapsed, "paused toast region occupies no layout space");
             await Task.Delay(4200);
-            Check(toast.VisibleCount == 3 && toast.PendingCount == 2, "pause retains notifications and lifetime");
+            Check(toast.VisibleCount == expectedToastCapacity && toast.PendingCount == 5 - expectedToastCapacity,
+                "pause retains notifications and lifetime");
             paused = false; await Task.Delay(300);
             Check(toast.Visibility == Visibility.Visible, "notifications resume after pause");
             Capture(toastWindow, "toast-queued-isolated");
