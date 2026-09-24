@@ -825,56 +825,65 @@ public sealed partial class SmokeApp : App
                 var navList = (ListBox)navSettingsPage.FindName("SettingsNav");
                 var navColumn = (ColumnDefinition)navSettingsPage.FindName("SettingsNavColumn");
                 var navGutter = (ColumnDefinition)navSettingsPage.FindName("SettingsNavGutter");
-                Check(navCard.IsVisible && navList.IsVisible && !DwgTranslator.App.Views.Controls.ResponsiveLayout.GetIsCompact(window),
-                    "master-detail settings exposes the left navigation card at full width");
-                var expectedNavWidth = ((GridLength)Resources["Size.SettingsNav"]).Value;
-                var expectedGutterWidth = ((GridLength)Resources["Size.CardGutter"]).Value;
-                Check(Math.Abs(navColumn.Width.Value - expectedNavWidth) < 0.1 && Math.Abs(navGutter.Width.Value - expectedGutterWidth) < 0.1,
-                    $"settings nav columns keep the shared width tokens (nav={navColumn.Width.Value:F1}/{expectedNavWidth:F1}, gutter={navGutter.Width.Value:F1}/{expectedGutterWidth:F1})");
-                var navTiles = FindVisuals<ListBoxItem>(navList).ToList();
-                Check(navTiles.Count == 6, "settings navigation lists all six sections, actual=" + navTiles.Count);
-                foreach (var tile in navTiles)
+                if (DwgTranslator.App.Views.Controls.ResponsiveLayout.GetIsCompact(window))
                 {
-                    Check(tile.IsVisible && tile.IsHitTestVisible && tile.ActualWidth > 40 && tile.ActualHeight >= 24,
-                        $"settings nav tile stays clickable ({tile.ActualWidth:F1}x{tile.ActualHeight:F1})");
-                    var inCard = tile.TransformToVisual(navCard).TransformBounds(new Rect(0, 0, tile.ActualWidth, tile.ActualHeight));
-                    Check(inCard.Left >= -0.5 && inCard.Top >= -0.5 && inCard.Right <= navCard.ActualWidth + 0.5 && inCard.Bottom <= navCard.ActualHeight + 0.5,
-                        $"settings nav tile is not clipped by the card (tile={inCard}, card={navCard.ActualWidth:F1}x{navCard.ActualHeight:F1})");
+                    Check(!navCard.IsVisible && !navList.IsVisible && Math.Abs(navColumn.Width.Value) < 0.1 && Math.Abs(navGutter.Width.Value) < 0.1,
+                        "compact settings collapses the desktop navigation card and columns");
+                    Console.WriteLine("SKIP expanded settings navigation checks: Windows work area is below the desktop breakpoint.");
                 }
-                // 六格必须严格等高：用户反复反馈"第 6 项比其他格高一点"。高度由 Height 与选中态样式
-                // 共同决定，任何一方回退都会在这里被拦下（"看起来不一样"另由边框色统一处理）。
-                var tileHeights = navTiles.Select(t => t.ActualHeight).ToArray();
-                Check(tileHeights.Max() - tileHeights.Min() < 0.5,
-                    "settings nav tiles share one height, actual=" + string.Join("/", tileHeights.Select(h => h.ToString("F1"))));
-                var sectionHost = (StackPanel)((Border)navSettingsPage.FindName("SettingsContent")).Child;
-                Check(sectionHost.Children.Count == 6, "settings right card hosts exactly six section panels, actual=" + sectionHost.Children.Count);
-                var navSaveBar = (FrameworkElement)navSettingsPage.FindName("SettingsSaveBar");
-                for (var target = 0; target < 6; target++)
+                else
                 {
-                    var tile = navTiles[target];
-                    // 走 UI 元素的选择通道，不是 ViewModel 通道：ListBoxItem.IsSelected 正是鼠标点击最终
-                    // 落到的那个属性，赋值后由 ListBoxItem → Selector 选中机制 → SelectedIndex 的
-                    // **双向**绑定 → vm.SettingsSection → IndexToVis 驱动右卡分区可见性。这条链上任何一环
-                    // 被 §G 重构弄断（ItemsPanel 改回默认纵向堆叠、ListBox 挪进左卡 Border、绑定退化成
-                    // OneWay），下面 4 条断言都会红。
-                    // 为什么不用 ISelectionItemProvider.Select()（与 :261 对按钮用 IInvokeProvider 同层）：
-                    // UIElementAutomationPeer.CreatePeerForElement(tile) 在本场景直接抛 NullReferenceException
-                    // ——这些 ListBoxItem 是 XAML 里显式声明的元素、自身即容器，其 peer 建立需要父级
-                    // SelectorAutomationPeer 链，而冒烟进程里没有任何自动化客户端去创建过该链。
-                    // 也不合成 MouseButton 事件：ListBoxItem 的选中在内部把该事件标记为已处理，
-                    // RaiseEvent 的结果取决于路由细节，不确定；IsSelected 赋值是同一终态且确定。
-                    // "可被点击"这一半由上面单独的 IsHitTestVisible + 实际尺寸 + 不被左卡裁切三条守住。
-                    tile.IsSelected = true;
-                    await NavIdleAsync();
-                    Check(vm.SettingsSection == target, $"selecting the left nav tile switches to section {target}, actual={vm.SettingsSection}");
-                    Check(navList.SelectedIndex == target && ReferenceEquals(navList.SelectedItem, tile), "left nav selection tracks the chosen section " + target);
-                    var visiblePanels = sectionHost.Children.OfType<FrameworkElement>().Where(p => p.Visibility == Visibility.Visible).ToList();
-                    Check(visiblePanels.Count == 1 && ReferenceEquals(visiblePanels[0], sectionHost.Children[target]),
-                        $"right card shows only section {target}, visible={visiblePanels.Count}");
-                    Check(visiblePanels[0].ActualHeight > 0 && visiblePanels[0].ActualWidth > 0,
-                        $"section {target} content is really laid out inside the right card ({visiblePanels[0].ActualWidth:F1}x{visiblePanels[0].ActualHeight:F1})");
-                    Check(navSaveBar.IsVisible == (target != 5), "nav-selected section still drives the save bar " + target);
-                    Capture(window, "settings-nav-" + target);
+                    Check(navCard.IsVisible && navList.IsVisible,
+                        "master-detail settings exposes the left navigation card at full width");
+                    var expectedNavWidth = ((GridLength)Resources["Size.SettingsNav"]).Value;
+                    var expectedGutterWidth = ((GridLength)Resources["Size.CardGutter"]).Value;
+                    Check(Math.Abs(navColumn.Width.Value - expectedNavWidth) < 0.1 && Math.Abs(navGutter.Width.Value - expectedGutterWidth) < 0.1,
+                        $"settings nav columns keep the shared width tokens (nav={navColumn.Width.Value:F1}/{expectedNavWidth:F1}, gutter={navGutter.Width.Value:F1}/{expectedGutterWidth:F1})");
+                    var navTiles = FindVisuals<ListBoxItem>(navList).ToList();
+                    Check(navTiles.Count == 6, "settings navigation lists all six sections, actual=" + navTiles.Count);
+                    foreach (var tile in navTiles)
+                    {
+                        Check(tile.IsVisible && tile.IsHitTestVisible && tile.ActualWidth > 40 && tile.ActualHeight >= 24,
+                            $"settings nav tile stays clickable ({tile.ActualWidth:F1}x{tile.ActualHeight:F1})");
+                        var inCard = tile.TransformToVisual(navCard).TransformBounds(new Rect(0, 0, tile.ActualWidth, tile.ActualHeight));
+                        Check(inCard.Left >= -0.5 && inCard.Top >= -0.5 && inCard.Right <= navCard.ActualWidth + 0.5 && inCard.Bottom <= navCard.ActualHeight + 0.5,
+                            $"settings nav tile is not clipped by the card (tile={inCard}, card={navCard.ActualWidth:F1}x{navCard.ActualHeight:F1})");
+                    }
+                    // 六格必须严格等高：用户反复反馈"第 6 项比其他格高一点"。高度由 Height 与选中态样式
+                    // 共同决定，任何一方回退都会在这里被拦下（"看起来不一样"另由边框色统一处理）。
+                    var tileHeights = navTiles.Select(t => t.ActualHeight).ToArray();
+                    Check(tileHeights.Max() - tileHeights.Min() < 0.5,
+                        "settings nav tiles share one height, actual=" + string.Join("/", tileHeights.Select(h => h.ToString("F1"))));
+                    var sectionHost = (StackPanel)((Border)navSettingsPage.FindName("SettingsContent")).Child;
+                    Check(sectionHost.Children.Count == 6, "settings right card hosts exactly six section panels, actual=" + sectionHost.Children.Count);
+                    var navSaveBar = (FrameworkElement)navSettingsPage.FindName("SettingsSaveBar");
+                    for (var target = 0; target < 6; target++)
+                    {
+                        var tile = navTiles[target];
+                        // 走 UI 元素的选择通道，不是 ViewModel 通道：ListBoxItem.IsSelected 正是鼠标点击最终
+                        // 落到的那个属性，赋值后由 ListBoxItem → Selector 选中机制 → SelectedIndex 的
+                        // **双向**绑定 → vm.SettingsSection → IndexToVis 驱动右卡分区可见性。这条链上任何一环
+                        // 被 §G 重构弄断（ItemsPanel 改回默认纵向堆叠、ListBox 挪进左卡 Border、绑定退化成
+                        // OneWay），下面 4 条断言都会红。
+                        // 为什么不用 ISelectionItemProvider.Select()（与 :261 对按钮用 IInvokeProvider 同层）：
+                        // UIElementAutomationPeer.CreatePeerForElement(tile) 在本场景直接抛 NullReferenceException
+                        // ——这些 ListBoxItem 是 XAML 里显式声明的元素、自身即容器，其 peer 建立需要父级
+                        // SelectorAutomationPeer 链，而冒烟进程里没有任何自动化客户端去创建过该链。
+                        // 也不合成 MouseButton 事件：ListBoxItem 的选中在内部把该事件标记为已处理，
+                        // RaiseEvent 的结果取决于路由细节，不确定；IsSelected 赋值是同一终态且确定。
+                        // "可被点击"这一半由上面单独的 IsHitTestVisible + 实际尺寸 + 不被左卡裁切三条守住。
+                        tile.IsSelected = true;
+                        await NavIdleAsync();
+                        Check(vm.SettingsSection == target, $"selecting the left nav tile switches to section {target}, actual={vm.SettingsSection}");
+                        Check(navList.SelectedIndex == target && ReferenceEquals(navList.SelectedItem, tile), "left nav selection tracks the chosen section " + target);
+                        var visiblePanels = sectionHost.Children.OfType<FrameworkElement>().Where(p => p.Visibility == Visibility.Visible).ToList();
+                        Check(visiblePanels.Count == 1 && ReferenceEquals(visiblePanels[0], sectionHost.Children[target]),
+                            $"right card shows only section {target}, visible={visiblePanels.Count}");
+                        Check(visiblePanels[0].ActualHeight > 0 && visiblePanels[0].ActualWidth > 0,
+                            $"section {target} content is really laid out inside the right card ({visiblePanels[0].ActualWidth:F1}x{visiblePanels[0].ActualHeight:F1})");
+                        Check(navSaveBar.IsVisible == (target != 5), "nav-selected section still drives the save bar " + target);
+                        Capture(window, "settings-nav-" + target);
+                    }
                 }
             }
             vm.SettingsSection = 1;
