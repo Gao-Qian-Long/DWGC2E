@@ -41,58 +41,142 @@ internal static class AvailableTextSpace
         var owner=GetTextOwner(text,tr);
         if(owner==null || owner.IsFromExternalReference || owner.IsFromOverlayReference || text is AttributeReference hidden && hidden.Invisible)yield break;
 
-        // Measuring the entity's ink can fail (host reports a rectangle as extents, exploded MText
-        // has no glyphs, style height is zero). That used to escape into the caller and abort the
-        // whole writeback; fall back to the geometric extents so the entity is still checked.
-        var measured = MeasureForInterference(text);
-        if (measured == null) yield break;
-        var (ink, ownCorners) = measured.Value;
+        // First validate the entity in its own owning block. Then, for definition text, walk every
+        // INSERT path that places that block into a parent and validate the transformed text against
+        // the parent's geometry too. A definition-local audit alone misses the common case where a
+        // longer translation grows out of a child block and into a title-block line or sibling block.
+        var measured=MeasureForInterference(text);
+        if(measured==null)yield break;
+        var (ink,ownCorners)=measured.Value;
 
+        foreach(var issue in FindIntersectionsAgainstOwner(
+                    text,owner,tr,ink,ownCorners,baseline,text.ObjectId,null))
+            yield return issue;
+
+        if(owner.IsLayout)yield break;
+
+        var path=new HashSet<ObjectId>{owner.ObjectId};
+        foreach(var issue in FindAncestorIntersections(
+                    text,owner,tr,ink,ownCorners,baseline,Matrix3d.Identity,path,0))
+            yield return issue;
+    }
+
+    private static IEnumerable<string> FindAncestorIntersections(
+        Entity text,BlockTableRecord childOwner,Transaction tr,
+        Extents3d localInk,Point3d[]? localCorners,Extents3d? localBaseline,
+        Matrix3d accumulated,HashSet<ObjectId> path,int depth)
+    {
+        if(depth>=8)yield break;
+
+        foreach(var referenceId in GetDirectBlockReferences(childOwner))
+        {
+            var reference=OpenBlockReference(tr,referenceId);
+            if(reference==null)continue;
+            var parent=OpenOwnerBlock(tr,reference.OwnerId);
+            if(parent==null || parent.IsFromExternalReference || parent.IsFromOverlayReference)continue;
+
+            // Keep the multiplication order identical to GetObstacles' nested-block traversal.
+            var transform=accumulated*reference.BlockTransform;
+            var ink=localInk;
+            ink.TransformBy(transform);
+
+            Point3d[]? corners=null;
+            if(localCorners!=null)
+            {
+                corners=new Point3d[localCorners.Length];
+                for(int i=0;i<localCorners.Length;i++)
+                    corners[i]=localCorners[i].TransformBy(transform);
+            }
+
+            Extents3d? transformedBaseline=null;
+            if(localBaseline.HasValue)
+            {
+                var sourceBaseline=localBaseline.Value;
+                sourceBaseline.TransformBy(transform);
+                transformedBaseline=sourceBaseline;
+            }
+
+            // Exclude the INSERT that carries this definition. Its definition geometry is the
+            // target's own local world and has already been audited above. Attributes remain
+            // independently visible because GetObstacles records them by their own ObjectId.
+            string context="|INSTANCE="+reference.Handle+"|OWNER="+parent.Handle;
+            foreach(var issue in FindIntersectionsAgainstOwner(
+                        text,parent,tr,ink,corners,transformedBaseline,reference.ObjectId,context))
+                yield return issue;
+
+            if(parent.IsLayout || !path.Add(parent.ObjectId))continue;
+            foreach(var issue in FindAncestorIntersections(
+                        text,parent,tr,localInk,localCorners,localBaseline,transform,path,depth+1))
+                yield return issue;
+            path.Remove(parent.ObjectId);
+        }
+    }
+
+    private static List<ObjectId> GetDirectBlockReferences(BlockTableRecord definition)
+    {
+        var result=new List<ObjectId>();
+        try
+        {
+            foreach(ObjectId id in definition.GetBlockReferenceIds(true,false))
+                if(id.IsValid)result.Add(id);
+        }
+        catch(Exception ex)
+        {
+            Log.DebugCategorized("Layout","Block reference lookup failed for {Handle}: {Detail}",
+                definition.Handle,ex.Message);
+        }
+        return result;
+    }
+
+    private static BlockReference? OpenBlockReference(Transaction tr,ObjectId id)
+    {
+        try{return tr.GetObject(id,OpenMode.ForRead,false) as BlockReference;}
+        catch{return null;}
+    }
+
+    private static BlockTableRecord? OpenOwnerBlock(Transaction tr,ObjectId id)
+    {
+        try{return id.IsValid?tr.GetObject(id,OpenMode.ForRead,false) as BlockTableRecord:null;}
+        catch{return null;}
+    }
+
+    private static IEnumerable<string> FindIntersectionsAgainstOwner(
+        Entity text,BlockTableRecord owner,Transaction tr,
+        Extents3d ink,Point3d[]? ownCorners,Extents3d? baseline,
+        ObjectId excludedRoot,string? context)
+    {
         foreach(var obstacle in GetObstacles(owner,tr))
         {
-            if(obstacle.Id==text.ObjectId)continue;
+            if(obstacle.Id==excludedRoot)continue;
             var box=obstacle.Ink;
-            bool hardBoundary = !obstacle.Text &&
-                (box.MaxPoint.X-box.MinPoint.X < .001 || box.MaxPoint.Y-box.MinPoint.Y < .001);
+            bool hardBoundary=!obstacle.Text &&
+                (box.MaxPoint.X-box.MinPoint.X<.001 || box.MaxPoint.Y-box.MinPoint.Y<.001);
 
             // Existing overlap with labels or symbols may be intentional, but a straight cell or
             // frame line is a hard boundary. Let those thin boundaries reach the shrink resolver
             // even when the source label already crossed them.
             if(!hardBoundary && baseline.HasValue &&
-               box.MaxPoint.X > baseline.Value.MinPoint.X+.01 && box.MinPoint.X < baseline.Value.MaxPoint.X-.01 &&
-               box.MaxPoint.Y > baseline.Value.MinPoint.Y+.01 && box.MinPoint.Y < baseline.Value.MaxPoint.Y-.01)
-                continue;   // the source text already overlapped this obstacle
+               box.MaxPoint.X>baseline.Value.MinPoint.X+.01 && box.MinPoint.X<baseline.Value.MaxPoint.X-.01 &&
+               box.MaxPoint.Y>baseline.Value.MinPoint.Y+.01 && box.MinPoint.Y<baseline.Value.MaxPoint.Y-.01)
+                continue;
 
-            // Two rotated labels sit inside diagonal bounding boxes that overlap even when the
-            // glyphs are far apart, so prefer the exact rectangle test whenever both shapes are
-            // known. Anything else keeps the previous axis-aligned behaviour.
-            //
-            // The oriented shape an MText exposes here is its LAYOUT rectangle
-            // (ActualWidth x ActualHeight), which counts empty leading paragraphs: these drawings
-            // write a specification line as "{\fSimSun;\P}2.2KW", so its layout rectangle is two
-            // lines tall and reaches through the label placed between it and the next line, while
-            // its visible glyphs sit ten units away. Letting that rectangle introduce a clash
-            // reverted every label pinned between two specification lines to Chinese, because the
-            // baseline exemption is evaluated on the obstacle's INK box and could never clear an
-            // obstacle the test never compared ink against. Ink against ink is the visible truth,
-            // so the axis-aligned ink boxes are a necessary condition and the oriented test may
-            // only REMOVE a conflict, never add one.
-            double textHeight = text is DBText heightDb ? heightDb.Height
-                : text is MText heightMText ? heightMText.TextHeight : 0;
-            double clearance = hardBoundary ? WBC.GeometryClearance(textHeight) : 0;
-            bool inkOverlaps = !hardBoundary
-                ? !(box.MaxPoint.X < ink.MinPoint.X+.01 || box.MinPoint.X > ink.MaxPoint.X-.01 ||
-                    box.MaxPoint.Y < ink.MinPoint.Y+.01 || box.MinPoint.Y > ink.MaxPoint.Y-.01)
-                : !(box.MaxPoint.X < ink.MinPoint.X-clearance || box.MinPoint.X > ink.MaxPoint.X+clearance ||
-                    box.MaxPoint.Y < ink.MinPoint.Y-clearance || box.MinPoint.Y > ink.MaxPoint.Y+clearance);
-            bool overlaps = inkOverlaps && (ownCorners == null || obstacle.Corners == null
-                || CollisionDetector.QuadsOverlap(ownCorners, obstacle.Corners));
+            double textHeight=text is DBText heightDb?heightDb.Height
+                :text is MText heightMText?heightMText.TextHeight:0;
+            double clearance=hardBoundary?WBC.GeometryClearance(textHeight):0;
+            bool inkOverlaps=!hardBoundary
+                ?!(box.MaxPoint.X<ink.MinPoint.X+.01 || box.MinPoint.X>ink.MaxPoint.X-.01 ||
+                   box.MaxPoint.Y<ink.MinPoint.Y+.01 || box.MinPoint.Y>ink.MaxPoint.Y-.01)
+                :!(box.MaxPoint.X<ink.MinPoint.X-clearance || box.MinPoint.X>ink.MaxPoint.X+clearance ||
+                   box.MaxPoint.Y<ink.MinPoint.Y-clearance || box.MinPoint.Y>ink.MaxPoint.Y+clearance);
+            bool overlaps=inkOverlaps && (ownCorners==null || obstacle.Corners==null
+                || CollisionDetector.QuadsOverlap(ownCorners,obstacle.Corners));
             if(!overlaps)continue;
 
-            string content=text is DBText d ? d.TextString : text is MText m ? m.Text : "";
+            string content=text is DBText d?d.TextString:text is MText m?m.Text:"";
             bool duplicate=obstacle.Text && content==obstacle.Content &&
                 ink.MinPoint.DistanceTo(box.MinPoint)<.01 && ink.MaxPoint.DistanceTo(box.MaxPoint)<.01;
-            yield return (duplicate?"DUPLICATE":"CONFLICT")+"="+text.Handle+","+obstacle.Id.Handle+"|KIND="+(obstacle.Text?"TEXT":"GEOMETRY")+"|OBSTACLE="+box;
+            yield return (duplicate?"DUPLICATE":"CONFLICT")+"="+text.Handle+","+obstacle.Id.Handle+
+                "|KIND="+(obstacle.Text?"TEXT":"GEOMETRY")+"|OBSTACLE="+box+(context??"");
         }
     }
 

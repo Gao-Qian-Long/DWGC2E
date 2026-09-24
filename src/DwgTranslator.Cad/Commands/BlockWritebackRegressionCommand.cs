@@ -32,6 +32,8 @@ public class BlockWritebackRegressionCommand
             var output = Path.Combine(directory, "output.dwg");
             var items = new List<TextEntity>();
             var expected = new Dictionary<string,string>();
+            string? instanceGuardTextHandle = null;
+            double instanceGuardX = double.NaN;
             using (var db = new Database(true, true))
             {
                 using (var tr = db.TransactionManager.StartTransaction())
@@ -65,6 +67,19 @@ public class BlockWritebackRegressionCommand
                                 : new DBText { TextString=labels[i], Height=3.5, Position=new Point3d(4,y+8,0) };
                             block.AppendEntity(text); tr.AddNewlyCreatedDBObject(text, true);
                             var bounds = text.GeometricExtents;
+                            if (name == "Operations" && i == 0)
+                            {
+                                // Parent-level guard: source Chinese sits just left of this line,
+                                // while the longer English replacement reaches it unless the
+                                // instance-aware post-pass sees geometry outside the child block.
+                                instanceGuardTextHandle = text.Handle.ToString();
+                                instanceGuardX = bounds.MaxPoint.X + 0.5;
+                                var guard = new Line(
+                                    new Point3d(instanceGuardX, bounds.MinPoint.Y - 1, 0),
+                                    new Point3d(instanceGuardX, bounds.MaxPoint.Y + 1, 0));
+                                parent.AppendEntity(guard);
+                                tr.AddNewlyCreatedDBObject(guard, true);
+                            }
                             var allowed = AvailableTextSpace.Measure(text,bounds,tr,false,out var length);
                             if (!narrow && !title && i == 0 && length <= bounds.MaxPoint.X-bounds.MinPoint.X+1)
                                 throw new InvalidOperationException("Block cell free space was ignored: " + name);
@@ -101,6 +116,15 @@ public class BlockWritebackRegressionCommand
                     var text=(Entity)tr.GetObject(db.GetObjectId(false,new Handle(Convert.ToInt64(item.Handle,16)),0),OpenMode.ForRead);
                     var actual=text is DBText dt?dt.TextString:((MText)text).Text;
                     if(actual!=expected[item.Handle]) throw new InvalidOperationException("Content mismatch: "+item.Handle+"="+actual);
+                    if (item.Handle == instanceGuardTextHandle && !double.IsNaN(instanceGuardX))
+                    {
+                        var translatedInk = CollisionDetector.GetCorrectedBounds(text, false);
+                        var clearance = DwgTranslator.Core.Models.WritebackConstants.GeometryClearance(item.OriginalHeight);
+                        if (translatedInk.MaxPoint.X >= instanceGuardX - clearance)
+                            throw new InvalidOperationException(
+                                "Instance-level parent geometry collision was not cleared: " + item.Handle);
+                        report.Add("INSTANCE_COLLISION_CLEAR=" + item.Handle);
+                    }
                     if(AvailableTextSpace.FindIntersections(text,tr).Any()) throw new InvalidOperationException("Block collision: "+item.Handle);
                     if (item.OriginalHeight == 200 && text is MText titleText)
                     {
