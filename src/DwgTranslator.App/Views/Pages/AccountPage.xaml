@@ -106,8 +106,13 @@
              合并后的结构约 222 + 详情 194 + 导航 80 ≈ 512 DIP，1500×820（可用体高约 606）与
              1366×768（约 554）都不出现纵向滚动。 -->
         <Grid Grid.Row="1">
-        <ScrollViewer x:Name="AccountScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-        <StackPanel MaxWidth="1200" Width="{Binding ViewportWidth, RelativeSource={RelativeSource AncestorType=ScrollViewer}}" HorizontalAlignment="Center">
+        <ScrollViewer x:Name="AccountScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                      HorizontalContentAlignment="Stretch" SizeChanged="AccountScroll_SizeChanged">
+        <!-- Do not bind Width back to ScrollViewer.ViewportWidth. With horizontal scrolling disabled,
+             that circular measure can preserve the child's 1200-DIP desired width after the window
+             narrows, so the right-hand cards are clipped instead of reflowing. Stretch constrains the
+             content to the real viewport while MaxWidth keeps it centred on wide screens. -->
+        <StackPanel x:Name="AccountContentRoot" MaxWidth="1200" HorizontalAlignment="Stretch">
             <!-- §D7 未登录的登录卡已移到 ScrollViewer 的同级覆盖层「登录舞台」里，
                  在那里做上下左右居中并铺杂志风背景；已登录内容从这里开始。 -->
             <StackPanel Visibility="{Binding IsAccountLoggedIn, Converter={StaticResource BoolToVis}}">
@@ -115,8 +120,8 @@
                      上行 = 头像 + 名称 + 邮箱 + 账号操作；下行 = 三项权益明细（原三张指标卡） + 额度环形用量图。
                      分组靠留白（§26 不加分隔线），卡片阴影向外溢出 3 DIP 由 Spacing.StackWide 的余量吸收。 -->
                 <Border Style="{StaticResource Account.InkCard}" Margin="{DynamicResource Spacing.StackWide}">
-                    <Grid>
-                        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                    <Grid x:Name="AccountIdentityLayout" SizeChanged="AccountIdentityLayout_SizeChanged">
+                        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                         <!-- 外网格：左列放「身份 + 三项权益」，右列放「操作按钮 + 环形用量图」竖排。
                              §B5 用户批注按钮"内缩、没和卡片右缘对齐"：按钮原先是左列的第 3 个 Auto 列，
                              右缘只到左列边界，而右列（环 136 + Spacing.InlineLeading 的 20 右外边距）
@@ -126,7 +131,7 @@
                              代价：右列由 136 变 32+12+136=180，卡片内容高 170→180（+10 DIP），
                              整页约 512→522，1366×768 的可用体高 554 仍不出现纵向滚动。 -->
                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                        <Grid Grid.Column="0">
+                        <Grid x:Name="AccountIdentityHeader" Grid.Column="0">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                             <!-- 头像：琥珀圆底 + 墨色衬线首字母（墨底横幅上的品牌高光） -->
                             <Grid Width="46" Height="46" Margin="{DynamicResource Spacing.InlineLoose}">
@@ -139,7 +144,7 @@
                             </StackPanel>
                             <!-- §B5 两个操作按钮已移到卡片右列顶端（右缘与卡片对齐），此处不再占第 3 列 -->
                         </Grid>
-                        <Grid Grid.Row="1" Grid.Column="0" Margin="{DynamicResource Spacing.BlockTopWide}">
+                        <Grid x:Name="AccountBenefits" Grid.Row="1" Grid.Column="0" Margin="{DynamicResource Spacing.BlockTopWide}">
                             <!-- 三项权益：标签固定列宽，数值列吃掉剩余宽度；超额时省略号 + ToolTip 兜底 -->
                             <Grid VerticalAlignment="Center">
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" MinWidth="84"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
@@ -149,10 +154,9 @@
                                 <TextBlock Grid.Row="1" Text="字符额度" Style="{StaticResource InfoLabel}" Foreground="{DynamicResource Brush.OnInkMuted}" VerticalAlignment="Top" Margin="{DynamicResource Spacing.InlineLoose}"/>
                                 <StackPanel Grid.Row="1" Grid.Column="1">
                                     <TextBlock Text="{Binding OnlineQuotaText}" FontFamily="{DynamicResource FontFamily.Display}" FontSize="{DynamicResource FontSize.SectionTitle}" FontWeight="SemiBold" Foreground="{DynamicResource Brush.OnInk}" TextTrimming="CharacterEllipsis" ToolTip="此处显示云端 AI 翻译额度；本机写回方式不代表可以离线调用 AI。" VerticalAlignment="Center"/>
-                                    <!-- 额度条固定 360 DIP 并靠左：ProgressBar 自身 desired width 近 0，
-                                         必须由外层给出确定宽度，否则轨道会被压成 0 宽。 -->
-                                    <Grid Width="360" HorizontalAlignment="Left" Margin="{DynamicResource Spacing.BlockTopTight}">
-                                        <ProgressBar x:Name="QuotaProgress" Minimum="0" Maximum="{Binding OnlineUsage.MonthlyQuota}" Value="{Binding OnlineUsage.Remaining, Mode=OneWay}" Foreground="{DynamicResource Brush.Amber}" Background="{DynamicResource Brush.OnInkTrack}" Height="5"><ProgressBar.Style><Style TargetType="ProgressBar" BasedOn="{StaticResource {x:Type ProgressBar}}"><Style.Triggers><DataTrigger Binding="{Binding OnlineUsage}" Value="{x:Null}"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger><DataTrigger Binding="{Binding OnlineUsage.MonthlyQuota}" Value="0"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></ProgressBar.Style></ProgressBar>
+                                    <!-- Let the quota rail shrink to the available column width instead of forcing the whole card wider. -->
+                                    <Grid HorizontalAlignment="Stretch" MaxWidth="360" Margin="{DynamicResource Spacing.BlockTopTight}">
+                                        <ProgressBar x:Name="QuotaProgress" HorizontalAlignment="Stretch" Minimum="0" Maximum="{Binding OnlineUsage.MonthlyQuota}" Value="{Binding OnlineUsage.Remaining, Mode=OneWay}" Foreground="{DynamicResource Brush.Amber}" Background="{DynamicResource Brush.OnInkTrack}" Height="5"><ProgressBar.Style><Style TargetType="ProgressBar" BasedOn="{StaticResource {x:Type ProgressBar}}"><Style.Triggers><DataTrigger Binding="{Binding OnlineUsage}" Value="{x:Null}"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger><DataTrigger Binding="{Binding OnlineUsage.MonthlyQuota}" Value="0"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></ProgressBar.Style></ProgressBar>
                                     </Grid>
                                 </StackPanel>
                                 <TextBlock Grid.Row="2" Text="会员有效期" Style="{StaticResource InfoLabel}" Foreground="{DynamicResource Brush.OnInkMuted}" VerticalAlignment="Center" Margin="{DynamicResource Spacing.InlineLoose}"/>
@@ -165,7 +169,7 @@
                              同理这里不加旋转 spinner：本文件下方已记录 Forever 动画被孤儿化后
                              永久 tick、饿死 ApplicationIdle 的事故，busy 态改由"文案切换 + 禁用降透明
                              + MinWidth 锁定尺寸"表达，全程零动画。 -->
-                        <StackPanel Grid.Column="1" Grid.RowSpan="2" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="{DynamicResource Spacing.LeftGap}">
+                        <StackPanel x:Name="AccountActionColumn" Grid.Column="1" Grid.RowSpan="2" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="{DynamicResource Spacing.LeftGap}">
                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                                 <!-- 手作装饰：八芒星火花从卡片右上角移进操作行当引导符
                                      （原位置 Grid.Column=1 Right/Top 现在被按钮占用，留着会叠在一起） -->
@@ -245,24 +249,25 @@
                      并且三块并不真的等宽（第 3 块比前两块宽 16）。改成 * / 槽 / * / 槽 / * 五列、
                      磁贴放 0/2/4 列且不带任何外边距 —— 三等分真正相等，左右两端都与上方卡片齐平，
                      槽宽 Size.CardGutter=16 与 MembershipDetails 两卡之间的列距一致。 -->
-                <Grid>
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="{StaticResource Size.CardGutter}"/><ColumnDefinition Width="*"/><ColumnDefinition Width="{StaticResource Size.CardGutter}"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                    <Button Style="{StaticResource Account.NavTile}" Command="{Binding NavigateToCommand}" CommandParameter="translate" ToolTip="打开图纸翻译">
+                <Grid x:Name="AccountNavTiles" SizeChanged="AccountNavTiles_SizeChanged">
+                    <Grid.ColumnDefinitions><ColumnDefinition x:Name="AccountNavColumn0" Width="*"/><ColumnDefinition x:Name="AccountNavColumn1" Width="{StaticResource Size.CardGutter}"/><ColumnDefinition x:Name="AccountNavColumn2" Width="*"/><ColumnDefinition x:Name="AccountNavColumn3" Width="{StaticResource Size.CardGutter}"/><ColumnDefinition x:Name="AccountNavColumn4" Width="*"/></Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                    <Button x:Name="TranslateNavTile" Style="{StaticResource Account.NavTile}" Command="{Binding NavigateToCommand}" CommandParameter="translate" ToolTip="打开图纸翻译" MinWidth="0">
                         <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                             <Grid Width="36" Height="36" Margin="{DynamicResource Spacing.InlineWide}" VerticalAlignment="Center"><Ellipse Fill="{DynamicResource Brush.PrimaryLight}"/><Path Data="{StaticResource Icon.NavTranslate}" Width="{DynamicResource Size.IconInline}" Height="{DynamicResource Size.IconInline}" Stretch="Uniform" Fill="Transparent" Stroke="{DynamicResource Brush.Primary}" StrokeThickness="{DynamicResource Size.Stroke}" HorizontalAlignment="Center" VerticalAlignment="Center"/></Grid>
-                            <StackPanel Grid.Column="1" VerticalAlignment="Center"><TextBlock Text="图纸翻译" FontWeight="SemiBold"/><TextBlock Text="导入图纸 · 翻译 · 写回" Style="{StaticResource CaptionStyle}" Margin="{DynamicResource Spacing.BlockTopTight}"/></StackPanel>
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center"><TextBlock Text="图纸翻译" FontWeight="SemiBold" TextWrapping="Wrap"/><TextBlock Text="导入图纸 · 翻译 · 写回" TextWrapping="Wrap" Style="{StaticResource CaptionStyle}" Margin="{DynamicResource Spacing.BlockTopTight}"/></StackPanel>
                         </Grid>
                     </Button>
-                    <Button Grid.Column="2" Style="{StaticResource Account.NavTile}" Command="{Binding NavigateToCommand}" CommandParameter="glossary" ToolTip="打开术语库">
+                    <Button x:Name="GlossaryNavTile" Grid.Column="2" Style="{StaticResource Account.NavTile}" Command="{Binding NavigateToCommand}" CommandParameter="glossary" ToolTip="打开术语库" MinWidth="0">
                         <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                             <Grid Width="36" Height="36" Margin="{DynamicResource Spacing.InlineWide}" VerticalAlignment="Center"><Ellipse Fill="{DynamicResource Brush.PrimaryLight}"/><Path Data="{StaticResource Icon.NavGlossary}" Width="{DynamicResource Size.IconInline}" Height="{DynamicResource Size.IconInline}" Stretch="Uniform" Fill="Transparent" Stroke="{DynamicResource Brush.Primary}" StrokeThickness="{DynamicResource Size.Stroke}" HorizontalAlignment="Center" VerticalAlignment="Center"/></Grid>
-                            <StackPanel Grid.Column="1" VerticalAlignment="Center"><TextBlock Text="管理术语" FontWeight="SemiBold"/><TextBlock Text="术语库、分类与云端核对" Style="{StaticResource CaptionStyle}" Margin="{DynamicResource Spacing.BlockTopTight}"/></StackPanel>
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center"><TextBlock Text="管理术语" FontWeight="SemiBold" TextWrapping="Wrap"/><TextBlock Text="术语库、分类与云端核对" TextWrapping="Wrap" Style="{StaticResource CaptionStyle}" Margin="{DynamicResource Spacing.BlockTopTight}"/></StackPanel>
                         </Grid>
                     </Button>
-                    <Button Grid.Column="4" Style="{StaticResource Account.NavTile}" Command="{Binding NavigateToCommand}" CommandParameter="output-settings" ToolTip="打开输出设置">
+                    <Button x:Name="OutputNavTile" Grid.Column="4" Style="{StaticResource Account.NavTile}" Command="{Binding NavigateToCommand}" CommandParameter="output-settings" ToolTip="打开输出设置" MinWidth="0">
                         <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                             <Grid Width="36" Height="36" Margin="{DynamicResource Spacing.InlineWide}" VerticalAlignment="Center"><Ellipse Fill="{DynamicResource Brush.PrimaryLight}"/><Path Data="{StaticResource Icon.NavSettings}" Width="{DynamicResource Size.IconInline}" Height="{DynamicResource Size.IconInline}" Stretch="Uniform" Fill="Transparent" Stroke="{DynamicResource Brush.Primary}" StrokeThickness="{DynamicResource Size.Stroke}" HorizontalAlignment="Center" VerticalAlignment="Center"/></Grid>
-                            <StackPanel Grid.Column="1" VerticalAlignment="Center"><TextBlock Text="输出设置" FontWeight="SemiBold"/><TextBlock Text="导出模式与文件命名" Style="{StaticResource CaptionStyle}" Margin="{DynamicResource Spacing.BlockTopTight}"/></StackPanel>
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center"><TextBlock Text="输出设置" FontWeight="SemiBold" TextWrapping="Wrap"/><TextBlock Text="导出模式与文件命名" TextWrapping="Wrap" Style="{StaticResource CaptionStyle}" Margin="{DynamicResource Spacing.BlockTopTight}"/></StackPanel>
                         </Grid>
                     </Button>
                 </Grid>
@@ -306,7 +311,6 @@
                                 <Setter Property="IsEnabled" Value="True" />
                                 <Style.Triggers>
                                     <DataTrigger Binding="{Binding IsLoggingIn}" Value="True"><Setter Property="IsEnabled" Value="False" /></DataTrigger>
-                                    <DataTrigger Binding="{Binding IsAccountRefreshing}" Value="True"><Setter Property="IsEnabled" Value="False" /></DataTrigger>
                                 </Style.Triggers>
                             </Style>
                         </Button.Style>

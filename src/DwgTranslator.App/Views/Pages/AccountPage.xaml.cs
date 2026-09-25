@@ -19,20 +19,103 @@ public partial class AccountPage : UserControl
     }
     private async void Owner_Activated(object? sender, EventArgs e) { if(IsVisible && DataContext is MainViewModel vm) await vm.RefreshMembershipOnActivationAsync(); }
     private void AccountMenu_Click(object sender, RoutedEventArgs e) { if(sender is Button b && b.ContextMenu is {} menu) { menu.DataContext=DataContext; menu.PlacementTarget=b; menu.IsOpen=true; } }
+    /// <summary>
+    /// 响应式判定统一改用**视口宽度**（用户批注 2026-09-25：「我调整窗口的时候右边会被裁切，是什么原因」）。
+    /// 原来三个处理器都拿 e.NewSize.Width —— 那是**内容自身**的宽度：内容根是 MaxWidth=1200 的 StackPanel，
+    /// 窗口变窄后它仍按 ~1200 上报，判定因此永远 ≥1000、永远走"三并排 / 两列"宽布局；
+    /// 而根部 ScrollViewer 又显式禁用了横向滚动（HorizontalScrollBarVisibility="Disabled"），
+    /// 溢出部分没有滚动条可看，只能被裁掉 —— 这正是"右边被裁切"的成因。
+    /// 换成视口宽度后，窗口一变窄即按 620 / 1100 两个门槛重排为两行或单列。
+    /// </summary>
+    private double ResponsiveWidth()
+    {
+        var width = AccountScroll?.ViewportWidth ?? 0;
+        if (double.IsNaN(width) || width <= 0) width = AccountScroll?.ActualWidth ?? 0;
+        if (double.IsNaN(width) || width <= 0) width = ActualWidth;
+        if (double.IsNaN(width) || width <= 0) width = 0;
+        return width;
+    }
+
+    /// <summary>
+    /// 视口尺寸变化时重算三处响应式布局。
+    /// 这一处是必需的：窗口变窄时内容宽度可能不变（仍是 MaxWidth 的 ~1200），
+    /// 三个容器自身的 SizeChanged 不会触发，只有盯着 ScrollViewer 才能及时重排。
+    /// </summary>
+    private void AccountScroll_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        MembershipDetails_SizeChanged(sender, e);
+        AccountIdentityLayout_SizeChanged(sender, e);
+        AccountNavTiles_SizeChanged(sender, e);
+    }
+
     private void MembershipDetails_SizeChanged(object sender, SizeChangedEventArgs e)
     {
-        // Stack complete sections on compact windows instead of clipping their actions.
-        var compact = e.NewSize.Width < 760;
+        // At compact widths two cards make their fixed label/description columns compete for space.
+        // Stack them before either card becomes narrower than its content.
+        // 判定必须用**视口宽度**（见 ResponsiveWidth 的说明）：用内容自身宽度会永远走宽布局分支。
+        var compact = ResponsiveWidth() < 1100;
         Grid.SetColumn(DevicesCard, compact ? 0 : 1);
         Grid.SetRow(DevicesCard, compact ? 1 : 0);
         Grid.SetColumnSpan(PlansCard, compact ? 2 : 1);
         Grid.SetColumnSpan(DevicesCard, compact ? 2 : 1);
         PlansCard.Margin = new Thickness(0, 0, compact ? 0 : 16, 16);
     }
+    private void AccountIdentityLayout_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        // 不再依赖 sender：视口回调会以 ScrollViewer 为 sender 调用本方法，靠名字取元素更稳。
+        if (AccountIdentityLayout == null || AccountIdentityHeader == null || AccountBenefits == null || AccountActionColumn == null) return;
+        // The identity card has a fixed-size quota ring and action buttons; move that group below the
+        // benefits on narrow cards, and let the quota bar itself follow the available width.
+        var stacked = ResponsiveWidth() < 1100;
+        AccountIdentityLayout.ColumnDefinitions[1].Width = stacked ? new GridLength(0) : GridLength.Auto;
+        Grid.SetColumn(AccountIdentityHeader, 0);
+        Grid.SetColumnSpan(AccountIdentityHeader, stacked ? 2 : 1);
+        Grid.SetRow(AccountBenefits, 1);
+        Grid.SetColumn(AccountBenefits, 0);
+        Grid.SetColumnSpan(AccountBenefits, stacked ? 2 : 1);
+        Grid.SetRow(AccountActionColumn, stacked ? 2 : 0);
+        Grid.SetColumn(AccountActionColumn, stacked ? 0 : 1);
+        Grid.SetColumnSpan(AccountActionColumn, stacked ? 2 : 1);
+        Grid.SetRowSpan(AccountActionColumn, stacked ? 1 : 2);
+        AccountActionColumn.HorizontalAlignment = stacked ? HorizontalAlignment.Stretch : HorizontalAlignment.Right;
+        AccountActionColumn.Margin = stacked ? new Thickness(0, 16, 0, 0) : (Thickness)FindResource("Spacing.LeftGap");
+    }
+    private void AccountNavTiles_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (AccountNavColumn0 == null || TranslateNavTile == null || GlossaryNavTile == null || OutputNavTile == null) return;
+
+        var width = ResponsiveWidth();
+        var singleColumn = width < 620;
+        var twoRows = !singleColumn && width < 1100;
+        var gutter = (GridLength)FindResource("Size.CardGutter");
+
+        AccountNavColumn0.Width = new GridLength(1, GridUnitType.Star);
+        AccountNavColumn1.Width = singleColumn ? new GridLength(0) : gutter;
+        AccountNavColumn2.Width = singleColumn ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
+        AccountNavColumn3.Width = twoRows || singleColumn ? new GridLength(0) : gutter;
+        AccountNavColumn4.Width = twoRows || singleColumn ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
+
+        PlaceTile(TranslateNavTile, row: 0, column: 0, columnSpan: singleColumn ? 5 : 1,
+            topMargin: 0);
+        PlaceTile(GlossaryNavTile, row: singleColumn ? 1 : 0, column: singleColumn ? 0 : 2,
+            columnSpan: singleColumn ? 5 : 1, topMargin: singleColumn ? 16 : 0);
+        PlaceTile(OutputNavTile, row: singleColumn ? 2 : twoRows ? 1 : 0,
+            column: twoRows || singleColumn ? 0 : 4,
+            columnSpan: twoRows || singleColumn ? (singleColumn ? 5 : 3) : 1,
+            topMargin: twoRows || singleColumn ? 16 : 0);
+    }
+
+    private static void PlaceTile(Button tile, int row, int column, int columnSpan, double topMargin)
+    {
+        Grid.SetRow(tile, row);
+        Grid.SetColumn(tile, column);
+        Grid.SetColumnSpan(tile, columnSpan);
+        tile.Margin = new Thickness(0, topMargin, 0, 0);
+    }
     private bool _submitting;
     private async void Login_Click(object sender, RoutedEventArgs e)
     {
-        if (_submitting || DataContext is not MainViewModel vm || vm.IsLoggingIn || vm.IsAccountRefreshing) return;
+        if (_submitting || DataContext is not MainViewModel vm || vm.IsLoggingIn) return;
         AccountInput.GetBindingExpression(TextBox.TextProperty)?.UpdateSource();
         var password = PasswordInput.Password;
         _submitting = true;
