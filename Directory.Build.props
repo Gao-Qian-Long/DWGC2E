@@ -1,4 +1,5 @@
 <Project>
+  <Import Project="$(MSBuildThisFileDirectory)release\\version.props" />
   <!--
     AutoCAD .NET API directory — adjust to your AutoCAD installation.
     

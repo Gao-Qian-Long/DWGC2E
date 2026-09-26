@@ -158,10 +158,13 @@ try {
     }
     } else { Write-Host 'TESTS_SKIPPED: explicitly requested; build and package checks still run.' }
     $revision = (& git rev-parse --short HEAD).Trim()
-    $version = "2.1.1+ui.$stamp.$revision"
+    [xml]$versionProps = Get-Content -LiteralPath (Join-Path $root 'release/version.props') -Raw
+    $productVersion = [string]$versionProps.Project.PropertyGroup.ProductVersion
+    if ($productVersion -notmatch '^\d+\.\d+\.\d+$') { throw "Invalid ProductVersion in release/version.props: $productVersion" }
+    $version = "$productVersion+ui.$stamp.$revision"
     # Symbols are suppressed at the source (-p:DebugType=none -p:DebugSymbols=false) so the candidate
     # never receives a *.pdb in the first place; the block after the architecture audit only asserts it.
-    & dotnet publish (Join-Path $root 'src/DwgTranslator.App/DwgTranslator.App.csproj') -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -p:DebugType=none -p:DebugSymbols=false "-p:InformationalVersion=$version" -p:IncludeSourceRevisionInInformationalVersion=false -o $stage
+    & dotnet publish (Join-Path $root 'src/DwgTranslator.App/DwgTranslator.App.csproj') -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -p:DebugType=none -p:DebugSymbols=false ("-p:Version="+$productVersion) ("-p:FileVersion="+$productVersion+".0") ("-p:InformationalVersion="+$version) -p:IncludeSourceRevisionInInformationalVersion=false -o $stage
     if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed: $LASTEXITCODE" }
     foreach ($folder in @('glossaries')) { New-Item -ItemType Directory -Path (Join-Path $stage $folder) -Force | Out-Null }
     Copy-Item -LiteralPath (Join-Path $root 'settings.json.example') -Destination (Join-Path $stage 'settings.json') -Force

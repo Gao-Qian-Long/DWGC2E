@@ -7,9 +7,9 @@
     <UseWPF>true</UseWPF>
     <RootNamespace>DwgTranslator.App</RootNamespace>
     <AssemblyName>QLCAD</AssemblyName>
-    <Version>2.1.1</Version>
-    <FileVersion>2.1.1.0</FileVersion>
-    <InformationalVersion>2.1.1</InformationalVersion>
+    <Version>$(ProductVersion)</Version>
+    <FileVersion>$(ProductVersion).0</FileVersion>
+    <InformationalVersion>$(ProductVersion)</InformationalVersion>
     <Product>QLCAD</Product>
     <Company>QLCAD</Company>
     <ApplicationIcon>..\..\assets\icons\icon.ico</ApplicationIcon>

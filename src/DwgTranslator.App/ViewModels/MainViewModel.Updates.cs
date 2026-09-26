@@ -135,7 +135,7 @@ public partial class MainViewModel
         var body = new TextBlock { TextWrapping = TextWrapping.Wrap, LineHeight = 25,
             Text = $"发现新版本 {info.LatestVersion}\n当前版本：{AppVersionText}\n\n" +
                 (string.IsNullOrWhiteSpace(info.ReleaseNotes) ? "本次发布未提供更新说明。" : info.ReleaseNotes) +
-                (canInstall ? "\n\n更新包具备大小、SHA-256 和签名元数据，可在 APP 内安全下载并暂存。" : "\n\n该版本缺少完整签名元数据或签名密钥不匹配，目前只显示更新信息，不执行自动安装。") };
+                (canInstall ? "\n\n安装包具备大小、SHA-256 和签名元数据，可在 APP 内安全下载、校验并升级。" : "\n\n该版本缺少完整签名元数据或签名密钥不匹配，目前只显示更新信息，不执行自动安装。") };
         var status = new TextBlock { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0,12,0,0) };
         var progress = new ProgressBar { Minimum = 0, Maximum = 100, Height = 5, Margin = new Thickness(0,8,0,0), Visibility = Visibility.Collapsed };
         var content = new StackPanel(); content.Children.Add(body); content.Children.Add(status); content.Children.Add(progress);
@@ -163,7 +163,7 @@ public partial class MainViewModel
                 var service = new SecureUpdatePackageService(http, UpdateTrust.PublicKeyPem);
                 var updateRoot = Path.Combine(App.AppDataDir, "updates");
                 var staged = await service.DownloadAndStageAsync(info, updateRoot, reporter, downloadCts.Token);
-                progress.Value = 100; status.Text = "更新包验证完成。准备替换前请保存图纸并关闭 CAD。";
+                progress.Value = 100; status.Text = "安装包验证完成。升级前请保存图纸并关闭 CAD。";
                 if (new[] { "acad", "acadlt", "gcad" }.Any(name => Process.GetProcessesByName(name).Length > 0))
                 {
                     status.Text = "检测到 CAD 仍在运行。请保存图纸并关闭 CAD，然后重新点击“下载并准备更新”；已验证包不会写入程序目录。";
@@ -172,7 +172,10 @@ public partial class MainViewModel
                 }
                 if (ActiveTranslationProject != null && !SaveActiveProject())
                 { status.Text = "当前项目未能安全保存，更新已取消。请处理项目冲突后重试。"; return; }
-                if (Views.PromptDialog.Show("更新包已通过签名、完整受管文件清单和逐文件哈希校验；APP 退出后更新器还会对原始 ZIP 再次校验。\n\n现在将关闭 APP，由独立更新器替换程序文件、保留一个回滚版本并重启。是否继续？",
+                var verificationText = staged.PackageType == "setup-exe"
+                    ? "安装包已通过签名与 SHA-256 校验；APP 退出后更新器会再次校验安装包，再由正式 Setup 完成升级。"
+                    : "更新包已通过签名、完整受管文件清单和逐文件哈希校验；APP 退出后更新器还会对原始 ZIP 再次校验。";
+                if (Views.PromptDialog.Show(verificationText + "\n\n现在将关闭 APP 并安装更新，完成后自动重启。是否继续？",
                     "准备安装更新", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK)
                 { status.Text = "更新包已验证并暂存，尚未修改当前程序。"; return; }
                 // 脚本必须落在 staging 之外：staging 是更新包里的暂存内容，不能当作可执行代码来源。
@@ -184,6 +187,7 @@ var script = UpdateApplyScript.Write(scriptDirectory);
                 psi.ArgumentList.Add("-AppPid"); psi.ArgumentList.Add(Environment.ProcessId.ToString());
                 psi.ArgumentList.Add("-Package"); psi.ArgumentList.Add(staged.PackagePath);
                 psi.ArgumentList.Add("-PackageSha256"); psi.ArgumentList.Add(staged.PackageSha256);
+                psi.ArgumentList.Add("-PackageType"); psi.ArgumentList.Add(staged.PackageType);
                 psi.ArgumentList.Add("-Install"); psi.ArgumentList.Add(AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar)); psi.ArgumentList.Add("-Log"); psi.ArgumentList.Add(log);
                 var updater = Process.Start(psi) ?? throw new InvalidOperationException("无法启动独立更新器。");
                 window.Close(); Application.Current?.Shutdown();

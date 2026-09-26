@@ -73,7 +73,10 @@ public partial class MainViewModel
     }
 
     [RelayCommand]
-    private void OpenWebsite() => OpenAboutLink("https://cad.pocketter.dpdns.org/", "官网已打开。");
+    private void OpenWebsite() => OpenAboutLink("https://cad.pocketter.dpdns.org/", "官网已打开.");
+
+    [RelayCommand]
+    private void OpenRegister() => OpenAboutLink("https://cad.pocketter.dpdns.org/account.html?mode=register", "注册页面已打开。");
 
     [RelayCommand]
     private void OpenFeedback() => OpenAboutLink("https://cad.pocketter.dpdns.org/#feedback", "反馈页面已打开。");

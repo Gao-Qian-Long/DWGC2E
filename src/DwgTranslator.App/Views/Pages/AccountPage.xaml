@@ -314,7 +314,7 @@
                             </Style>
                         </Button.Style>
                     </Button>
-                    <Button x:Name="RegisterLinkButton" Content="还没有账号？前往官网注册" Command="{Binding OpenWebsiteCommand}"
+                    <Button x:Name="RegisterLinkButton" Content="还没有账号？前往官网注册" Command="{Binding OpenRegisterCommand}"
                             Style="{StaticResource Button.Compact.Tertiary}" HorizontalAlignment="Left"
                             AutomationProperties.Name="前往官网注册" Margin="{DynamicResource Spacing.BlockTopTight}" />
                     <Border Margin="{DynamicResource Spacing.BlockTopLoose}" Padding="12,8" Background="{DynamicResource Brush.InfoLight}" BorderBrush="{DynamicResource Brush.BorderLight}" BorderThickness="1" CornerRadius="{DynamicResource CornerRadius.Small}">

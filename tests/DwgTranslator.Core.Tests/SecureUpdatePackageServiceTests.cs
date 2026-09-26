@@ -42,6 +42,31 @@ public sealed class SecureUpdatePackageServiceTests : IDisposable
         Assert.Equal("helper", File.ReadAllText(Path.Combine(staged.StagingDirectory, "lib", "helper.dll")));
     }
 
+
+    [Fact]
+    public async Task ValidSignedSetupExeStagesWithoutZipExtraction()
+    {
+        using var rsa = RSA.Create(2048);
+        var setup = Encoding.UTF8.GetBytes("verified-setup-binary");
+        var hash = SHA256.HashData(setup);
+        var info = new VersionInfo
+        {
+            LatestVersion = "2.2.0",
+            DownloadUrl = "https://updates.example/QLCAD-Setup.exe",
+            PackageType = "setup-exe",
+            PackageSize = setup.LongLength,
+            PackageSha256 = Convert.ToHexString(hash).ToLowerInvariant(),
+            PackageSignature = Convert.ToBase64String(rsa.SignHash(hash, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1))
+        };
+        using var http = new HttpClient(new BytesHandler(setup));
+        var staged = await new SecureUpdatePackageService(http, rsa.ExportSubjectPublicKeyInfoPem()).DownloadAndStageAsync(info, _root);
+
+        Assert.Equal("setup-exe", staged.PackageType);
+        Assert.EndsWith(".exe", staged.PackagePath, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(staged.PackagePath, staged.ExecutablePath);
+        Assert.Equal(setup, File.ReadAllBytes(staged.PackagePath));
+    }
+
     [Fact]
     public async Task HashAndSignatureMismatchAreRejectedAndCleaned()
     {

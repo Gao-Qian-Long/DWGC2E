@@ -33,6 +33,7 @@ param(
  [Parameter(Mandatory=$true)][int]$AppPid,
  [Parameter(Mandatory=$true)][string]$Package,
  [Parameter(Mandatory=$true)][string]$PackageSha256,
+ [ValidateSet('zip','setup-exe')][string]$PackageType='zip',
  [Parameter(Mandatory=$true)][string]$Install,
  [Parameter(Mandatory=$true)][string]$Log
 )
@@ -98,13 +99,24 @@ try{
  $package=(Resolve-Path -LiteralPath $Package).Path;$install=(Resolve-Path -LiteralPath $Install).Path
  if($PackageSha256 -notmatch '^[0-9a-fA-F]{64}$'){throw '预期更新包哈希格式无效'}
  $work=(Split-Path -Parent $package);$applyRoot=Safe-Child $work (Join-Path $work ('apply-'+[Guid]::NewGuid().ToString('N')))
- $verifiedPackage=Safe-Child $work (Join-Path $work ('verified-'+[Guid]::NewGuid().ToString('N')+'.zip'))
+ $verifiedExtension=if($PackageType -eq 'setup-exe'){'.exe'}else{'.zip'}
+ $verifiedPackage=Safe-Child $work (Join-Path $work ('verified-'+[Guid]::NewGuid().ToString('N')+$verifiedExtension))
  Copy-Item -LiteralPath $package -Destination $verifiedPackage
  $actualPackageHash=(Get-Sha256 $verifiedPackage)
  if($actualPackageHash -ne $PackageSha256){throw 'APP 退出后更新包 SHA-256 二次校验失败'}
  # 注意：本脚本运行在 Windows PowerShell 5.1（.NET Framework）上，无法加载 net8.0 的
  # DwgTranslator.Core，因此这里只做文件哈希复验；RSA 签名与密钥标识由 APP 侧完成。
  # 把签名复验下沉到应用时，必须使用 DwgTranslator.Updater（net8.0），不能靠本脚本。
+ if($PackageType -eq 'setup-exe'){
+  Write-Log '启动已验证的正式安装器'
+  $setupArgs=@('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/CURRENTUSER')
+  $setup=Start-Process -FilePath $verifiedPackage -ArgumentList $setupArgs -PassThru -Wait
+  if($setup.ExitCode -ne 0){throw ('安装器升级失败，退出码：'+$setup.ExitCode)}
+  $exe=Safe-Child $install (Join-Path $install 'QLCAD.exe')
+  if(-not(Test-Path -LiteralPath $exe -PathType Leaf)){throw '安装器完成后未找到 QLCAD.exe'}
+  Write-Log '安装器升级成功，正在重启';Start-Process -FilePath $exe -WorkingDirectory $install
+  exit 0
+ }
  New-Item -ItemType Directory -Path $applyRoot|Out-Null;Extract-VerifiedZip $verifiedPackage $applyRoot
  $manifestPath=Join-Path $applyRoot 'update-manifest.json';if(-not(Test-Path -LiteralPath $manifestPath -PathType Leaf)){throw '更新包缺少 update-manifest.json'}
  $manifest=Get-Content -LiteralPath $manifestPath -Raw|ConvertFrom-Json

@@ -29,11 +29,12 @@ public sealed class StagedUpdate
     public string PackagePath { get; init; } = string.Empty;
     public string PackageSha256 { get; init; } = string.Empty;
     public string PackageSignature { get; init; } = string.Empty;
+    public string PackageType { get; init; } = "zip";
     public string StagingDirectory { get; init; } = string.Empty;
     public string ExecutablePath { get; init; } = string.Empty;
 }
 
-/// <summary>Downloads and validates signed ZIP updates without touching the running installation.</summary>
+/// <summary>Downloads and validates signed update packages without touching the running installation.</summary>
 public sealed class SecureUpdatePackageService
 {
     private const long MaximumPackageBytes = 2L * 1024 * 1024 * 1024;
@@ -49,7 +50,8 @@ public sealed class SecureUpdatePackageService
     }
 
     public static bool HasInstallMetadata(VersionInfo info) =>
-        info.PackageType?.Equals("zip", StringComparison.OrdinalIgnoreCase) == true &&
+        (info.PackageType?.Equals("zip", StringComparison.OrdinalIgnoreCase) == true ||
+         info.PackageType?.Equals("setup-exe", StringComparison.OrdinalIgnoreCase) == true) &&
         info.PackageSize is > 0 and <= MaximumPackageBytes &&
         IsSha256(info.PackageSha256) && !string.IsNullOrWhiteSpace(info.PackageSignature) &&
         Uri.TryCreate(info.DownloadUrl, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps;
@@ -57,13 +59,14 @@ public sealed class SecureUpdatePackageService
     public async Task<StagedUpdate> DownloadAndStageAsync(VersionInfo info, string updateRoot,
         IProgress<double>? progress = null, CancellationToken cancellationToken = default)
     {
-        if (!HasInstallMetadata(info)) throw new InvalidOperationException("更新缺少 ZIP 大小、SHA-256、签名或 HTTPS 下载地址，只能显示更新信息。 ");
+        if (!HasInstallMetadata(info)) throw new InvalidOperationException("更新缺少受信任安装包类型、大小、SHA-256、签名或 HTTPS 下载地址，只能显示更新信息。 ");
         if (string.IsNullOrWhiteSpace(_publicKeyPem)) throw new InvalidOperationException("APP 未配置更新签名公钥。");
         var root = Path.GetFullPath(updateRoot);
         Directory.CreateDirectory(root);
         var work = Path.Combine(root, SanitizeVersion(info.LatestVersion) + "-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(work);
-        var package = Path.Combine(work, "package.zip");
+        var packageType = info.PackageType!.Trim().ToLowerInvariant();
+        var package = Path.Combine(work, packageType == "setup-exe" ? "package.exe" : "package.zip");
         var staging = Path.Combine(work, "staging");
         try
         {
@@ -93,6 +96,19 @@ public sealed class SecureUpdatePackageService
             if (!hash.Equals(info.PackageSha256, StringComparison.OrdinalIgnoreCase)) throw new CryptographicException("更新包 SHA-256 校验失败。");
             VerifySignature(hash, info.PackageSignature!);
 
+            if (packageType == "setup-exe")
+            {
+                return new StagedUpdate
+                {
+                    Version = info.LatestVersion,
+                    PackagePath = package,
+                    PackageSha256 = hash,
+                    PackageSignature = info.PackageSignature!,
+                    PackageType = packageType,
+                    ExecutablePath = package
+                };
+            }
+
             Directory.CreateDirectory(staging);
             ExtractSafely(package, staging);
             var manifestPath = Path.Combine(staging, ManifestName);
@@ -108,6 +124,7 @@ public sealed class SecureUpdatePackageService
                 PackagePath = package,
                 PackageSha256 = hash,
                 PackageSignature = info.PackageSignature!,
+                PackageType = packageType,
                 StagingDirectory = staging,
                 ExecutablePath = executable
             };

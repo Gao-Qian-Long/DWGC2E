@@ -8,7 +8,9 @@
 
 | 文件 | 输入、输出和操作边界 |
 |---|---|
-| `Publish-Desktop.ps1` | 正式入口；构建并验证候选后更新 `release`，保留便携数据和一份回滚。正常交付不传 `-BuildOnly`；失败不得替换安装版。可能还原构建依赖，需要网络。 |
+| `Release-Manager.ps1` | 维护者发布助手 GUI；统一 `release/version.props` 与网站兜底版本，调用完整 Setup 交付流水线，验证网盘直链与本地安装包哈希，使用本机 RSA 私钥签名，并通过后台接口发布版本。管理员密钥和私钥只在内存/本机使用，不写入仓库。 |
+| `ReleaseSigner/` | .NET 8 本地签名辅助程序；对最终 Setup.exe 的 SHA-256 做 RSA PKCS#1 v1.5 签名并输出 Key ID。私钥文件不属于仓库。 |
+| `Publish-Desktop.ps1` | 正式入口；产品版本从 `release/version.props` 读取，构建并验证候选后更新 `release`，保留便携数据和一份回滚。正常交付不传 `-BuildOnly`；失败不得替换安装版。可能还原构建依赖，需要网络。 |
 | `New-DesktopInstaller.ps1` | 从干净候选编译生产/隔离 Setup；完成新装/升级/修复/卸载验收后仅把生产 Setup 写入 public，不上传。 |
 | `Get-DesktopPayload.ps1` | 严格验证候选运行文件白名单与全部文件哈希。 |
 | `Get-DesktopSourceSnapshot.ps1` | 固定构建输入哈希，阻止构建过程中修改输入后仍替换 release。 |
