@@ -983,7 +983,9 @@ public class AcadWriterEngine
         // existing attachment point never clears that border. Retry inside the strict
         // cell interior before shrinking in place; keep the change only after a full
         // collision audit. The normal source-footprint allowance remains unchanged.
-        if (entity is MText cellText && baseline.HasValue && Math.Abs(Math.Sin(cellText.Rotation)) < .001)
+        // Rotated labels can straddle a nearby symbol line too. The strict-interior
+        // retry is geometry-checked below, so do not restrict it to horizontal text.
+        if (entity is MText cellText && baseline.HasValue)
         {
             using var saved = (MText)cellText.Clone();
             AvailableTextSpace.Refresh(tr);
@@ -1048,6 +1050,44 @@ public class AcadWriterEngine
         // first test has to rebuild them. Another entity's shrink may already have cleared this
         // one, and the row-neighbour chains on a rotated drawing resolve from one end.
         if (IsClear()) { steps = 0; return true; }
+
+        // A single rotated phrase can be wrapped into two lines by the source MText
+        // rectangle. Uniformly shrinking both height and width preserves that extra
+        // line forever, leaving its lower glyphs on an indicator symbol. Before
+        // conceding the translation, try the same phrase on one line at the
+        // largest collision-free height. The rendered-geometry audit remains the
+        // acceptance gate, so neighbouring labels and frame lines stay protected.
+        if (entity is MText singleLine && unfittedContents != null
+            && unfittedContents.IndexOf("\\P", StringComparison.OrdinalIgnoreCase) < 0
+            && Math.Abs(Math.Sin(singleLine.Rotation)) >= .001)
+        {
+            using var saved = (MText)singleLine.Clone();
+            singleLine.Contents = unfittedContents;
+            singleLine.Width = 0;
+            singleLine.TextHeight = startHeight * floorScale;
+            singleLine.RecordGraphicsModified(true);
+            if (IsClear())
+            {
+                double singleLineClear = floorScale, singleLineConflicting = 1.0;
+                for (int attempt = 0; attempt < 10; attempt++)
+                {
+                    double candidate = (singleLineClear + singleLineConflicting) / 2;
+                    singleLine.TextHeight = startHeight * candidate;
+                    singleLine.RecordGraphicsModified(true);
+                    if (IsClear()) singleLineClear = candidate; else singleLineConflicting = candidate;
+                }
+                singleLine.TextHeight = startHeight * singleLineClear;
+                singleLine.RecordGraphicsModified(true);
+                if (IsClear())
+                {
+                    steps = tries;
+                    return true;
+                }
+            }
+            singleLine.CopyFrom(saved);
+            singleLine.RecordGraphicsModified(true);
+            AvailableTextSpace.Refresh(tr);
+        }
 
         // IsClear is monotone in the scale (a smaller text overlaps no more than a larger one), so
         // bisect between the known-conflicting original size and the floor.

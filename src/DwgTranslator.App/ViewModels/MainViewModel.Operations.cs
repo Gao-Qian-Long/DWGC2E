@@ -171,6 +171,8 @@ public partial class MainViewModel
     [RelayCommand]
     private void ApplySearch() => ApplyFilter();
 
+    partial void OnSearchTextChanged(string value) => ApplyFilter();
+
     private void ApplyFilter()
     {
         IEnumerable<TextEntity> filtered = Entities;

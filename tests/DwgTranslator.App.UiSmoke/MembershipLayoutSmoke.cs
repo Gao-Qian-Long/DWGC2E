@@ -29,6 +29,12 @@ public sealed partial class SmokeApp
                 Check(account.ActualHeight == 60, "account entry has stable hit target " + tier);
                 Check(((Button)page.FindName("MembershipPlansButton")).IsEnabled, "membership catalog entry enabled " + tier);
                 Check(vm.OnlineQuotaText.Contains("1,007,996,209"), "quota text follows refreshed usage " + tier);
+                var quotaText = (TextBlock)page.FindName("QuotaText");
+                var quotaBar = (ProgressBar)page.FindName("QuotaProgress");
+                var quotaLeft = quotaText.TransformToAncestor(page).Transform(new Point()).X;
+                var barLeft = quotaBar.TransformToAncestor(page).Transform(new Point()).X;
+                Check(Math.Abs(quotaLeft - barLeft) < 2, $"quota rail aligns with quota number {tier} ({quotaLeft:F1} vs {barLeft:F1})");
+                Check(quotaBar.ActualWidth > 300 && quotaBar.ActualWidth <= 360, $"quota rail has bounded width {tier}");
                 Capture(window, "membership-redesign-" + tier);
             }
             var accountScroll = (ScrollViewer)page.FindName("AccountScroll");

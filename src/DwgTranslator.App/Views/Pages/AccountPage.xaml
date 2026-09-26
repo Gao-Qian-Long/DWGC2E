@@ -152,9 +152,9 @@
                                 <TextBlock Grid.Column="1" Text="{Binding OnlinePlanText}" FontFamily="{DynamicResource FontFamily.Display}" FontSize="{DynamicResource FontSize.SectionTitle}" FontWeight="SemiBold" Foreground="{DynamicResource Brush.Amber}" TextTrimming="CharacterEllipsis" ToolTip="以当前账号同步权益为准" VerticalAlignment="Center"/>
                                 <TextBlock Grid.Row="1" Text="字符额度" Style="{StaticResource InfoLabel}" Foreground="{DynamicResource Brush.OnInkMuted}" VerticalAlignment="Top" Margin="{DynamicResource Spacing.InlineLoose}"/>
                                 <StackPanel Grid.Row="1" Grid.Column="1">
-                                    <TextBlock Text="{Binding OnlineQuotaText}" FontFamily="{DynamicResource FontFamily.Display}" FontSize="{DynamicResource FontSize.SectionTitle}" FontWeight="SemiBold" Foreground="{DynamicResource Brush.OnInk}" TextTrimming="CharacterEllipsis" ToolTip="此处显示云端 AI 翻译额度；本机写回方式不代表可以离线调用 AI。" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="QuotaText" Text="{Binding OnlineQuotaText}" FontFamily="{DynamicResource FontFamily.Display}" FontSize="{DynamicResource FontSize.SectionTitle}" FontWeight="SemiBold" Foreground="{DynamicResource Brush.OnInk}" TextTrimming="CharacterEllipsis" ToolTip="此处显示云端 AI 翻译额度；本机写回方式不代表可以离线调用 AI。" VerticalAlignment="Center"/>
                                     <!-- Let the quota rail shrink to the available column width instead of forcing the whole card wider. -->
-                                    <Grid HorizontalAlignment="Stretch" MaxWidth="360" Margin="{DynamicResource Spacing.BlockTopTight}">
+                                    <Grid HorizontalAlignment="Left" Width="360" Margin="{DynamicResource Spacing.BlockTopTight}">
                                         <ProgressBar x:Name="QuotaProgress" HorizontalAlignment="Stretch" Minimum="0" Maximum="{Binding OnlineUsage.MonthlyQuota}" Value="{Binding OnlineUsage.Remaining, Mode=OneWay}" Foreground="{DynamicResource Brush.Amber}" Background="{DynamicResource Brush.OnInkTrack}" Height="5"><ProgressBar.Style><Style TargetType="ProgressBar" BasedOn="{StaticResource {x:Type ProgressBar}}"><Style.Triggers><DataTrigger Binding="{Binding OnlineUsage}" Value="{x:Null}"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger><DataTrigger Binding="{Binding OnlineUsage.MonthlyQuota}" Value="0"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></ProgressBar.Style></ProgressBar>
                                     </Grid>
                                 </StackPanel>
@@ -314,6 +314,9 @@
                             </Style>
                         </Button.Style>
                     </Button>
+                    <Button x:Name="RegisterLinkButton" Content="还没有账号？前往官网注册" Command="{Binding OpenWebsiteCommand}"
+                            Style="{StaticResource Button.Compact.Tertiary}" HorizontalAlignment="Left"
+                            AutomationProperties.Name="前往官网注册" Margin="{DynamicResource Spacing.BlockTopTight}" />
                     <Border Margin="{DynamicResource Spacing.BlockTopLoose}" Padding="12,8" Background="{DynamicResource Brush.InfoLight}" BorderBrush="{DynamicResource Brush.BorderLight}" BorderThickness="1" CornerRadius="{DynamicResource CornerRadius.Small}">
                         <Border.Style>
                             <Style TargetType="Border">

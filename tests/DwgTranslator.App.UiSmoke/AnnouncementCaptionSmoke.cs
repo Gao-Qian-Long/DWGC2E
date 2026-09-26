@@ -79,6 +79,13 @@ public sealed partial class SmokeApp
             Check(banner.IsOpen && !banner.HasUnread, "opening announcement clears dot");
             var announcementWindow = Application.Current.Windows.OfType<AnnouncementWindow>().Single();
             Capture(announcementWindow,"announcement-detail");
+            var hostBounds = window.WindowState == WindowState.Maximized
+                ? SystemParameters.WorkArea
+                : new Rect(window.Left, window.Top, window.ActualWidth, window.ActualHeight);
+            var hostCenter = hostBounds.Left + hostBounds.Width / 2;
+            var popupCenter = announcementWindow.Left + announcementWindow.ActualWidth / 2;
+            Check(Math.Abs(popupCenter - hostCenter) <= 1.5,
+                $"announcement popup is horizontally centered (popup={popupCenter:F1}, host={hostCenter:F1})");
             banner.IsOpen = false;
             await banner.RefreshAsync();
             Check(!banner.HasUnread, "same announcement stays read after refresh");

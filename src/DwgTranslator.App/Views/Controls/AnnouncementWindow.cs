@@ -29,7 +29,9 @@ public sealed class AnnouncementWindow : Window
         // §弹窗排版：高度随公告长度收敛。此前固定 Height=400，内容只有「暂无公告」时正文与按钮之间留大片空白。
         SizeToContent = SizeToContent.Height;
         MinWidth = 320; MinHeight = 240; ShowInTaskbar = false;
-        WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        // WPF 的 CenterOwner 会在 SizeToContent 尚未完成时定位，最大化主窗与 DPI 缩放时会留下明显右偏。
+        // 先关闭自动定位，等最终尺寸确定后按 owner 的工作区边界重新计算中心点。
+        WindowStartupLocation = WindowStartupLocation.Manual;
         // §闪烁修复（用户批注「开始出来会闪烁一下」）：SizeToContent + CenterOwner 的经典闪跳——
         // 窗口先按默认高度渲染一帧，排完内容后再缩放并二次居中，肉眼看到尺寸/位置各跳一次。
         // 先整窗透明，等 OnContentRendered（此时已按内容定尺）手动按 owner 居中，再一次显形。
@@ -71,10 +73,21 @@ public sealed class AnnouncementWindow : Window
         if (Opacity >= 1) return;
         // 此时 SizeToContent 已把窗口缩到内容高度；CenterOwner 是在 Show 时按改前尺寸定位的，
         // 需要按最终尺寸重新居中，否则窗口会偏下偏右一截（与闪烁同一根因的两个表现）。
-        if (Owner != null)
+        var owner = Owner;
+        if (owner != null)
         {
-            Left = Owner.Left + (Owner.Width - ActualWidth) / 2;
-            Top = Math.Max(Owner.Top, Owner.Top + (Owner.Height - ActualHeight) / 2);
+            // 最大化状态使用当前屏幕工作区；还原状态使用 owner 的实际边界，避免标题栏/侧栏把弹窗视觉中心推向右侧。
+            var bounds = owner.WindowState == WindowState.Maximized ? SystemParameters.WorkArea :
+                new Rect(owner.Left, owner.Top, owner.ActualWidth > 0 ? owner.ActualWidth : owner.Width,
+                    owner.ActualHeight > 0 ? owner.ActualHeight : owner.Height);
+            Left = bounds.Left + Math.Max(0, (bounds.Width - ActualWidth) / 2);
+            Top = bounds.Top + Math.Max(0, (bounds.Height - ActualHeight) / 2);
+        }
+        else
+        {
+            var work = SystemParameters.WorkArea;
+            Left = work.Left + Math.Max(0, (work.Width - ActualWidth) / 2);
+            Top = work.Top + Math.Max(0, (work.Height - ActualHeight) / 2);
         }
         Opacity = 1;
     }

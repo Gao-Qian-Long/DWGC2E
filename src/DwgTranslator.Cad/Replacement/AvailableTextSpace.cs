@@ -199,8 +199,12 @@ internal static class AvailableTextSpace
             {
                 // Compare a transformed line segment with visible ink instead of treating its
                 // axis-aligned bounding rectangle as filled geometry.
+                // A rotated MText's axis-aligned bounds contain large empty corners. Testing
+                // those corners as ink falsely makes an indicator's short line collide with
+                // the translated label even when its oriented glyph rectangle is clear.
                 overlaps=CollisionDetector.SegmentWithinClearance(
-                    obstacle.SegmentStart.Value,obstacle.SegmentEnd.Value,BoxCorners(ink),clearance);
+                    obstacle.SegmentStart.Value,obstacle.SegmentEnd.Value,
+                    ownCorners ?? BoxCorners(ink),clearance);
             }
             else
             {

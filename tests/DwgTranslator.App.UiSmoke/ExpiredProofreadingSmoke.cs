@@ -4,12 +4,33 @@ using DwgTranslator.App.ViewModels;
 using DwgTranslator.Core.Models;
 using DwgTranslator.Core.Services;
 using DwgTranslator.Core.Tasks;
+using DwgTranslator.Core.Resources;
 
 namespace UiSmoke;
 public sealed partial class SmokeApp
 {
     private async Task VerifyExpiredProofreadingAsync(MainViewModel vm)
     {
+        var savedSearch = vm.SearchText;
+        var savedFilter = vm.FilterStatusText;
+        var savedDrawing = vm.SelectedDrawingFile;
+        var searchFixture = new TextEntity { Handle = "search-proof-unique", PlainText = "搜索验证词", TranslatedText = "Stop Indicator" };
+        try
+        {
+            vm.SelectedDrawingFile = null;
+            vm.FilterStatusText = Strings.Get("FilterAll");
+            vm.Entities.Add(searchFixture);
+            vm.SearchText = "搜索验证词";
+            Check(vm.VisibleCount == 1 && vm.FilteredEntities.Single() == searchFixture,
+                "typing proofreading search filters the table and updates result count immediately");
+        }
+        finally
+        {
+            vm.Entities.Remove(searchFixture);
+            vm.SearchText = savedSearch;
+            vm.FilterStatusText = savedFilter;
+            vm.SelectedDrawingFile = savedDrawing;
+        }
         var flags = BindingFlags.Instance | BindingFlags.NonPublic;
         var manager = (DwgTranslator.Core.Tasks.TaskManager)typeof(MainViewModel).GetField("_taskManager", flags)!.GetValue(vm)!;
         var version = typeof(MainViewModel).GetField("_sessionVersion", flags)!;
