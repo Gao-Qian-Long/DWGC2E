@@ -31,7 +31,6 @@
 | `Get-ProjectInventory.ps1` | `-OutputDir` 必须为新目录；写 CSV 和范围说明。只提取显式构建声明，不求值 MSBuild、不删除源文件。 |
 | `Verify-ProjectMoves.ps1` | 可选 `-ManifestPath -ResultPath`；对迁移记录与 Git 基线核对，输出证据，不移动文件。 |
 | `Clean-DesktopArtifacts.ps1` | **有删除行为**；先预览 `-WhatIf` 并确认作用范围及保留规则。不得将其他任务产物、用户数据、恢复备份当垃圾。 |
-| `Reset-FirstReleaseArtifacts.ps1` | **历史一次性清理，保留审计用途，不再运行**；固定首发基线与完成记录保护，不是日常清理入口。 |
 | `Test-DesktopArtifactCleanup.ps1` | 保留的兼容入口，转发 `tests/BuildPipeline/Test-DesktopArtifactCleanup.ps1`；正式测试源码不在 tools 中重复维护。 |
 | `Sync-BrandIcons.ps1` | **修改两个工作区的品牌资源**：本仓库 SVG/ICO，以及默认 `D:/DWGC2E_Website` 的 logo.svg/favicon.svg；写生成证据。仅在明确品牌变更时使用，不负责构建或部署。 |
 
