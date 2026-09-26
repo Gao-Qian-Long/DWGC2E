@@ -9,7 +9,16 @@ public sealed class PageHeader : HeaderedContentControl
     public static readonly DependencyProperty IsStackedProperty = DependencyProperty.Register(
         nameof(IsStacked), typeof(bool), typeof(PageHeader), new PropertyMetadata(false));
     public bool IsStacked { get => (bool)GetValue(IsStackedProperty); set => SetValue(IsStackedProperty, value); }
-    public PageHeader() { SizeChanged += (_, _) => IsStacked = ActualWidth < 420; }
+    /// <summary>动作区折行阈值：读共享断点令牌，取不到时退回原来的 420（§自适应 2026-09-25）。</summary>
+    private const double FallbackStackWidth = 420;
+    public PageHeader()
+    {
+        SizeChanged += (_, _) => IsStacked = ActualWidth < ResolveStackWidth();
+        Loaded += (_, _) => IsStacked = ActualWidth < ResolveStackWidth();
+    }
+
+    private double ResolveStackWidth() =>
+        TryFindResource("Size.BreakpointPageHeader") is double token ? token : FallbackStackWidth;
     public static readonly DependencyProperty DescriptionProperty = DependencyProperty.Register(
         nameof(Description), typeof(string), typeof(PageHeader), new PropertyMetadata(string.Empty));
     public string Description

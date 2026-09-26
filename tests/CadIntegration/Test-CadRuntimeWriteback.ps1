@@ -4,6 +4,7 @@ param(
  [string]$PluginPath = (Join-Path $PSScriptRoot '../../release/CadPlugin/DwgTranslator.Cad.dll')
 )
 $ErrorActionPreference='Stop'
+Import-Module Microsoft.PowerShell.Utility -ErrorAction Stop
 $CadExe=(Resolve-Path -LiteralPath $CadExe).Path
 $PluginPath=(Resolve-Path -LiteralPath $PluginPath).Path
 $root=[IO.Path]::GetFullPath($EvidenceRoot)

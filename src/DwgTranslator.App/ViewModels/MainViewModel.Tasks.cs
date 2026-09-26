@@ -413,24 +413,55 @@ public partial class MainViewModel
     private void ResumePendingTasks()
     {
         var pending = _taskManager.PendingFromLastRun;
+        // TaskManager persists completed/failed history as well as interrupted work. The
+        // task-center table is workspace-backed, so restore one visible row for every saved
+        // drawing instead of only adding the interrupted subset.
+        foreach (var task in _taskManager.Tasks.OrderByDescending(item => item.CreatedAt))
+        {
+            if (DrawingFiles.All(r => !string.Equals(
+                    NormalizeSourcePath(r.FullPath), NormalizeSourcePath(task.FilePath),
+                    StringComparison.OrdinalIgnoreCase)))
+            {
+                DrawingFiles.Add(new DrawingFileItem(task.FilePath) { Index = DrawingFiles.Count + 1 });
+            }
+        }
+        AttachTasksToRows();
+        HasDrawingFiles = DrawingFiles.Count > 0;
+        HasMultipleDrawingFiles = DrawingFiles.Count > 1;
         if (pending.Count > 0)
         {
-            foreach (var task in pending)
-            {
-                if (DrawingFiles.All(r => !string.Equals(
-                        NormalizeSourcePath(r.FullPath), NormalizeSourcePath(task.FilePath), StringComparison.OrdinalIgnoreCase)))
-                {
-                    DrawingFiles.Add(new DrawingFileItem(task.FilePath) { Index = DrawingFiles.Count + 1 });
-                }
-            }
-
-            AttachTasksToRows();
-            HasDrawingFiles = DrawingFiles.Count > 0;
-            HasMultipleDrawingFiles = DrawingFiles.Count > 1;
             Log.Information("上次遗留 {Count} 个未完成任务，已用红点提示并由任务中心处理", pending.Count);
         }
 
         RefreshTaskRecoveryNotice();
+    }
+
+    [RelayCommand]
+    private async Task RetranslateSkippedChineseAsync(DrawingFileItem? row)
+    {
+        var task = row?.Task;
+        if (row == null || task == null || !row.HasSkippedChinese || IsProcessing) return;
+
+        // Historical tasks may have a different language pair from the current workspace.
+        if (!string.IsNullOrWhiteSpace(task.ProjectId))
+        {
+            try
+            {
+                var project = ProjectStore.Load(task.ProjectId);
+                CurrentSourceLang = project.SourceLanguage;
+                CurrentTargetLang = project.TargetLanguage;
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "读取漏译补翻任务的语言设置失败：{TaskId}", task.Id);
+                StatusMessage = "无法读取该历史任务的语言方向，请先从翻译项目中打开它。";
+                return;
+            }
+        }
+
+        var count = row.SkippedChineseCount;
+        StatusMessage = $"正在重新检查 {count} 条旧检查点中被跳过的中文；已完成译文会继续复用。";
+        await RunTaskQueueAsync(retryFailedFirst: false, askWritebackMode: false, onlyTaskId: task.Id);
     }
 
     #endregion

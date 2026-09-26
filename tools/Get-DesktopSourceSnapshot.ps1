@@ -2,6 +2,7 @@
 # Output: deterministic file hashes; no secret values or runtime data.
 param([string]$WorkspaceRoot=(Join-Path $PSScriptRoot '..'))
 $ErrorActionPreference='Stop'
+Import-Module Microsoft.PowerShell.Utility -ErrorAction Stop
 $root=(Resolve-Path -LiteralPath $WorkspaceRoot).Path.TrimEnd('\')
 $files=New-Object 'System.Collections.Generic.List[object]'
 function Visit([string]$directory){

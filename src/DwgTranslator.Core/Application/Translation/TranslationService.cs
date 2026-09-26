@@ -172,7 +172,9 @@ public class TranslationService : ITranslationService, IWritebackGlossaryProvide
         try
         {
             if (string.IsNullOrWhiteSpace(entity.PlainText))
-                return new TranslationPair { Handle = entity.Handle, Status = TranslationStatus.Skipped };
+                return new TranslationPair { Handle = entity.Handle, SourceFilePath = entity.SourceFilePath,
+                    SourceText = entity.PlainText, Status = TranslationStatus.Skipped,
+                    ErrorMessage = TranslationFilter.GetSkipReason(entity.PlainText, sourceLanguage, targetLanguage) ?? string.Empty };
 
             // 命中冲突术语的条目只能由用户裁决，不能让模型猜：整批抛异常会把这份图纸里
             // 其余能翻的文字一起拖下水，所以在这里逐条标失败，其余条目照常翻译。
@@ -190,7 +192,9 @@ public class TranslationService : ITranslationService, IWritebackGlossaryProvide
                 return new TranslationPair
                 {
                     Handle = entity.Handle, SourceText = entity.PlainText,
-                    TranslatedText = entity.PlainText, GlossaryHit = false, Status = TranslationStatus.Skipped
+                    SourceFilePath = entity.SourceFilePath, TranslatedText = entity.PlainText,
+                    GlossaryHit = false, Status = TranslationStatus.Skipped,
+                    ErrorMessage = TranslationFilter.GetSkipReason(entity.PlainText, sourceLanguage, targetLanguage) ?? string.Empty
                 };
             }
 
@@ -199,7 +203,9 @@ public class TranslationService : ITranslationService, IWritebackGlossaryProvide
                 return new TranslationPair
                 {
                     Handle = entity.Handle, SourceText = entity.PlainText,
-                    TranslatedText = entity.PlainText, GlossaryHit = false, Status = TranslationStatus.Skipped
+                    SourceFilePath = entity.SourceFilePath, TranslatedText = entity.PlainText,
+                    GlossaryHit = false, Status = TranslationStatus.Skipped,
+                    ErrorMessage = TranslationFilter.GetSkipReason(entity.PlainText, sourceLanguage, targetLanguage) ?? string.Empty
                 };
             }
 

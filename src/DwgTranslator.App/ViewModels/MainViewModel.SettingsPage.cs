@@ -225,6 +225,19 @@ public partial class MainViewModel
         }
         return ConfirmLeaveGlossary();
     }
+
+    public async Task<bool> ConfirmLeavePageAsync()
+    {
+        if (!ConfirmLeaveProofreading()) return false;
+        if (HasUnsavedSettings || ValidateSettingsInputs?.Invoke() == false)
+        {
+            var result = Views.PromptDialog.Show("设置尚未保存。是否保存后继续？", "未保存的设置", System.Windows.MessageBoxButton.YesNoCancel);
+            if (result == System.Windows.MessageBoxResult.Cancel) return false;
+            if (result == System.Windows.MessageBoxResult.Yes && !SaveSettingsPage()) return false;
+            if (result == System.Windows.MessageBoxResult.No) DiscardSettingsChangesCore();
+        }
+        return await ConfirmLeaveGlossaryAsync();
+    }
     [RelayCommand]
     private void SaveSettingsChanges() => SaveSettingsPage();
 

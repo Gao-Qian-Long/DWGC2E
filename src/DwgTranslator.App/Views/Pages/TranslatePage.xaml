@@ -2,6 +2,28 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:controls="clr-namespace:DwgTranslator.App.Views.Controls">
+    <UserControl.Resources>
+        <!-- §自适应（2026-09-25）：队列状态点样式。窄档的"状态与进度"合并列与常规状态列必须共用
+             同一套颜色语义——复制两份触发器的话，将来漏改一处就会出现"同一状态两种颜色"。 -->
+        <Style x:Key="QueueStatusDot" TargetType="Ellipse">
+            <Setter Property="Width" Value="7" />
+            <Setter Property="Height" Value="7" />
+            <Setter Property="Margin" Value="{DynamicResource Spacing.InlineTight}" />
+            <Setter Property="Fill" Value="{DynamicResource Brush.TextDisabled}" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding WorkflowStatusText}" Value="解析中"><Setter Property="Fill" Value="{DynamicResource Brush.Primary}" /></DataTrigger>
+                <DataTrigger Binding="{Binding WorkflowStatusText}" Value="提取文本"><Setter Property="Fill" Value="{DynamicResource Brush.Primary}" /></DataTrigger>
+                <DataTrigger Binding="{Binding WorkflowStatusText}" Value="翻译中"><Setter Property="Fill" Value="{DynamicResource Brush.Primary}" /></DataTrigger>
+                <DataTrigger Binding="{Binding WorkflowStatusText}" Value="排版优化"><Setter Property="Fill" Value="{DynamicResource Brush.Primary}" /></DataTrigger>
+                <DataTrigger Binding="{Binding WorkflowStatusText}" Value="写回中"><Setter Property="Fill" Value="{DynamicResource Brush.Primary}" /></DataTrigger>
+                <!-- "待校对"这条触发器已删除：WorkflowStatusText 不再产出该值（2026-09-22 校对降级为可选），
+                     留在这里只会是永远不命中的死代码。翻译完成=可导出=绿色。 -->
+                <DataTrigger Binding="{Binding WorkflowStatusText}" Value="待导出"><Setter Property="Fill" Value="{DynamicResource Brush.Success}" /></DataTrigger>
+                <DataTrigger Binding="{Binding WorkflowStatusText}" Value="已导出"><Setter Property="Fill" Value="{DynamicResource Brush.Success}" /></DataTrigger>
+                <DataTrigger Binding="{Binding HasError}" Value="True"><Setter Property="Fill" Value="{DynamicResource Brush.Danger}" /></DataTrigger>
+            </Style.Triggers>
+        </Style>
+    </UserControl.Resources>
     <Grid Margin="{DynamicResource Spacing.Page}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -36,7 +58,9 @@
         <Border Grid.Row="1" x:Name="TranslationSummaryBar"
                 Style="{StaticResource Section.Surface}" Margin="{DynamicResource Spacing.Vertical}"
                 MinHeight="64" Padding="0,10,0,2">
-            <UniformGrid x:Name="TranslationSummaryMetrics" Rows="1" Columns="7">
+            <UniformGrid x:Name="TranslationSummaryMetrics" Rows="1" Columns="7"
+                         controls:ResponsiveLayout.UniformColumnsBelow="{DynamicResource Size.BreakpointMetrics}"
+                         controls:ResponsiveLayout.UniformColumns="4">
                 <!-- 每格内容居中：用户标了「都没居中」。七格由 UniformGrid 等分，
                      格内的外边距/内边距只会把文字推离格心；分隔线仍画在格边界上，
                      所以 Border 保留、只把它的 Padding 归零。 -->
@@ -159,16 +183,33 @@
             </Grid>
         </Border>
 
-        <Grid x:Name="TranslationWorkspace" Grid.Row="3" MinHeight="300">
-            <!-- 两列的最小宽度和必须 <= 最小窗口下的内容宽：1120 - 200(侧栏) - 40(页边距) = 880。
-                 520 + 360 = 880 刚好卡住；这里不能再插入任何占宽的列，否则最小窗口会横向溢出。
+        <!-- §自适应（2026-09-25 用户批注「用鼠标把界面横向一直缩小，界面没有任何的自适应调节」）：
+             页面可用宽低于 Size.BreakpointPageStack(1110) 时，TranslationWorkspace 把右栏折到队列下方
+             （见下方右栏 ScrollViewer 上的 StackTarget），整块内容改由 WorkspaceScroll 纵向滚动兜住 ——
+             否则折行后总高超过视口，底部卡片会被裁掉。
+             宽档下 WorkspaceScroll 的纵向滚动保持 Disabled：内容仍按视口约束、滚动条不出现，所以 1366
+             及以上窗口的几何与改动前逐字一致（这就是"界面显示要一致"）。 -->
+        <ScrollViewer x:Name="WorkspaceScroll" Grid.Row="3"
+                      VerticalScrollBarVisibility="Disabled" HorizontalScrollBarVisibility="Disabled"
+                      HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"
+                      controls:ResponsiveLayout.PageScrollBelow="{DynamicResource Size.BreakpointPageStack}">
+        <Grid x:Name="TranslationWorkspace" MinHeight="300"
+              controls:ResponsiveLayout.StackBelow="{DynamicResource Size.BreakpointPageStack}">
+            <!-- 两列并排需要页宽 ≥ 1110（Size.BreakpointPageStack 的推导）：左栏队列表固定列 680 +
+                 右栏设置卡 400 + 槽 16 + 边框/滚动条 14。低于它由 StackBelow 折成上下，折行后队列表
+                 反而拿到整页宽，因此窄档不需要再压缩队列表的列。
+                 宽档下 520 + 400 = 920 是最小并排宽度，这里不能再插入任何占宽的列。
                  分区感靠右栏补上与左栏相同的外边距（见下方 ScrollViewer 的 Margin）来实现。 -->
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" MinWidth="520" />
-                <ColumnDefinition Width="400" MinWidth="360" MaxWidth="460" />
+                <ColumnDefinition x:Name="QueueWorkspaceColumn" Width="*" MinWidth="520" />
+                <ColumnDefinition x:Name="SettingsWorkspaceColumn" Width="400" MinWidth="360" MaxWidth="460" />
             </Grid.ColumnDefinitions>
 
-            <Border Grid.Column="0" Style="{StaticResource Section.Surface}" Padding="0" Margin="{DynamicResource Spacing.InlineWide}" VerticalAlignment="Stretch">
+            <Border x:Name="QueueSurface" Grid.Column="0" Style="{StaticResource Section.Surface}" Padding="0" Margin="{DynamicResource Spacing.InlineWide}" VerticalAlignment="Stretch">
                 <Grid x:Name="TranslationScroll">
                     <Grid.RowDefinitions>
                         <RowDefinition x:Name="QueueAreaRow" Height="*" />
@@ -252,6 +293,11 @@
 
                         <DataGrid Grid.Row="1" x:Name="DrawingQueue" ItemsSource="{Binding DrawingFiles}"
                                   SelectedItem="{Binding SelectedQueueDrawing, Mode=TwoWay}"
+                                  controls:ResponsiveTable.FullColumnsAbove="{DynamicResource Size.BreakpointQueue}"
+                                  controls:ResponsiveTable.CompactColumns="状态,进度"
+                                  controls:ResponsiveTable.MergedColumn="状态与进度"
+                                  controls:ResponsiveTable.FillColumnsBelow="{DynamicResource Size.BreakpointCards}"
+                                  controls:ResponsiveTable.FillColumns="文件名=3;状态=1.2;文本=1;进度=1.5;状态与进度=1.2"
                                   AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="False"
                                   HeadersVisibility="Column" RowHeight="{DynamicResource Size.TableRow}" FontSize="13"
                                   GridLinesVisibility="Horizontal" BorderThickness="0"
@@ -264,19 +310,28 @@
                                   ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                                   ScrollViewer.CanContentScroll="True">
                             <DataGrid.Columns>
-                                <DataGridCheckBoxColumn Header="导出"
-                                                        Binding="{Binding IsIncludedForExport, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                        Width="48" />
+                                <!-- 与术语库的“选择术语”列使用同一种 TemplateColumn + CheckBox，避免
+                                     DataGridCheckBoxColumn 自带的紧缩样式与全局复选框视觉不一致。
+                                     60 DIP 同时给“导出”两字和表头内边距留足空间，不再裁字。 -->
+                                <DataGridTemplateColumn Header="导出" Width="60" IsReadOnly="True">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <CheckBox IsChecked="{Binding IsIncludedForExport, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                      HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                      AutomationProperties.Name="选择导出图纸" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
                                 <!-- 用户批注（2026-09-22）：「左边的文件名没必要占用那么大宽度」。
                                      原来文件名是这张表唯一的星号列，窗口越宽它越宽（最大化下能吃掉 700+ DIP），
                                      把状态/文本/进度顶到中间、操作按钮推到最右边缘，中间留一大片空。
                                      现在文件名取固定宽，"多出来的空间"交给末尾的空白星号列（见表格最后）——
                                      列因此贴着左边排成一列，操作按钮紧跟在进度之后。
-                                     取 200 而不是更大：实测队列表在 1366 下只有 687 DIP、在 1280 下只有 601 DIP，
-                                     而列宽超出可用宽时表格会**按比例压缩所有列**（不是裁切）——文件名定得越大，
-                                     「操作」里的第三个按钮被压掉的风险越高。200 时固定列合计 680 <= 687，
-                                     1366 及以上完全不压缩。过长文件名照旧 CharacterEllipsis + ToolTip。 -->
-                                <DataGridTemplateColumn Header="文件名" Width="192" IsReadOnly="True" SortMemberPath="FileName">
+                                     取 200 而不是更大：实测队列表在窗口下限 1366 下只有 707 DIP（旧下限 1280 时
+                                     621 DIP），而列宽超出可用宽时表格会**按比例压缩所有列**（不是裁切）——
+                                     文件名定得越大，「操作」里的第三个按钮被压掉的风险越高。固定列合计
+                                     680 <= 707，1366 及以上完全不压缩。过长文件名照旧 CharacterEllipsis + ToolTip。 -->
+                                <DataGridTemplateColumn Header="文件名" Width="180" MinWidth="180" IsReadOnly="True" SortMemberPath="FileName">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
                                             <TextBlock Text="{Binding FileName}" TextTrimming="CharacterEllipsis"
@@ -286,29 +341,11 @@
                                 </DataGridTemplateColumn>
                                 <!-- 状态 104→96：最长文案 4 个汉字 + 状态点 7 + Spacing.Inline 8 + 单元格内边距
                                      约 79 DIP，104 的余量可在文件名固定宽之后收回 8。 -->
-                                <DataGridTemplateColumn Header="状态" Width="96" IsReadOnly="True" SortMemberPath="WorkflowStatusText">
+                                <DataGridTemplateColumn Header="状态" Width="96" MinWidth="96" IsReadOnly="True" SortMemberPath="WorkflowStatusText">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
                                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center" ToolTip="{Binding SummaryText}">
-                                                <Ellipse Width="7" Height="7" Margin="{DynamicResource Spacing.InlineTight}">
-                                                    <Ellipse.Style>
-                                                        <Style TargetType="Ellipse">
-                                                            <Setter Property="Fill" Value="{DynamicResource Brush.TextDisabled}" />
-                                                            <Style.Triggers>
-                                                                <DataTrigger Binding="{Binding WorkflowStatusText}" Value="解析中"><Setter Property="Fill" Value="{DynamicResource Brush.Primary}" /></DataTrigger>
-                                                                <DataTrigger Binding="{Binding WorkflowStatusText}" Value="提取文本"><Setter Property="Fill" Value="{DynamicResource Brush.Primary}" /></DataTrigger>
-                                                                <DataTrigger Binding="{Binding WorkflowStatusText}" Value="翻译中"><Setter Property="Fill" Value="{DynamicResource Brush.Primary}" /></DataTrigger>
-                                                                <DataTrigger Binding="{Binding WorkflowStatusText}" Value="排版优化"><Setter Property="Fill" Value="{DynamicResource Brush.Primary}" /></DataTrigger>
-                                                                <DataTrigger Binding="{Binding WorkflowStatusText}" Value="写回中"><Setter Property="Fill" Value="{DynamicResource Brush.Primary}" /></DataTrigger>
-                                                                <!-- "待校对"这条触发器已删除：WorkflowStatusText 不再产出该值（2026-09-22 校对降级为可选），
-                                                                     留在这里只会是永远不命中的死代码。翻译完成=可导出=绿色。 -->
-                                                                <DataTrigger Binding="{Binding WorkflowStatusText}" Value="待导出"><Setter Property="Fill" Value="{DynamicResource Brush.Success}" /></DataTrigger>
-                                                                <DataTrigger Binding="{Binding WorkflowStatusText}" Value="已导出"><Setter Property="Fill" Value="{DynamicResource Brush.Success}" /></DataTrigger>
-                                                                <DataTrigger Binding="{Binding HasError}" Value="True"><Setter Property="Fill" Value="{DynamicResource Brush.Danger}" /></DataTrigger>
-                                                            </Style.Triggers>
-                                                        </Style>
-                                                    </Ellipse.Style>
-                                                </Ellipse>
+                                                <Ellipse Style="{StaticResource QueueStatusDot}" />
                                                 <TextBlock Text="{Binding WorkflowStatusText}" TextTrimming="CharacterEllipsis"
                                                            VerticalAlignment="Center" />
                                             </StackPanel>
@@ -318,11 +355,11 @@
                                 <!-- §L8 5 位数（"12,345"）加 Padding 需要 80 DIP，原 68 会溢出。
                                      用户批注后把文件名固定为 240，这 16 DIP 是补给列宽预算的：内容是等宽
                                      "12,345"（约 42 DIP）+ 单元格内边距 12 = 54，64 仍有余量。 -->
-                                <DataGridTextColumn Header="文本" Binding="{Binding TextCountText}" Width="64"
+                                <DataGridTextColumn Header="文本" Binding="{Binding TextCountText}" Width="64" MinWidth="64"
                                                     IsReadOnly="True" ElementStyle="{StaticResource CenteredCellStyle}" />
                                 <!-- 进度 118→108：内容框 = 进度条 + 等宽 "100%"(29) + LeftGap 8，原值的余量可在
                                      文件名固定宽之后收回 10 DIP。 -->
-                                <DataGridTemplateColumn Header="进度" Width="108" IsReadOnly="True" SortMemberPath="ProgressPercent">
+                                <DataGridTemplateColumn Header="进度" Width="108" MinWidth="108" IsReadOnly="True" SortMemberPath="ProgressPercent">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
                                             <Grid VerticalAlignment="Center">
@@ -381,10 +418,29 @@
                                         </DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
-                                <!-- 收尾空白星号列（用户批注 2026-09-22：「多出的空白放在表格最右侧」）。
-                                     所有实列都是固定宽，富余宽度全落到这一列上，于是列组贴着左边排、
-                                     操作按钮紧跟在进度之后，而不是被推到窗口最右边缘。
-                                     它也是"不溢出"的保险：窄窗下这一列归零，其余列仍按各自固定宽排布。 -->
+                                <!-- §自适应 窄档合并列（用户 2026-09-25 选择"次要列合并进一个单元格"）：
+                                     表格可用宽低于 Size.BreakpointQueue(690) 时，状态与进度并成一格，
+                                     由 ResponsiveTable 行为负责这一列与"状态""进度"两列的显示/隐藏切换。
+                                     这里刻意排成**单行**（状态点 + 状态 + 百分比）：行高是 Size.TableRow(40) 的
+                                     固定值，两行会把行高撑破、连带改掉整张表的密度；单行同样不丢信息。
+                                     宽度 130 vs 原来 96+108：窄档省下 74 DIP，正是「操作」列三个按钮
+                                     在窄档不被压缩所需的余量。状态点复用 QueueStatusDot，颜色语义与宽档一致。 -->
+                                <DataGridTemplateColumn Header="状态与进度" Width="130" MinWidth="130" IsReadOnly="True" Visibility="Collapsed">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" ToolTip="{Binding SummaryText}">
+                                                <Ellipse Style="{StaticResource QueueStatusDot}" />
+                                                <TextBlock Text="{Binding WorkflowStatusText}" TextTrimming="CharacterEllipsis"
+                                                           VerticalAlignment="Center" />
+                                                <TextBlock Text="{Binding ProgressText}" Margin="{DynamicResource Spacing.LeftGap}"
+                                                           FontSize="12" FontFamily="{DynamicResource FontFamily.Mono}"
+                                                           Foreground="{DynamicResource Brush.TextSecondary}" VerticalAlignment="Center" />
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                                <!-- 宽档保留尾部弹性留白；最小宽度由 ResponsiveTable 折叠本列，
+                                     把空间按比例分配给文件名、状态、文本与进度。 -->
                                 <DataGridTemplateColumn Header="" Width="*" MinWidth="0" IsReadOnly="True" CanUserSort="False" />
                             </DataGrid.Columns>
                         </DataGrid>
@@ -406,9 +462,10 @@
                  Padding 右 2 原意是给纵向滚动条留位，但本项目 ScrollBar 宽仅 10 DIP
                  (MainWindowStyles.xaml:668)，且本栏在 1280x720 以上都不出滚动条，留 2 反而让右缘永久差
                  2 DIP —— 归零才是精确对齐。 -->
-            <ScrollViewer Grid.Column="1"
+            <ScrollViewer Grid.Column="1" x:Name="TranslationSettingsScroll"
                           VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                           CanContentScroll="True"
+                          controls:ResponsiveLayout.StackTarget="True"
                           controls:ResponsiveLayout.HandoffMouseWheelAtBoundary="True">
                 <!-- E10 右栏底部大片留白（用户批注：右栏底部比左侧「文件队列」卡高 150-200px，头重脚轻）
                      根因：下面三行原本全是 Auto，Grid 在 ScrollViewer 里按内容高测量后顶端对齐，而左栏卡片
@@ -429,7 +486,7 @@
                     </Grid.RowDefinitions>
                     <!-- E9 下内边距由 0 补到 16，完整根因见下方 OutputSection 的注释。 -->
                     <Border x:Name="TranslationSettingsSection" Grid.Row="0"
-                            Style="{StaticResource Section.Surface}" Padding="16,14,16,16">
+                            Style="{StaticResource Section.Surface}" Padding="16,12,16,12">
                         <Grid>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />
@@ -481,10 +538,10 @@
                          完全同色，按钮全靠 1px 的 Brush.Border 描边才成形；下内边距为 0 时按钮下边框距卡片
                          下边框只剩 ~1px，两条浅棕线几乎重合，肉眼就读成「按钮被卡片底边切掉一截」。
                          （像素取证：卡片下边框 y≈932，按钮白体止于 y≈925，中间仅 ~4px。）
-                         补回 16 的对称下内边距后按钮完整落在卡内，圆角与 Shadow.Hard 都有了落点。
+                         补回 12 的紧凑下内边距后按钮完整落在卡内，圆角与 Shadow.Hard 都有了落点。
                          同样的 0 下内边距也在翻译设置卡与运行日志卡上，一并补齐。 -->
                     <Border x:Name="OutputSection" Grid.Row="1" Style="{StaticResource Section.Surface}"
-                            Margin="{DynamicResource Spacing.BlockTop}" Padding="16,14,16,16">
+                            Margin="{DynamicResource Spacing.BlockTop}" Padding="16,12,16,12">
                         <Grid>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />
@@ -526,7 +583,7 @@
                         </Grid>
                     </Border>
 
-                    <Border Grid.Row="2" Style="{StaticResource Section.Surface}" Margin="{DynamicResource Spacing.BlockTop}" Padding="16,14,16,16">
+                    <Border Grid.Row="2" Style="{StaticResource Section.Surface}" Margin="{DynamicResource Spacing.BlockTop}" Padding="16,12,16,12">
                         <Expander x:Name="WorkspaceLogLauncher" Header="运行日志"
                                   AutomationProperties.Name="打开运行日志">
                         <!-- E10 运行日志卡吃掉右栏剩余高度（上面第 3 行已由 Auto 改 *）。折叠时 Expander 模板里承载内容的
@@ -566,5 +623,6 @@
                 </Grid>
             </ScrollViewer>
         </Grid>
+        </ScrollViewer>
     </Grid>
 </UserControl>

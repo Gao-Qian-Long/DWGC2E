@@ -4,6 +4,7 @@
 # Cleanup removes only the exact newly created link with an unchanged SHA256; no recursive deletion.
 param([switch]$AllowDesktopFixture,[string]$ResultDir)
 $ErrorActionPreference='Stop'
+Import-Module Microsoft.PowerShell.Utility -ErrorAction Stop
 if(-not $AllowDesktopFixture){throw 'Explicit -AllowDesktopFixture is required; this test briefly uses the real Desktop known folder.'}
 $root=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..')).TrimEnd('\')
 if(-not $ResultDir){$ResultDir=Join-Path $root ('artifacts/installer-safety-20260916-resumed/desktop-shortcuts-'+[guid]::NewGuid().ToString('N'))}

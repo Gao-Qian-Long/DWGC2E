@@ -34,31 +34,86 @@ public partial class MainViewModel
 
     private bool _restoringPage;
     private string _acceptedPage = PageTranslate;
+    private bool _pageTransitionPending;
     partial void OnCurrentPageChanged(string value)
     {
         if (_restoringPage) return;
-        if (_acceptedPage != value && !ConfirmLeavePage())
+        if (_pageTransitionPending)
         {
-            _restoringPage = true; CurrentPage = _acceptedPage; _restoringPage = false;
+            RestoreAcceptedPage();
             return;
         }
-        _acceptedPage = value;
+        if (_acceptedPage != value)
+        {
+            var previous = _acceptedPage;
+            RestoreAcceptedPage();
+            _pageTransitionPending = true;
+            _ = CompletePageTransitionAsync(previous, value);
+            return;
+        }
+        ActivatePage(value);
+    }
+
+    private void RestoreAcceptedPage()
+    {
+        _restoringPage = true;
+        try { CurrentPage = _acceptedPage; }
+        finally { _restoringPage = false; }
+    }
+
+    private async Task CompletePageTransitionAsync(string previous, string requested)
+    {
+        try
+        {
+            if (!await ConfirmLeavePageAsync()) return;
+            // A canceled/overlapping request must never apply a stale destination.
+            if (_acceptedPage != previous) return;
+            _acceptedPage = requested;
+            _restoringPage = true;
+            try { CurrentPage = requested; }
+            finally { _restoringPage = false; }
+            ActivatePage(requested);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "页面切换前保存状态失败");
+            StatusMessage = "页面切换未完成，请检查未保存内容后重试。";
+        }
+        finally { _pageTransitionPending = false; }
+    }
+
+    private void ActivatePage(string page)
+    {
+        _acceptedPage = page;
         OnPropertyChanged(nameof(IsSettingsPage));
         OnPropertyChanged(nameof(IsTranslatePage));
         OnPropertyChanged(nameof(IsBatchPage));
         OnPropertyChanged(nameof(IsGlossaryPage));
         OnPropertyChanged(nameof(IsAccountPage));
         RefreshPageStatistics();
-        if (CurrentPage == PageAccount) _ = SafeRefreshAccountAsync(userInitiated: false); // 自动同步：导航进会员中心的后台刷新，不弹成功 toast（§A3 补完 t7）
-        if (CurrentPage == PageGlossary) LoadTermEditor();
+        if (page == PageAccount) _ = SafeRefreshAccountAsync(userInitiated: false); // 自动同步：导航进会员中心的后台刷新，不弹成功 toast（§A3 补完 t7）
+        if (page == PageGlossary) LoadTermEditor();
+    }
+
+    private async Task<bool> NavigateToPageAsync(string page)
+    {
+        if (_pageTransitionPending) return false;
+        if (_acceptedPage != page && !await ConfirmLeavePageAsync()) return false;
+        _acceptedPage = page;
+        _restoringPage = true;
+        try { CurrentPage = page; }
+        finally { _restoringPage = false; }
+        ActivatePage(page);
+        return true;
     }
 
     [RelayCommand]
-    private void NavigateTo(string? page)
+    private async Task NavigateTo(string? page)
     {
         if (string.IsNullOrWhiteSpace(page)) return;
-        if (page == "output-settings") { CurrentPage = PageSettings; SettingsSection = 2; return; }
-        CurrentPage = page;
+        var target = page == "output-settings" ? PageSettings : page;
+        if (!await NavigateToPageAsync(target)) return;
+        if (page == "output-settings") SettingsSection = 2;
     }
 
     /// <summary>
@@ -67,13 +122,14 @@ public partial class MainViewModel
     /// translate page is a per-drawing task table.
     /// </summary>
     [RelayCommand]
-    private void OpenDrawingFileItems(DrawingFileItem? item)
+    private async Task OpenDrawingFileItems(DrawingFileItem? item)
     {
-        if (item == null || !ConfirmLeaveProofreading()) return;
+        if (item == null || !await NavigateToPageAsync(PageBatch)) return;
         SelectedDrawingFile = item;
         ApplyFilter();
-        CurrentPage = PageBatch;
-        if (CurrentPage == PageBatch) { SelectedBatchTask = item; IsProofreading = true; IsTaskDetailOpen = false; }
+        SelectedBatchTask = item;
+        IsProofreading = true;
+        IsTaskDetailOpen = false;
     }
 
     /// <summary>True when the workspace has at least one drawing (drives the empty hint).</summary>

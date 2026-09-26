@@ -37,6 +37,9 @@ public sealed partial class SmokeApp
             Check(vm.PendingTaskCount == 1 && vm.HasPendingTasks, "unfinished work surfaces as a pending count instead of a dialog");
             Check(vm.PendingTasksNotice.Contains("fixture-unfinished.dwg"), "pending notice names the unfinished drawing");
             Check(manager.Tasks.Count == 3 && manager.Tasks[0].Id == "unfinished", "recovery keeps the in-memory queue intact");
+            Check(vm.DrawingFiles.Any(row => row.FileName == "completed.dwg" && row.Task?.Status == TranslationTaskStatus.Completed)
+                && vm.DrawingFiles.Any(row => row.FileName == "cancelled.dwg" && row.Task?.Status == TranslationTaskStatus.Cancelled),
+                "task center restores completed and cancelled drawing history as selectable rows");
             Check(File.ReadAllBytes(path).SequenceEqual(before), "recovery does not overwrite the persisted queue");
             Check(!manager.IsRunning, "recovery does not auto-start CAD or translation");
 

@@ -72,7 +72,10 @@ public partial class MainViewModel
     #region Glossary Management
 
     [RelayCommand]
-    private void OpenGlossaryManager() { CurrentPage = PageGlossary; LoadTermEditor(); }
+    private async Task OpenGlossaryManager()
+    {
+        await NavigateToPageAsync(PageGlossary);
+    }
 
     private void RefreshGlossaryDataFromList(List<GlossaryEntry> entries)
     {
@@ -105,9 +108,7 @@ public partial class MainViewModel
             if (entries.Count > 1000) throw new InvalidDataException();
             var errors=entries.Count(t => t == null || !DwgTranslator.Core.Services.EffectiveGlossary.Valid(t));
             entries=entries.Where(t => t != null && DwgTranslator.Core.Services.EffectiveGlossary.Valid(t)).ToList();
-            CurrentPage = PageGlossary;
-            if (CurrentPage != PageGlossary) return;
-            LoadTermEditor();
+            if (!await NavigateToPageAsync(PageGlossary)) return;
             foreach(var entry in entries) { entry.LocalId=Guid.NewGuid().ToString("D");entry.CloudId=null;entry.SourceKind=GlossarySource.User; DwgTranslator.Core.Services.EffectiveGlossary.Normalize(entry); }
             var known=TermDraft.Select(t=>(t.SourceLang,t.TargetLang,Source:t.Source.Trim().ToUpperInvariant(),Target:t.Target.Trim())).ToHashSet();
             var added=entries.Where(t=>known.Add((t.SourceLang,t.TargetLang,t.Source.ToUpperInvariant(),t.Target))).ToList();

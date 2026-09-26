@@ -37,11 +37,11 @@ public static class GlossaryManagementWindow
             actions.Children.Add(button);
             void UpdateAllowed() => button.IsEnabled = vm.CanEditWorkspace && (action == "新建" || list.SelectedItem?.ToString() is { } selected && selected != EffectiveGlossary.DefaultCategory);
             list.SelectionChanged += (_, _) => UpdateAllowed(); UpdateAllowed();
-            button.Click += (_, _) =>
+            button.Click += async (_, _) =>
             {
                 var old = list.SelectedItem?.ToString(); var delete = action.StartsWith("删除");
                 if (delete && PromptDialog.Show($"将 {vm.TermDraft.Count(t => t.SourceKind == GlossarySource.User && t.Category == old)} 条用户术语迁回默认分类。词条不会删除，云端不自动修改。", "删除分类", MessageBoxButton.YesNo) != MessageBoxResult.Yes) return;
-                vm.ChangeTermCategory(action == "新建" ? null : old, name.Text, delete);
+                await vm.ChangeTermCategoryAsync(action == "新建" ? null : old, name.Text, delete);
                 feedback.Text = vm.TermFeedback; list.ItemsSource = vm.TermCategories.ToList(); list.SelectedIndex = 0;
             };
         }

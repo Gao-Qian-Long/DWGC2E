@@ -5,6 +5,10 @@
 # Inno Setup 6 locations in that order.
 param([switch]$BuildOnly, [switch]$SkipTests, [switch]$Clean, [switch]$SkipUi, [string]$Compiler)
 $ErrorActionPreference = 'Stop'
+# Get-FileHash is used throughout delivery and source-snapshot validation. Import the
+# Windows PowerShell utility module explicitly so command availability doesn't depend on
+# module autoload state inherited by the batch-launched publishing session.
+Import-Module Microsoft.PowerShell.Utility -ErrorAction Stop
 # Canonical delivery must always pass regression/UI gates. BuildOnly is an explicit
 # isolated diagnostic mode, never a substitute for a verified release update.
 if ($SkipTests -and -not $BuildOnly) {

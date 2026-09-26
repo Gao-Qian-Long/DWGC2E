@@ -22,10 +22,25 @@ public partial class MainWindow : Window
     private readonly MainViewModel _viewModel;
     private readonly Dictionary<string, FrameworkElement> _pageCache = new(StringComparer.Ordinal);
     private bool? _isCompactLayout;
-    /// <summary>§L5 断点：进入 compact 的客户区宽度上限，必须等于 MinWidth 才可达。</summary>
-    private const double CompactEnterWidth = 1120;
-    /// <summary>§L5 迟滞上限：已进入 compact 后放宽到 1136，避免侧栏在边界上反复收放。</summary>
-    private const double CompactLeaveWidth = 1136;
+    private bool _closeValidationPending;
+    private bool _closeAfterValidation;
+    // ── §自适应 侧栏两态的唯一判据：图标栏能摆下页面，展开栏要等到"摆得下两栏" ────────────
+    // 页面可用宽 = 窗口宽 − 侧栏 − Spacing.Page 左右（展开 −248、图标 −96）。
+    // 翻译页两栏并排需要页宽 ≥ Size.BreakpointPageStack(1110)：左栏队列表固定列 680 + 右栏 400 +
+    // 槽 16 + 边框/滚动条 14。低于它页面自己会折成上下（ResponsiveLayout.StackBelow），所以
+    //   · 图标栏（−96）只要窗口 ≥ 1206 就能并排；
+    //   · 展开栏（−248）要窗口 ≥ 1358 才能并排。
+    // 因此把"收起侧栏"一直用到 1358：在 1024–1357 这一段用 64 DIP 图标栏把宽度全留给页面，
+    // 页面照样能并排；到 1358 以上才把标签列展开。窗口下限 1024 是用户 2026-09-25 的要求
+    // （"拖到 1024 甚至更窄，每个页面按宽度重排"），由页面重排保证不裁切。
+    /// <summary>进入紧凑布局的客户区宽度上限：展开侧栏摆不下翻译页两栏的宽度（1110 + 248）。</summary>
+    private const double CompactEnterWidth = 1358;
+    /// <summary>
+    /// 退出紧凑布局的迟滞上限，避免窗口在边界上反复收放侧栏（16 DIP 迟滞）。
+    /// 必须与展开阈值拉开：若迟滞阈值等于判定边界，侧栏收放会随 DPI 尾差来回翻转
+    /// （上一轮实测 SidebarToastStabilitySmoke 的某一档因此从 56 DIP 图标栏跳回 168 DIP 展开条）。
+    /// </summary>
+    private const double CompactLeaveWidth = 1374;
 
     // ── §D5 最大化必须贴合"工作区"而不是"整块屏幕" ──────────────────────────────
     // WindowStyle=None + WindowChrome 的窗口没有系统非客户区，WPF 自带的 WindowChromeWorker
@@ -92,13 +107,15 @@ public partial class MainWindow : Window
     {
         if (PageHost == null) return;
         // 用客户区宽度而不是 Window.ActualWidth：无边框窗口的 ActualWidth 会包含
-        // WindowChrome 的不可见调整边框，导致 MinWidth=1120 时读到 1120+边框宽，
+        // WindowChrome 的不可见调整边框会让窗口边界宽度产生几 DIP 偏移，
         // 阈值判定永远差几 DIP。
         var viewportWidth = Content is FrameworkElement shell && shell.ActualWidth > 0 ? shell.ActualWidth : ActualWidth;
-        // §L5 窗口下限已改为 1120×640：阈值必须与下限对齐，否则 compact 分支永不可达
-        // （原 null 分支 <1100 在 MinWidth=1280 下是死代码）。
+        // §自适应（2026-09-25）外壳只负责"侧栏两态 + 页面外边距"；页面内部的折行/收列由页面自己的
+        // 宽度断点决定（ResponsiveLayout / ResponsiveTable 附加属性）。所以这里不再需要"下限之上必须
+        // 展开"这种对齐关系：1024–1357 走图标栏把宽度让给页面，1358 以上才展开标签列（推导见
+        // CompactEnterWidth 的注释）。绝不能让侧栏在页面还没准备好之前才展开——那会在展开的瞬间压窄页面。
         // 两个陷阱：① 判定必须读旧状态、写回在后面，否则读到的是自己刚写进去的值；
-        // ② 窗口宽度经 DPI 换算带浮点尾差（1120 读到 1120.0000000000002），
+        // ② 窗口宽度经 DPI 换算带浮点尾差，
         //    先吸附到整 DIP 再比较，否则窗口正好停在边界时永远判不中。
         viewportWidth = Math.Round(viewportWidth);
         var wasCompact = _isCompactLayout;
@@ -109,29 +126,50 @@ public partial class MainWindow : Window
             true => viewportWidth <= CompactLeaveWidth
         };
         _isCompactLayout = compact;
-        PageHost.MaxWidth = ActualWidth >= 1900 ? 1600 : double.PositiveInfinity;
+        // All pages share the same shell edges, including on maximized monitors.  A
+        // centered shell cap made account/settings look like floating narrow islands
+        // while translation and task tables filled the viewport.  Individual controls
+        // may remain bounded, but the page canvas itself must always fill the host.
+        PageHost.MaxWidth = double.PositiveInfinity;
+        PageHost.HorizontalAlignment = HorizontalAlignment.Stretch;
         Controls.ResponsiveLayout.SetIsCompact(this, compact);
         // IsShort 与宽度无关，只按高度判定（同样先吸附整 DIP，避开 DPI 尾差）。
         Controls.ResponsiveLayout.SetIsShort(this, Math.Round(ActualHeight) < 640);
         // 展开宽度只有 Size.Sidebar 一个来源（Themes/Metrics.xaml）：这里再写死一个数字的话，
         // 令牌改动后窗口一在 compact 边界来回切换就会跳回旧宽度。
         SidebarColumn.Width = compact ? new GridLength(64) : (GridLength)FindResource("Size.Sidebar");
-        Resources["Spacing.Page"] = compact ? new Thickness(20) : new Thickness(32,24,32,24);
+        Resources["Spacing.Page"] = compact ? new Thickness(16) : new Thickness(24,16,24,16);
         ShellStatusLabel.MaxWidth = compact ? 180 : 420;
         ShellProgressLabel.MaxWidth = compact ? 100 : 260;
         ShellVersionLabel.MaxWidth = compact ? 100 : 120;
         BrandLabel.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
-        SidebarBrand.Margin = new Thickness(16, compact ? 12 : 24, 0, compact ? 12 : 24);
+        SidebarBrand.Margin = compact ? new Thickness(0, 12, 0, 12) : new Thickness(16, 24, 0, 24);
+        SidebarBrand.HorizontalAlignment = compact ? HorizontalAlignment.Center : HorizontalAlignment.Left;
+        SidebarBrandIcon.Margin = compact ? new Thickness(0) : (Thickness)FindResource("Spacing.InlineWide");
         AccountEntryLabels.Visibility = AccountChevron.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
         AccountEntryBorder.Margin = compact ? new Thickness(4,0,4,4) : new Thickness(16,0,16,12);
+        AccountEntryContent.HorizontalAlignment = compact ? HorizontalAlignment.Center : HorizontalAlignment.Stretch;
+        AccountEntryContent.Width = compact ? 28 : double.NaN;
+        AccountEntryContent.ColumnDefinitions[1].Width = compact ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
         AccountEntryContent.ColumnDefinitions[2].Width = new GridLength(compact ? 0 : 14);
         foreach (System.Windows.Controls.ListBoxItem item in NavList.Items)
         {
-            item.Padding = new Thickness(compact ? 14 : 12,0,0,0);
+            item.Padding = compact ? new Thickness(0) : new Thickness(12,0,0,0);
             item.Margin = new Thickness(compact ? 0 : 8,2,compact ? 0 : 8,2);
             if (item.Content is System.Windows.Controls.StackPanel panel)
+            {
+                panel.HorizontalAlignment = compact ? HorizontalAlignment.Center : HorizontalAlignment.Left;
                 foreach (var child in panel.Children)
-                    if (child is System.Windows.Controls.TextBlock text) { text.Visibility = compact ? Visibility.Collapsed : Visibility.Visible; item.ToolTip = text.Text; }
+                {
+                    if (child is System.Windows.Controls.TextBlock text)
+                    {
+                        text.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
+                        if (!string.IsNullOrWhiteSpace(text.Text)) item.ToolTip = text.Text;
+                    }
+                    else if (child is System.Windows.Shapes.Path icon)
+                        icon.Margin = compact ? new Thickness(0) : (Thickness)FindResource("Spacing.InlineWide");
+                }
+            }
         }
     }
 
@@ -141,7 +179,7 @@ public partial class MainWindow : Window
         SizeChanged += (_, _) => UpdateResponsiveLayout();
         Loaded += (_, _) => UpdateResponsiveLayout();
         var area = SystemParameters.WorkArea;
-        // §L5 窗口下限不能大于屏幕工作区：125% 缩放的 1366×768（约 1093×530 DIP）上
+        // §L5 窗口下限不能大于屏幕工作区：高 DPI / 小屏幕上
         // 否则会得到"必然大于屏幕、且拖不小"的窗口。仍保留 800×560 的可用下界。
         MinWidth = Math.Min(MinWidth, Math.Max(800, area.Width - 20));
         MinHeight = Math.Min(MinHeight, Math.Max(560, area.Height - 20));
@@ -176,13 +214,33 @@ public partial class MainWindow : Window
         Loaded += OnLoaded;
         // MainViewModel 是单例（与任务管理器同生命周期）：关窗只解除本窗口的订阅并落盘工作区会话，
         // 不再 Dispose 整个 VM——否则第二次打开窗口会拿到一个已取消 CTS、已退订事件的残废实例。
-        Closing += (s, e) =>
+        Closing += OnClosingAsync;
+    }
+
+    private async void OnClosingAsync(object? sender, CancelEventArgs e)
+    {
+        if (_closeAfterValidation)
         {
-            if (!_viewModel.ConfirmLeavePage()) { e.Cancel = true; return; }
             _viewModel.PropertyChanged -= ViewModel_PropertyChanged;
             _viewModel.SaveWorkspaceSession();
             _viewModel.DetachWindowScopedState();
-        };
+            return;
+        }
+
+        e.Cancel = true;
+        if (_closeValidationPending) return;
+        _closeValidationPending = true;
+        try
+        {
+            if (!await _viewModel.ConfirmLeavePageAsync()) return;
+            _closeAfterValidation = true;
+            // WPF still marks the current Closing event as in-progress until this async-void
+            // handler returns, even when the awaited validation already completed synchronously.
+            // Queue the second Close so it starts a fresh close cycle instead of throwing
+            // InvalidOperationException from Window.VerifyNotClosing().
+            Dispatcher.BeginInvoke(new Action(Close), System.Windows.Threading.DispatcherPriority.Background);
+        }
+        finally { _closeValidationPending = false; }
     }
 
 
@@ -207,7 +265,9 @@ public partial class MainWindow : Window
             {
                 var workWidthDip = (work.Right - work.Left) / scaleX;
                 var workHeightDip = (work.Bottom - work.Top) / scaleY;
-                // 只在工作区装不下当前下限时才收敛，正常显示器上是空操作（不动 1120×640 契约）。
+                // 只在工作区装不下当前下限时才收敛，普通显示器保持 1024×640；
+                // 小工作区（更窄时）仍进入 compact 布局，并把窗口下限限制在工作区内 ——
+                // 窗口宽于工作区是比"内容被压窄"更糟的故障，所以这条兜底不能被下限顶掉。
                 if (workWidthDip < MinWidth) MinWidth = Math.Max(640, workWidthDip);
                 if (workHeightDip < MinHeight) MinHeight = Math.Max(480, workHeightDip);
             }
@@ -237,6 +297,17 @@ public partial class MainWindow : Window
         info.ptMaxPosition.Y = work.Top;
         info.ptMaxSize.X = work.Right - work.Left;
         info.ptMaxSize.Y = work.Bottom - work.Top;
+        // WindowChrome can otherwise leave the native minimum track size at the value
+        // captured before DPI/monitor negotiation.  Set it explicitly on every query so
+        // dragging cannot continue below the responsive layout's supported floor.
+        var source = HwndSource.FromHwnd(hwnd);
+        var scaleX = source?.CompositionTarget?.TransformToDevice.M11 ?? 1.0;
+        var scaleY = source?.CompositionTarget?.TransformToDevice.M22 ?? 1.0;
+        if (scaleX > 0 && scaleY > 0)
+        {
+            info.ptMinTrackSize.X = (int)Math.Ceiling(MinWidth * scaleX);
+            info.ptMinTrackSize.Y = (int)Math.Ceiling(MinHeight * scaleY);
+        }
         Marshal.StructureToPtr(info, lParam, false);
         handled = true;
         return IntPtr.Zero;

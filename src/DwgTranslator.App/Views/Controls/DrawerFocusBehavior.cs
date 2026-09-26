@@ -90,7 +90,7 @@ public static class DrawerFocusBehavior
     /// 用户批注（2026-09-21）：「从右到左弹出来就行了」——抽屉打开时从右侧滑入。
     /// RenderTransform 不参与布局，ActualWidth/ActualHeight/焦点命中全部不变，冒烟几何断言不受影响。
     /// 动画时长 220ms + EaseOut（快进缓停），短于冒烟 WaitUntil 的轮询粒度，不会让断言等到中间帧；
-    /// 幂等：重复可见（如 1280 冒烟里 IsTaskDetailOpen 重开）会先停掉旧动画再放新的。
+    /// 幂等：重复可见（如 1366 冒烟里 IsTaskDetailOpen 重开）会先停掉旧动画再放新的。
     /// 滑入只作用于挂了本行为的抽屉（任务详情/术语编辑），MergeDrawer 等无行为挂载的不动。
     /// </summary>
     private static void SlideIn(FrameworkElement drawer)

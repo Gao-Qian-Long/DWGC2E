@@ -2,6 +2,7 @@
 # Usage: powershell -NoProfile -File tests/BuildPipeline/Test-InventoryPaths.ps1 -EvidenceDir <new-directory>
 param([Parameter(Mandatory=$true)][string]$EvidenceDir)
 $ErrorActionPreference='Stop'
+Import-Module Microsoft.PowerShell.Utility -ErrorAction Stop
 $root=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 $out=$ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($EvidenceDir)
 if(Test-Path -LiteralPath $out){throw 'Use a new evidence directory'}

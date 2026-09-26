@@ -1,5 +1,6 @@
 param([string]$EvidenceDir)
 $ErrorActionPreference='Stop'
+Import-Module Microsoft.PowerShell.Utility -ErrorAction Stop
 $root=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 $parent=Join-Path $root 'artifacts/cross-end-completion-20260916/release-manifest'
 if ($EvidenceDir) { $parent=$ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($EvidenceDir) }

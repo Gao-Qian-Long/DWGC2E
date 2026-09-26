@@ -108,11 +108,10 @@
         <Grid Grid.Row="1">
         <ScrollViewer x:Name="AccountScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                       HorizontalContentAlignment="Stretch" SizeChanged="AccountScroll_SizeChanged">
-        <!-- Do not bind Width back to ScrollViewer.ViewportWidth. With horizontal scrolling disabled,
-             that circular measure can preserve the child's 1200-DIP desired width after the window
-             narrows, so the right-hand cards are clipped instead of reflowing. Stretch constrains the
-             content to the real viewport while MaxWidth keeps it centred on wide screens. -->
-        <StackPanel x:Name="AccountContentRoot" MaxWidth="1200" HorizontalAlignment="Stretch">
+        <!-- Stretch the account canvas to the same page edges as translation and tasks.
+             A 1200-DIP cap centred the entire membership view on maximized windows;
+             the viewport-width breakpoints below still reflow its cards on narrow ones. -->
+        <StackPanel x:Name="AccountContentRoot" HorizontalAlignment="Stretch">
             <!-- §D7 未登录的登录卡已移到 ScrollViewer 的同级覆盖层「登录舞台」里，
                  在那里做上下左右居中并铺杂志风背景；已登录内容从这里开始。 -->
             <StackPanel Visibility="{Binding IsAccountLoggedIn, Converter={StaticResource BoolToVis}}">

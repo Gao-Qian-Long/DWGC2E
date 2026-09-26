@@ -96,6 +96,9 @@ public partial class DrawingFileItem : ObservableObject
         OnPropertyChanged(nameof(CanOpenProofreading));
         OnPropertyChanged(nameof(CanRetry));
         OnPropertyChanged(nameof(CanExport));
+        OnPropertyChanged(nameof(SkippedChineseCount));
+        OnPropertyChanged(nameof(HasSkippedChinese));
+        OnPropertyChanged(nameof(SkippedChineseButtonText));
     }
 
     #endregion
@@ -227,6 +230,13 @@ public partial class DrawingFileItem : ObservableObject
         || _task?.Status is TranslationTaskStatus.ReadyForReview or TranslationTaskStatus.Completed;
 
     public bool CanRetry => _task?.Status is TranslationTaskStatus.Failed or TranslationTaskStatus.PartiallyCompleted;
+
+    /// <summary>汉字来源却在旧检查点中被记录为跳过的条目数；可从详情中显式补翻。</summary>
+    public int SkippedChineseCount => _task?.SuccessfulTranslations?.Count(pair =>
+        pair.Status == TranslationStatus.Skipped
+        && DwgTranslator.Core.Services.TranslationQualityValidator.ContainsCjk(pair.SourceText)) ?? 0;
+    public bool HasSkippedChinese => SkippedChineseCount > 0 && _task?.IsActive != true;
+    public string SkippedChineseButtonText => $"补翻漏译中文（{SkippedChineseCount}）";
 
     public bool CanExport => NeedsExport;
 

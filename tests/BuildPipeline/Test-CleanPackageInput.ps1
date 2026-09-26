@@ -1,6 +1,7 @@
 ﻿# Purpose: local packager input safety regression; no build/install/network/payment actions.
 param([Parameter(Mandatory=$true)][string]$PublishDir, [Parameter(Mandatory=$true)][string]$EvidenceDir)
 $ErrorActionPreference='Stop'
+Import-Module Microsoft.PowerShell.Utility -ErrorAction Stop
 $root=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 $tool=Join-Path $root 'tools/Assert-CleanPackageInput.ps1'
 $packager=Join-Path $root 'tools/New-ReleasePackage.ps1'

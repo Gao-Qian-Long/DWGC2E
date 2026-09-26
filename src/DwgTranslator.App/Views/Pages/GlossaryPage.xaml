@@ -23,6 +23,13 @@
     <Trigger Property="Tag" Value="Empty"><Setter Property="IsEnabled" Value="False"/></Trigger>
    </Style.Triggers>
   </Style>
+  <Style x:Key="Glossary.SelectionAction" TargetType="Button" BasedOn="{StaticResource Button.Compact.Secondary}">
+   <Setter Property="Width" Value="92"/><Setter Property="MinWidth" Value="92"/>
+   <Setter Property="HorizontalContentAlignment" Value="Center"/>
+  </Style>
+  <Style x:Key="Glossary.SelectionActionDanger" TargetType="Button" BasedOn="{StaticResource Glossary.SelectionAction}">
+   <Setter Property="Foreground" Value="{DynamicResource Brush.Danger}"/>
+  </Style>
  </UserControl.Resources>
  <Grid Margin="{DynamicResource Spacing.Page}">
   <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
@@ -32,26 +39,31 @@
        用户批注（2026-09-21）「这里布局是不是太丑了！」：三行工具区（批量/筛选/常规）裸排在页面上，
        与任务中心「统计条、筛选卡各自成卡」的语言不一致。整体装进一张 Section.Surface 白卡；
        状态标签行（全部/已启用/…）一并入卡，作为工具区的收尾行。 -->
-  <Border Grid.Row="1" Grid.RowSpan="3" Style="{StaticResource Section.Surface}" Padding="16,12,16,14" Margin="{DynamicResource Spacing.BlockTopTight}">
+        <Border Grid.Row="1" Grid.RowSpan="3" Style="{StaticResource Section.Surface}" Padding="14,10,14,12" Margin="{DynamicResource Spacing.BlockTopTight}">
    <Grid>
    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
    <!-- 用户反馈「移到上面去啊」：批量操作条常驻工具区首行（原先排在常规工具条之下），
         整条不再插入/移除；无选中项或忙时仍由 SelectionToolbarState 统一置灰。 -->
-   <Grid x:Name="SelectionToolbar" Grid.Row="0" Margin="{DynamicResource Spacing.BlockTopTight}" Style="{StaticResource SelectionToolbarState}" Tag="Empty">
-    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="120"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-    <TextBlock x:Name="SelectionCount" Grid.Column="0" VerticalAlignment="Center" Margin="{DynamicResource Spacing.InlineWide}"/>
-    <Button x:Name="UploadSelectedButton" Grid.Column="1" Content="上传所选" Click="UploadSelected_Click" Style="{StaticResource Button.Compact.Secondary}" Margin="{DynamicResource Spacing.InlineTight}" IsEnabled="False"/>
-    <Button x:Name="BatchDirectionButton" Grid.Column="2" Content="指定方向" Click="BatchDirection_Click" Style="{StaticResource Button.Compact.Secondary}" Margin="{DynamicResource Spacing.InlineTight}" IsEnabled="False"/>
-    <Button Grid.Column="3" Content="启用" Tag="True" Click="BatchEnabled_Click" Style="{StaticResource Button.Compact.Secondary}" Margin="{DynamicResource Spacing.InlineTight}"/>
-    <Button Grid.Column="4" Content="停用" Tag="False" Click="BatchEnabled_Click" Style="{StaticResource Button.Compact.Secondary}" Margin="{DynamicResource Spacing.InlineTight}"/>
-    <!-- 用户反馈批量条里的分类显示成「custom-c…」：分类名允许到 128 字（MainViewModel.GlossaryStorage.cs:29），
-     任何固定宽度都装不下，所以让它优雅降级——选中框按可用宽省略号截断，悬停给出完整名称。 -->
-    <ComboBox x:Name="BatchCategory" Grid.Column="5" SelectedIndex="0" ItemsSource="{Binding TermCategories}" ToolTip="选择或输入分类" Margin="{DynamicResource Spacing.InlineTight}"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding}" TextTrimming="CharacterEllipsis" ToolTip="{Binding}"/></DataTemplate></ComboBox.ItemTemplate></ComboBox>
-    <Button x:Name="BatchCategoryButton" Grid.Column="6" Content="修改分类" Click="BatchCategory_Click" Style="{StaticResource Button.Compact.Secondary}" Margin="{DynamicResource Spacing.InlineTight}" IsEnabled="False"/>
-    <Button Grid.Column="7" Content="导出所选" Click="ExportSelected_Click" Style="{StaticResource Button.Compact.Secondary}" Margin="{DynamicResource Spacing.InlineTight}" ToolTip="仅导出当前选中的术语"/>
-    <!-- §L12 「删除本机」是破坏性操作（移除本机术语），用危险色；「停用」不是 -->
-    <Button Grid.Column="8" x:Name="DeleteSelectionButton" Content="删除本机" Click="Delete_Click" Style="{StaticResource Button.SecondaryDanger}" Margin="{DynamicResource Spacing.InlineTight}"/>
-    <Button Grid.Column="9" Content="取消选择" Click="ClearSelection_Click" Style="{StaticResource Button.Compact.Secondary}" HorizontalAlignment="Left" Margin="{DynamicResource Spacing.InlineTight}"/>
+    <Grid x:Name="SelectionToolbar" Grid.Row="0" Margin="{DynamicResource Spacing.BlockTopTight}" Style="{StaticResource SelectionToolbarState}" Tag="Empty">
+     <!-- 操作集在窄页宽时允许自然换行；固定网格会把最右侧动作裁出视口。 -->
+     <WrapPanel x:Name="SelectionToolbarItems" HorizontalAlignment="Stretch">
+      <TextBlock x:Name="SelectionCount" VerticalAlignment="Center" Margin="{DynamicResource Spacing.InlineWide}"/>
+       <Button x:Name="UploadSelectedButton" Content="上传所选" Click="UploadSelected_Click" Style="{StaticResource Glossary.SelectionAction}" Margin="{DynamicResource Spacing.ToolbarItem}" IsEnabled="False"/>
+       <Button x:Name="BatchDirectionButton" Content="指定方向" Click="BatchDirection_Click" Style="{StaticResource Glossary.SelectionAction}" Margin="{DynamicResource Spacing.ToolbarItem}" IsEnabled="False"/>
+       <Button Content="启用" Tag="True" Click="BatchEnabled_Click" Style="{StaticResource Glossary.SelectionAction}" Margin="{DynamicResource Spacing.ToolbarItem}"/>
+       <Button Content="停用" Tag="False" Click="BatchEnabled_Click" Style="{StaticResource Glossary.SelectionAction}" Margin="{DynamicResource Spacing.ToolbarItem}"/>
+      <!-- 用户反馈批量条里的分类显示成「custom-c…」：分类名允许到 128 字（MainViewModel.GlossaryStorage.cs:29），
+       任何固定宽度都装不下，所以让它优雅降级——选中框按可用宽省略号截断，悬停给出完整名称。 -->
+       <ComboBox x:Name="BatchCategory" Width="112" Height="{DynamicResource Size.ButtonCompact}" MinHeight="{DynamicResource Size.ButtonCompact}" VerticalAlignment="Center" SelectedIndex="0" ItemsSource="{Binding TermCategories}" ToolTip="选择或输入分类" Margin="{DynamicResource Spacing.ToolbarItem}"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding}" TextTrimming="CharacterEllipsis" ToolTip="{Binding}"/></DataTemplate></ComboBox.ItemTemplate></ComboBox>
+       <Button x:Name="BatchCategoryButton" Content="修改分类" Click="BatchCategory_Click" Style="{StaticResource Glossary.SelectionAction}" Margin="{DynamicResource Spacing.ToolbarItem}" IsEnabled="False"/>
+      <!-- 将末尾三项作为一个换行单元，窄档不会只剩「取消选择」孤零零落到下一行。 -->
+       <StackPanel Orientation="Horizontal">
+        <Button Content="导出所选" Click="ExportSelected_Click" Style="{StaticResource Glossary.SelectionAction}" Margin="{DynamicResource Spacing.ToolbarItem}" ToolTip="仅导出当前选中的术语"/>
+        <!-- §L12 「删除本机」是破坏性操作（移除本机术语），用危险色；「停用」不是 -->
+        <Button x:Name="DeleteSelectionButton" Content="删除本机" Click="Delete_Click" Style="{StaticResource Glossary.SelectionActionDanger}" Margin="{DynamicResource Spacing.ToolbarItem}"/>
+        <Button Content="取消选择" Click="ClearSelection_Click" Style="{StaticResource Glossary.SelectionAction}" Margin="{DynamicResource Spacing.ToolbarItem}"/>
+       </StackPanel>
+     </WrapPanel>
    </Grid>
 
    <Grid Grid.Row="1" Margin="{DynamicResource Spacing.BlockTop}">
@@ -103,16 +115,22 @@
         列宽不再重算，于是总列宽比视口（1092）多出滚动条那 10 DIP。结果是 1366 下凭空多出
         一条横向滚动条，并且「操作」列右缘被顶到视口外、行内「⋯」看起来贴着边被裁。
         纵向滚动条常驻后，视口宽度在第一次测量前就已确定，星号列按真视口分配，不再溢出；
-        横向滚动条仍保留 Auto，只在窗口窄到星号列触底（约 1150 以下）时作为兜底出现。 -->
-   <DataGrid x:Name="TermList" ItemsSource="{Binding TermView}" SelectedItem="{Binding SelectedTerm}" AutoGenerateColumns="False" CanUserAddRows="False" CanUserDeleteRows="False" CanUserResizeColumns="True" CanUserSortColumns="True" SelectionMode="Extended" SelectionUnit="FullRow" IsReadOnly="False" HeadersVisibility="Column" BorderThickness="0" RowHeight="{DynamicResource Size.TableRow}" ScrollViewer.VerticalScrollBarVisibility="Visible" ScrollViewer.HorizontalScrollBarVisibility="Auto" ScrollViewer.CanContentScroll="True" EnableRowVirtualization="True" EnableColumnVirtualization="True" VirtualizingPanel.VirtualizationMode="Recycling" LoadingRow="TermRow_Loading" MouseDoubleClick="TermList_DoubleClick" SelectionChanged="Selection_Changed" BeginningEdit="BeginningEdit" CellEditEnding="CellEditEnding">
+        横向滚动条仍保留 Auto，只在窗口窄到星号列触底（约 1150 以下）时作为兜底出现。
+
+        在小屏工作区的 800/900 DIP 探针里，原固定列合计 860 DIP，但表格只有 704/804 DIP；
+        空表时内部 ScrollViewer 的 ScrollableWidth 仍是 0、横向滚动条不出现，右端操作列被直接裁掉。
+        窄档只收起只读的「适用方向」「来源」两列；完整信息仍可在每行详情抽屉查看。
+        分类编辑、启用开关和操作按钮始终保留。原文/译文的最低宽度改为 140，
+        窄档实列最低合计 686 DIP，连同常驻纵向滚动条仍能进入 704 DIP 视口。 -->
+   <DataGrid x:Name="TermList" ItemsSource="{Binding TermView}" SelectedItem="{Binding SelectedTerm}" AutoGenerateColumns="False" CanUserAddRows="False" CanUserDeleteRows="False" CanUserResizeColumns="True" CanUserSortColumns="True" SelectionMode="Extended" SelectionUnit="FullRow" IsReadOnly="False" HeadersVisibility="Column" BorderThickness="0" RowHeight="{DynamicResource Size.TableRow}" controls:ResponsiveTable.FullColumnsAbove="{DynamicResource Size.BreakpointTermTable}" controls:ResponsiveTable.CompactColumns="适用方向,来源" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Auto" ScrollViewer.CanContentScroll="True" EnableRowVirtualization="True" EnableColumnVirtualization="True" VirtualizingPanel.VirtualizationMode="Recycling" LoadingRow="TermRow_Loading" MouseDoubleClick="TermList_DoubleClick" SelectionChanged="Selection_Changed" BeginningEdit="BeginningEdit" CellEditEnding="CellEditEnding">
     <DataGrid.Style><Style TargetType="DataGrid" BasedOn="{StaticResource {x:Type DataGrid}}"><Style.Triggers><DataTrigger Binding="{Binding IsTermDrawerOpen}" Value="True"><Setter Property="IsEnabled" Value="False"/></DataTrigger><DataTrigger Binding="{Binding IsProcessing}" Value="True"><Setter Property="IsEnabled" Value="False"/></DataTrigger><DataTrigger Binding="{Binding IsGlossaryLoading}" Value="True"><Setter Property="IsEnabled" Value="False"/></DataTrigger><DataTrigger Binding="{Binding IsWorkspaceSaving}" Value="True"><Setter Property="IsEnabled" Value="False"/></DataTrigger><DataTrigger Binding="{Binding IsCloudGlossarySyncing}" Value="True"><Setter Property="IsEnabled" Value="False"/></DataTrigger></Style.Triggers></Style></DataGrid.Style>
     <DataGrid.Columns>
      <DataGridTemplateColumn Width="40" MinWidth="40" MaxWidth="40" IsReadOnly="True">
       <DataGridTemplateColumn.Header><CheckBox x:Name="SelectAll" IsThreeState="True" Click="SelectAll_Click" ToolTip="选择当前结果 (Ctrl+A)" AutomationProperties.Name="选择全部术语"/></DataGridTemplateColumn.Header>
       <DataGridTemplateColumn.CellTemplate><DataTemplate><CheckBox PreviewMouseLeftButtonDown="SelectionCheckbox_MouseDown" PreviewKeyDown="SelectionCheckbox_KeyDown" AutomationProperties.Name="选择术语" IsChecked="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=DataGridRow}, Mode=TwoWay}" HorizontalAlignment="Center" VerticalAlignment="Center"/></DataTemplate></DataGridTemplateColumn.CellTemplate>
      </DataGridTemplateColumn>
-     <controls:WorkspaceTextColumn ElementStyle="{StaticResource TermCellText}" Header="原文" SortMemberPath="Source" Binding="{Binding Source, UpdateSourceTrigger=Explicit}" Width="1.2*" MinWidth="155" MaxWidth="520"/>
-     <controls:WorkspaceTextColumn ElementStyle="{StaticResource TermCellText}" Header="译文" SortMemberPath="Target" Binding="{Binding Target, UpdateSourceTrigger=Explicit}" Width="1.45*" MinWidth="155" MaxWidth="560"/>
+     <controls:WorkspaceTextColumn ElementStyle="{StaticResource TermCellText}" Header="原文" SortMemberPath="Source" Binding="{Binding Source, UpdateSourceTrigger=Explicit}" Width="1.2*" MinWidth="140" MaxWidth="520"/>
+     <controls:WorkspaceTextColumn ElementStyle="{StaticResource TermCellText}" Header="译文" SortMemberPath="Target" Binding="{Binding Target, UpdateSourceTrigger=Explicit}" Width="1.45*" MinWidth="140" MaxWidth="560"/>
      <DataGridTemplateColumn Header="分类" Width="156" MinWidth="152" MaxWidth="184" IsReadOnly="True">
       <DataGridTemplateColumn.CellTemplate><DataTemplate>
        <ComboBox Height="28" MinHeight="28" Padding="6,0" Margin="2,0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" VerticalAlignment="Center" ToolTip="{Binding Category}" ItemsSource="{Binding DataContext.TermCategories, RelativeSource={RelativeSource AncestorType=UserControl}}" SelectedItem="{Binding Category, Mode=OneWay}" SelectionChanged="Category_Changed">

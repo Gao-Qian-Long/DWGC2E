@@ -186,7 +186,7 @@ public partial class MainViewModel
     /// entities translated in the previous pair back to pending. Without the reset the grid would
     /// keep showing translations for a language the drawing is no longer written into.
     /// </summary>
-    private void LanguagePairChanged()
+    private async void LanguagePairChanged()
     {
         if (_applyingLanguagePair) return;
         var key = PairKey(CurrentSourceLang, CurrentTargetLang);
@@ -200,7 +200,7 @@ public partial class MainViewModel
             _applyingLanguagePair = true;
             CurrentSourceLang = previous[0]; CurrentTargetLang = previous[1];
             _applyingLanguagePair = false;
-            if (IsProcessing || IsGlossaryLoading || !ConfirmLeaveGlossary()) return;
+            if (IsProcessing || IsGlossaryLoading || !await ConfirmLeaveGlossaryAsync()) return;
             _applyingLanguagePair = true;
             CurrentSourceLang = proposedSource; CurrentTargetLang = proposedTarget;
             _applyingLanguagePair = false;

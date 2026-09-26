@@ -68,6 +68,16 @@ public sealed partial class SmokeApp
     {
         vm.CurrentPage = MainViewModel.PageGlossary;
         await Dispatcher.InvokeAsync(() => {}, DispatcherPriority.ApplicationIdle);
+        var glossaryPage = FindVisual<DwgTranslator.App.Views.Pages.GlossaryPage>(window);
+        window.UpdateLayout();
+        var selectionLabels = new HashSet<string>(StringComparer.Ordinal)
+            { "上传所选", "指定方向", "启用", "停用", "修改分类", "导出所选", "删除本机", "取消选择" };
+        var selectionButtons = FindVisuals<Button>(glossaryPage)
+            .Where(button => button.Content is string label && selectionLabels.Contains(label)).ToArray();
+        Check(selectionButtons.Length == selectionLabels.Count
+              && selectionButtons.All(button => Math.Abs(button.ActualWidth - 92) < 0.5)
+              && selectionButtons.Select(button => button.ActualHeight).Distinct().Count() == 1,
+            "glossary selection toolbar actions use one consistent button size");
         var type = typeof(MainViewModel);
         var clientField = type.GetField("_apiClient",BindingFlags.NonPublic|BindingFlags.Instance)!;
         var verifiedField = type.GetField("_sessionVerified",BindingFlags.NonPublic|BindingFlags.Instance)!;

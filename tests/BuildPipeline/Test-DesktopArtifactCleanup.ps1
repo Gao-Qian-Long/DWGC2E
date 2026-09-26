@@ -1,4 +1,5 @@
-﻿$ErrorActionPreference='Stop'
+$ErrorActionPreference='Stop'
+Import-Module Microsoft.PowerShell.Utility -ErrorAction Stop
 $repo=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 $fixture=Join-Path $repo ('artifacts/cleanup-test-'+[guid]::NewGuid().ToString('N'))
 $art=Join-Path $fixture 'artifacts'

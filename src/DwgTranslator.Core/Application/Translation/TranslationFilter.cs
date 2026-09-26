@@ -28,13 +28,18 @@ internal static class TranslationFilter
     /// <summary>
     /// Check if text should be skipped from translation (numeric-only, already target language, etc.).
     /// </summary>
-    public static bool ShouldSkipTranslation(string text, string sourceLang, string targetLang)
+    public static bool ShouldSkipTranslation(string text, string sourceLang, string targetLang) =>
+        GetSkipReason(text, sourceLang, targetLang) != null;
+
+    /// <summary>Human-readable explanation for a deliberate skip; null means the text should translate.</summary>
+    public static string? GetSkipReason(string text, string sourceLang, string targetLang)
     {
-        if (string.IsNullOrWhiteSpace(text)) return true;
+        if (string.IsNullOrWhiteSpace(text)) return "空白或仅包含格式代码，未提交翻译。";
         var trimmed = text.Trim();
 
         // Pure engineering token (KM, CB, M8 already handled by length/digit rule below)
-        if (IsEngineeringToken(trimmed)) return true;
+        if (IsEngineeringToken(trimmed) || IsNumericOnly(trimmed))
+            return "纯数字、单位或工程代号，按规则保留原文。";
 
         // Engineering labels: short text with digits and few letters (e.g. 24V, φ12, M8, IP65, 50Hz)
         // Do not classify natural labels such as "Motor 2" as engineering codes
@@ -42,7 +47,7 @@ internal static class TranslationFilter
 
         // Short all-caps alphanumeric codes without CJK (e.g. KM, CB, GB/T, H7)
         if (!HasCjk(trimmed) && trimmed.Length <= 15 && IsMostlyCode(trimmed))
-            return true;
+            return "识别为短工程编号/代号，按规则保留原文。";
 
         // Already-target-language detection. The source language's script has to actually appear,
         // otherwise the text is already written in the target language. Pairs that share a script
@@ -54,19 +59,19 @@ internal static class TranslationFilter
             bool targetIsCjk = DwgTranslator.Core.Models.TranslationLanguages.IsCjk(targetLang);
             if (sourceIsCjk && !targetIsCjk)
             {
-                if (!HasCjk(trimmed)) return true;          // e.g. Chinese/Japanese into English
+                if (!HasCjk(trimmed)) return "原文未检测到中文/日文字符，按已是目标语保留原文。";
             }
             else if (!sourceIsCjk && targetIsCjk)
             {
-                if (!HasAsciiLetters(trimmed)) return true; // e.g. English into Chinese/Japanese
+                if (!HasAsciiLetters(trimmed)) return "原文未检测到英文字符，按已是目标语保留原文。";
             }
             else if (sourceIsCjk && targetIsCjk && IsDistinctiveScript(trimmed, targetLang))
             {
-                return true;                                // e.g. kana already present when going to Japanese
+                return "原文已包含目标语言特有文字，按规则保留原文。";
             }
         }
 
-        return false;
+        return null;
     }
 
     /// <summary>True when the text already carries the target language's distinguishing script.</summary>

@@ -8,6 +8,9 @@ public partial class LogViewerWindow : Window
     public LogViewerWindow(LogViewModel viewModel)
     {
         InitializeComponent();
+        // §自适应（2026-09-25）：MinWidth=700 / 固定 1060 宽在窄屏上会被工作区截住；
+        // 收敛尺寸上下限（日志列表自己带滚动）。Esc 已由本类处理，故只用 ConstrainSize。
+        Controls.DialogShell.ConstrainSize(this);
         DataContext = viewModel;
         Loaded += (_, _) =>
         {

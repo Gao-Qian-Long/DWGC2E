@@ -2,6 +2,7 @@
 # Input: new ResultDir below artifacts. Output: JSON and child logs; no APP build.
 param([string]$ResultDir)
 $ErrorActionPreference='Stop'
+Import-Module Microsoft.PowerShell.Utility -ErrorAction Stop
 $root=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 if(!$ResultDir){$ResultDir=Join-Path $root ('artifacts/publish-lock-test-'+[guid]::NewGuid().ToString('N'))}
 $ResultDir=[IO.Path]::GetFullPath($ResultDir)

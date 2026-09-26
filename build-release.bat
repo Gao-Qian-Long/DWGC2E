@@ -14,7 +14,7 @@ echo               产物会标记 uiSmoke=skipped，SUCCESS 摘要里也会明�
 echo ============================================================
 echo.
 
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\Publish-Desktop.ps1" %*
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\Invoke-LoggedDesktopPublish.ps1" %*
 set RC=%ERRORLEVEL%
 
 if not "%RC%"=="0" (

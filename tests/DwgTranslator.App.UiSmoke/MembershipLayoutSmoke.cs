@@ -66,11 +66,27 @@ public sealed partial class SmokeApp
 
             details.Width = 700;
             await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
-            Check(Grid.GetRow(devices) == 1 && Grid.GetColumnSpan(devices) == 2, "compact membership stacks device section");
+            // 会员卡的堆叠判定读的是 AccountScroll.ViewportWidth，**与 details.Width 无关**，所以"窄视口"
+            // 必须真的构造出来。§自适应（2026-09-25）把窗口下限放宽到 1024 之后，这一档在正常显示器上
+            // 就能真的拖出来（图标栏 64 + 页边距 32 ⇒ 视口 = 1024 - 96 = 928 < 1100），所以直接改窗口宽度：
+            // 这比"按请求尺寸强制布局"更贴近用户实际看到的状态，也不受强制布局的事件时序影响
+            // （后者曾让这条断言变成"看布局历史"的脆弱检查）。
+            var savedWindowWidth = window.Width;
+            var savedWindowHeight = window.Height;
+            FitNativeWindow(window, new Size(1024, 720));
+            await WaitForStableAsync(() => window.ActualWidth, "membership compact window 1024x720");
+            await NavIdleAsync();
+            page.UpdateLayout(); accountScroll.UpdateLayout();
+            Console.WriteLine($"INFO membership stack probe: window={window.ActualWidth:F1} min={window.MinWidth:F1} page={page.ActualWidth:F1} viewport={accountScroll.ViewportWidth:F1} details={details.ActualWidth:F1} row={Grid.GetRow(devices)} span={Grid.GetColumnSpan(devices)} compact={DwgTranslator.App.Views.Controls.ResponsiveLayout.GetIsCompact(window)}");
+            Check(Grid.GetRow(devices) == 1 && Grid.GetColumnSpan(devices) == 2,
+                $"compact membership stacks device section (viewport={accountScroll.ViewportWidth:F1}, row={Grid.GetRow(devices)}, span={Grid.GetColumnSpan(devices)})");
             Check(plans.Margin.Right == 0, "compact membership has no leftover column gutter");
             Capture(window, "membership-redesign-compact");
+            FitNativeWindow(window, new Size(savedWindowWidth, savedWindowHeight));
+            await WaitForStableAsync(() => window.ActualWidth, "membership wide window restored");
             details.Width = double.NaN;
-            await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+            await NavIdleAsync();
+            page.UpdateLayout(); accountScroll.UpdateLayout();
             Check(details.ActualWidth < 760 || Grid.GetColumn(devices) == 1, "wide membership uses two organized columns");
 
             vm.CurrentPage = MainViewModel.PageSettings; vm.SettingsSection = 5;

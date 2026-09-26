@@ -12,6 +12,7 @@ public partial class AccountPage : UserControl
     public AccountPage()
     {
         InitializeComponent();
+        AccountScroll.ScrollChanged += (_, _) => ConstrainAccountCanvas();
         Loaded += (_, _) => { var w = Window.GetWindow(this); if(w != null) { w.Activated -= Owner_Activated; w.Activated += Owner_Activated; } };
         Unloaded += (_, _) => { var w = Window.GetWindow(this); if(w != null) w.Activated -= Owner_Activated; };
         IsVisibleChanged += async (_, _) => { if (IsVisible && DataContext is MainViewModel vm) await vm.RefreshMembershipOnActivationAsync(); };
@@ -25,8 +26,16 @@ public partial class AccountPage : UserControl
     /// 窗口变窄后它仍按 ~1200 上报，判定因此永远 ≥1000、永远走"三并排 / 两列"宽布局；
     /// 而根部 ScrollViewer 又显式禁用了横向滚动（HorizontalScrollBarVisibility="Disabled"），
     /// 溢出部分没有滚动条可看，只能被裁掉 —— 这正是"右边被裁切"的成因。
-    /// 换成视口宽度后，窗口一变窄即按 620 / 1100 两个门槛重排为两行或单列。
+    /// 换成视口宽度后，窗口一变窄即按 Size.BreakpointTiles(620) / Size.BreakpointCards(1100)
+    /// 两个共享令牌重排为两行或单列（§自适应后这两个数值只存在于 Themes/Metrics.xaml）。
     /// </summary>
+    /// <summary>
+    /// §自适应（2026-09-25）：宽度断点一律从共享令牌读（Themes/Metrics.xaml 的 Size.Breakpoint*），
+    /// 不在页面代码里再写第二份字面量。取不到时退回改动前的原值，行为与历史一致。
+    /// </summary>
+    private double ResolveBreakpoint(string tokenKey, double fallback) =>
+        TryFindResource(tokenKey) is double value && value > 0 ? value : fallback;
+
     private double ResponsiveWidth()
     {
         var width = AccountScroll?.ViewportWidth ?? 0;
@@ -43,9 +52,21 @@ public partial class AccountPage : UserControl
     /// </summary>
     private void AccountScroll_SizeChanged(object sender, SizeChangedEventArgs e)
     {
+        ConstrainAccountCanvas();
         MembershipDetails_SizeChanged(sender, e);
         AccountIdentityLayout_SizeChanged(sender, e);
         AccountNavTiles_SizeChanged(sender, e);
+    }
+
+    private void ConstrainAccountCanvas()
+    {
+        // ScrollViewer measures a StackPanel at its desired width even with horizontal
+        // scrolling disabled.  Cap it to the *current* visible viewport rather than a
+        // fixed 1200 DIP, so narrow cards reflow and maximized cards fill the page.
+        var width = AccountScroll.ViewportWidth > 0
+            ? AccountScroll.ViewportWidth : AccountScroll.ActualWidth;
+        if (width > 0 && Math.Abs(AccountContentRoot.MaxWidth - width) > 0.5)
+            AccountContentRoot.MaxWidth = width;
     }
 
     private void MembershipDetails_SizeChanged(object sender, SizeChangedEventArgs e)
@@ -53,7 +74,7 @@ public partial class AccountPage : UserControl
         // At compact widths two cards make their fixed label/description columns compete for space.
         // Stack them before either card becomes narrower than its content.
         // 判定必须用**视口宽度**（见 ResponsiveWidth 的说明）：用内容自身宽度会永远走宽布局分支。
-        var compact = ResponsiveWidth() < 1100;
+        var compact = ResponsiveWidth() < ResolveBreakpoint("Size.BreakpointCards", 1100);
         Grid.SetColumn(DevicesCard, compact ? 0 : 1);
         Grid.SetRow(DevicesCard, compact ? 1 : 0);
         Grid.SetColumnSpan(PlansCard, compact ? 2 : 1);
@@ -66,7 +87,7 @@ public partial class AccountPage : UserControl
         if (AccountIdentityLayout == null || AccountIdentityHeader == null || AccountBenefits == null || AccountActionColumn == null) return;
         // The identity card has a fixed-size quota ring and action buttons; move that group below the
         // benefits on narrow cards, and let the quota bar itself follow the available width.
-        var stacked = ResponsiveWidth() < 1100;
+        var stacked = ResponsiveWidth() < ResolveBreakpoint("Size.BreakpointCards", 1100);
         AccountIdentityLayout.ColumnDefinitions[1].Width = stacked ? new GridLength(0) : GridLength.Auto;
         Grid.SetColumn(AccountIdentityHeader, 0);
         Grid.SetColumnSpan(AccountIdentityHeader, stacked ? 2 : 1);
@@ -85,8 +106,8 @@ public partial class AccountPage : UserControl
         if (AccountNavColumn0 == null || TranslateNavTile == null || GlossaryNavTile == null || OutputNavTile == null) return;
 
         var width = ResponsiveWidth();
-        var singleColumn = width < 620;
-        var twoRows = !singleColumn && width < 1100;
+        var singleColumn = width < ResolveBreakpoint("Size.BreakpointTiles", 620);
+        var twoRows = !singleColumn && width < ResolveBreakpoint("Size.BreakpointCards", 1100);
         var gutter = (GridLength)FindResource("Size.CardGutter");
 
         AccountNavColumn0.Width = new GridLength(1, GridUnitType.Star);

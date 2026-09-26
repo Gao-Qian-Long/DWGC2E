@@ -2,6 +2,7 @@
 using DwgTranslator.Core.Services;
 using System.IO;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Media;
 
 namespace DwgTranslator.App.Views;
@@ -31,7 +32,31 @@ public partial class EnvironmentCheckPanel : System.Windows.Controls.UserControl
         _warn = (Brush)FindResource("Brush.Warning");
         _unknown = (Brush)FindResource("Brush.TextDisabled");
 
+        EnvironmentStatusGrid.SizeChanged += (_, _) => UpdateStatusColumnLayout();
+        Loaded += (_, _) => UpdateStatusColumnLayout();
         Loaded += (_, _) => { RefreshStatus(); Dispatcher.BeginInvoke(new Action(PromptInstallIfNeeded), System.Windows.Threading.DispatcherPriority.ApplicationIdle); };
+    }
+
+    private void UpdateStatusColumnLayout()
+    {
+        var stacked = EnvironmentStatusGrid.ActualWidth < 960;
+        EnvironmentStatusGrid.ColumnDefinitions[0].Width = new GridLength(1, GridUnitType.Star);
+        EnvironmentStatusGrid.ColumnDefinitions[1].Width = stacked ? new GridLength(0) : new GridLength(24);
+        EnvironmentStatusGrid.ColumnDefinitions[2].Width = stacked ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
+
+        Place(AppStatusRow, 0, 0);
+        Place(RuntimeStatusRow, 1, 0);
+        Place(DataPathStatusRow, 2, 0);
+        Place(CadProductStatusRow, stacked ? 3 : 0, stacked ? 0 : 2);
+        Place(PluginStatusRow, stacked ? 4 : 1, stacked ? 0 : 2);
+        Place(AutoLoadStatusRow, stacked ? 5 : 2, stacked ? 0 : 2);
+
+        void Place(FrameworkElement row, int index, int column)
+        {
+            Grid.SetRow(row, index);
+            Grid.SetColumn(row, column);
+            Grid.SetColumnSpan(row, stacked ? 3 : 1);
+        }
     }
 
     private void RefreshStatus()

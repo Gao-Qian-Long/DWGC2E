@@ -1,5 +1,7 @@
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 
@@ -145,6 +147,240 @@ public static class ResponsiveLayout
             return VisualTreeHelper.GetParent(child);
         if (child is FrameworkContentElement content) return content.Parent;
         return LogicalTreeHelper.GetParent(child);
+    }
+
+    // ── 宽度分档行为（§自适应 2026-09-25 用户批注「用鼠标把界面横向一直缩小，界面没有任何的
+    //    自适应调节」）────────────────────────────────────────────────────────────────────
+    // 为什么用附加属性 + SizeChanged，而不是 DataTrigger / VisualStateManager：WPF 没有基于
+    // "容器实际宽度"的内置触发器。文件末尾记录的 AdaptiveCardGrid 就是前车之鉴——它把 600/900
+    // 写死在自己内部、与落点不符，最后被删掉。所以断点必须由 XAML 按落点声明
+    // （{DynamicResource Size.Breakpoint*}），行为只负责"档位翻转时切换"。
+    // 三条共同约束：
+    //   ① 判定一律用元素**自身** Math.Round(ActualWidth)，与外壳的 IsCompact 解耦，页面之间互不影响；
+    //   ② 档位没变就直接返回，因此不会自激，也不需要定时器或轮询；
+    //   ③ 只处理自己这一层的子元素，不递归可视化树。
+
+    /// <summary>
+    /// 附加在 Grid 上：自身可用宽低于该值时，把标记了 <see cref="StackTargetProperty"/> 的子元素
+    /// 折到其余内容下方并跨满整行（右侧栏/槽列让位）；回升到阈值以上时逐字还原原来的行、列、跨列与边距。
+    /// 这是 AccountPage 三处手写折行的通用化：页面侧只需声明阈值 + 标记"谁要折"。
+    /// </summary>
+    public static readonly DependencyProperty StackBelowProperty = DependencyProperty.RegisterAttached(
+        "StackBelow", typeof(double), typeof(ResponsiveLayout), new PropertyMetadata(double.NaN, OnStackBelowChanged));
+
+    public static double GetStackBelow(DependencyObject element) => (double)element.GetValue(StackBelowProperty);
+    public static void SetStackBelow(DependencyObject element, double value) => element.SetValue(StackBelowProperty, value);
+
+    /// <summary>附加在 StackBelow 宿主 Grid 的直接子元素上：窄档时该元素折到下方。</summary>
+    public static readonly DependencyProperty StackTargetProperty = DependencyProperty.RegisterAttached(
+        "StackTarget", typeof(bool), typeof(ResponsiveLayout), new PropertyMetadata(false));
+
+    public static bool GetStackTarget(DependencyObject element) => (bool)element.GetValue(StackTargetProperty);
+    public static void SetStackTarget(DependencyObject element, bool value) => element.SetValue(StackTargetProperty, value);
+
+    /// <summary>折行后补的上间距：沿用元素原有上边距，没有就用这个值（与 Spacing.Stack 同值）。</summary>
+    private const double StackGap = 16;
+
+    private sealed class GridSlot
+    {
+        public int Row { get; init; }
+        public int Column { get; init; }
+        public int ColumnSpan { get; init; }
+        public int RowSpan { get; init; }
+        public Thickness Margin { get; init; }
+    }
+
+    private static readonly DependencyProperty StackSlotProperty = DependencyProperty.RegisterAttached(
+        "StackSlot", typeof(GridSlot), typeof(ResponsiveLayout), new PropertyMetadata(null));
+    private static readonly DependencyProperty StackStateProperty = DependencyProperty.RegisterAttached(
+        "StackState", typeof(bool?), typeof(ResponsiveLayout), new PropertyMetadata(null));
+
+    private static void OnStackBelowChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is not Grid grid) return;
+        grid.SizeChanged -= OnStackHostSizeChanged;
+        grid.Loaded -= OnStackHostLoaded;
+        if (!double.IsNaN((double)e.NewValue))
+        {
+            grid.SizeChanged += OnStackHostSizeChanged;
+            grid.Loaded += OnStackHostLoaded;
+        }
+        ApplyStack(grid);
+    }
+
+    private static void OnStackHostLoaded(object sender, RoutedEventArgs e) => ApplyStack((Grid)sender);
+    private static void OnStackHostSizeChanged(object sender, SizeChangedEventArgs e) => ApplyStack((Grid)sender);
+
+    private static void ApplyStack(Grid grid)
+    {
+        var threshold = GetStackBelow(grid);
+        if (double.IsNaN(threshold) || threshold <= 0) return;
+        var width = Math.Round(grid.ActualWidth);
+        if (width <= 0) return;
+        var stacked = width < threshold;
+        if (grid.GetValue(StackStateProperty) is bool previous && previous == stacked) return;
+        grid.SetValue(StackStateProperty, stacked);
+
+        var targets = grid.Children.OfType<FrameworkElement>().Where(GetStackTarget).ToList();
+        if (targets.Count == 0) return;
+        var columns = Math.Max(1, grid.ColumnDefinitions.Count);
+        // 折行后从"未标记子元素占用的最后一行"往下排，避免与原有内容重叠。
+        var row = grid.Children.OfType<FrameworkElement>()
+            .Where(child => !GetStackTarget(child))
+            .Select(Grid.GetRow)
+            .DefaultIfEmpty(0)
+            .Max() + 1;
+        foreach (var target in targets)
+        {
+            if (stacked)
+            {
+                if (target.GetValue(StackSlotProperty) is not GridSlot)
+                    target.SetValue(StackSlotProperty, new GridSlot
+                    {
+                        Row = Grid.GetRow(target),
+                        Column = Grid.GetColumn(target),
+                        ColumnSpan = Grid.GetColumnSpan(target),
+                        RowSpan = Grid.GetRowSpan(target),
+                        Margin = target.Margin
+                    });
+                var slot = (GridSlot)target.GetValue(StackSlotProperty)!;
+                Grid.SetRow(target, row);
+                Grid.SetColumn(target, 0);
+                Grid.SetColumnSpan(target, columns);
+                Grid.SetRowSpan(target, 1);
+                var gap = slot.Margin.Top > 0 ? slot.Margin.Top : StackGap;
+                target.Margin = new Thickness(slot.Margin.Left, gap, slot.Margin.Right, slot.Margin.Bottom);
+                row++;
+            }
+            else if (target.GetValue(StackSlotProperty) is GridSlot slot)
+            {
+                Grid.SetRow(target, slot.Row);
+                Grid.SetColumn(target, slot.Column);
+                Grid.SetColumnSpan(target, slot.ColumnSpan);
+                Grid.SetRowSpan(target, slot.RowSpan);
+                target.Margin = slot.Margin;
+            }
+        }
+    }
+
+    /// <summary>
+    /// 附加在 UniformGrid 上：自身可用宽低于该值时改用 <see cref="UniformColumnsProperty"/> 指定的列数
+    /// （行数交回自动），回升后逐字还原 XAML 里声明的 Columns/Rows。用于 7 项指标带折成两行。
+    /// </summary>
+    public static readonly DependencyProperty UniformColumnsBelowProperty = DependencyProperty.RegisterAttached(
+        "UniformColumnsBelow", typeof(double), typeof(ResponsiveLayout), new PropertyMetadata(double.NaN, OnUniformColumnsBelowChanged));
+
+    public static double GetUniformColumnsBelow(DependencyObject element) => (double)element.GetValue(UniformColumnsBelowProperty);
+    public static void SetUniformColumnsBelow(DependencyObject element, double value) => element.SetValue(UniformColumnsBelowProperty, value);
+
+    /// <summary>窄档列数；宽档沿用 XAML 里声明的 Columns。</summary>
+    public static readonly DependencyProperty UniformColumnsProperty = DependencyProperty.RegisterAttached(
+        "UniformColumns", typeof(int), typeof(ResponsiveLayout), new PropertyMetadata(1));
+
+    public static int GetUniformColumns(DependencyObject element) => (int)element.GetValue(UniformColumnsProperty);
+    public static void SetUniformColumns(DependencyObject element, int value) => element.SetValue(UniformColumnsProperty, value);
+
+    private sealed class UniformSlot
+    {
+        public int Columns { get; init; }
+        public int Rows { get; init; }
+    }
+
+    private static readonly DependencyProperty UniformSlotProperty = DependencyProperty.RegisterAttached(
+        "UniformSlot", typeof(UniformSlot), typeof(ResponsiveLayout), new PropertyMetadata(null));
+    private static readonly DependencyProperty UniformStateProperty = DependencyProperty.RegisterAttached(
+        "UniformState", typeof(bool?), typeof(ResponsiveLayout), new PropertyMetadata(null));
+
+    private static void OnUniformColumnsBelowChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is not UniformGrid grid) return;
+        grid.SizeChanged -= OnUniformHostSizeChanged;
+        grid.Loaded -= OnUniformHostLoaded;
+        if (!double.IsNaN((double)e.NewValue))
+        {
+            grid.SizeChanged += OnUniformHostSizeChanged;
+            grid.Loaded += OnUniformHostLoaded;
+        }
+        ApplyUniformColumns(grid);
+    }
+
+    private static void OnUniformHostLoaded(object sender, RoutedEventArgs e) => ApplyUniformColumns((UniformGrid)sender);
+    private static void OnUniformHostSizeChanged(object sender, SizeChangedEventArgs e) => ApplyUniformColumns((UniformGrid)sender);
+
+    private static void ApplyUniformColumns(UniformGrid grid)
+    {
+        var threshold = GetUniformColumnsBelow(grid);
+        if (double.IsNaN(threshold) || threshold <= 0) return;
+        var width = Math.Round(grid.ActualWidth);
+        if (width <= 0) return;
+        var narrow = width < threshold;
+        if (grid.GetValue(UniformStateProperty) is bool previous && previous == narrow) return;
+        grid.SetValue(UniformStateProperty, narrow);
+        if (narrow)
+        {
+            if (grid.GetValue(UniformSlotProperty) is not UniformSlot)
+                grid.SetValue(UniformSlotProperty, new UniformSlot { Columns = grid.Columns, Rows = grid.Rows });
+            grid.Columns = Math.Max(1, GetUniformColumns(grid));
+            grid.Rows = 0;
+        }
+        else if (grid.GetValue(UniformSlotProperty) is UniformSlot slot)
+        {
+            grid.Columns = slot.Columns;
+            grid.Rows = slot.Rows;
+        }
+    }
+
+    /// <summary>
+    /// 附加在页面级 ScrollViewer 上：自身可用宽低于该值时把纵向滚动从 Disabled 改为 Auto。
+    /// 页面在窄档把并排两栏折成上下之后总高会超过视口，必须靠这一层滚动兜住，否则底部内容被裁掉。
+    /// 宽档还原为原值（Disabled 时滚动条不出现、内容仍按视口约束，所以宽档几何逐字不变）。
+    /// </summary>
+    public static readonly DependencyProperty PageScrollBelowProperty = DependencyProperty.RegisterAttached(
+        "PageScrollBelow", typeof(double), typeof(ResponsiveLayout), new PropertyMetadata(double.NaN, OnPageScrollBelowChanged));
+
+    public static double GetPageScrollBelow(DependencyObject element) => (double)element.GetValue(PageScrollBelowProperty);
+    public static void SetPageScrollBelow(DependencyObject element, double value) => element.SetValue(PageScrollBelowProperty, value);
+
+    private static readonly DependencyProperty PageScrollOriginalProperty = DependencyProperty.RegisterAttached(
+        "PageScrollOriginal", typeof(ScrollBarVisibility?), typeof(ResponsiveLayout), new PropertyMetadata(null));
+    private static readonly DependencyProperty PageScrollStateProperty = DependencyProperty.RegisterAttached(
+        "PageScrollState", typeof(bool?), typeof(ResponsiveLayout), new PropertyMetadata(null));
+
+    private static void OnPageScrollBelowChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is not ScrollViewer viewer) return;
+        viewer.SizeChanged -= OnPageScrollHostSizeChanged;
+        viewer.Loaded -= OnPageScrollHostLoaded;
+        if (!double.IsNaN((double)e.NewValue))
+        {
+            viewer.SizeChanged += OnPageScrollHostSizeChanged;
+            viewer.Loaded += OnPageScrollHostLoaded;
+        }
+        ApplyPageScroll(viewer);
+    }
+
+    private static void OnPageScrollHostLoaded(object sender, RoutedEventArgs e) => ApplyPageScroll((ScrollViewer)sender);
+    private static void OnPageScrollHostSizeChanged(object sender, SizeChangedEventArgs e) => ApplyPageScroll((ScrollViewer)sender);
+
+    private static void ApplyPageScroll(ScrollViewer viewer)
+    {
+        var threshold = GetPageScrollBelow(viewer);
+        if (double.IsNaN(threshold) || threshold <= 0) return;
+        var width = Math.Round(viewer.ActualWidth);
+        if (width <= 0) return;
+        var scrollable = width < threshold;
+        if (viewer.GetValue(PageScrollStateProperty) is bool previous && previous == scrollable) return;
+        viewer.SetValue(PageScrollStateProperty, scrollable);
+        if (scrollable)
+        {
+            if (viewer.GetValue(PageScrollOriginalProperty) is not ScrollBarVisibility)
+                viewer.SetValue(PageScrollOriginalProperty, viewer.VerticalScrollBarVisibility);
+            viewer.VerticalScrollBarVisibility = ScrollBarVisibility.Auto;
+        }
+        else if (viewer.GetValue(PageScrollOriginalProperty) is ScrollBarVisibility original)
+        {
+            viewer.VerticalScrollBarVisibility = original;
+        }
     }
 }
 

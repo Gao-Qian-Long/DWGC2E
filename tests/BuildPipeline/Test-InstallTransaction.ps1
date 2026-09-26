@@ -1,6 +1,7 @@
 ﻿# Purpose: inject installation failures only into isolated copies and verify exact rollback.
 param([string]$ResultDir)
 $ErrorActionPreference='Stop'
+Import-Module Microsoft.PowerShell.Utility -ErrorAction Stop
 $root=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 if(-not $ResultDir){$ResultDir=Join-Path $root ('artifacts/installer-safety-20260916-resumed/installer-transaction/run-'+[guid]::NewGuid().ToString('N'))}
 [IO.Directory]::CreateDirectory($ResultDir)|Out-Null

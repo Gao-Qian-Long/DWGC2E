@@ -1,5 +1,6 @@
 param([string]$ExecutablePath)
 $ErrorActionPreference='Stop'
+Import-Module Microsoft.PowerShell.Utility -ErrorAction Stop
 $root=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 $script=Join-Path $root 'tools/Refresh-DesktopShellIcon.ps1'
 if(-not $ExecutablePath){$ExecutablePath=Join-Path $root 'release/QLCAD.exe'}

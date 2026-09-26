@@ -18,43 +18,82 @@ public sealed partial class SmokeApp
         var root = (FrameworkElement)window.Content;
         var host = (FrameworkElement)window.FindName("PageHost");
         Check((double)Resources["FontSize.Body"] == 14 && (double)Resources["FontSize.Table"] == 14, "refinement body and table tokens 14 DIP");
-        // §L5 1120×640 是最小支持尺寸，该尺寸下 compact 分支必须真正生效，随后恢复为非 compact。
-        window.Width = 1120; window.Height = 640;
-        await WaitForStableAsync(() => window.ActualWidth, "window width 1120x640");
-        await WaitForStableAsync(() => host.ActualWidth, "page canvas 1120x640");
+        // §自适应（2026-09-25 用户批注「用鼠标把界面横向一直缩小，界面没有任何的自适应调节」）：
+        // 常规显示器上的最小支持宽度是 1024 DIP（MainWindow.xaml 的 MinWidth），它落在**图标栏**那一段
+        // （窗口 ≤1358 收侧栏），所以最小窗口 = 图标侧栏 64 + 页面可用宽 928。
+        // 关键：这一档必须靠"页面自己重排"成立，而不是靠内容被裁掉——下面 size.Width == 1024 的窄档断言
+        // 逐页检查两栏堆叠 / 表格收列 / 页面滚动是否真的生效（用户看到的问题正是这些没生效）。
+        // 同时尝试更窄宽度时 WPF 必须把窗口约束在最小宽度，避免内容横向裁切。
+        // The preceding 1366×960 native toast probe can trigger Windows snap/maximize
+        // on a 960-DIP monitor. Width/Height setters do not resize a maximized window.
+        window.WindowState = WindowState.Normal;
+        var workAreaWidth = SystemParameters.WorkArea.Width;
+        var minimumLayoutWidth = Math.Min(1024, Math.Max(800, workAreaWidth - 20));
+        FitNativeWindow(window, new Size(minimumLayoutWidth, 640));
+        await WaitForStableAsync(() => window.ActualWidth, $"window width {minimumLayoutWidth:F0}x640");
+        await WaitForStableAsync(() => host.ActualWidth, $"page canvas {minimumLayoutWidth:F0}x640");
         var sidebarProbe = (System.Windows.Controls.ColumnDefinition)window.FindName("SidebarColumn");
-        Console.WriteLine($"INFO compact probe: actual={window.ActualWidth:F1}x{window.ActualHeight:F1} content={((FrameworkElement)window.Content).ActualWidth:F1} sidebar={sidebarProbe.Width.Value:F1} host={host.ActualWidth:F1} pageMargin={window.Resources["Spacing.Page"]}");
-        Check(ResponsiveLayout.GetIsCompact(window) && (window.MinWidth <= 1120 && window.MinHeight <= 640),
-            $"compact layout engages at the supported minimum window size (min={window.MinWidth}x{window.MinHeight}, actual={window.ActualWidth:F1}x{window.ActualHeight:F1}, content={((FrameworkElement)window.Content).ActualWidth:F1}, host={host.ActualWidth:F1}, sidebar={sidebarProbe.Width.Value:F1}, compact={ResponsiveLayout.GetIsCompact(window)})");
-        Check(Math.Abs(((System.Windows.Controls.ColumnDefinition)window.FindName("SidebarColumn")).Width.Value - 64) < 0.1,
-            "compact sidebar collapses to the 64 DIP icon rail");
+        Console.WriteLine($"INFO minimum-window probe: actual={window.ActualWidth:F1}x{window.ActualHeight:F1} min={window.MinWidth:F1}x{window.MinHeight:F1} content={((FrameworkElement)window.Content).ActualWidth:F1} sidebar={sidebarProbe.Width.Value:F1} host={host.ActualWidth:F1} pageMargin={window.Resources["Spacing.Page"]}");
+        Check(ResponsiveLayout.GetIsCompact(window) && window.MinWidth <= 1024 && window.MinHeight <= 640,
+            $"the supported minimum window uses the icon rail (min={window.MinWidth}x{window.MinHeight}, actual={window.ActualWidth:F1}x{window.ActualHeight:F1}, content={((FrameworkElement)window.Content).ActualWidth:F1}, host={host.ActualWidth:F1}, sidebar={sidebarProbe.Width.Value:F1}, compact={ResponsiveLayout.GetIsCompact(window)})");
+        Check(Math.Abs(sidebarProbe.Width.Value - 64) < 0.1,
+            $"the supported minimum collapses the sidebar to the 64 DIP icon rail (sidebar={sidebarProbe.Width.Value:F1})");
+        window.Width = Math.Max(640, window.MinWidth - 100);
+        await WaitForStableAsync(() => window.ActualWidth, "window minimum-width resize constraint");
+        Check(window.ActualWidth + 1 >= window.MinWidth,
+            $"resizing narrower than the minimum cannot clip the window content (requested={window.MinWidth - 100:F1}, actual={window.ActualWidth:F1}, min={window.MinWidth:F1})");
         vm.CurrentPage = MainViewModel.PageSettings;
         await NavIdleAsync();
-        var compactSettings = FindVisual<SettingsPage>(window);
-        Check(((FrameworkElement)compactSettings.FindName("CompactSections")).IsVisible,
-            "compact window exposes the section picker instead of the hidden nav column");
+        var minimumSettings = FindVisual<SettingsPage>(window);
+        Check(((FrameworkElement)minimumSettings.FindName("CompactSections")).IsVisible
+              && !((FrameworkElement)minimumSettings.FindName("SettingsNavCard")).IsVisible,
+            "the icon-rail minimum window exposes the section picker instead of the nav column");
         vm.CurrentPage = "translate";
         await NavIdleAsync();
-        window.Width = 1280; window.Height = 720;
-        await WaitForStableAsync(() => window.ActualWidth, "window width 1280x720");
-        var workAreaWidth = SystemParameters.WorkArea.Width;
-        if (workAreaWidth >= 1152)
-            Check(!ResponsiveLayout.GetIsCompact(window), "leaving the minimum restores the full sidebar");
+        // 宽档对齐（"界面显示要一致"）：离开图标栏那一段后必须恢复展开侧栏。
+        if (FitsNativeWindow(window, new Size(1440, 900)))
+        {
+            FitNativeWindow(window, new Size(1440, 900));
+            await WaitForStableAsync(() => window.ActualWidth, "window width 1440x900");
+            Check(!ResponsiveLayout.GetIsCompact(window), "leaving the compact band restores the full sidebar");
+        }
         else
         {
-            Check(ResponsiveLayout.GetIsCompact(window), "compact layout remains active when the display cannot fit its expanded breakpoint");
-            Console.WriteLine($"SKIP expanded-sidebar native resize checks: work area is {workAreaWidth:F1} DIP wide");
+            Console.WriteLine($"SKIP 1440x900 native probe: work area is {SystemParameters.WorkArea.Width:F1}x{SystemParameters.WorkArea.Height:F1} DIP");
         }
-        var nativeLayoutSizes = workAreaWidth >= 1280
-            ? new[] { new Size(1280,720), new Size(1366,768), new Size(1440,900), new Size(1920,1080) }
-            : Array.Empty<Size>();
-        foreach (var size in nativeLayoutSizes)
+        // §自适应 迟滞行为：从图标栏那一段往上拖时，窗口落在 Enter(1358)..Leave(1374) 之间必须**保持**
+        // 图标栏，越过 Leave 才展开——否则侧栏会在断点上反复收放，页面跟着抖。
+        // 这一段只能靠"先窄后宽"构造出来（从宽档往下拖时，1358 就已经收起了）。
+        FitNativeWindow(window, new Size(1024, 720)); await WaitForStableAsync(() => window.ActualWidth, "hysteresis entry 1024");
+        if (FitsNativeWindow(window, new Size(1380, 720)))
         {
-            window.Width = size.Width; window.Height = size.Height;
+            FitNativeWindow(window, new Size(1366, 720)); await WaitForStableAsync(() => window.ActualWidth, "hysteresis hold 1366");
+            Check(ResponsiveLayout.GetIsCompact(window),
+                "the icon rail holds inside the hysteresis band while growing from the narrow side");
+            FitNativeWindow(window, new Size(1380, 720)); await WaitForStableAsync(() => window.ActualWidth, "hysteresis exit 1380");
+            Check(!ResponsiveLayout.GetIsCompact(window), "passing the hysteresis ceiling restores the full sidebar");
+        }
+        else Console.WriteLine("SKIP hysteresis native probe: 1380x720 DIP does not fit the monitor work area");
+        var nativeLayoutSizes = workAreaWidth >= 1024
+            ? new[] { new Size(1024,720), new Size(1120,720), new Size(1366,768), new Size(1440,900), new Size(1920,1080) }
+            : Array.Empty<Size>();
+        foreach (var size in nativeLayoutSizes.Where(size => FitsNativeWindow(window, size)))
+        {
+            FitNativeWindow(window, size);
             // 窗口尺寸由 OS/合成器异步生效：必须等客户区真正稳定后再量，否则会读到旧尺寸。
             await WaitForStableAsync(() => window.ActualWidth, $"window width {size.Width}x{size.Height}");
             await WaitForStableAsync(() => host.ActualWidth, $"page canvas {size.Width}x{size.Height}");
-            var expectedCompact = false; // The desktop shell enforces a usable normal-workspace minimum.
+            // 图标栏一直用到 1358：1024/1120 走图标栏，1366 及以上走展开栏（与 MainWindow.xaml.cs 对齐）。
+            var expectedCompact = size.Width <= 1358;
+            if (ResponsiveLayout.GetIsCompact(window) != expectedCompact && size.Width > 1358)
+            {
+                // 迟滞：从图标栏那一段走到 1366（仍在 Leave=1374 之内）会保持图标栏。
+                // 矩阵要量的是"稳定态"，所以先拉宽到 1600 越过迟滞带，再回到目标宽度。
+                FitNativeWindow(window, new Size(Math.Min(Math.Max(size.Width, 1600), NativeWorkAreaLimit(window).Width), size.Height));
+                await WaitForStableAsync(() => window.ActualWidth, "hysteresis reset 1600");
+                FitNativeWindow(window, size);
+                await WaitForStableAsync(() => window.ActualWidth, $"window width {size.Width}x{size.Height}");
+            }
             Check(ResponsiveLayout.GetIsCompact(window) == expectedCompact, "sidebar breakpoint " + size);
             Check(host.ActualWidth <= size.Width - (expectedCompact ? 64 : 200) + 1, $"no oversized minimum page canvas {size} (host={host.ActualWidth:F1}, window={window.ActualWidth:F1}, page={vm.CurrentPage})");
             foreach (var page in new[] { "translate", "batch", "glossary", "account", "settings" })
@@ -73,6 +112,34 @@ public sealed partial class SmokeApp
                     var summaryRight = summary.TranslatePoint(new Point(summary.ActualWidth, 0), root).X;
                     Check(summary.IsVisible && summary.ActualHeight >= 64 && summaryRight <= root.ActualWidth + 1,
                         "translation summary remains fully visible " + size);
+                    if (size.Width == 1024)
+                    {
+                        // §自适应（2026-09-25）：最小窗口必须真的重排——两栏折成上下 + 整块可纵向滚动，
+                        // 而不是把右栏裁出视口。这正是用户报的"界面没有任何的自适应调节"。
+                        var settingsColumn = (FrameworkElement)translate.FindName("TranslationSettingsScroll");
+                        var workspace = (FrameworkElement)translate.FindName("TranslationWorkspace");
+                        var queueSurface = (FrameworkElement)translate.FindName("QueueSurface");
+                        Check(Grid.GetRow(settingsColumn) == 1 && Grid.GetColumnSpan(settingsColumn) == 2,
+                            $"the minimum window stacks the settings column under the queue (row={Grid.GetRow(settingsColumn)}, span={Grid.GetColumnSpan(settingsColumn)})");
+                        Check(Grid.GetColumnSpan(queueSurface) == 2
+                              && queueSurface.ActualWidth >= workspace.ActualWidth - 24,
+                            $"the stacked queue occupies the full workspace instead of a clipped half-page (queue={queueSurface.ActualWidth:F1}, workspace={workspace.ActualWidth:F1})");
+                        Check(((ScrollViewer)translate.FindName("WorkspaceScroll")).VerticalScrollBarVisibility == ScrollBarVisibility.Auto,
+                            "the stacked workspace becomes scrollable so the settings cards stay reachable");
+                        var narrowQueue = (DataGrid)translate.FindName("DrawingQueue");
+                        Check(narrowQueue.Columns.Single(c => Equals(c.Header, "状态与进度")).Visibility == Visibility.Collapsed
+                              && narrowQueue.Columns.Single(c => Equals(c.Header, "状态")).Visibility == Visibility.Visible,
+                            "the stacked queue keeps its full column set (it owns the whole page width)");
+                        var narrowAction = narrowQueue.Columns.Single(c => Equals(c.Header, "操作")).ActualWidth;
+                        Check(Math.Abs(narrowAction - 172) < 0.6,
+                            $"the queue action column keeps its declared width at the minimum window (actual={narrowAction:F1})");
+                        var queueTail = narrowQueue.Columns.Single(c => Equals(c.Header, ""));
+                        var queueActionHeader = FindVisuals<System.Windows.Controls.Primitives.DataGridColumnHeader>(narrowQueue)
+                            .Single(c => Equals(c.Content, "操作"));
+                        var queueRight = queueActionHeader.TranslatePoint(new Point(queueActionHeader.ActualWidth, 0), narrowQueue).X;
+                        Check(queueTail.Visibility == Visibility.Collapsed && narrowQueue.ActualWidth - queueRight <= 18,
+                            $"minimum queue allocates spare width to content, not an empty tail (gap={narrowQueue.ActualWidth - queueRight:F1})");
+                    }
                     var metricLabels = FindVisuals<TextBlock>(metrics).Where(x => x.IsVisible).Select(x => x.Text).ToHashSet();
                     // "待校对"改叫"未校对"：校对是可选的（2026-09-22 用户批注「校对不是必须的」），
                     // 它不再是流程上的一道门，所以标签必须改成描述性的，而不是"待办"的语气。
@@ -81,15 +148,25 @@ public sealed partial class SmokeApp
                     Check(nextStep.IsVisible && nextStep.ActualWidth >= 80,
                         "translation next-step guidance remains visible " + size);
 
-                    if (size.Width == 1280 && size.Height == 720)
+                    if (size.Width == 1024 && size.Height == 720)
                     {
                         var chooseFile = (Button)translate.FindName("EmptySelectFileButton");
                         var bottom = chooseFile.TranslatePoint(new Point(0, chooseFile.ActualHeight), root).Y;
                         Check(chooseFile.IsVisible && chooseFile.ActualHeight >= 30 && bottom <= root.ActualHeight + 1,
-                            "minimum window keeps primary file CTA fully visible");
+                            "minimum window keeps primary file CTA fully visible even with the stacked workspace");
+                        var rows = CreateMinimumTableRows();
+                        try
+                        {
+                            foreach (var row in rows) vm.DrawingFiles.Add(row);
+                            await NavIdleAsync();
+                            Capture(window, "minimum-translate-with-rows");
+                            var output = System.IO.Path.GetFullPath(Environment.GetEnvironmentVariable("DWGC2E_UI_SMOKE_OUTPUT") ?? "artifacts/ui-smoke");
+                            CapturePhysicalWindow(window, System.IO.Path.Combine(output, "physical-minimum-translate-with-rows.png"));
+                        }
+                        finally { foreach (var row in rows) vm.DrawingFiles.Remove(row); }
                     }
 
-                    if (size.Width is 1280 or 1366)
+                    if (size.Width is 1366 or 1440)
                     {
                         var failed = new DrawingFileItem(System.IO.Path.Combine(AppDataDir, $"refinement-failed-{size.Width}.dwg"));
                         failed.AttachTask(new DwgTranslator.Core.Tasks.TranslationTask(failed.FullPath)
@@ -125,6 +202,13 @@ public sealed partial class SmokeApp
                             queue.UpdateLayout();
                             Check(ScrollViewer.GetHorizontalScrollBarVisibility(queue) == ScrollBarVisibility.Disabled,
                                 "translation queue does not rely on horizontal scrolling " + size);
+                            var exportColumn = queue.Columns.Single(c => Equals(c.Header, "导出"));
+                            Check(exportColumn is DataGridTemplateColumn && exportColumn.ActualWidth >= 59.5,
+                                $"translation export selector matches the glossary template and keeps its full header {size}");
+                            var exportSelector = FindVisuals<CheckBox>(queue).FirstOrDefault(c =>
+                                AutomationProperties.GetName(c) == "选择导出图纸");
+                            Check(exportSelector != null && exportSelector.ActualWidth > 0 && exportSelector.ActualHeight > 0,
+                                $"translation export checkbox is fully rendered {size}");
                             var actionHeader = FindVisuals<System.Windows.Controls.Primitives.DataGridColumnHeader>(queue)
                                 .Single(x => Equals(x.Content, "操作"));
                             var actionRight = actionHeader.TranslatePoint(new Point(actionHeader.ActualWidth, 0), queue).X;
@@ -134,8 +218,9 @@ public sealed partial class SmokeApp
                                 "translation action column is not clipped " + size);
                             // 「表头不出界」不等于"按钮没被压窄"：列宽合计超出可用宽时，表格会按比例压缩
                             // **所有**列。文件名改成固定宽之后（用户批注 2026-09-22），这条直接量按钮与单元格的
-                            // 关系，防止把「移除」压掉。1280 下队列只有 601 DIP，压掉第三个按钮是既有的窄窗
-                            // 限制（改前也同样贴边），故从 1366 起断言。
+                            // 关系，防止把「移除」压掉。窗口下限抬到 1366 之后队列在最窄窗口也有 707 DIP
+                            // （≥ 固定列 680），旧的"1280 下 601 DIP 会压掉第三个按钮"的窄窗豁免不再成立：
+                            // 矩阵里每一档都必须三按钮齐全。
                             if (size.Width >= 1366)
                             {
                                 var widestActionCell = FindVisuals<System.Windows.Controls.DataGridCell>(queue)
@@ -205,6 +290,13 @@ public sealed partial class SmokeApp
                 if (page == "glossary")
                 {
                     var glossary = FindVisual<GlossaryPage>(window);
+                    var selectionToolbar = (FrameworkElement)glossary.FindName("SelectionToolbar");
+                    selectionToolbar.UpdateLayout();
+                    var clearSelectionButton = FindVisuals<Button>(selectionToolbar).Single(b => Equals(b.Content, "取消选择"));
+                    var clearSelectionBounds = clearSelectionButton.TransformToAncestor(selectionToolbar)
+                        .TransformBounds(new Rect(0, 0, clearSelectionButton.ActualWidth, clearSelectionButton.ActualHeight));
+                    Check(clearSelectionBounds.Left >= -1 && clearSelectionBounds.Right <= selectionToolbar.ActualWidth + 1,
+                        "glossary selection actions wrap without clipping the clear-selection button " + size);
                     var grid = (DataGrid)glossary.FindName("TermList");
                     Check(grid.ActualHeight >= 40, "glossary retains usable table viewport " + size);
                     grid.UpdateLayout();
@@ -215,6 +307,13 @@ public sealed partial class SmokeApp
                     var actionHeader = FindVisuals<System.Windows.Controls.Primitives.DataGridColumnHeader>(grid).Single(h => Equals(h.Content, "操作"));
                     var actionRight = actionHeader.TranslatePoint(new Point(actionHeader.ActualWidth, 0), grid).X;
                     Check(actionHeader.IsVisible && actionRight <= grid.ActualWidth + 1, "glossary action column is not clipped " + size);
+                    // §自适应：这张表刻意不做窄档收列（「分类」「启用」是行内可交互控件，收进只读的合并列
+                    // 等于在窄档拿走编辑/启用能力），它用"列宽合计不超过视口"来证明没有裁切：列都带 MinWidth，
+                    // 一旦放不下就会出横向滚动条（本表是唯一保留 Auto 兜底的表格），合计必然超过视口。
+                    var visibleColumns = grid.Columns.Where(c => c.Visibility == Visibility.Visible).ToArray();
+                    var declaredColumns = visibleColumns.Sum(c => c.ActualWidth);
+                    Check(declaredColumns <= grid.ActualWidth + 1,
+                        $"glossary columns fit the viewport without clipping (declared={declaredColumns:F1}, table={grid.ActualWidth:F1}) {size}");
                     if (grid.Items.Count > 0)
                     {
                         grid.ScrollIntoView(grid.Items[0]);
@@ -237,8 +336,24 @@ public sealed partial class SmokeApp
                 }
                 if (page == "batch")
                 {
+                    if (size.Width == 1024)
+                    {
+                        var rows = CreateMinimumTableRows();
+                        try
+                        {
+                            foreach (var row in rows) vm.DrawingFiles.Add(row);
+                            await NavIdleAsync();
+                            Capture(window, "minimum-batch-with-rows");
+                            var output = System.IO.Path.GetFullPath(Environment.GetEnvironmentVariable("DWGC2E_UI_SMOKE_OUTPUT") ?? "artifacts/ui-smoke");
+                            CapturePhysicalWindow(window, System.IO.Path.Combine(output, "physical-minimum-batch-with-rows.png"));
+                        }
+                        finally { foreach (var row in rows) vm.DrawingFiles.Remove(row); }
+                    }
                     var batch = FindVisual<BatchTasksPage>(window);
                     var taskTable = (DataGrid)batch.FindName("TaskTable");
+                    Check(taskTable.Columns[0] is DataGridTemplateColumn
+                          && FindVisuals<Button>(batch).Any(x => Equals(x.Content, "批量导出所选")),
+                        "task centre keeps selection and batch export controls " + size);
                     Check(taskTable.ActualHeight >= 40, "batch retains usable table viewport " + size);
                     Check(ScrollViewer.GetHorizontalScrollBarVisibility(taskTable) == ScrollBarVisibility.Disabled,
                         "batch table does not rely on horizontal scrolling " + size);
@@ -252,9 +367,37 @@ public sealed partial class SmokeApp
                     Console.WriteLine($"TASKTABLE_WIDTH {size} table={taskTable.ActualWidth:F1} actionRight={actionRight:F1}");
                     Check(actionHeader.IsVisible && actionRight <= taskTable.ActualWidth + 1,
                         "batch action column is not clipped " + size);
+                    if (size.Width == 1024)
+                    {
+                        // §自适应（用户 2026-09-25 选定"次要列合并进一个单元格"）：窄档把阶段/进度/最近更新
+                        // 并成一格，而不是按比例压缩所有列把「查看详情」压掉。
+                        Check(taskTable.Columns.Single(c => Equals(c.Header, "阶段与进度")).Visibility == Visibility.Visible
+                              && taskTable.Columns.Single(c => Equals(c.Header, "阶段")).Visibility == Visibility.Collapsed
+                              && taskTable.Columns.Single(c => Equals(c.Header, "进度")).Visibility == Visibility.Collapsed
+                              && taskTable.Columns.Single(c => Equals(c.Header, "最近更新")).Visibility == Visibility.Collapsed,
+                            "narrow window merges the task table's secondary columns into one cell");
+                        var narrowTaskAction = taskTable.Columns.Single(c => Equals(c.Header, "操作")).ActualWidth;
+                        Check(Math.Abs(narrowTaskAction - 118) < 0.6,
+                            $"the task table action column keeps its declared width at the minimum window (actual={narrowTaskAction:F1})");
+                        var taskTail = taskTable.Columns.Single(c => Equals(c.Header, ""));
+                        var taskLastHeader = FindVisuals<System.Windows.Controls.Primitives.DataGridColumnHeader>(taskTable)
+                            .Single(c => Equals(c.Content, "阶段与进度"));
+                        var taskRight = taskLastHeader.TranslatePoint(new Point(taskLastHeader.ActualWidth, 0), taskTable).X;
+                        Check(taskTail.Visibility == Visibility.Collapsed && taskTable.ActualWidth - taskRight <= 18,
+                            $"minimum task table allocates spare width to content, not an empty tail (gap={taskTable.ActualWidth - taskRight:F1})");
+                    }
+                    else if (size.Width >= 1120)
+                    {
+                        var taskTail = taskTable.Columns.Single(c => Equals(c.Header, ""));
+                        Check(taskTail.Visibility == Visibility.Collapsed && taskTable.ActualWidth - actionRight <= 18,
+                            $"wide task table fills the row with real columns, not an empty tail (gap={taskTable.ActualWidth - actionRight:F1}, window={size.Width})");
+                        Check(taskTable.Columns.Single(c => Equals(c.Header, "任务 / 图纸")).ActualWidth >= 184
+                              && taskTable.Columns.Single(c => Equals(c.Header, "最近更新")).ActualWidth >= 152,
+                            "wide task table preserves readable filename and timestamp columns " + size);
+                    }
 
                     var previousTask = vm.SelectedBatchTask;
-                    if (size.Width is 1280 or 1366)
+                    if (size.Width is 1366 or 1440)
                     {
                         var now = DateTime.Now;
                         var outputPath = System.IO.Path.Combine(AppDataDir, $"batch-exported-{size.Width}.dwg");
@@ -318,6 +461,12 @@ public sealed partial class SmokeApp
                             await Dispatcher.InvokeAsync(() => {}, DispatcherPriority.ApplicationIdle);
                             taskTable.ScrollIntoView(failed);
                             taskTable.UpdateLayout();
+                            if (size.Width == 1440)
+                            {
+                                Capture(window, "wide-batch-with-rows-1440");
+                                var output = System.IO.Path.GetFullPath(Environment.GetEnvironmentVariable("DWGC2E_UI_SMOKE_OUTPUT") ?? "artifacts/ui-smoke");
+                                CapturePhysicalWindow(window, System.IO.Path.Combine(output, "physical-wide-batch-with-rows-1440.png"));
+                            }
 
                             Check(review.WorkflowStatusText == "待导出" && completed.WorkflowStatusText == "待导出" && exported.WorkflowStatusText == "已导出",
                                 "batch rows distinguish export-ready and exported states " + size);
@@ -401,7 +550,7 @@ public sealed partial class SmokeApp
                                 "task drawer hands wheel input to the page at scroll boundaries " + size);
                             Check(ResponsiveLayout.GetHandoffMouseWheelAtBoundary(taskTable),
                                 "DataGrid precision wheel behavior is applied globally " + size);
-                            if (size.Width == 1280)
+                            if (size.Width == 1366)
                             {
                                 var closeButton = (Button)batch.FindName("TaskDrawerCloseButton");
                                 await WaitUntil(
@@ -454,18 +603,49 @@ public sealed partial class SmokeApp
                         await Dispatcher.InvokeAsync(() => {}, DispatcherPriority.ApplicationIdle);
                         var taskDrawer = (FrameworkElement)batch.FindName("TaskDetailDrawer");
                         Check(taskDrawer.ActualHeight >= 160 && taskDrawer.ActualWidth <= host.ActualWidth, "task drawer retains page height " + size);
+                        // Wait for the intentional slide-in to settle before treating the drawer's
+                        // transient offscreen frame as a layout failure or capturing a clipped image.
+                        await Task.Delay(450);
+                        await Dispatcher.InvokeAsync(() => {}, DispatcherPriority.ApplicationIdle);
+                        var drawerRight = taskDrawer.TranslatePoint(new Point(taskDrawer.ActualWidth, 0), batch).X;
+                        Check(drawerRight <= batch.ActualWidth + 0.5 && drawerRight <= host.ActualWidth + 0.5,
+                            $"task drawer settles inside the visible page {size}: right={drawerRight:F1}, page={batch.ActualWidth:F1}");
                         Capture(window, $"compact-task-drawer-{size.Width}-{size.Height}");
                         vm.IsTaskDetailOpen = false;
                         vm.SelectedBatchTask = previousTask;
                     }
-                }                if (page == "settings")
+                }
+                if (page == "account" && size.Width == 1024)
+                {
+                    // §自适应：会员卡在窄档上下堆叠（阈值 1100 现在来自共享令牌 Size.BreakpointCards）。
+                    var accountPage = FindVisual<AccountPage>(window);
+                    var devicesCard = (Border)accountPage.FindName("DevicesCard");
+                    Check(Grid.GetRow(devicesCard) == 1 && Grid.GetColumnSpan(devicesCard) == 2,
+                        $"narrow window stacks the membership cards (row={Grid.GetRow(devicesCard)}, span={Grid.GetColumnSpan(devicesCard)})");
+                }
+                if (page == "settings")
                 {
                     var settings = FindVisual<SettingsPage>(window);
                     Check(((FrameworkElement)settings.FindName("CompactSections")).IsVisible == expectedCompact, "settings switches navigation " + size);
+                    if (expectedCompact)
+                        Check(settings.FindName("CompactSections") is ListBox tabs && tabs.Items.Count == 6
+                              && tabs.Items.Cast<ListBoxItem>().All(x => x.IsVisible),
+                            "compact settings exposes six section buttons " + size);
+                    if (expectedCompact)
+                    {
+                        var numberedTabs = (ListBox)settings.FindName("CompactSections");
+                        var numbers = FindVisuals<TextBlock>(numberedTabs).Where(x => x.IsVisible)
+                            .Select(x => x.Text).ToHashSet();
+                        Check(Enumerable.Range(1, 6).All(n => numbers.Contains(n.ToString("00"))),
+                            "compact settings keeps the six numbered section chips " + size);
+                    }
                     for (var section = 0; section < 6; section++)
                     {
                         vm.SettingsSection = section;
                         await NavIdleAsync();
+                        if (section is 4 or 5)
+                            Check(FindVisuals<TextBlock>(settings).Any(x => x.IsVisible && x.Text.StartsWith($"SECTION 0{section + 1}")),
+                                $"settings section {section + 1} keeps its numbered kicker " + size);
                         Capture(window, $"compact-settings-{section}-{size.Width}-{size.Height}");
                     }
                     vm.SettingsSection = 0;
@@ -473,17 +653,18 @@ public sealed partial class SmokeApp
                 Capture(window, $"compact-{page}-{size.Width}-{size.Height}");
             }
         }
+        await VerifyContinuousResizeAsync(window, vm);
         await VerifyPrecisionWheelHandoffAsync();
-        Check(window.MinWidth <= 1120 && window.MinHeight <= 640 && window.MinWidth >= 800 && window.MinHeight >= 560,
-            $"desktop shell minimum stays usable and never exceeds the compact breakpoint (min={window.MinWidth}x{window.MinHeight})");
-        window.Width = 1366; window.Height = 768;
+        Check(window.MinWidth <= 1024 && window.MinHeight <= 640 && window.MinWidth >= 800 && window.MinHeight >= 560,
+            $"desktop shell minimum stays usable and matches the width every page can reflow into (min={window.MinWidth}x{window.MinHeight})");
+        FitNativeWindow(window, new Size(1366, 768));
         await Dispatcher.InvokeAsync(() => {}, DispatcherPriority.ApplicationIdle);
         vm.CurrentPage = previous;
         await NavIdleAsync();
         // Standalone host avoids consuming actual view-model notifications in the shell.
         var toast = new ToastHost();
         var paused = false; toast.ShouldPause = () => paused;
-        var toastWindow = new Window { Width = 400, Height = 900, Content = toast, ShowInTaskbar = false };
+        var toastWindow = new Window { Width = 400, Height = Math.Min(900, SystemParameters.WorkArea.Height - 20), Content = toast, ShowInTaskbar = false };
         toastWindow.Show();
         try
         {
@@ -574,6 +755,24 @@ public sealed partial class SmokeApp
         {
             testWindow.Close();
         }
+    }
+
+    private DrawingFileItem[] CreateMinimumTableRows()
+    {
+        var now = DateTime.Now;
+        return Enumerable.Range(1, 3).Select(index =>
+        {
+            var row = new DrawingFileItem(System.IO.Path.Combine(AppDataDir, $"minimum-layout-{index}.dxf"));
+            row.AttachTask(new DwgTranslator.Core.Tasks.TranslationTask(row.FullPath)
+            {
+                Status = DwgTranslator.Core.Tasks.TranslationTaskStatus.Completed,
+                Progress = 100,
+                TextCount = 120 * index,
+                TranslatedCount = 120 * index,
+                UpdatedAt = now.AddMinutes(-index)
+            });
+            return row;
+        }).ToArray();
     }
 
 }

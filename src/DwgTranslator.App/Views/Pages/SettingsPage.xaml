@@ -121,7 +121,7 @@
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
 
-            <!-- 左卡：分区导航。Padding 用 10 而非 Section.Surface 默认的 Spacing.Card(20)——
+            <!-- 左卡：分区导航。Padding 用 10 而非 Section.Surface 默认的 Spacing.Card(16)——
                  168 的列宽扣掉 20 内边距、再扣格子自身的边距与内边距后放不下最长的「CAD 与环境」。
                  整卡与右卡同源 Section.Surface，H 组柔化阴影后两卡自动一致。 -->
             <!-- 左卡改为贴合内容而不是被右卡拉伸（2026-09-22 用户反馈「底下空一大块」）：
@@ -157,24 +157,32 @@
                  CompactSections 必须留在这一列、不能塞进左卡：RefinementSmoke.cs:34 与 :385 断言它的 IsVisible
                  必须严格等于 compact，而窄窗时左卡整张 Collapsed，下拉若在卡内会被连带隐藏而踩红。 -->
             <StackPanel Grid.Row="0" Grid.Column="2" Margin="{DynamicResource Spacing.Stack}">
-                <ComboBox x:Name="CompactSections" Visibility="Collapsed" SelectedIndex="{Binding SettingsSection}" SelectionChanged="SettingsSection_Changed" Margin="{DynamicResource Spacing.StackWide}" AutomationProperties.Name="设置分类"><ComboBoxItem Content="常规"/><ComboBoxItem Content="翻译与保护"/><ComboBoxItem Content="文件与输出"/><ComboBoxItem Content="CAD 与环境"/><ComboBoxItem Content="日志"/><ComboBoxItem Content="关于与帮助"/></ComboBox>
+                <ListBox x:Name="CompactSections" Visibility="Collapsed" SelectedIndex="{Binding SettingsSection}" SelectionChanged="SettingsSection_Changed" Margin="{DynamicResource Spacing.StackWide}" AutomationProperties.Name="设置分类" BorderThickness="0" Background="Transparent" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Disabled">
+                    <ListBox.ItemsPanel><ItemsPanelTemplate><UniformGrid Rows="1" Columns="6" /></ItemsPanelTemplate></ListBox.ItemsPanel>
+                    <ListBoxItem Style="{StaticResource Settings.SectionTile}" MinWidth="100" HorizontalContentAlignment="Center"><StackPanel Orientation="Horizontal"><Border Style="{StaticResource Settings.NumberChip}"><TextBlock Text="01" Style="{StaticResource Settings.NumberChip.Text}" /></Border><TextBlock Text="常规" VerticalAlignment="Center" /></StackPanel></ListBoxItem>
+                    <ListBoxItem Style="{StaticResource Settings.SectionTile}" MinWidth="126" HorizontalContentAlignment="Center"><StackPanel Orientation="Horizontal"><Border Style="{StaticResource Settings.NumberChip}"><TextBlock Text="02" Style="{StaticResource Settings.NumberChip.Text}" /></Border><TextBlock Text="翻译与保护" VerticalAlignment="Center" /></StackPanel></ListBoxItem>
+                    <ListBoxItem Style="{StaticResource Settings.SectionTile}" MinWidth="126" HorizontalContentAlignment="Center"><StackPanel Orientation="Horizontal"><Border Style="{StaticResource Settings.NumberChip}"><TextBlock Text="03" Style="{StaticResource Settings.NumberChip.Text}" /></Border><TextBlock Text="文件与输出" VerticalAlignment="Center" /></StackPanel></ListBoxItem>
+                    <ListBoxItem Style="{StaticResource Settings.SectionTile}" MinWidth="126" HorizontalContentAlignment="Center"><StackPanel Orientation="Horizontal"><Border Style="{StaticResource Settings.NumberChip}"><TextBlock Text="04" Style="{StaticResource Settings.NumberChip.Text}" /></Border><TextBlock Text="CAD 与环境" VerticalAlignment="Center" /></StackPanel></ListBoxItem>
+                    <ListBoxItem Style="{StaticResource Settings.SectionTile}" MinWidth="100" HorizontalContentAlignment="Center"><StackPanel Orientation="Horizontal"><Border Style="{StaticResource Settings.NumberChip}"><TextBlock Text="05" Style="{StaticResource Settings.NumberChip.Text}" /></Border><TextBlock Text="日志" VerticalAlignment="Center" /></StackPanel></ListBoxItem>
+                    <ListBoxItem Style="{StaticResource Settings.SectionTile}" MinWidth="126" HorizontalContentAlignment="Center"><StackPanel Orientation="Horizontal"><Border Style="{StaticResource Settings.NumberChip}"><TextBlock Text="06" Style="{StaticResource Settings.NumberChip.Text}" /></Border><TextBlock Text="关于与帮助" VerticalAlignment="Center" /></StackPanel></ListBoxItem>
+                </ListBox>
                             </StackPanel>
             <!-- 右卡。MinHeight 绑到外层 ScrollViewer 的 ViewportHeight：分区内容比视口矮时卡片仍铺满，
                  与左卡（Stretch 到同一行高）恒等高，不会出现"左卡长右卡短"的缺口。该绑定不会自激振荡——
                  ViewportHeight 不受纵向滚动条影响、横向滚动条已 Disabled（与 TranslatePage 右栏 E10 同一手法）。
-                 MaxWidth 1080 必须保留：UI 冒烟 Program.cs:636 断言 SettingsContent.ActualWidth 落在 (400, 1080]。 -->
+                 右卡随右侧网格列伸展，和页头、操作条及其他页面保持同一右边界。 -->
             <ScrollViewer x:Name="SettingsScroll" Grid.Row="1" Grid.Column="2" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" HorizontalContentAlignment="Stretch" controls:ResponsiveLayout.HandoffMouseWheelAtBoundary="True">
-                <Border x:Name="SettingsContent" HorizontalAlignment="Stretch" MinHeight="{Binding ViewportHeight, RelativeSource={RelativeSource AncestorType=ScrollViewer}}"><Border.Style><Style TargetType="Border" BasedOn="{StaticResource Section.Surface}"><Setter Property="MaxWidth" Value="1080"/></Style></Border.Style>
+                <Border x:Name="SettingsContent" HorizontalAlignment="Stretch" MinHeight="{Binding ViewportHeight, RelativeSource={RelativeSource AncestorType=ScrollViewer}}" Style="{StaticResource Section.Surface}">
                     <StackPanel>
-                        <!-- 每个分区块内部是同一套两列表单骨架：20 DIP 中缝把 * / * 两列分开，左右两列各自独立堆叠，
+                         <!-- 每个分区块内部是同一套两列表单骨架：16 DIP 中缝把 * / * 两列分开，左右两列各自独立堆叠，
                              行数不等也不会留空洞，且不覆盖 SettingsRow 自带的行距；需要整行宽度的路径输入跨三列。 -->
                         <StackPanel Visibility="{Binding SettingsSection, Converter={StaticResource IndexToVis}, ConverterParameter=0}">
-                            <TextBlock Text="SECTION 01 · GENERAL" Style="{StaticResource Kicker}" Margin="0,0,0,2" />
+                            <TextBlock Text="SECTION 01 · GENERAL" Style="{StaticResource Kicker}" Margin="{DynamicResource Spacing.SettingsKicker}" />
                             <TextBlock Text="常规" Style="{StaticResource SectionTitleStyle}" Margin="{DynamicResource Spacing.StackLoose}" />
-                            <Grid HorizontalAlignment="Left">
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="20"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <Grid x:Name="GeneralSettingsGrid" HorizontalAlignment="Stretch">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*" MinWidth="0"/><ColumnDefinition Width="16"/><ColumnDefinition Width="*" MinWidth="0"/></Grid.ColumnDefinitions>
                                 <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                                <StackPanel Grid.Row="0" Grid.Column="0">
+                                <StackPanel x:Name="GeneralPreferencesPanel" Grid.Row="0" Grid.Column="0">
                                     <!-- 常规：原「界面语言」与「应用行为」两张宽窄不一的卡片合并成同一张表单，统一 220 DIP 标签列。 -->
                                     <controls:SettingsRow>
                                         <TextBlock Text="界面语言" Style="{StaticResource FormRowLabel}" />
@@ -195,7 +203,7 @@
                                         <CheckBox Style="{StaticResource Toggle.Switch}" HorizontalAlignment="Left" AutomationProperties.Name="启动时恢复上次工作区" IsChecked="{Binding SettingsDraft.RestoreLastWorkspace}" />
                                     </controls:SettingsRow>
                                 </StackPanel>
-                                <StackPanel Grid.Row="0" Grid.Column="2">
+                                <StackPanel x:Name="GeneralOptionsPanel" Grid.Row="0" Grid.Column="2">
                                     <controls:SettingsRow>
                                         <TextBlock Text="自动检查更新" Style="{StaticResource FormRowLabel}" />
                                         <CheckBox Style="{StaticResource Toggle.Switch}" HorizontalAlignment="Left" AutomationProperties.Name="自动检查更新" IsChecked="{Binding SettingsDraft.AutoCheckUpdate}" />
@@ -209,12 +217,12 @@
                             <!-- 2026-09-21 用户批注：各分区上方的生效时机说明整行不要（含同级子分区的同类说明），已连同 SettingsSectionApplyHint 属性一并删除。 -->
                         </StackPanel>
                         <StackPanel Visibility="{Binding SettingsSection, Converter={StaticResource IndexToVis}, ConverterParameter=1}">
-                            <TextBlock Text="SECTION 02 · TRANSLATION" Style="{StaticResource Kicker}" Margin="0,0,0,2" />
+                            <TextBlock Text="SECTION 02 · TRANSLATION" Style="{StaticResource Kicker}" Margin="{DynamicResource Spacing.SettingsKicker}" />
                             <TextBlock Text="翻译与保护" Style="{StaticResource SectionTitleStyle}" Margin="{DynamicResource Spacing.StackLoose}" />
-                            <Grid HorizontalAlignment="Left">
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="20"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <Grid x:Name="TranslationSettingsGrid" HorizontalAlignment="Stretch">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*" MinWidth="0"/><ColumnDefinition Width="16"/><ColumnDefinition Width="*" MinWidth="0"/></Grid.ColumnDefinitions>
                                 <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                                <StackPanel Grid.Row="0" Grid.Column="0">
+                                <StackPanel x:Name="TranslationProtectionPanel" Grid.Row="0" Grid.Column="0">
                                     <TextBlock Text="图纸保护" Style="{StaticResource FormRowLabel}" Margin="{DynamicResource Spacing.Stack}" />
                                     <CheckBox Content="保护尺寸" IsChecked="{Binding SettingsDraft.ProtectDimensions}" Margin="{DynamicResource Spacing.Vertical}" />
                                     <CheckBox Content="保护公差" IsChecked="{Binding SettingsDraft.ProtectTolerances}" Margin="{DynamicResource Spacing.Vertical}" />
@@ -222,7 +230,7 @@
                                     <CheckBox Content="内存优化" IsChecked="{Binding SettingsDraft.MemoryOptimization}" Margin="{DynamicResource Spacing.Vertical}" ToolTip="降低大图纸翻译时的内存峰值，代价是解析略慢。" />
                                     <TextBlock Text="已启用术语始终优先于 AI 和旧缓存；请在术语库中启用或停用条目。" TextWrapping="Wrap" Margin="{DynamicResource Spacing.BlockTop}" Style="{StaticResource CaptionStyle}" />
                                 </StackPanel>
-                                <StackPanel Grid.Row="0" Grid.Column="2">
+                                <StackPanel x:Name="TranslationPerformancePanel" Grid.Row="0" Grid.Column="2">
                                     <TextBlock Text="性能" Style="{StaticResource FormRowLabel}" Margin="{DynamicResource Spacing.Stack}" />
                                     <controls:SettingsRow><TextBlock Text="同时处理的图纸数" Style="{StaticResource FormRowLabel}"/><TextBox x:Name="LocalWorkerCountInput" Width="120" HorizontalAlignment="Left" Style="{StaticResource Settings.ValidatedInput}" MinHeight="{DynamicResource Size.Control}" Padding="8,4"><TextBox.Text><Binding Path="SettingsDraft.LocalWorkerCount" UpdateSourceTrigger="PropertyChanged" ValidatesOnExceptions="True"><Binding.ValidationRules><controls:IntegerRangeValidationRule Minimum="1" Maximum="6" FieldName="图纸并发"/></Binding.ValidationRules></Binding></TextBox.Text></TextBox></controls:SettingsRow>
                                     <controls:SettingsRow><TextBlock Text="失败重试次数" Style="{StaticResource FormRowLabel}"/><TextBox x:Name="MaxRetryCountInput" Width="120" HorizontalAlignment="Left" Style="{StaticResource Settings.ValidatedInput}" MinHeight="{DynamicResource Size.Control}" Padding="8,4"><TextBox.Text><Binding Path="SettingsDraft.MaxRetryCount" UpdateSourceTrigger="PropertyChanged" ValidatesOnExceptions="True"><Binding.ValidationRules><controls:IntegerRangeValidationRule Minimum="0" Maximum="5" FieldName="重试次数"/></Binding.ValidationRules></Binding></TextBox.Text></TextBox></controls:SettingsRow>
@@ -231,10 +239,10 @@
                             </Grid>
                         </StackPanel>
                         <StackPanel Visibility="{Binding SettingsSection, Converter={StaticResource IndexToVis}, ConverterParameter=2}">
-                            <TextBlock Text="SECTION 03 · FILES &amp; OUTPUT" Style="{StaticResource Kicker}" Margin="0,0,0,2" />
+                            <TextBlock Text="SECTION 03 · FILES &amp; OUTPUT" Style="{StaticResource Kicker}" Margin="{DynamicResource Spacing.SettingsKicker}" />
                             <TextBlock Text="文件与输出" Style="{StaticResource SectionTitleStyle}" Margin="{DynamicResource Spacing.StackLoose}" />
                             <Grid HorizontalAlignment="Left">
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="20"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="16"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                 <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                                 <!-- 输出目录是用户会填长路径的输入框，跨三列保留整行宽度。 -->
                                 <controls:SettingsRow Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="3">
@@ -284,40 +292,41 @@
                             </Grid>
                         </StackPanel>
                         <StackPanel Visibility="{Binding SettingsSection, Converter={StaticResource IndexToVis}, ConverterParameter=3}">
-                            <TextBlock Text="SECTION 04 · CAD &amp; ENV" Style="{StaticResource Kicker}" Margin="0,0,0,2" />
+                            <TextBlock Text="SECTION 04 · CAD &amp; ENV" Style="{StaticResource Kicker}" Margin="{DynamicResource Spacing.SettingsKicker}" />
                             <TextBlock Text="CAD 与环境" Style="{StaticResource SectionTitleStyle}" Margin="{DynamicResource Spacing.StackLoose}" />
-                            <Grid HorizontalAlignment="Left">
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="20"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <Grid x:Name="CadSettingsGrid" HorizontalAlignment="Stretch">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*" MinWidth="0"/><ColumnDefinition Width="16"/><ColumnDefinition Width="*" MinWidth="0"/></Grid.ColumnDefinitions>
                                 <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                                <StackPanel Grid.Row="0" Grid.Column="0">
+                                <StackPanel x:Name="CadDirectoryPanel" Grid.Row="0" Grid.Column="0">
                                     <controls:SettingsRow>
                                         <StackPanel>
                                             <TextBlock Text="CAD 安装目录" Style="{StaticResource FormRowLabel}" />
                                             <TextBlock Text="修改路径后请先保存，再重新检测环境。" Style="{StaticResource FormRowDescription}" />
                                         </StackPanel>
-                                        <DockPanel><Button DockPanel.Dock="Right" Content="浏览" Click="BrowseCad_Click" Style="{StaticResource Button.Secondary}" Margin="{DynamicResource Spacing.LeftGap}"/><TextBox Text="{Binding SettingsDraft.AutoCadInstallPath, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}" MinHeight="{DynamicResource Size.Control}" Padding="8,4" ToolTip="{Binding SettingsDraft.AutoCadInstallPath}" /></DockPanel>
+                                        <DockPanel LastChildFill="True"><Button DockPanel.Dock="Right" Content="浏览" Click="BrowseCad_Click" Style="{StaticResource Button.Secondary}" Margin="{DynamicResource Spacing.LeftGap}"/><TextBox Text="{Binding SettingsDraft.AutoCadInstallPath, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}" MinWidth="0" HorizontalAlignment="Stretch" MinHeight="{DynamicResource Size.Control}" Padding="8,4" ToolTip="{Binding SettingsDraft.AutoCadInstallPath}" /></DockPanel>
                                     </controls:SettingsRow>
                                     <controls:SettingsRow>
                                         <TextBlock Text="路径检测" Style="{StaticResource FormRowLabel}" />
                                         <Button Content="自动检测路径" Command="{Binding DetectSettingsCadCommand}" Style="{StaticResource Button.Secondary}" HorizontalAlignment="Left" />
                                     </controls:SettingsRow>
                                 </StackPanel>
-                                <StackPanel Grid.Row="0" Grid.Column="2">
+                                <StackPanel x:Name="CadPluginPathPanel" Grid.Row="0" Grid.Column="2">
                                     <controls:SettingsRow>
                                         <StackPanel>
                                             <TextBlock Text="CAD 插件文件路径" Style="{StaticResource FormRowLabel}" />
                                             <TextBlock Text="通常由自动检测填写，无需手动修改。" Style="{StaticResource FormRowDescription}" />
                                         </StackPanel>
-                                        <DockPanel><Button DockPanel.Dock="Right" Content="浏览" Click="BrowsePlugin_Click" Style="{StaticResource Button.Secondary}" Margin="{DynamicResource Spacing.LeftGap}"/><TextBox Text="{Binding SettingsDraft.CadPluginPath, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}" MinHeight="{DynamicResource Size.Control}" Padding="8,4" ToolTip="{Binding SettingsDraft.CadPluginPath}" /></DockPanel>
+                                        <DockPanel LastChildFill="True"><Button DockPanel.Dock="Right" Content="浏览" Click="BrowsePlugin_Click" Style="{StaticResource Button.Secondary}" Margin="{DynamicResource Spacing.LeftGap}"/><TextBox Text="{Binding SettingsDraft.CadPluginPath, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}" MinWidth="0" HorizontalAlignment="Stretch" MinHeight="{DynamicResource Size.Control}" Padding="8,4" ToolTip="{Binding SettingsDraft.CadPluginPath}" /></DockPanel>
                                     </controls:SettingsRow>
                                 </StackPanel>
                             </Grid>
                             <ContentControl x:Name="EnvironmentHost" Margin="{DynamicResource Spacing.BlockTopSection}" />
                         </StackPanel>
                         <StackPanel Visibility="{Binding SettingsSection, Converter={StaticResource IndexToVis}, ConverterParameter=4}">
+                            <TextBlock Text="SECTION 05 · LOGS" Style="{StaticResource Kicker}" Margin="{DynamicResource Spacing.SettingsKicker}" />
                             <TextBlock Text="日志" Style="{StaticResource SectionTitleStyle}" Margin="{DynamicResource Spacing.StackLoose}" />
                             <Grid HorizontalAlignment="Left">
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="20"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="16"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                 <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                                 <StackPanel Grid.Row="0" Grid.Column="0">
                                     <controls:SettingsRow>
@@ -400,7 +409,7 @@
                                     <Setter Property="VerticalAlignment" Value="Center" />
                                 </Style>
                             </StackPanel.Resources>
-                            <TextBlock Text="SECTION 06 · ABOUT" Style="{StaticResource Kicker}" Margin="0,0,0,2" />
+                            <TextBlock Text="SECTION 06 · ABOUT" Style="{StaticResource Kicker}" Margin="{DynamicResource Spacing.SettingsKicker}" />
                             <TextBlock Text="关于与帮助" Style="{StaticResource SectionTitleStyle}" />
 
                             <!-- S5 · D7/D8 拆卡（用户截图 06 红字「这个分成两个独立的卡片不要放在一张卡片上」/「放到右边去」）：
@@ -427,8 +436,8 @@
                                         <ColumnDefinition Width="{DynamicResource Size.AboutLogoColumn}" />
                                         <ColumnDefinition Width="*" />
                                     </Grid.ColumnDefinitions>
-                                    <Border Width="{DynamicResource Size.AboutIconBox}" Height="{DynamicResource Size.AboutIconBox}" Background="{DynamicResource Brush.AmberSoft}" BorderBrush="{DynamicResource Brush.Amber}" BorderThickness="1" CornerRadius="2" VerticalAlignment="Top" HorizontalAlignment="Left">
-                                        <Image Source="pack://application:,,,/QLCAD;component/icon.ico" Width="{DynamicResource Size.AboutIconGlyph}" Height="{DynamicResource Size.AboutIconGlyph}" Stretch="Uniform" />
+                                    <Border x:Name="AboutIconBox" Width="{DynamicResource Size.AboutIconBox}" Height="{DynamicResource Size.AboutIconBox}" Background="{DynamicResource Brush.AmberSoft}" BorderBrush="{DynamicResource Brush.Amber}" BorderThickness="1" CornerRadius="2" VerticalAlignment="Center" HorizontalAlignment="Center">
+                                        <TextBlock x:Name="AboutIconGlyph" Text="Q" FontFamily="{DynamicResource FontFamily.Display}" FontSize="30" FontWeight="Bold" Foreground="{DynamicResource Brush.Ink}" HorizontalAlignment="Center" VerticalAlignment="Center" TextOptions.TextFormattingMode="Ideal" />
                                     </Border>
                                     <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="{DynamicResource Spacing.InlineLeading}">
                                         <TextBlock Text="QLCAD" FontFamily="{DynamicResource FontFamily.Display}" FontSize="23" FontWeight="SemiBold" Foreground="{DynamicResource Brush.TextPrimary}" />
@@ -469,7 +478,7 @@
                             </Grid>
 
                             <!-- 快捷入口与版本详情并排：宽屏减少纵向占用；中等宽度与窄窗由
-                                 SettingsPage.xaml.cs 的 1256 DIP 响应式断点统一改为上下堆叠。 -->
+                                 SettingsPage.xaml.cs 的 1240 DIP 响应式断点统一改为上下堆叠。 -->
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
@@ -539,7 +548,7 @@
                  只保证"同宽且居中"，而居中的参照是**所在列**——若让它跨三列，它会按整页宽度居中，
                  与只占列 2 的表单错开 (168+16)/2 = 92 DIP，直接踩红 UI 冒烟 Program.cs:640
                  「settings footer aligns with form」（断言两者 ActualWidth 差 < 2）。 -->
-            <DockPanel x:Name="SettingsSaveBar" Grid.Row="2" Grid.Column="2" HorizontalAlignment="Center" Width="{Binding ActualWidth, ElementName=SettingsContent}" MaxWidth="1080" Margin="{DynamicResource Spacing.BlockTopWide}" MinHeight="48" Background="{DynamicResource Brush.SurfaceAlt}"><DockPanel.Style><Style TargetType="DockPanel"><Style.Triggers><DataTrigger Binding="{Binding SettingsSection}" Value="5"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></DockPanel.Style>
+            <DockPanel x:Name="SettingsSaveBar" Grid.Row="2" Grid.Column="2" HorizontalAlignment="Stretch" Width="{Binding ActualWidth, ElementName=SettingsContent}" Margin="{DynamicResource Spacing.BlockTopWide}" MinHeight="48" Background="{DynamicResource Brush.SurfaceAlt}"><DockPanel.Style><Style TargetType="DockPanel"><Style.Triggers><DataTrigger Binding="{Binding SettingsSection}" Value="5"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></DockPanel.Style>
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                     <Button x:Name="RestoreSettingsButton" Content="恢复本节推荐值" Command="{Binding RestoreSettingsSectionDefaultsCommand}" Style="{StaticResource Button.Tertiary}" Margin="{DynamicResource Spacing.Inline}" />
                     <Button x:Name="DiscardSettingsButton" Content="放弃更改" Command="{Binding DiscardSettingsChangesCommand}" IsEnabled="{Binding CanDiscardSettings}" Style="{StaticResource Button.Secondary}" Margin="{DynamicResource Spacing.Inline}" />

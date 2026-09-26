@@ -96,6 +96,24 @@ public class WorkerTranslationServiceTests
         Assert.Equal(@"\H2x;Bevel", pair.TranslatedText);
         Assert.Equal(TranslationStatus.Translated, pair.Status);
     }
+
+    [Fact]
+    public async Task ChineseTitleBlockTextWithLatinPlaceholdersIsNotMisclassifiedAsAlreadyEnglish()
+    {
+        const string source = "图号=DWGNAME;项目名称=FILENAME;页数=SHEET;总页数=SHEETMAX";
+        var api = new Api();
+        var entity = Entity();
+        entity.Handle = "FIELD1";
+        entity.PlainText = source;
+        entity.RawText = source;
+
+        var pair = Assert.Single(await Service(api).TranslateBatchAsync([entity], "ZH", "EN"));
+
+        Assert.Single(api.Requests);
+        Assert.Equal(source, Assert.Single(api.Requests[0].Items).Text);
+        Assert.Equal(TranslationStatus.Translated, pair.Status);
+        Assert.Equal("Chamfer", pair.TranslatedText);
+    }
     [Theory]
     [InlineData("EN-ZH", true, false)]
     [InlineData("ZH-EN", true, true)]

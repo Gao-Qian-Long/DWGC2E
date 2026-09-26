@@ -5,7 +5,7 @@ using DwgTranslator.Core.Services;
 namespace DwgTranslator.App.Views.Pages;
 public partial class SettingsPage : UserControl
 {
-    public SettingsPage() { InitializeComponent(); SizeChanged += (_, _) => UpdateLayoutMode(); Loaded += (_, _) => UpdateLayoutMode(); AddHandler(TextBox.TextChangedEvent, new TextChangedEventHandler((_,_) => Dispatcher.BeginInvoke(new Action(UpdateSaveState)))); AddHandler(System.Windows.Controls.Primitives.ToggleButton.CheckedEvent,new RoutedEventHandler((_,_)=>Dispatcher.BeginInvoke(new Action(UpdateSaveState)))); AddHandler(System.Windows.Controls.Primitives.ToggleButton.UncheckedEvent,new RoutedEventHandler((_,_)=>UpdateSaveState())); AddHandler(System.Windows.Controls.Primitives.Selector.SelectionChangedEvent,new SelectionChangedEventHandler((_,_)=>Dispatcher.BeginInvoke(new Action(UpdateSaveState)))); IsVisibleChanged += (_,_)=>UpdateSaveState(); Loaded += (_, _) => { if (DataContext is MainViewModel vm) { EnvironmentHost.Content = new EnvironmentCheckPanel(vm); vm.ValidateSettingsInputs = () => !HasValidationError(this); vm.NotifySettingsDraftState(!HasValidationError(this)); } }; LiveLogAutoScroll(); }
+    public SettingsPage() { InitializeComponent(); SizeChanged += (_, _) => UpdateLayoutMode(); Loaded += (_, _) => UpdateLayoutMode(); GeneralSettingsGrid.SizeChanged += (_, _) => UpdateFormColumnLayouts(); TranslationSettingsGrid.SizeChanged += (_, _) => UpdateFormColumnLayouts(); CadSettingsGrid.SizeChanged += (_, _) => UpdateFormColumnLayouts(); AddHandler(TextBox.TextChangedEvent, new TextChangedEventHandler((_,_) => Dispatcher.BeginInvoke(new Action(UpdateSaveState)))); AddHandler(System.Windows.Controls.Primitives.ToggleButton.CheckedEvent,new RoutedEventHandler((_,_)=>Dispatcher.BeginInvoke(new Action(UpdateSaveState)))); AddHandler(System.Windows.Controls.Primitives.ToggleButton.UncheckedEvent,new RoutedEventHandler((_,_)=>UpdateSaveState())); AddHandler(System.Windows.Controls.Primitives.Selector.SelectionChangedEvent,new SelectionChangedEventHandler((_,_)=>Dispatcher.BeginInvoke(new Action(UpdateSaveState)))); IsVisibleChanged += (_,_)=>UpdateSaveState(); Loaded += (_, _) => { if (DataContext is MainViewModel vm) { EnvironmentHost.Content = new EnvironmentCheckPanel(vm); vm.ValidateSettingsInputs = () => !HasValidationError(this); vm.NotifySettingsDraftState(!HasValidationError(this)); } }; LiveLogAutoScroll(); }
     // 实时日志列表：新条目到达时自动滚到底部，保持"正在运行"的滚动观感（设置-日志分区，2026-10-02）。
     // Items（ItemCollection）自身实现 INotifyCollectionChanged，绑定晚到也不影响挂钩。
     //
@@ -46,6 +46,7 @@ public partial class SettingsPage : UserControl
     private void UpdateLayoutMode()
     {
         var compact = Controls.ResponsiveLayout.GetIsCompact(this);
+        UpdateFormColumnLayouts();
         SettingsNav.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
         CompactSections.Visibility = compact ? Visibility.Visible : Visibility.Collapsed;
         // G 主从双卡片的窄窗降级：左卡与槽列一起收为 0，右卡独占整行（等价于上下堆叠时"只剩右卡"），不破裂。
@@ -67,8 +68,8 @@ public partial class SettingsPage : UserControl
             // 因此行/列归属改设在**卡片**上——AboutUpdatePanel 现在是卡片内的 StackPanel，
             // 对它调用 Grid.SetColumn 已无意义（不再是 Grid 的直接子元素）。
             // 中等宽度也上下堆叠：固定宽度的更新卡会挤窄身份卡，常见 1280–1440 窗口尤其明显。
-            // 与下方快捷入口/版本详情共用 1256 DIP 阈值，使关于页在同一宽度切换为纵向版式。
-            var aboutCardsStack = compact || ActualWidth < 1256;
+            // 与下方快捷入口/版本详情共用 1240 DIP 阈值，使关于页在同一宽度切换为纵向版式。
+            var aboutCardsStack = compact || ActualWidth < ResolveBreakpoint("Size.BreakpointAbout", 1240);
             var aboutUpdateWidth = TryFindResource("Size.AboutUpdateColumn") as GridLength? ?? new GridLength(236);
             AboutUpdateColumn.Width = aboutCardsStack ? new GridLength(0) : aboutUpdateWidth;
             Grid.SetColumn(AboutUpdateCard, aboutCardsStack ? 0 : 2);
@@ -84,7 +85,8 @@ public partial class SettingsPage : UserControl
             AboutUpdatePanel.HorizontalAlignment = aboutCardsStack ? HorizontalAlignment.Left : HorizontalAlignment.Stretch;
         }
         // §G 副作用收敛（必须与上面新增的左卡配套看）：左卡 + 槽列固定占去 168 + 16 = 184 DIP，
-        // 于是右卡在 1280~1440 这些主流笔记本宽度下比改前窄 184 DIP；窗口 ≥1528 时右卡已被
+        // 于是右卡在 1366~1440 这些主流笔记本宽度下比改前窄 184 DIP（§L5 把窗口下限从 1280 抬到
+        // 1366 之后，1280 这一档已不可达，下面保留的 1280 读数只是改动前的历史测量）；窗口 ≥1528 时右卡已被
         // SettingsContent 的 MaxWidth=1080 封顶，这 184 被完全吸收、不受影响。
         // 分区 06 的「快捷入口 / 版本详情」并排布局需要约 974 DIP 内容宽，才能让快捷入口说明
         // "查看软件使用说明和常见操作"（13 字 × FontSize.Secondary 13 = 169 DIP）单行放得下。
@@ -93,17 +95,17 @@ public partial class SettingsPage : UserControl
         // 视觉复审必然看到。处置沿用本任务契约点名的手段（"现有响应式机制…可上下堆叠"）：
         // 把既有 compact 堆叠分支的触发条件从"仅 compact"放宽到"内容宽不足"，
         // 于是绝大多数宽度下并排 / 堆叠的分界与文字是否被截断一致，不新增任何布局代码。
-        // 阈值换算（t7 按 smoke 实测修正——t3 推算时误把 Spacing.Page 的左右 64 也算进了本控件宽度）：
+        // 阈值换算（页边压缩后，可用宽度要求对应减少 16 DIP）：
         //   实测 window.Width=1280 时本页 ActualWidth=1080.0，故 ActualWidth = 窗口宽 - 侧栏 200；
-        //   Spacing.Page 的左右各 32 是页面**内部** Page Grid 的 Margin，已在 ActualWidth 之内，不能再减一次。
-        //   链：Col2 = ActualWidth - 64 - 184；SettingsContent = min(Col2, 1080)；inner = SettingsContent - 42；
+        //   Spacing.Page 的左右各 24 是页面**内部** Page Grid 的 Margin，已在 ActualWidth 之内，不能再减一次。
+        //   链：Col2 = ActualWidth - 48 - 184；SettingsContent = min(Col2, 1080)；inner = SettingsContent - 42；
         //       说明可用宽 = (inner - 396 - 16) / 2 - 30 - 70 - 8 = (inner - 412) / 2 - 108，需 ≥ 169
         //       （396 = 版本详情列 380 + 槽 16；30 = About.ShortcutCard Padding 14×2 + 边框 2；
         //         70 = 格内 cols 50/*/20 的两侧；8 = 中层 StackPanel 的 Spacing.Inline 右距）。
-        //   ⇒ 完全不截断需 inner ≥ 966 ⇔ ActualWidth ≥ 1256 ⇔ 窗口宽 ≥ 1456
+        //   ⇒ 完全不截断需 inner ≥ 966 ⇔ ActualWidth ≥ 1240 ⇔ 窗口宽 ≥ 1440
         //     （t3 写的 974 / 1200 / 1464 中，974 是把 1280 改前的可用 inner 误当成了需求值，实际只需 966）。
-        //   以 ActualWidth < 1256 作为堆叠阈值，窗口宽约 <1456 时统一进入堆叠态；
-        //   这样 1280、1366、1440 三档都不会把快捷入口说明截断，1920 及更宽窗口仍保持并排布局。
+        //   以 ActualWidth < 1240 作为堆叠阈值，窗口宽约 <1440 时统一进入堆叠态；
+        //   这样 1366、1440 两档都不会把快捷入口说明截断，1920 及更宽窗口仍保持并排布局。
         // 不会自激振荡：堆叠只改内容高度，ActualWidth 由 PageHost 决定；SettingsScroll 的纵向滚动条
         //          只影响 SettingsContent 宽度、不影响本 UserControl 的 ActualWidth，故不会反复触发 SizeChanged。
         // AboutDetails* 与上方身份/更新卡共用同一堆叠阈值；UpdateNotificationSmoke.cs:29-30
@@ -111,10 +113,10 @@ public partial class SettingsPage : UserControl
         // **更正（S5 实测，替换改前此处的一句错误陈述）**：改前注释称"tests\ 全库 grep 证实无任何断言
         // 引用 AboutDetailsCard / AboutDetailsColumn / AboutDetailsGap"，该陈述**为假**——
         // tests\DwgTranslator.App.UiSmoke\Program.cs:764-766 明确按 x:Name 取用 AboutDetailsCard，
-        // 并断言其在 1280 窄窗下 Grid.GetRow==2 && Grid.GetColumn==0（堆叠槽 row2）。四个快捷入口按钮确实无断言引用。
+        // 并断言其在最窄窗口下 Grid.GetRow==2 && Grid.GetColumn==0（堆叠槽 row2；该档原为 1280，§L5 后为 1366）。四个快捷入口按钮确实无断言引用。
         // 因此 AboutDetailsCard 的 x:Name 与本分支的行/列归属都是**被冒烟守住的契约**，不可删改。
         // （该错误陈述经 git show HEAD: 溯源，来自上一批的提交 c334969，非本批引入。）
-        var aboutStack = compact || ActualWidth < 1256;
+        var aboutStack = compact || ActualWidth < ResolveBreakpoint("Size.BreakpointAbout", 1240);
         if (AboutDetailsCard != null && AboutDetailsColumn != null && AboutDetailsGap != null)
         {
             // 快捷入口与版本详情并排铺满横向空间；横向空间不足时落回堆叠，避免两张卡都被挤到不可读。
@@ -128,6 +130,33 @@ public partial class SettingsPage : UserControl
             Grid.SetColumnSpan(AboutDetailsCard, aboutStack ? 3 : 1);
             AboutDetailsCard.Margin = aboutStack ? new Thickness(0, 12, 0, 0) : new Thickness(0);
         }
+    }
+    private void UpdateFormColumnLayouts()
+    {
+        var formThreshold = ResolveBreakpoint("Size.BreakpointForm", 840);
+        ReflowTwoColumnForm(GeneralSettingsGrid, GeneralPreferencesPanel, GeneralOptionsPanel, formThreshold);
+        ReflowTwoColumnForm(TranslationSettingsGrid, TranslationProtectionPanel, TranslationPerformancePanel, formThreshold);
+        ReflowTwoColumnForm(CadSettingsGrid, CadDirectoryPanel, CadPluginPathPanel, formThreshold);
+    }
+
+    /// <summary>
+    /// §自适应（2026-09-25）：宽度断点一律从共享令牌读（Themes/Metrics.xaml 的 Size.Breakpoint*），
+    /// 不在页面代码里再写第二份字面量——令牌是单一事实来源，改档位时只动一处。取不到时退回原值。
+    /// </summary>
+    private double ResolveBreakpoint(string tokenKey, double fallback) =>
+        TryFindResource(tokenKey) is double value && value > 0 ? value : fallback;
+    private static void ReflowTwoColumnForm(Grid grid, FrameworkElement left, FrameworkElement right, double threshold)
+    {
+        if (grid.ColumnDefinitions.Count < 3) return;
+        // The sidebar state is not the form's available width. A 1024-DIP window still leaves
+        // enough room for two form columns after the icon rail collapses; forcing a single
+        // column there wastes half the page and makes the form unnecessarily tall.
+        var stacked = grid.ActualWidth > 0 && grid.ActualWidth < threshold;
+        grid.ColumnDefinitions[0].Width = new GridLength(1, GridUnitType.Star);
+        grid.ColumnDefinitions[1].Width = stacked ? new GridLength(0) : new GridLength(16);
+        grid.ColumnDefinitions[2].Width = stacked ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
+        Grid.SetColumn(left, 0); Grid.SetRow(left, 0); Grid.SetColumnSpan(left, stacked ? 3 : 1);
+        Grid.SetColumn(right, stacked ? 0 : 2); Grid.SetRow(right, stacked ? 1 : 0); Grid.SetColumnSpan(right, stacked ? 3 : 1);
     }
     private void SettingsSection_Changed(object sender, SelectionChangedEventArgs e)
     {

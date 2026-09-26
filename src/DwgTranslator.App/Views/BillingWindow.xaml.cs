@@ -30,6 +30,9 @@ public partial class BillingWindow : Window
  {
   // 「购买账号：」这个前缀已移到 XAML 的 InfoLabel 里，这里只给值，避免同一行出现两次。
   InitializeComponent();_client=client;_valid=valid;_apply=apply;Account.Text=account;
+ // §自适应（2026-09-25）：XAML 里写死的 MinWidth=900 在窄屏 / 高 DPI 下会把窗口下限顶出工作区，
+ // 于是窗口既拖不小、内容也滚不动。收敛进工作区（宽屏下不变）。
+ Controls.DialogShell.Constrain(this);
   // 用户批注（2026-09-23）：「更改套餐后 右侧的二维码并不刷新」——原来改选只弹一条提示条，
   // 二维码仍是旧订单的。现在把"改套餐"当成一次明确的换单意图：确认后按新套餐重新下单并刷新二维码
   // （原订单不取消，也不会重复扣款）。_planSelectionLocked 用来区分"程序性回填选择"

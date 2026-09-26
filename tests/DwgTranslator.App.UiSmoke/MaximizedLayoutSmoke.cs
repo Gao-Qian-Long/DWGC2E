@@ -18,8 +18,8 @@ namespace UiSmoke;
 /// src\DwgTranslator.App\ViewModels\MainViewModel.SettingsPage.cs:25-26（帮助窗口的最小化还原）
 /// 与 ViewModels\MainWindow.xaml.cs 之外的零处；grep WM_GETMINMAXINFO / HwndSource /
 /// MonitorFromWindow / SourceInitialized 在 src\ 下**零命中**。所以 Program.cs 的 185 张截图矩阵
-/// 与全部断言都是"窗口模式"几何（:456 设 1366x768、:701-704 四档矩阵、:756-757 设 1280x720，
-/// RefinementSmoke.cs 设 1120x640 / 1280x720 / 1366x768），而用户报的 D1（顶栏上下不居中）、
+/// 与全部断言都是"窗口模式"几何（:456 设 1366x768、:1060 起的页面矩阵现为 1024/1366/1440/1920/1920@1.25/2560@1.5，
+/// RefinementSmoke.cs 设 1024x640 与 1024/1120/1366/1440/1920 的矩阵），而用户报的 D1（顶栏上下不居中）、
 /// D5（被任务栏盖住）、D12（会员中心不居中）**只在最大化态出现** —— 这是守护缺口：
 /// 改动前后既有断言都"全绿"，红不了。
 ///
@@ -63,6 +63,7 @@ public sealed partial class SmokeApp
     private async Task VerifyMaximizedLayoutAsync(MainWindow window, MainViewModel vm)
     {
         var savedPage = vm.CurrentPage;
+        var savedSettingsSection = vm.SettingsSection;
         var savedUsage = vm.OnlineUsage;
         var savedSubscription = vm.OnlineSubscription;
         var content = (FrameworkElement)window.Content;
@@ -159,13 +160,31 @@ public sealed partial class SmokeApp
 
             // ── 第四组（D12）：会员中心内容块中心 vs 滚动视口中心的偏差 ─────────────────
             // 只在真实页树上按请求 DIP 尺寸强制布局（Program.cs:711-714 的既有手法），逐档取读数。
-            // 为什么必须逐档：AccountPage.xaml:99 是 MaxWidth="1200" + HorizontalAlignment="Left"，
-            // 视口宽 <= 1200 时 Width=ViewportWidth 撑满、居与否无从观测（读数恒为 0，属同义反复）；
-            // 只有视口宽 > 1200 时 MaxWidth 才生效、HorizontalAlignment 才决定落位。
+            // All widths must fill the account viewport rather than leaving a centred
+            // 1200-DIP island on maximized monitors.
             var accountPage = FindVisual<AccountPage>(window);
             Check(accountPage != null, "maximized layout exposes the account page for centring measurement");
-            foreach (var width in new[] { 1366d, 1600d, 1920d, 2560d })
+            var pageHost = (FrameworkElement)window.FindName("PageHost");
+            var accountRoot = (FrameworkElement)accountPage!.FindName("AccountContentRoot");
+            var accountRight = accountRoot.TranslatePoint(new Point(accountRoot.ActualWidth, 0), pageHost).X;
+            Check(Math.Abs(accountRight - (pageHost.ActualWidth - 24)) <= 3,
+                $"maximized account shares the page right edge (right={accountRight:F1}, expected={pageHost.ActualWidth - 24:F1})");
+            foreach (var width in new[] { 900d, 1000d, 1120d, 1280d, 1366d, 1600d, 1920d, 2560d })
                 await MeasureAccountCentringAtAsync(window, accountPage!, width, 900d);
+
+            vm.CurrentPage = MainViewModel.PageSettings;
+            vm.SettingsSection = 0;
+            await NavIdleAsync();
+            var settingsPage = FindVisual<SettingsPage>(window);
+            var settingsForm = (FrameworkElement)settingsPage.FindName("SettingsContent");
+            var settingsFooter = (FrameworkElement)settingsPage.FindName("SettingsSaveBar");
+            var settingsRight = settingsForm.TranslatePoint(new Point(settingsForm.ActualWidth, 0), pageHost).X;
+            var footerRight = settingsFooter.TranslatePoint(new Point(settingsFooter.ActualWidth, 0), pageHost).X;
+            Check(Math.Abs(settingsRight - (pageHost.ActualWidth - 24)) <= 3,
+                $"maximized settings card shares the page right edge (right={settingsRight:F1}, expected={pageHost.ActualWidth - 24:F1})");
+            Check(Math.Abs(footerRight - settingsRight) <= 2,
+                $"maximized settings footer aligns with its card (footer={footerRight:F1}, card={settingsRight:F1})");
+            Capture(window, "maximized-settings");
 
             // ── 断言（读数已全部落 stdout；修复前应在这几行变红）────────────────────────
             // D5：最大化客户区底边不得越过工作区底边（否则底部 30 DIP 状态栏被 Windows 任务栏盖住）。
@@ -189,6 +208,9 @@ public sealed partial class SmokeApp
             foreach (var (name, deviation, visible, height) in topBarDeviations)
                 Check(visible && height > 0 && deviation <= 1.0,
                     $"maximized title bar centres {name} in the 44 DIP row (deviation={deviation:F2}, visible={visible}, h={height:F1})");
+            vm.CurrentPage = MainViewModel.PageGlossary;
+            await NavIdleAsync();
+            Capture(window, "maximized-glossary");
         }
         finally
         {
@@ -197,10 +219,11 @@ public sealed partial class SmokeApp
                 window.WindowState = WindowState.Normal;
                 await NavIdleAsync();
             }
-            window.Width = savedWindowWidth; window.Height = savedWindowHeight;
+            FitNativeWindow(window, new Size(savedWindowWidth, savedWindowHeight));
             content.Width = savedContentWidth; content.Height = savedContentHeight;
             await WaitForStableAsync(() => window.ActualWidth, "restored window width");
             vm.CurrentPage = savedPage;
+            vm.SettingsSection = savedSettingsSection;
             vm.OnlineUsage = savedUsage;
             vm.OnlineSubscription = savedSubscription;
             await NavIdleAsync();
@@ -225,14 +248,31 @@ public sealed partial class SmokeApp
         var block = (FrameworkElement)scroll.Content;
         scroll.UpdateLayout(); block.UpdateLayout();
         var rect = block.TransformToAncestor(scroll).TransformBounds(new Rect(0, 0, block.ActualWidth, block.ActualHeight));
-        var viewportCenterX = scroll.ActualWidth / 2;
+        // ActualWidth includes the vertical scrollbar.  ViewportWidth is the
+        // width that the content can really occupy and is therefore the only
+        // correct reference for centring/clipping assertions.
+        var usableViewportWidth = scroll.ViewportWidth > 0 ? scroll.ViewportWidth : scroll.ActualWidth;
+        var viewportCenterX = usableViewportWidth / 2;
         var blockCenterX = rect.Left + rect.Width / 2;
         var offsetX = Math.Abs(blockCenterX - viewportCenterX);
-        var rightGap = scroll.ActualWidth - rect.Right;
-        Console.WriteLine($"MAXIMIZED_ACCOUNT canvas={width:F0}x{height:F0} scrollViewport={scroll.ActualWidth:F1}x{scroll.ActualHeight:F1} block={block.ActualWidth:F1}x{block.ActualHeight:F1} leftGap={rect.Left:F1} rightGap={rightGap:F1} blockCenterX={blockCenterX:F1} viewportCenterX={viewportCenterX:F1} offsetX={offsetX:F1}");
+        var rightGap = usableViewportWidth - rect.Right;
+        var blockWidth = block.ActualWidth;
+        var blockHeight = block.ActualHeight;
+        var tiles = (Grid)page.FindName("AccountNavTiles");
+        var outputTile = (FrameworkElement)page.FindName("OutputNavTile");
+        var tilesWidth = tiles.ActualWidth;
+        var outputRect = outputTile.TransformToAncestor(scroll).TransformBounds(
+            new Rect(0, 0, outputTile.ActualWidth, outputTile.ActualHeight));
+        Console.WriteLine($"MAXIMIZED_ACCOUNT canvas={width:F0}x{height:F0} scrollActual={scroll.ActualWidth:F1}x{scroll.ActualHeight:F1} usableViewport={usableViewportWidth:F1} block={blockWidth:F1}x{blockHeight:F1} leftGap={rect.Left:F1} rightGap={rightGap:F1} blockCenterX={blockCenterX:F1} viewportCenterX={viewportCenterX:F1} offsetX={offsetX:F1}");
         content.Width = double.NaN; content.Height = double.NaN;
         await NavIdleAsync();
         Check(offsetX <= 1.0,
             $"account content is horizontally centred at {width:F0} DIP (offsetX={offsetX:F1}, leftGap={rect.Left:F1}, rightGap={rightGap:F1})");
+        Check(blockWidth <= usableViewportWidth + 1.0 && rightGap >= -1.0,
+            $"account content stays inside the horizontal viewport at {width:F0} DIP (block={blockWidth:F1}, viewport={usableViewportWidth:F1}, rightGap={rightGap:F1})");
+        Check(Math.Abs(rect.Left) <= 1.0 && Math.Abs(rightGap) <= 1.0,
+            $"account content fills the horizontal viewport at {width:F0} DIP (leftGap={rect.Left:F1}, rightGap={rightGap:F1})");
+        Check(tilesWidth <= usableViewportWidth + 1.0 && outputRect.Right <= usableViewportWidth + 1.0,
+            $"account rightmost navigation tile remains visible at {width:F0} DIP (tiles={tilesWidth:F1}, tileRight={outputRect.Right:F1}, viewport={usableViewportWidth:F1})");
     }
 }

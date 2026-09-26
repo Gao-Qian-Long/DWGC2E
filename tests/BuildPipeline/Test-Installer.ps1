@@ -2,6 +2,7 @@
 # Input: optional -ResultDir; output: case results; fixtures are retained for inspection.
 param([string]$ResultDir)
 $ErrorActionPreference = 'Stop'
+Import-Module Microsoft.PowerShell.Utility -ErrorAction Stop
 $root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 if (-not $ResultDir) { $ResultDir = Join-Path $root ('artifacts/installer-test-' + [guid]::NewGuid().ToString('N')) }
 $fixture = Join-Path $ResultDir ('fixture-' + [guid]::NewGuid().ToString('N'))

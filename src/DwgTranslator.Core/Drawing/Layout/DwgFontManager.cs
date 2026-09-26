@@ -20,40 +20,12 @@ internal static class DwgFontManager
     {
         try
         {
-            if (targetIsCjk)
-            {
-                EnsureStyle(doc, "SimHei");
-            }
-            else
-            {
-                EnsureStyle(doc, "Arial");
-                EnsureStyle(doc, "Helvetica");
-            }
+            EnsureMappedStyle(doc, targetIsCjk ? "SimHei" : "Arial");
         }
         catch (Exception ex)
         {
             Log.Warning(ex, "Failed to ensure font styles");
         }
-    }
-
-    private static void EnsureStyle(CadDocument doc, string styleName)
-    {
-        if (doc.TextStyles.Contains(styleName)) return;
-
-        var style = new TextStyle(styleName);
-
-        // Set font file reference so the output DWG/DXF renders text correctly.
-        // Without this, viewers may show empty rectangles instead of glyphs.
-        bool isShx = styleName.EndsWith(".shx", StringComparison.OrdinalIgnoreCase);
-        if (isShx)
-        {
-            // IsShapeFile is automatically set by ACadSharp when Filename is assigned
-            style.Filename = styleName;
-        }
-        // For TrueType fonts, the style name IS the font name — no additional
-        // properties needed. DWG/DXF viewers resolve "Arial" → system Arial font.
-
-        doc.TextStyles.Add(style);
     }
 
     /// <summary>
@@ -62,30 +34,36 @@ internal static class DwgFontManager
     /// </summary>
     public static TextStyle? ResolveTextStyle(string originalStyleName, bool targetIsCjk, CadDocument doc)
     {
-        var targetFont = FontMapper.MapFontName(originalStyleName, targetIsCjk);
+        var original = doc.TextStyles.FirstOrDefault(ts =>
+            string.Equals(ts.Name, originalStyleName, StringComparison.OrdinalIgnoreCase));
+        var targetFont = FontMapper.MapFontName(originalStyleName,
+            original?.Filename, original?.BigFontFilename, targetIsCjk);
         if (string.IsNullOrEmpty(targetFont)) return null;
+        return EnsureMappedStyle(doc, targetFont);
+    }
 
-        foreach (var ts in doc.TextStyles)
+    private static TextStyle EnsureMappedStyle(CadDocument doc, string targetFont)
+    {
+        // Do not reuse a user style named "Arial"/"SimHei": that name may point to a
+        // different SHX or have a fixed height/width. The private style carries an explicit
+        // font file and neutral metrics so the output renderer cannot silently fall back to
+        // the generic txt.shx face (the source of the thin/odd-looking offline glyphs).
+        var styleName = "DWGC2E_" + targetFont.Replace('.', '_');
+        var style = doc.TextStyles.FirstOrDefault(ts =>
+            string.Equals(ts.Name, styleName, StringComparison.OrdinalIgnoreCase));
+        if (style == null)
         {
-            if (string.Equals(ts.Name, targetFont, StringComparison.OrdinalIgnoreCase))
-                return ts;
+            style = new TextStyle(styleName);
+            doc.TextStyles.Add(style);
         }
 
-        var newStyle = new TextStyle(targetFont);
-
-        // Set font file reference for SHX fonts (e.g. "romans.shx", "simplex.shx").
-        // Without Filename, the DWG/DXF viewer can't locate the SHX file and may
-        // show empty rectangles. TrueType fonts (e.g. "Arial", "SimHei") are
-        // resolved by style name alone.
-        bool isShx = targetFont.EndsWith(".shx", StringComparison.OrdinalIgnoreCase);
-        if (isShx)
-        {
-            // IsShapeFile is automatically set by ACadSharp when Filename is assigned
-            newStyle.Filename = targetFont;
-        }
-
-        doc.TextStyles.Add(newStyle);
-        return newStyle;
+        style.Filename = FontMapper.FontFileName(targetFont);
+        style.BigFontFilename = string.Empty;
+        style.Height = 0;
+        style.Width = 1;
+        style.ObliqueAngle = 0;
+        style.TrueType = FontFlags.Regular;
+        return style;
     }
 
     /// <summary>

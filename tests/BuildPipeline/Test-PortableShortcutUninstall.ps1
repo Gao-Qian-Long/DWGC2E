@@ -3,6 +3,7 @@
 # No desktop shortcut records, real user-folder changes, APP execution, or recursive deletion.
 param([string]$ResultDir)
 $ErrorActionPreference='Stop'
+Import-Module Microsoft.PowerShell.Utility -ErrorAction Stop
 $root=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..')).TrimEnd('\')
 if(-not $ResultDir){$ResultDir=Join-Path $root ('artifacts/installer-safety-20260916-resumed/shortcut-uninstall-'+[guid]::NewGuid().ToString('N'))}
 $ResultDir=[IO.Path]::GetFullPath($ResultDir).TrimEnd('\')

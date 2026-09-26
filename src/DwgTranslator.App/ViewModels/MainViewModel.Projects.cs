@@ -6,6 +6,7 @@ using DwgTranslator.Core.Tasks;
 using Serilog;
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Windows;
 
 namespace DwgTranslator.App.ViewModels;
 
@@ -13,6 +14,7 @@ public partial class MainViewModel
 {
     private TranslationProjectStore ProjectStore => new(AccountDataDirectory);
     private CancellationTokenSource? _projectAutosaveCts;
+    private readonly SemaphoreSlim _projectSaveGate = new(1, 1);
 
     private async void ScheduleProjectAutosave()
     {
@@ -25,7 +27,7 @@ public partial class MainViewModel
         {
             await Task.Delay(1200, cts.Token);
             if (!cts.IsCancellationRequested && ActiveTranslationProject != null && !IsProcessing && !IsExporting)
-                SaveActiveProject();
+                await SaveActiveProjectAsync(cts.Token);
         }
         catch (OperationCanceledException) { }
         catch (Exception ex) { Log.Warning(ex, "翻译项目自动保存失败"); }
@@ -61,9 +63,8 @@ public partial class MainViewModel
     }
 
     /// <summary>
-    /// 选中即打开（用户批注 2026-09-23：「选择之后不会立即刷新列表」）。
-    /// 原来下拉只是个选择器：选完必须再点「打开项目」才会加载，界面上看着像"没反应"。
-    /// 现在选中就直接走同一条打开链路（含未保存校对的确认与原记录保留策略）；
+    /// 选中即载入项目（用户批注 2026-09-23：「选择之后不会立即刷新列表」），
+    /// 但载入后留在任务列表，逐张选择图纸进入详情/校对，不直接跳到单张图纸。
     /// _projectSelectionLocked 用来区分程序性回填（刷新列表、打开后重选），那种绝不能触发加载。
     /// </summary>
     partial void OnSelectedTranslationProjectChanged(TranslationProjectSummary? value)
@@ -141,35 +142,145 @@ public partial class MainViewModel
     {
         var project = ActiveTranslationProject;
         if (project == null) return false;
-        var map = Entities.GroupBy(e => NormalizeSourcePath(e.SourceFilePath), StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(g => g.Key, g => g.ToDictionary(e => e.Handle, StringComparer.Ordinal), StringComparer.OrdinalIgnoreCase);
-        foreach (var drawing in project.Drawings)
-        {
-            if (!map.TryGetValue(NormalizeSourcePath(drawing.SourcePath), out var entries)) continue;
-            foreach (var saved in drawing.Entries)
-            {
-                if (!entries.TryGetValue(saved.Handle, out var entity)) continue;
-                saved.TranslatedText = entity.TranslatedText ?? string.Empty;
-                saved.Status = entity.Status;
-                saved.Notes = entity.Notes ?? string.Empty;
-                saved.GlossaryHit = entity.GlossaryHit;
-                saved.ManuallyEdited = entity.Status == TranslationStatus.Reviewed || _proofreadingOriginals.ContainsKey(entity);
-            }
-        }
+        _projectSaveGate.Wait();
         try
         {
-            ProjectStore.Save(project);
-            RefreshTranslationProjects();
-            return true;
+            var map = Entities.GroupBy(e => NormalizeSourcePath(e.SourceFilePath), StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.ToDictionary(e => e.Handle, StringComparer.Ordinal), StringComparer.OrdinalIgnoreCase);
+            foreach (var drawing in project.Drawings)
+            {
+                if (!map.TryGetValue(NormalizeSourcePath(drawing.SourcePath), out var entries)) continue;
+                foreach (var saved in drawing.Entries)
+                {
+                    if (!entries.TryGetValue(saved.Handle, out var entity)) continue;
+                    saved.TranslatedText = entity.TranslatedText ?? string.Empty;
+                    saved.Status = entity.Status;
+                    saved.Notes = entity.Notes ?? string.Empty;
+                    saved.GlossaryHit = entity.GlossaryHit;
+                    saved.ManuallyEdited = entity.Status == TranslationStatus.Reviewed || _proofreadingOriginals.ContainsKey(entity);
+                }
+            }
+            try
+            {
+                ProjectStore.Save(project);
+                RefreshTranslationProjects();
+                return true;
+            }
+            catch (ProjectConflictException ex)
+            {
+                Log.Warning(ex, "翻译项目发生并发保存冲突，已阻止覆盖 {ProjectId}", project.Id);
+                StatusMessage = "当前项目已被另一个窗口更新。为避免覆盖他人的修改，本次保存已停止；请重新打开项目后再合并更改。";
+                DwgTranslator.App.Services.ToastService.Warning("项目已在其他窗口更新，本次保存未覆盖磁盘内容。");
+                return false;
+            }
+        }
+        finally { _projectSaveGate.Release(); }
+    }
+
+    private async Task<bool> SaveActiveProjectAsync(CancellationToken cancellationToken)
+    {
+        var project = ActiveTranslationProject;
+        if (project == null) return false;
+        await _projectSaveGate.WaitAsync(cancellationToken);
+        try
+        {
+            if (!ReferenceEquals(project, ActiveTranslationProject) || IsProcessing || IsExporting) return false;
+            var snapshot = CloneProject(project);
+            var map = Entities.GroupBy(e => NormalizeSourcePath(e.SourceFilePath), StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.ToDictionary(e => e.Handle, StringComparer.Ordinal), StringComparer.OrdinalIgnoreCase);
+            foreach (var drawing in snapshot.Drawings)
+            {
+                if (!map.TryGetValue(NormalizeSourcePath(drawing.SourcePath), out var entries)) continue;
+                foreach (var saved in drawing.Entries)
+                {
+                    if (!entries.TryGetValue(saved.Handle, out var entity)) continue;
+                    saved.TranslatedText = entity.TranslatedText ?? string.Empty;
+                    saved.Status = entity.Status;
+                    saved.Notes = entity.Notes ?? string.Empty;
+                    saved.GlossaryHit = entity.GlossaryHit;
+                    saved.ManuallyEdited = entity.Status == TranslationStatus.Reviewed || _proofreadingOriginals.ContainsKey(entity);
+                }
+            }
+
+            var accountDirectory = AccountDataDirectory;
+            await Task.Run(() => new TranslationProjectStore(accountDirectory).Save(snapshot), cancellationToken)
+                .ConfigureAwait(false);
+            // Project metadata is not observable; updating its revision before releasing the gate keeps
+            // an explicit save from racing the completed background commit with a stale revision.
+            project.Revision = snapshot.Revision;
+            project.ModifiedAtUtc = snapshot.ModifiedAtUtc;
         }
         catch (ProjectConflictException ex)
         {
-            Log.Warning(ex, "翻译项目发生并发保存冲突，已阻止覆盖 {ProjectId}", project.Id);
-            StatusMessage = "当前项目已被另一个窗口更新。为避免覆盖他人的修改，本次保存已停止；请重新打开项目后再合并更改。";
-            DwgTranslator.App.Services.ToastService.Warning("项目已在其他窗口更新，本次保存未覆盖磁盘内容。");
+            Log.Warning(ex, "翻译项目自动保存发生并发冲突，已阻止覆盖 {ProjectId}", project.Id);
+            _ = Application.Current.Dispatcher.BeginInvoke(new Action(() =>
+            {
+                StatusMessage = "当前项目已被另一个窗口更新。为避免覆盖他人的修改，自动保存已停止；请重新打开项目后再合并更改。";
+                DwgTranslator.App.Services.ToastService.Warning("项目已在其他窗口更新，自动保存未覆盖磁盘内容。");
+            }));
             return false;
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { return false; }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "翻译项目自动保存失败");
+            _ = Application.Current.Dispatcher.BeginInvoke(new Action(() => StatusMessage = "翻译项目自动保存失败，请检查磁盘空间和目录权限。修改仍保留在当前工作区。"));
+            return false;
+        }
+        finally { _projectSaveGate.Release(); }
+
+        await Application.Current.Dispatcher.InvokeAsync(() =>
+        {
+            if (ReferenceEquals(ActiveTranslationProject, project)) RefreshTranslationProjects();
+        });
+        return true;
     }
+
+    private static TranslationProject CloneProject(TranslationProject source) => new()
+    {
+        SchemaVersion = source.SchemaVersion,
+        Revision = source.Revision,
+        Id = source.Id,
+        Name = source.Name,
+        CreatedAtUtc = source.CreatedAtUtc,
+        ModifiedAtUtc = source.ModifiedAtUtc,
+        SourceLanguage = source.SourceLanguage,
+        TargetLanguage = source.TargetLanguage,
+        TranslationConfig = new(source.TranslationConfig),
+        Drawings = source.Drawings.Select(drawing => new TranslationProjectDrawing
+        {
+            SourcePath = drawing.SourcePath,
+            SourceFileName = drawing.SourceFileName,
+            SourceSha256 = drawing.SourceSha256,
+            Entries = drawing.Entries.Select(entry => new TranslationProjectEntry
+            {
+                Handle = entry.Handle,
+                OriginalText = entry.OriginalText,
+                RawText = entry.RawText,
+                EntityType = entry.EntityType,
+                TranslatedText = entry.TranslatedText,
+                Status = entry.Status,
+                Notes = entry.Notes,
+                GlossaryHit = entry.GlossaryHit,
+                ManuallyEdited = entry.ManuallyEdited
+            }).ToList()
+        }).ToList(),
+        ExportHistory = source.ExportHistory.Select(export => new TranslationProjectExport
+        {
+            ExportedAtUtc = export.ExportedAtUtc,
+            OutputDirectory = export.OutputDirectory,
+            WritebackMode = export.WritebackMode,
+            Files = export.Files.Select(file => new TranslationProjectExportFile
+            {
+                SourcePath = file.SourcePath,
+                OutputPath = file.OutputPath,
+                SuccessCount = file.SuccessCount,
+                FailureCount = file.FailureCount,
+                Skipped = file.Skipped,
+                Message = file.Message
+            }).ToList()
+        }).ToList()
+    };
 
     [RelayCommand]
     private async Task OpenTranslationProjectAsync(TranslationProjectSummary? summary)
@@ -207,8 +318,11 @@ public partial class MainViewModel
             Entities.Clear(); foreach (var entity in loaded) Entities.Add(entity); InvalidateEntityIndex();
             RebuildDrawingFileList(project.Drawings.Select(d => d.SourcePath).ToArray());
             ActiveTranslationProject = project; CurrentSourceLang = project.SourceLanguage; CurrentTargetLang = project.TargetLanguage;
-            ApplyFilter(); UpdateStatistics(); IsProofreading = true;
-            StatusMessage = $"已打开项目“{project.Name}”，共 {loaded.Count} 条译文。";
+            ApplyFilter(); UpdateStatistics();
+            IsProofreading = false;
+            SelectedBatchTask = null;
+            IsTaskDetailOpen = false;
+            StatusMessage = $"已载入项目“{project.Name}”，共 {project.Drawings.Count} 张图纸、{loaded.Count} 条译文。请在任务列表中逐张查看。";
         }
         catch (Exception ex)
         {
@@ -217,6 +331,73 @@ public partial class MainViewModel
                 Log.Warning(ex, "打开翻译项目失败");
                 StatusMessage = "翻译项目无法打开，原记录已保留。";
             }
+        }
+    }
+
+    [RelayCommand]
+    private void DeleteSelectedTranslationProject()
+    {
+        var summary = SelectedTranslationProject;
+        if (summary == null) return;
+        if (IsProcessing || IsTranslating || IsExporting)
+        {
+            StatusMessage = "当前有任务正在运行，请完成后再删除历史项目。";
+            DwgTranslator.App.Services.ToastService.Warning(StatusMessage);
+            return;
+        }
+
+        var answer = DwgTranslator.App.Views.PromptDialog.Show(
+            $"确定从历史项目中删除“{summary.Name}”吗？\n\n只删除翻译项目归档，不删除源图纸和已导出的文件。",
+            "删除历史项目", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+        if (answer != MessageBoxResult.Yes) return;
+
+        var removesActiveProject = ActiveTranslationProject?.Id == summary.Id;
+        if (removesActiveProject && !ConfirmLeaveProofreading()) return;
+        if (removesActiveProject)
+        {
+            _projectAutosaveCts?.Cancel();
+            _projectAutosaveCts?.Dispose();
+            _projectAutosaveCts = null;
+        }
+
+        try
+        {
+            _projectSaveGate.Wait();
+            try
+            {
+                var linkedTasks = _taskManager.Tasks
+                    .Where(task => string.Equals(task.ProjectId, summary.Id, StringComparison.Ordinal))
+                    .ToArray();
+                foreach (var task in linkedTasks) task.ProjectId = null;
+                try { _taskManager.EnsureAccountStoreSaved(); }
+                catch
+                {
+                    foreach (var task in linkedTasks) task.ProjectId = summary.Id;
+                    throw;
+                }
+
+                try { ProjectStore.Delete(summary.Id); }
+                catch
+                {
+                    foreach (var task in linkedTasks) task.ProjectId = summary.Id;
+                    try { _taskManager.EnsureAccountStoreSaved(); }
+                    catch (Exception saveException) { Log.Warning(saveException, "恢复历史项目引用失败：{ProjectId}", summary.Id); }
+                    throw;
+                }
+                if (removesActiveProject) ActiveTranslationProject = null;
+            }
+            finally { _projectSaveGate.Release(); }
+            RefreshTranslationProjects();
+            if (removesActiveProject) ScheduleWorkspaceSessionSave();
+            ProjectRenameName = string.Empty;
+            StatusMessage = $"已从历史记录删除项目“{summary.Name}”；源图纸和导出文件保持不变。";
+            DwgTranslator.App.Services.ToastService.Success("历史项目已删除。图纸文件未删除。");
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "删除历史翻译项目失败 {ProjectId}", summary.Id);
+            StatusMessage = "历史项目删除失败，原有记录保持不变。";
+            DwgTranslator.App.Services.ToastService.Error(StatusMessage);
         }
     }
 

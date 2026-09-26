@@ -48,6 +48,24 @@ public sealed class TranslationProjectStoreTests : IDisposable
     }
 
     [Fact]
+    public void DeleteRemovesOnlyArchivedProjectAndSearchCanFindDrawingName()
+    {
+        var account = Path.Combine(_root, "delete-history");
+        var source = Source("delete-history", "历史总图.dwg");
+        var store = new TranslationProjectStore(account);
+        var project = store.Create("批次 11 张", "zh", "en", new[] { Entity(source) });
+        var projectDirectory = Path.Combine(account, "projects", project.Id);
+
+        Assert.Single(store.List("历史总图"));
+        store.Delete(project.Id);
+
+        Assert.Empty(store.List());
+        Assert.False(Directory.Exists(projectDirectory));
+        Assert.True(File.Exists(source));
+        Assert.Equal("dwg-v1", File.ReadAllText(source));
+    }
+
+    [Fact]
     public void SaveAtomicallyReplacesExistingProjectAndLeavesNoTemporaryFiles()
     {
         var account = Path.Combine(_root, "atomic");

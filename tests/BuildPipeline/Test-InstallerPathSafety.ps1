@@ -3,6 +3,7 @@
 # Output: JSON, logs, retained synthetic fixtures/junctions. No real APP/CAD execution or recursive deletion.
 param([Parameter(Mandatory=$true)][string]$NodeExe,[string]$ResultDir)
 $ErrorActionPreference='Stop'
+Import-Module Microsoft.PowerShell.Utility -ErrorAction Stop
 $root=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..')).TrimEnd('\')
 if(-not $ResultDir){$ResultDir=Join-Path $root ('artifacts/installer-safety-20260916-resumed/path-safety-'+[guid]::NewGuid().ToString('N'))}
 $ResultDir=[IO.Path]::GetFullPath($ResultDir).TrimEnd('\')

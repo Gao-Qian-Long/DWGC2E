@@ -26,59 +26,62 @@
     <FontFamily x:Key="FontFamily.Mono">Cascadia Mono, Consolas, Microsoft YaHei UI</FontFamily>
     <sys:Double x:Key="FontSize.Kicker">11</sys:Double>
     <sys:Double x:Key="FontSize.MonoTag">11.5</sys:Double>
-    <!-- ── 8pt 间距系统 ── -->
-    <Thickness x:Key="Spacing.Page">32,24</Thickness>
-    <Thickness x:Key="Spacing.PageTop">0,12,0,10</Thickness>
-    <Thickness x:Key="Spacing.Card">20</Thickness>
-    <Thickness x:Key="Spacing.CardHeader">20,16</Thickness>
-    <Thickness x:Key="Spacing.CardGap">0,0,0,16</Thickness>
-    <Thickness x:Key="Spacing.SectionGap">0,0,0,24</Thickness>
+    <!-- ── 紧凑工作台间距系统：页边与卡片留足呼吸感，重复表单/分区采用 4 / 6 / 8 / 12 / 16 DIP 节奏 ── -->
+    <Thickness x:Key="Spacing.Page">24,16</Thickness>
+    <Thickness x:Key="Spacing.PageTop">0,8,0,8</Thickness>
+    <Thickness x:Key="Spacing.Card">16</Thickness>
+    <Thickness x:Key="Spacing.CardHeader">16,12</Thickness>
+    <Thickness x:Key="Spacing.CardGap">0,0,0,12</Thickness>
+    <Thickness x:Key="Spacing.SectionGap">0,0,0,16</Thickness>
     <Thickness x:Key="Spacing.RowGap">0,0,0,8</Thickness>
     <Thickness x:Key="Spacing.Inline">0,0,8,0</Thickness>
 
-    <!-- ══ 方向性间距（统一节奏）══
-         档位只有 4 / 8 / 12 / 16 / 20；方向由名字决定，禁止页面各写各的字面量。
+    <!-- ══ 方向性间距（统一紧凑节奏）══
+         档位收敛为 4 / 6 / 8 / 12 / 16；方向由名字决定，禁止页面各写各的字面量。
          Inline*   = 元素之后的水平间隔（右外边距）
          Stack*    = 竖直堆叠元素之间的间隔（下外边距）
          BlockTop* = 区块起始的竖直间隔（上外边距）
     -->
     <Thickness x:Key="Spacing.InlineTight">0,0,4,0</Thickness>
-    <Thickness x:Key="Spacing.InlineWide">0,0,12,0</Thickness>
-    <Thickness x:Key="Spacing.InlineLoose">0,0,16,0</Thickness>
-    <Thickness x:Key="Spacing.InlineLeading">0,0,20,0</Thickness>
+    <Thickness x:Key="Spacing.InlineWide">0,0,8,0</Thickness>
+    <Thickness x:Key="Spacing.InlineLoose">0,0,12,0</Thickness>
+    <Thickness x:Key="Spacing.InlineLeading">0,0,16,0</Thickness>
+    <!-- Compact glossary WrapPanel actions: a 4-DIP horizontal and vertical gutter. -->
+    <Thickness x:Key="Spacing.ToolbarItem">0,0,4,4</Thickness>
 
     <Thickness x:Key="Spacing.StackTight">0,0,0,4</Thickness>
-    <Thickness x:Key="Spacing.Stack">0,0,0,8</Thickness>
-    <Thickness x:Key="Spacing.StackWide">0,0,0,12</Thickness>
-    <Thickness x:Key="Spacing.StackLoose">0,0,0,16</Thickness>
-    <Thickness x:Key="Spacing.StackSection">0,0,0,20</Thickness>
+    <Thickness x:Key="Spacing.SettingsKicker">0,0,0,2</Thickness>
+    <Thickness x:Key="Spacing.Stack">0,0,0,6</Thickness>
+    <Thickness x:Key="Spacing.StackWide">0,0,0,8</Thickness>
+    <Thickness x:Key="Spacing.StackLoose">0,0,0,12</Thickness>
+    <Thickness x:Key="Spacing.StackSection">0,0,0,16</Thickness>
 
     <Thickness x:Key="Spacing.BlockTopTight">0,4,0,0</Thickness>
-    <Thickness x:Key="Spacing.BlockTop">0,8,0,0</Thickness>
-    <Thickness x:Key="Spacing.BlockTopWide">0,12,0,0</Thickness>
-    <Thickness x:Key="Spacing.BlockTopLoose">0,16,0,0</Thickness>
-    <Thickness x:Key="Spacing.BlockTopSection">0,20,0,0</Thickness>
+    <Thickness x:Key="Spacing.BlockTop">0,6,0,0</Thickness>
+    <Thickness x:Key="Spacing.BlockTopWide">0,8,0,0</Thickness>
+    <Thickness x:Key="Spacing.BlockTopLoose">0,12,0,0</Thickness>
+    <Thickness x:Key="Spacing.BlockTopSection">0,16,0,0</Thickness>
 
     <Thickness x:Key="Spacing.Lead">0,6,0,0</Thickness>
     <Thickness x:Key="Spacing.CardInset">0,12,0,6</Thickness>
-    <Thickness x:Key="Spacing.RowInset">0,16,0,8</Thickness>
+    <Thickness x:Key="Spacing.RowInset">0,12,0,6</Thickness>
     <!-- §L14 全出血表格卡片（Padding=0）的标题行内衬：左右 12 与表格单元文字对齐
          （DataGrid 单元内边距 12），标题不再贴住卡片左边框。 -->
-    <Thickness x:Key="Spacing.TableHeaderInset">12,8,12,8</Thickness>
-    <Thickness x:Key="Spacing.Toolbar">0,4,0,8</Thickness>
+    <Thickness x:Key="Spacing.TableHeaderInset">12,6,12,6</Thickness>
+    <Thickness x:Key="Spacing.Toolbar">0,4,0,6</Thickness>
     <Thickness x:Key="Spacing.LeftGap">8,0,0,0</Thickness>
     <!-- 选项说明文字的左缩进：对齐到单选框/复选框的文字起点，而不是圆点。 -->
     <Thickness x:Key="Spacing.LeftIndent">20,0,0,0</Thickness>
-    <Thickness x:Key="Spacing.Vertical">0,8,0,8</Thickness>
+    <Thickness x:Key="Spacing.Vertical">0,4,0,4</Thickness>
     <!-- ── 控件尺寸（同一工具栏不再出现多种高度）── -->
     <sys:Double x:Key="Size.Control">36</sys:Double>
     <sys:Double x:Key="Size.Button">36</sys:Double>
     <sys:Double x:Key="Size.ButtonCompact">32</sys:Double>
-    <sys:Double x:Key="Size.Toolbar">44</sys:Double>
+    <sys:Double x:Key="Size.Toolbar">40</sys:Double>
     <sys:Double x:Key="Size.Header">44</sys:Double>
     <sys:Double x:Key="Size.TableRow">40</sys:Double>
     <sys:Double x:Key="Size.TableHeader">40</sys:Double>
-    <sys:Double x:Key="Size.NavItem">42</sys:Double>
+    <sys:Double x:Key="Size.NavItem">40</sys:Double>
     <sys:Double x:Key="Size.Icon">18</sys:Double>
     <sys:Double x:Key="Size.IconInline">16</sys:Double>
     <sys:Double x:Key="Size.Stroke">1.5</sys:Double>
@@ -89,11 +92,11 @@
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}" />
     </Style>
-    <Style x:Key="PageSubtitleStyle" TargetType="TextBlock"><Setter Property="LineHeight" Value="22"/>
+    <Style x:Key="PageSubtitleStyle" TargetType="TextBlock"><Setter Property="LineHeight" Value="20"/>
         <Setter Property="FontSize" Value="{DynamicResource FontSize.PageSubtitle}" />
         <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}" />
         <Setter Property="TextWrapping" Value="Wrap" />
-        <Setter Property="Margin" Value="0,8,0,0" />
+        <Setter Property="Margin" Value="0,6,0,0" />
     </Style>
     <Style x:Key="SectionTitleStyle" TargetType="TextBlock"><Setter Property="LineHeight" Value="24"/>
         <Setter Property="FontFamily" Value="{DynamicResource FontFamily.Display}" />
@@ -108,12 +111,12 @@
         <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}" />
         <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
-    <Style x:Key="BodyStyle" TargetType="TextBlock"><Setter Property="LineHeight" Value="22"/>
+    <Style x:Key="BodyStyle" TargetType="TextBlock"><Setter Property="LineHeight" Value="20"/>
         <Setter Property="FontSize" Value="{DynamicResource FontSize.Body}" />
         <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}" />
         <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
-    <Style x:Key="CaptionStyle" TargetType="TextBlock"><Setter Property="LineHeight" Value="22"/>
+    <Style x:Key="CaptionStyle" TargetType="TextBlock"><Setter Property="LineHeight" Value="20"/>
         <Setter Property="FontSize" Value="{DynamicResource FontSize.Secondary}" />
         <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}" />
         <Setter Property="TextWrapping" Value="Wrap" />
@@ -343,7 +346,7 @@
          外边距在列内部，于是末块右缘内缩 16 且三块并不等宽；改用"槽列"表达间距后，
          三块真正三等分、两端与父容器齐平。与 MembershipDetails 两卡之间 16 的列距同值。 -->
     <GridLength x:Key="Size.CardGutter">16</GridLength>
-    <GridLength x:Key="Size.Sidebar">200</GridLength><sys:Double x:Key="Size.PageHeader">86</sys:Double><GridLength x:Key="Size.SettingsNav">168</GridLength>
+    <GridLength x:Key="Size.Sidebar">200</GridLength><sys:Double x:Key="Size.PageHeader">80</sys:Double><GridLength x:Key="Size.SettingsNav">168</GridLength>
     <sys:Double x:Key="Size.Drawer">400</sys:Double>
     <sys:Double x:Key="Size.FormMax">800</sys:Double>
     <sys:Double x:Key="Size.WorkspaceMax">1600</sys:Double>
@@ -373,4 +376,33 @@
     <sys:Double x:Key="Size.ShortcutIconBox">34</sys:Double>
     <sys:Double x:Key="Size.ShortcutIconGlyph">18</sys:Double>
     <GridLength x:Key="Size.ShortcutChevronColumn">20</GridLength>
+    <!-- §自适应（2026-09-25 用户批注「用鼠标把界面横向一直缩小，界面没有任何的自适应调节」）：
+         宽度断点的**单一事实来源**。此前 1100 / 1240 / 840 / 1150 散落在 5 个页面、1350 散在
+         MainWindow.xaml.cs 里各自为政，改一处看不出会牵动谁。现在页面用 {DynamicResource} 声明断点，
+         行为（Views/Controls/ResponsiveLayout.cs、ResponsiveTable.cs）只负责在档位翻转时切换。
+
+         口径统一：令牌比较的是**承载布局的容器自身 ActualWidth**（不是窗口宽）。窗口宽 → 页面可用宽的
+         换算是"展开侧栏 −248、图标侧栏 −96"（推导见 MainWindow.xaml.cs 的 CompactEnterWidth 注释）。
+         选值原则：取"该布局刚好放得下完整内容"的实测宽 + 少量余量，且保证最小窗口（1024）一定落在窄档；
+         宽档（≥1366）必须仍在窄档阈值之上，这样"界面显示要一致"才成立。 -->
+    <!-- 翻译页两栏并排所需最小页宽：左栏队列表固定列 680 + 右栏设置卡 400 + 槽 16 + 边框/滚动条 14
+         ≈ 1108，取 1110。低于它即上下堆叠，堆叠后队列表拿到整页宽，反而不再需要收列。 -->
+    <sys:Double x:Key="Size.BreakpointPageStack">1110</sys:Double>
+    <!-- 会员中心：两卡并排 / 身份卡右列 / 三磁贴并排的既有实测阈值（原来写死在 AccountPage.xaml.cs）。 -->
+    <sys:Double x:Key="Size.BreakpointCards">1100</sys:Double>
+    <sys:Double x:Key="Size.BreakpointTiles">620</sys:Double>
+    <!-- 设置页「关于与帮助」两卡并排所需页宽（原写死在 SettingsPage.xaml.cs）。 -->
+    <sys:Double x:Key="Size.BreakpointAbout">1240</sys:Double>
+    <!-- 设置页两列表单并排所需页宽（原写死在 SettingsPage.xaml.cs 的 840）。 -->
+    <sys:Double x:Key="Size.BreakpointForm">840</sys:Double>
+    <!-- 页头动作区折行（原写死在 PageHeader.cs 的 420）。 -->
+    <sys:Double x:Key="Size.BreakpointPageHeader">420</sys:Double>
+    <!-- 表格"完整列"所需可用宽：≥ 它保持全部列；< 它把次要列并进一个"一格多行"合并列。
+         队列表固定列 680 → 690；任务表 990（含边框与纵向滚动条 12）→ 1010；术语表 870 → 880。 -->
+    <sys:Double x:Key="Size.BreakpointQueue">690</sys:Double>
+    <sys:Double x:Key="Size.BreakpointTaskTable">1010</sys:Double>
+    <sys:Double x:Key="Size.BreakpointTermTable">880</sys:Double>
+    <!-- 7 项指标带：低于该宽折成 4 列两行（每档约 110 DIP，够放 4 字标签 + 数值）。 -->
+    <sys:Double x:Key="Size.BreakpointMetrics">780</sys:Double>
+    <sys:Double x:Key="Size.MetricsCompactColumns">4</sys:Double>
 </ResourceDictionary>

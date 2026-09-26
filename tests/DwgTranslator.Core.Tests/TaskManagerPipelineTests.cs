@@ -70,6 +70,29 @@ public class TaskManagerPipelineTests : IDisposable
         Assert.Throws<InvalidOperationException>(() => manager.MarkReviewCompleted(pending.Id));
         Assert.Equal(TranslationTaskStatus.Pending, pending.Status);
     }
+
+    [Fact]
+    public void RemoveDrawingPurgesAllPersistedRunsForThatSourcePath()
+    {
+        var store = new InMemoryTaskStore();
+        using var manager = CreateManager(new FakeReader(), new FakeTranslator(), new FakeWriter(), store, Config(), out _);
+        var source = CreateDrawing("repeated-history.dwg");
+        var earlierRun = manager.Enqueue(source);
+        earlierRun.Status = TranslationTaskStatus.Completed;
+        var latestRun = manager.Enqueue(source);
+        var unrelated = manager.Enqueue(CreateDrawing("different-source.dwg"));
+
+        Assert.Equal(3, manager.Tasks.Count);
+        manager.Remove(latestRun);
+
+        Assert.Single(manager.Tasks);
+        Assert.Equal(unrelated.Id, manager.Tasks.Single().Id);
+        Assert.Single(store.Saved);
+        Assert.Equal(unrelated.Id, store.Saved.Single().Id);
+        using var restored = CreateManager(new FakeReader(), new FakeTranslator(), new FakeWriter(), store, Config(), out _);
+        Assert.Equal(unrelated.Id, Assert.Single(restored.Tasks).Id);
+        Assert.Equal(unrelated.Id, Assert.Single(restored.PendingFromLastRun).Id);
+    }
     [Fact]
     public void RecordExportPath_RecordsExportAuditAndClearsLegacyPath()
     {
@@ -602,6 +625,29 @@ public class TaskManagerPipelineTests : IDisposable
         Assert.Equal(TranslationTaskStatus.ReadyForReview,task.Status); Assert.Empty(writer.Written); Assert.Null(task.OutputPath);
     }
 
+    [Fact]
+    public async Task RetryDoesNotReuseAStaleSkippedChineseCheckpoint()
+    {
+        var translator = new SkipChineseOnceTranslator();
+        using var manager = CreateManager(new FakeReader(), translator, new FakeWriter(),
+            new InMemoryTaskStore(), Config(), out _);
+        manager.ConfigureRun("ZH", "EN");
+        var task = manager.Enqueue(CreateDrawing("old-skipped-chinese.dwg"));
+
+        await manager.RunAsync();
+        Assert.Equal(TranslationTaskStatus.ReadyForReview, task.Status);
+        Assert.Contains(task.SuccessfulTranslations, pair => pair.SourceText == "表面粗糙度"
+            && pair.Status == TranslationStatus.Skipped);
+
+        await manager.RetryTaskAsync(task.Id);
+
+        Assert.Equal(new[] { "表面粗糙度", "倒角" }, translator.Inputs[0]);
+        Assert.Equal(new[] { "表面粗糙度" }, translator.Inputs[1]);
+        Assert.Equal(TranslationTaskStatus.ReadyForReview, task.Status);
+        Assert.All(task.SuccessfulTranslations, pair => Assert.Equal(TranslationStatus.Translated, pair.Status));
+        Assert.Equal("Surface Roughness", task.SuccessfulTranslations.Single(pair => pair.Handle == "A1").TranslatedText);
+    }
+
     private sealed class PartialHandler : System.Net.Http.HttpMessageHandler
     {
         public List<int> Counts { get; } = new();
@@ -612,6 +658,39 @@ public class TaskManagerPipelineTests : IDisposable
             return new(System.Net.HttpStatusCode.OK) { Content = new System.Net.Http.StringContent(Counts.Count == 1
                 ? "{\"success\":true,\"items\":[{\"id\":0,\"translated_text\":\"Surface Roughness\"},{\"id\":1,\"error_code\":\"missing_result\"}]}"
                 : "{\"success\":true,\"items\":[{\"id\":0,\"translated_text\":\"Chamfer\"}]}") };
+        }
+    }
+
+    private sealed class SkipChineseOnceTranslator : ITranslationService
+    {
+        public List<string[]> Inputs { get; } = new();
+        private int _calls;
+        public Task<string> TranslateAsync(string text, string sourceLanguage, string targetLanguage,
+            CancellationToken cancellationToken = default) => Task.FromResult("Translated");
+        public Task<List<TranslationPair>> TranslateBatchAsync(List<TextEntity> entities,
+            string sourceLanguage, string targetLanguage, CancellationToken cancellationToken = default) =>
+            TranslateBatchWithProgressAsync(entities, sourceLanguage, targetLanguage, null, cancellationToken);
+        public Task<List<TranslationPair>> TranslateBatchWithProgressAsync(List<TextEntity> entities,
+            string sourceLanguage, string targetLanguage, IProgress<TranslationPair>? progress = null,
+            CancellationToken cancellationToken = default)
+        {
+            var call = Interlocked.Increment(ref _calls);
+            Inputs.Add(entities.Select(entity => entity.PlainText).ToArray());
+            var pairs = entities.Select(entity =>
+            {
+                var skipped = call == 1 && entity.Handle == "A1";
+                return new TranslationPair
+                {
+                    Handle = entity.Handle,
+                    SourceFilePath = entity.SourceFilePath,
+                    SourceText = entity.PlainText,
+                    TranslatedText = skipped ? entity.PlainText
+                        : entity.Handle == "A1" ? "Surface Roughness" : "Chamfer",
+                    Status = skipped ? TranslationStatus.Skipped : TranslationStatus.Translated
+                };
+            }).ToList();
+            foreach (var pair in pairs) progress?.Report(pair);
+            return Task.FromResult(pairs);
         }
     }
 

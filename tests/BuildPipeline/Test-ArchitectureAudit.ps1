@@ -3,6 +3,7 @@
 # Usage: powershell -NoProfile -File tests/BuildPipeline/Test-ArchitectureAudit.ps1 -OutputDir artifacts/<task>/negative-cases
 param([Parameter(Mandatory=$true)][string]$OutputDir)
 $ErrorActionPreference='Stop'
+Import-Module Microsoft.PowerShell.Utility -ErrorAction Stop
 $root=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 $out=$ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutputDir)
 if(-not $out.StartsWith((Join-Path $root 'artifacts')+'\',[StringComparison]::OrdinalIgnoreCase) -or (Test-Path -LiteralPath $out)){throw 'Use a new evidence directory under artifacts.'}

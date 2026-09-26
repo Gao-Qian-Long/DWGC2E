@@ -3,6 +3,7 @@
 # Output: results.json and retained synthetic links. No real desktop/start-menu access or APP launch.
 param([string]$ResultDir)
 $ErrorActionPreference='Stop'
+Import-Module Microsoft.PowerShell.Utility -ErrorAction Stop
 $root=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..')).TrimEnd('\')
 if(-not $ResultDir){$ResultDir=Join-Path $root 'artifacts/installer-safety-20260916-resumed/portable-shortcuts'}
 $ResultDir=[IO.Path]::GetFullPath($ResultDir).TrimEnd('\')

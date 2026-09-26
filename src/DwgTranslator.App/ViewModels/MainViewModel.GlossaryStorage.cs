@@ -34,6 +34,25 @@ public partial class MainViewModel
         if (!ok) _workspace.Categories = categories;
         RefreshWorkspaceCounts(); return ok;
     }
+
+    public async Task<bool> ChangeTermCategoryAsync(string? oldName, string? newName, bool delete = false)
+    {
+        if (!CanEditWorkspace || IsTermDrawerOpen) return false;
+        EnsureWorkspace(); var name = newName?.Trim() ?? "";
+        if (oldName == EffectiveGlossary.DefaultCategory || (!delete && (name.Length == 0 || name.Length > 128 || name == "全部分类" || _workspace.Categories.Any(c => c.Equals(name, StringComparison.OrdinalIgnoreCase) && c != oldName))))
+        { TermFeedback = "分类名称为空、重复、保留名称或超过128字；默认分类不可修改。"; return false; }
+        var categories = _workspace.Categories.ToList();
+        if (oldName != null) _workspace.Categories.Remove(oldName);
+        if (!delete) _workspace.Categories.Add(name);
+        var ok = await CommitWorkspaceChangeAsync(() =>
+        {
+            foreach (var term in TermDraft.Where(term => term.SourceKind == GlossarySource.User && term.Category == oldName))
+                term.Category = delete ? EffectiveGlossary.DefaultCategory : name;
+        });
+        if (!ok) _workspace.Categories = categories;
+        RefreshWorkspaceCounts();
+        return ok;
+    }
     private void RefreshSyncStatuses()
     {
         EnsureWorkspace();

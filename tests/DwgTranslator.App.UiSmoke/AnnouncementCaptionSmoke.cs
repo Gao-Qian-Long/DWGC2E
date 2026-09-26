@@ -58,7 +58,7 @@ public sealed partial class SmokeApp
             await Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ApplicationIdle);
             Check(banner.DisplayText == body, "admin announcement loads through actual HTTP client");
             var entry = FindVisual<Button>(banner);
-            // §L20 公告条由固定 220 改为弹性 160..320，以保证 1120 宽窗口下与用户入口不重叠。
+            // §L20 公告条由固定 220 改为弹性 160..320，以保证最窄窗口（§自适应后下限 1024）下与用户入口不重叠。
             Check(entry != null && entry.ActualWidth >= 160 && entry.ActualWidth <= 320,
                 $"announcement has bounded ticker entry (actual={entry?.ActualWidth:F1})");
             Check(banner.IsHitTestVisible, "announcement entry accepts input");

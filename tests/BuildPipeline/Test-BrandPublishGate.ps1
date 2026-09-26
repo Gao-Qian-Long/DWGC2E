@@ -1,6 +1,7 @@
 # Exercise branding gates without rebuilding APP or invoking the publisher.
 param([string]$ResultDir)
 $ErrorActionPreference='Stop'
+Import-Module Microsoft.PowerShell.Utility -ErrorAction Stop
 $root=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 if(-not $ResultDir){$ResultDir=Join-Path $root 'artifacts/icon-cache-20260916/publish-gate'}
 New-Item -ItemType Directory -Force -Path $ResultDir | Out-Null

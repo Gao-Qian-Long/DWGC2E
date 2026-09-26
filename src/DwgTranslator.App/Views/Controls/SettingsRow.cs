@@ -8,7 +8,7 @@ public sealed class SettingsRow : Grid
 {
     public SettingsRow()
     {
-        Margin = new Thickness(0, 0, 0, 16);
+        Margin = new Thickness(0, 0, 0, 12);
         Loaded += (_, _) => Reflow();
         SizeChanged += (_, _) => Reflow();
     }

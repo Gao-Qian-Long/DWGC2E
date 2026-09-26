@@ -108,7 +108,8 @@ public sealed class WorkerTranslationService : ITranslationService, IWritebackGl
             if (string.IsNullOrWhiteSpace(entity.PlainText)
                 || (EffectiveGlossary.Match(entity.PlainText, resolvedTerms).Count == 0
                     && TranslationFilter.ShouldSkipTranslation(entity.PlainText, source, target)))
-                Complete(entity, entity.PlainText, TranslationStatus.Skipped, "", results, progress);
+                Complete(entity, entity.PlainText, TranslationStatus.Skipped,
+                    TranslationFilter.GetSkipReason(entity.PlainText, source, target) ?? "", results, progress);
             else if (EffectiveGlossary.HasConflictingHit(entity.PlainText, conflictingTerms))
                 // 命中冲突术语的条目必须由用户裁决，不能整批中止，也不能让模型猜。
                 Complete(entity, "", TranslationStatus.TranslationFailed, GlossaryConflict, results, progress);

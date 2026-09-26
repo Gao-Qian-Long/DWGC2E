@@ -5,6 +5,7 @@ using System.Windows.Data;
 using System.Windows;
 using System.IO;
 using System.Diagnostics;
+using DwgTranslator.Core.Models;
 using DwgTranslator.Core.Tasks;
 using DwgTranslator.Core.Services;
 using Serilog;
@@ -247,23 +248,112 @@ public partial class MainViewModel
     [RelayCommand] private void CloseTaskDetail() => IsTaskDetailOpen = false;
 
     [RelayCommand]
-    private void OpenTaskProofreading()
+    private async Task OpenTaskProofreadingAsync()
     {
-        if (SelectedBatchTask == null) return;
-        if (SelectedBatchTask.Task?.IsActive == true)
+        var selected = SelectedBatchTask;
+        if (selected == null) return;
+        if (selected.Task?.IsActive == true)
         {
             Services.ToastService.Warning("任务正在执行，请完成或停止后再校对。");
             return;
         }
-        if (!SelectedBatchTask.CanOpenProofreading)
+        if (!selected.CanOpenProofreading)
         {
-            Services.ToastService.Warning(SelectedBatchTask.HasError
+            Services.ToastService.Warning(selected.HasError
                 ? "此任务尚未生成可校对译文，请先重试失败任务。"
                 : "此任务尚未完成翻译，暂时不能进入校对。");
             return;
         }
         if (!ConfirmLeaveProofreading()) return;
-        SelectedDrawingFile = SelectedBatchTask;
+
+        // Restored task rows may outlive the active in-memory entity list. Rehydrate the
+        // selected drawing from its archived project so choosing a historical task never
+        // opens an empty proofreading grid.
+        TranslationProject? project = null;
+        var loaded = Entities.Where(entity => string.Equals(
+            NormalizeSourcePath(entity.SourceFilePath), NormalizeSourcePath(selected.FullPath),
+            StringComparison.OrdinalIgnoreCase)).ToList();
+        // A matching row already in the workspace may be an import-only/stale copy.
+        // For a selected archived task the project's saved entries are authoritative.
+        var hasArchivedProject = !string.IsNullOrWhiteSpace(selected.Task?.ProjectId);
+        if ((loaded.Count == 0 || hasArchivedProject) && !File.Exists(selected.FullPath))
+        {
+            StatusMessage = "源图已移走，请恢复原图纸后再打开历史译文。";
+            return;
+        }
+        if (loaded.Count == 0 || hasArchivedProject)
+        {
+            try
+            {
+                var task = selected.Task;
+                if (!string.IsNullOrWhiteSpace(task?.ProjectId))
+                {
+                    project = ProjectStore.Load(task.ProjectId);
+                    var drawing = project.Drawings.FirstOrDefault(item => string.Equals(
+                        NormalizeSourcePath(item.SourcePath), NormalizeSourcePath(selected.FullPath),
+                        StringComparison.OrdinalIgnoreCase));
+                    if (drawing == null || ProjectStore.ValidateSource(drawing) != ProjectSourceValidation.Valid)
+                    {
+                        StatusMessage = "源图缺失或已变化，未套用历史句柄译文；请重新导入该图纸。";
+                        return;
+                    }
+                    loaded = await LoadProjectEntitiesAsync(project, [drawing]);
+                    if (loaded.Count == 0)
+                    {
+                        StatusMessage = "历史项目中没有找到这张图纸的译文条目。";
+                        return;
+                    }
+                }
+                else
+                {
+                    loaded = await Task.Run(() => string.Equals(Path.GetExtension(selected.FullPath), ".dxf",
+                        StringComparison.OrdinalIgnoreCase)
+                        ? _dxfReader?.ExtractFromFile(selected.FullPath) ?? new List<DwgTranslator.Core.Models.TextEntity>()
+                        : _dwgReaderService.ExtractFromFile(selected.FullPath));
+                    var saved = task?.SuccessfulTranslations?.ToDictionary(pair => (pair.Handle, pair.SourceText));
+                    if (saved != null)
+                        foreach (var entity in loaded)
+                            if (saved.TryGetValue((entity.Handle, entity.PlainText), out var pair))
+                            {
+                                entity.TranslatedText = pair.TranslatedText;
+                                entity.Status = pair.Status;
+                                entity.GlossaryHit = pair.GlossaryHit;
+                            }
+                }
+                foreach (var entity in loaded) entity.SourceFilePath = selected.FullPath;
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "恢复任务 {TaskId} 的校对文字失败", selected.Task?.Id);
+                StatusMessage = "无法重新读取这张图纸的校对内容，请检查源文件。";
+                return;
+            }
+        }
+
+        if (loaded.Count == 0)
+        {
+            StatusMessage = "该历史任务没有可显示的译文条目，请重新导入图纸。";
+            return;
+        }
+
+        if (project != null || Entities.All(entity => !string.Equals(
+            NormalizeSourcePath(entity.SourceFilePath), NormalizeSourcePath(selected.FullPath),
+            StringComparison.OrdinalIgnoreCase)))
+        {
+            Entities.Clear();
+            foreach (var entity in loaded) Entities.Add(entity);
+            InvalidateEntityIndex();
+            if (project != null)
+            {
+                ActiveTranslationProject = project;
+                CurrentSourceLang = project.SourceLanguage;
+                CurrentTargetLang = project.TargetLanguage;
+            }
+            else ActiveTranslationProject = null;
+            UpdateStatistics();
+        }
+
+        SelectedDrawingFile = selected;
         ApplyFilter();
         IsProofreading = true;
         IsTaskDetailOpen = false;

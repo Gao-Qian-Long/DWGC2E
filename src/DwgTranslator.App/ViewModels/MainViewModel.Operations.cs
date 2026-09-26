@@ -219,7 +219,7 @@ public partial class MainViewModel
     /// <summary>
     /// 校对视图顶部的分类摘要（用户批注 2026-09-23：「把没有翻译的，还有替换了的，标记一下，让用户知道」）。
     /// 直接读 Entities，不新增计数字段；由 <see cref="UpdateStatistics"/> 统一触发重算。
-    /// 「未翻译」= Skipped（源图里无文字、或排版阶段被跳过的条目）；「术语命中」= 译文由术语库直接替换而来。
+    /// 「已跳过」= 明确按规则保留原文的条目；具体原因显示在状态标签悬浮提示中。
     /// </summary>
     public bool HasEntityCategorySummary => Entities.Count > 0;
 
@@ -236,7 +236,7 @@ public partial class MainViewModel
             var glossary = Entities.Count(e => e.GlossaryHit);
             var pending = Entities.Count(e => e.Status == TranslationStatus.Pending);
             var failed = Entities.Count(e => e.Status == TranslationStatus.TranslationFailed);
-            return $"本张 {Entities.Count} 条 · 未翻译 {skipped} · 术语命中 {glossary} · 待翻译 {pending} · 失败 {failed}";
+            return $"本张 {Entities.Count} 条 · 已跳过 {skipped} · 术语命中 {glossary} · 待翻译 {pending} · 失败 {failed}";
         }
     }
 

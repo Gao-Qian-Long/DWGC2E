@@ -60,12 +60,14 @@ public sealed partial class SmokeApp
             Check(FindVisuals<Button>(dialog).Single(b => Equals(b.Content,"下载并准备更新")).IsEnabled == false, "unsigned update install is disabled");
             Capture(dialog,"update-recommendation"); dialog.Close();
             Check(vm.HasAvailableUpdate, "dismissed recommendation retains update entry");
-            window.Width = 600; window.UpdateLayout();
+            // 窗口下限由 MainWindow.xaml 的 MinWidth 决定（§自适应后为 1024）：直接写 600 只会被 WPF
+            // 顶回去，所以这里明确用"当前下限"作为测量档，量到的才是用户真能看到的最窄状态。
+            window.Width = window.MinWidth; window.UpdateLayout();
             var banner = (FrameworkElement)window.FindName("SiteAnnouncement");
             var update = FindVisuals<Button>(window).Single(b => Equals(b.Content,"建议更新"));
-            Check(banner.TranslatePoint(new Point(banner.ActualWidth,0),window).X <= update.TranslatePoint(new Point(0,0),window).X, "ticker and update entry do not overlap at minimum width");
+            Check(banner.TranslatePoint(new Point(banner.ActualWidth,0),window).X <= update.TranslatePoint(new Point(0,0),window).X, "ticker and update entry do not overlap at the minimum window width");
             Capture(window,"announcement-update-minimum-width");
-            window.Width = 1366;
+            FitNativeWindow(window, new Size(1366, window.Height));
             config.AutoCheckUpdate = true;
             api.FailUpdate = true; await vm.CheckUpdatesAsync(true);
             Check(vm.HasAvailableUpdate && vm.AboutFeedback.Contains("无法检查") && !vm.SettingsFeedback.Contains("无法检查"), "transient failure preserves known update and reports manual error");

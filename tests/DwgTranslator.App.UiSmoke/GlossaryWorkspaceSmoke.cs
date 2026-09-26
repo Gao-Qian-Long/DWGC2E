@@ -144,9 +144,8 @@ public sealed partial class SmokeApp
             Check(vm.TermLocalStatus.Contains("已保存") && vm.TermCloudStatus.Contains("手动同步"),"local/cloud status channels remain distinct");
             vm.TermFeedback="本机已保存 · 云端需手动同步";
             await Task.Delay(4200);
-            var width=window.Width; var height=window.Height;
-            foreach(var size in new[] {1366d,1920d,2560d}) { window.Width=size; window.Height=900; await Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ApplicationIdle); Capture(window,"workspace-"+size); }
-            window.Width=width; window.Height=height;
+            foreach(var size in new[] {1366d,1920d,2560d})
+                CaptureLayout(window, new Size(size, 900), "workspace-"+size);
             table.SelectedItem=vm.TermDraft[1]; table.UpdateLayout();
             var more=FindVisuals<Button>(table).First(b=>b.DataContext==vm.TermDraft[1] && Equals(b.Content,"⋯"));
             Check(more.ActualHeight == 32 && table.RowHeight >= more.ActualHeight + 8,"row quick actions fit inside compact cell padding");

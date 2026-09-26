@@ -3,6 +3,7 @@
 # Output: retained fixtures, logs and results under artifacts; requires installed Inno 6 + Chinese ISL.
 param([Parameter(Mandatory=$true)][string]$PublishDir,[string]$Compiler,[string]$ResultDir,[string]$PreviousPublishDir)
 $ErrorActionPreference='Stop'
+Import-Module Microsoft.PowerShell.Utility -ErrorAction Stop
 $root=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..')).TrimEnd('\')
 if(-not $Compiler){$Compiler=Join-Path $env:LOCALAPPDATA 'Programs/Inno Setup 6/ISCC.exe'}
 if(-not (Test-Path -LiteralPath $Compiler -PathType Leaf)){throw 'Inno compiler not found'}

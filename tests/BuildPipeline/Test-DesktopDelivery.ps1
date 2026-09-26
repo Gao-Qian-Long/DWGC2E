@@ -1,6 +1,7 @@
 ﻿# Purpose: exercise data preservation and delivery fail-closed contracts without replacing release.
 param([string]$ResultDir)
 $ErrorActionPreference='Stop'
+Import-Module Microsoft.PowerShell.Utility -ErrorAction Stop
 $root=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..')).TrimEnd('\')
 if(-not $ResultDir){$ResultDir=Join-Path $root ('artifacts/delivery-test-'+[guid]::NewGuid().ToString('N'))}
 $fixture=Join-Path $ResultDir 'workspace'

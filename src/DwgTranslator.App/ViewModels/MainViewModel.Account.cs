@@ -36,11 +36,16 @@ public partial class MainViewModel
     private string? _loginReturnPage;
     private DateTime _lastMembershipRefreshUtc = DateTime.MinValue;
     private bool _isMembershipActivationRefreshRunning;
+    private CancellationTokenSource? _accountRefreshCts;
+    private TaskCompletionSource<bool>? _accountRefreshCompleted;
+    private bool _accountRefreshCancelledForLogin;
+    private static readonly TimeSpan AccountRefreshTimeout = TimeSpan.FromSeconds(20);
     public bool IsAccountLoggedIn => _sessionVerified;
     public string RefreshAccountButtonText => IsAccountRefreshing ? "同步中…" : "刷新权益";
     public string SavedSessionRecoveryButtonText => IsAccountRefreshing ? "正在验证…" : "重新验证会话";
     public bool HasSavedAccountSession => !string.IsNullOrWhiteSpace(AppConfig.DecryptApiKey(_config.AuthTokenEncrypted));
-    public string AccountEntryText => IsAccountLoggedIn ? AccountDisplayNameText : "登录账号";
+    public string AccountEntryText => FirstNonBlank(OnlineProfile?.DisplayName, LoginName,
+        IsAccountLoggedIn ? "已登录账号" : "登录账号");
     public bool RequireAccount()
     {
         if (IsLoggingIn) { AccountFeedback = "账户正在切换，请稍后再执行操作。"; return false; }
@@ -58,12 +63,25 @@ public partial class MainViewModel
     {
         get
         {
-            var name = (OnlineProfile?.DisplayName ?? "U").Trim();
-            return name.Length == 0 ? "U" : name[..Math.Min(2, name.Length)].ToUpperInvariant();
+            var name = FirstNonBlank(
+                OnlineProfile?.DisplayName,
+                OnlineProfile?.Email?.Split('@')[0],
+                LoginName?.Split('@')[0],
+                IsAccountLoggedIn ? "已登录账号" : "登录账号");
+            return name[..Math.Min(2, name.Length)].ToUpperInvariant();
         }
     }
-    public string AccountDisplayNameText => string.IsNullOrWhiteSpace(OnlineProfile?.DisplayName) ? (IsAccountLoggedIn ? "已登录账号" : "未登录") : OnlineProfile.DisplayName;
+    public string AccountDisplayNameText => FirstNonBlank(OnlineProfile?.DisplayName, LoginName,
+        IsAccountLoggedIn ? "已登录账号" : "未登录");
     public string AccountEmailText => OnlineProfile?.Email ?? string.Empty;
+    private static string FirstNonBlank(params string?[] values) =>
+        values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim() ?? "用户";
+    partial void OnLoginNameChanged(string value)
+    {
+        OnPropertyChanged(nameof(AccountDisplayNameText));
+        OnPropertyChanged(nameof(AccountAvatarText));
+        OnPropertyChanged(nameof(AccountEntryText));
+    }
     public string OnlinePlanText => string.IsNullOrWhiteSpace(OnlineSubscription?.PlanName) ? "未同步套餐" : OnlineSubscription.PlanName;
     public string MembershipTierColor => (OnlineSubscription?.PlanName ?? "").ToLowerInvariant() switch
     { "max" => "#805719", "pro" => "#974719", "go" => "#A95724", _ => "#6E675D" };
@@ -118,10 +136,11 @@ public partial class MainViewModel
         finally { _isMembershipActivationRefreshRunning = false; }
     }
 
-    private static async Task<BillingEntitlements?> ReadOptionalBillingSnapshot(IBillingClient billing)
+    private static async Task<BillingEntitlements?> ReadOptionalBillingSnapshot(IBillingClient billing, CancellationToken cancellationToken)
     {
-        try { return await billing.GetBillingEntitlementsAsync(); }
+        try { return await billing.GetBillingEntitlementsAsync(cancellationToken); }
         catch (ApiAuthenticationException) { throw; }
+        catch (OperationCanceledException) { throw; }
         catch (Exception ex) { Log.Debug("会员快照暂不可用：{Type}", ex.GetType().Name); return null; }
     }
 
@@ -221,20 +240,39 @@ public partial class MainViewModel
         IsAccountRefreshing = true;
         AccountState = AccountSessionState.Validating;
         AccountFeedback = "正在验证会话并同步账户…";
+        var refreshCts = new CancellationTokenSource(AccountRefreshTimeout);
+        var refreshCompleted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _accountRefreshCts = refreshCts;
+        _accountRefreshCompleted = refreshCompleted;
+        _accountRefreshCancelledForLogin = false;
         try
         {
-            var profileTask = _apiClient.GetProfileAsync();
-            var billingTask = _apiClient is IBillingClient billing ? ReadOptionalBillingSnapshot(billing) : null;
-            var subscriptionTask = billingTask == null ? _apiClient.GetSubscriptionAsync() : Task.FromResult<SubscriptionInfo?>(null);
-            var usageTask = billingTask == null ? _apiClient.GetUsageAsync() : Task.FromResult<UsageInfo?>(null);
-            var devicesTask = _apiClient.GetDevicesAsync();
-            await Task.WhenAll(profileTask, subscriptionTask, usageTask, devicesTask, (Task?)billingTask ?? Task.CompletedTask).ConfigureAwait(true);
+            var cancellationToken = refreshCts.Token;
+            var profileTask = _apiClient.GetProfileAsync(cancellationToken);
+            var billingTask = _apiClient is IBillingClient billing ? ReadOptionalBillingSnapshot(billing, cancellationToken) : null;
+            var subscriptionTask = billingTask == null ? _apiClient.GetSubscriptionAsync(cancellationToken) : Task.FromResult<SubscriptionInfo?>(null);
+            var usageTask = billingTask == null ? _apiClient.GetUsageAsync(cancellationToken) : Task.FromResult<UsageInfo?>(null);
+            var devicesTask = _apiClient.GetDevicesAsync(cancellationToken);
+            await Task.WhenAll(profileTask, subscriptionTask, usageTask, devicesTask, (Task?)billingTask ?? Task.CompletedTask)
+                .WaitAsync(cancellationToken).ConfigureAwait(true);
             if (sessionVersion != _sessionVersion) return;
-            OnlineProfile = await profileTask;
+            var fetchedProfile = await profileTask;
+            if (fetchedProfile != null)
+            {
+                // A partial profile response is not a logout: keep the last non-empty name/email
+                // until a complete response arrives, so the shell never flashes the generic avatar.
+                if (string.IsNullOrWhiteSpace(fetchedProfile.DisplayName) && !string.IsNullOrWhiteSpace(OnlineProfile?.DisplayName))
+                    fetchedProfile.DisplayName = OnlineProfile.DisplayName;
+                if (string.IsNullOrWhiteSpace(fetchedProfile.Email) && !string.IsNullOrWhiteSpace(OnlineProfile?.Email))
+                    fetchedProfile.Email = OnlineProfile.Email;
+                OnlineProfile = fetchedProfile;
+            }
+            // A transient null profile is an offline snapshot, not proof that a previously verified
+            // session disappeared. Only explicit auth rejection or logout clears cached identity.
             _sessionVerified = OnlineProfile != null || _sessionVerified;
-            AccountState = OnlineProfile != null ? AccountSessionState.SignedIn : AccountSessionState.Offline;
-            AccountFeedback = OnlineProfile == null ? "暂时无法同步账户，请检查网络后重试。" : "账户信息已同步。";
-            if (OnlineProfile != null) _lastMembershipRefreshUtc = DateTime.UtcNow;
+            AccountState = fetchedProfile != null ? AccountSessionState.SignedIn : AccountSessionState.Offline;
+            AccountFeedback = fetchedProfile == null ? "暂时无法同步账户，已保留上次账户信息；可稍后重试。" : "账户信息已同步。";
+            if (fetchedProfile != null) _lastMembershipRefreshUtc = DateTime.UtcNow;
             if (billingTask != null) { var snapshot = await billingTask; if(snapshot != null) ApplyBillingEntitlements(snapshot); else AccountFeedback = OnlineProfile != null ? "已登录，会员与额度暂未同步，请稍后刷新；请勿重复付款。" : AccountFeedback; }
             else { OnlineSubscription = await subscriptionTask; OnlineUsage = await usageTask; }
             var devices = await devicesTask;
@@ -252,6 +290,15 @@ public partial class MainViewModel
             // 后台重试）不出声——用户没请求它，且 ToastHost.xaml.cs:44 对同文案重复 Show() 会重置
             // 4s 倒计时导致永不过期、盖住 C6 第 3 块磁贴。AccountFeedback 与失败告警通道均不受影响。
             if (userInitiated && AccountFeedback == "账户信息已同步。" && CurrentPage == PageAccount) ToastService.Success("账户信息已同步");
+        }
+        catch (OperationCanceledException) when (refreshCts.IsCancellationRequested)
+        {
+            if (sessionVersion != _sessionVersion) return;
+            AccountState = _sessionVerified ? AccountSessionState.SignedIn : AccountSessionState.Offline;
+            AccountFeedback = _accountRefreshCancelledForLogin
+                ? "已停止旧会话验证，正在使用账号密码登录。"
+                : "会话验证超时，已保留上次账户信息；仍可使用账号密码登录或稍后重试。";
+            Log.Debug("账户刷新在 {Reason} 后结束", _accountRefreshCancelledForLogin ? "登录接管" : "超时");
         }
         catch (ApiAuthenticationException ex)
         {
@@ -306,7 +353,18 @@ public partial class MainViewModel
             ToastService.Warning("登录已过期，请重新登录。");
         }
         catch (Exception ex) { if (sessionVersion != _sessionVersion) return; AccountState = AccountSessionState.Offline; AccountFeedback = "暂时无法连接服务，请检查网络后重试。"; Log.Warning(ex, "刷新在线账户信息失败"); ToastService.Warning(AccountFeedback); }
-        finally { IsAccountRefreshing = false; NotifyAccount(); }
+        finally
+        {
+            IsAccountRefreshing = false;
+            NotifyAccount();
+            if (ReferenceEquals(_accountRefreshCts, refreshCts))
+            {
+                _accountRefreshCts = null;
+                _accountRefreshCompleted = null;
+            }
+            refreshCts.Dispose();
+            refreshCompleted.TrySetResult(true);
+        }
     }
     [RelayCommand]
     private async Task RevokeDeviceAsync(DeviceInfo? device)
@@ -345,7 +403,23 @@ public partial class MainViewModel
 
     public async Task SubmitLoginAsync(string password)
     {
-        if (IsLoggingIn || IsAccountRefreshing) return;
+        if (IsLoggingIn) return;
+        if (IsAccountRefreshing)
+        {
+            _accountRefreshCancelledForLogin = true;
+            var refreshCompleted = _accountRefreshCompleted?.Task;
+            _accountRefreshCts?.Cancel();
+            if (refreshCompleted != null)
+            {
+                try { await refreshCompleted.WaitAsync(TimeSpan.FromSeconds(5)); }
+                catch (TimeoutException)
+                {
+                    AccountFeedback = "旧会话验证仍在收尾，请稍后再提交登录。";
+                    return;
+                }
+            }
+            if (IsAccountRefreshing) return;
+        }
         if (IsExporting || IsGlossaryLoading || IsProcessing)
         {
             AccountFeedback = "当前有任务或数据操作正在进行，请完成后再切换账号。";

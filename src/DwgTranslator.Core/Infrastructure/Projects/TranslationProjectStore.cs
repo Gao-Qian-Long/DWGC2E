@@ -36,6 +36,7 @@ public interface ITranslationProjectStore
     IReadOnlyList<TranslationProjectSummary> List(string? search = null);
     void Save(TranslationProject project);
     void Rename(string projectId, string name);
+    void Delete(string projectId);
     ProjectSourceValidation ValidateSource(TranslationProjectDrawing drawing);
     void AppendExport(string projectId, TranslationProjectExport export);
 }
@@ -119,6 +120,17 @@ public sealed class TranslationProjectStore : ITranslationProjectStore
             var project = ReadProject(path, projectId);
             project.Name = name.Trim();
             SaveLocked(project, path);
+        });
+    }
+
+    /// <summary>Removes one archived translation project. Source drawings and exported files are never touched.</summary>
+    public void Delete(string projectId)
+    {
+        var path = ProjectFile(projectId);
+        WithProjectLock(path, () =>
+        {
+            var directory = Path.GetDirectoryName(path)!;
+            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
         });
     }
 

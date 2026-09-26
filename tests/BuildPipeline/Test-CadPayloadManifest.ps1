@@ -3,6 +3,7 @@
 # Usage: powershell -NoProfile -File tests/BuildPipeline/Test-CadPayloadManifest.ps1 -EvidenceDir artifacts/<task>/manifest-test
 param([Parameter(Mandatory=$true)][string]$EvidenceDir)
 $ErrorActionPreference = 'Stop'
+Import-Module Microsoft.PowerShell.Utility -ErrorAction Stop
 $root = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 $out = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($EvidenceDir)
 if (Test-Path -LiteralPath $out) { throw 'Use a fresh EvidenceDir; existing evidence is never overwritten.' }

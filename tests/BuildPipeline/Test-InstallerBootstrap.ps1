@@ -3,6 +3,7 @@
 # Uses NoLaunch/NoPrompt/NoShortcuts; no actual APP execution or desktop/start-menu writes.
 param([string]$ResultDir)
 $ErrorActionPreference='Stop'
+Import-Module Microsoft.PowerShell.Utility -ErrorAction Stop
 $root=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..')).TrimEnd('\')
 if(-not $ResultDir){$ResultDir=Join-Path $root ('artifacts/installer-safety-20260916-resumed/bootstrap-'+[guid]::NewGuid().ToString('N'))}
 $ResultDir=[IO.Path]::GetFullPath($ResultDir).TrimEnd('\')

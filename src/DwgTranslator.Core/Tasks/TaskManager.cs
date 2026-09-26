@@ -409,21 +409,28 @@ public sealed class TaskManager : ITaskManager, ITaskRecoveryDiagnostics, IRunti
         ThrowIfDisposed();
         if (task == null) return;
 
-        bool removed;
+        TranslationTask[] removed;
         lock (_gate)
         {
-            if (task.IsActive)
+            var path = NormalizePath(task.FilePath);
+            var matches = _tasks.Where(candidate => candidate.Id == task.Id
+                || (!string.IsNullOrEmpty(path)
+                    && string.Equals(NormalizePath(candidate.FilePath), path, StringComparison.OrdinalIgnoreCase)))
+                .ToArray();
+            if (matches.Any(candidate => candidate.IsActive))
             {
-                // 工作线程还持有这个对象，抽走它只会让状态更新落到队列外。
+                // 工作线程还持有这张图纸的任一任务对象，抽走部分历史只会造成同一路径状态分裂。
                 Log.Warning("任务正在执行，无法从队列移除：{File}", task.FileName);
                 return;
             }
 
-            removed = _tasks.Remove(task) || _tasks.RemoveAll(t => t.Id == task.Id) > 0;
-            if (removed) _pendingFromLastRun.RemoveAll(t => t.Id == task.Id);
+            foreach (var match in matches) _tasks.Remove(match);
+            var removedIds = matches.Select(match => match.Id).Append(task.Id).ToHashSet(StringComparer.Ordinal);
+            _pendingFromLastRun.RemoveAll(pending => removedIds.Contains(pending.Id));
+            removed = matches;
         }
 
-        if (!removed) return;
+        if (removed.Length == 0) return;
         RaiseOverallProgress();
         SaveNow();
     }
@@ -831,8 +838,20 @@ public sealed class TaskManager : ITaskManager, ITaskRecoveryDiagnostics, IRunti
                 foreach (var entity in entities)
                 {
                     if (!savedByKey.TryGetValue((entity.Handle, entity.PlainText), out var saved)) continue;
+                    // Older task files checkpointed every Skipped result as successful. If a
+                    // Chinese source phrase was mistakenly skipped by an earlier filter, do not
+                    // restore that stale decision: leave it Pending so current rules can translate
+                    // it while preserving all genuinely completed work.
+                    if (saved.Status == TranslationStatus.Skipped
+                        && !string.IsNullOrWhiteSpace(entity.PlainText)
+                        && !entity.IsXref
+                        && !AttributeTranslationPolicy.IsMetadataHandle(entity.Handle)
+                        && !TranslationFilter.ShouldSkipTranslation(entity.PlainText, _sourceLanguage, _targetLanguage))
+                        continue;
                     entity.TranslatedText = saved.TranslatedText;
                     entity.Status = saved.Status;
+                    if (saved.Status == TranslationStatus.Skipped && !string.IsNullOrWhiteSpace(saved.ErrorMessage))
+                        entity.Notes = saved.ErrorMessage;
                     task.TranslatedCount++;
                 }
             }
@@ -1033,7 +1052,14 @@ public sealed class TaskManager : ITaskManager, ITaskRecoveryDiagnostics, IRunti
         foreach (var entity in entities)
         {
             entity.SourceFilePath = fullPath;
-            entity.Notes = $"Source: {Path.GetFileNameWithoutExtension(path)}";
+            entity.Notes = entity.Status == TranslationStatus.Skipped
+                ? entity.EntityType == "AttributeDefinition"
+                    ? "块属性定义是插入属性的默认模板，不是图纸上显示的属性参照；实际属性参照会单独翻译。"
+                    : AttributeTranslationPolicy.IsMetadataHandle(entity.Handle)
+                        ? "WD_TB 标题栏机器映射字段，按规则保留，不作为可见注释翻译。"
+                        : TranslationFilter.GetSkipReason(entity.PlainText, _sourceLanguage, _targetLanguage)
+                            ?? "此图元类型当前不参与文字翻译。"
+                : $"Source: {Path.GetFileNameWithoutExtension(path)}";
         }
 
         return entities;
@@ -1063,6 +1089,9 @@ public sealed class TaskManager : ITaskManager, ITaskRecoveryDiagnostics, IRunti
             entity.TranslatedText = pair.TranslatedText;
             entity.Status = pair.Status;
             entity.GlossaryHit = pair.GlossaryHit;
+            if (!string.IsNullOrWhiteSpace(pair.ErrorMessage)
+                && pair.Status is TranslationStatus.Skipped or TranslationStatus.TranslationFailed)
+                entity.Notes = pair.ErrorMessage;
         }
     }
     /// <summary>

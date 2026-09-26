@@ -14,6 +14,9 @@ public sealed class SavedOutputsWindow : Window
         // 非客户区≈40、固定 chrome≈140（标题 43 + 按钮行 48 + 外边距 48）、每行≈44。
         Width = 640; Height = Math.Clamp(40 + 140 + paths.Length * 44, 300, 420); MinWidth = 460; MinHeight = 300;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        // §自适应（2026-09-25）：MinWidth=460 / 固定 640 宽在窄屏上会被工作区截住并压坏内容，
+        // 收敛尺寸上下限，溢出交给下方 ListBox 自己的横向/纵向滚动承担。
+        Controls.DialogShell.Constrain(this);
         Background = (Brush)Application.Current.FindResource("Brush.Surface");
         var panel = new DockPanel { Margin = new Thickness(24) };
         var heading = new TextBlock { Text = $"已保存 {paths.Length} 份图纸", FontSize = 20, Margin = new Thickness(0, 0, 0, 16) };

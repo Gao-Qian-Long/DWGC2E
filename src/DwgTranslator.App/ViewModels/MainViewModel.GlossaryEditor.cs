@@ -83,11 +83,11 @@ public partial class MainViewModel
         RefreshTermView();
     }
     [RelayCommand] private async Task FinishTermEditAsync() { if (await SaveTermEditorAsync()) CloseTermDrawer(); }
-    [RelayCommand] private void DeleteTerm()
+    [RelayCommand] private async Task DeleteTerm()
     {
         if (SelectedTerm == null || SelectedTerm.SourceKind != GlossarySource.User) return;
         if (Views.PromptDialog.Show("仅删除本机术语，云端副本保留。确定删除？", "删除术语", MessageBoxButton.YesNo) != MessageBoxResult.Yes) return;
-        var term = SelectedTerm; if (CommitWorkspaceChange(() => TermDraft.Remove(term))) CloseTermDrawer();
+        var term = SelectedTerm; if (await CommitWorkspaceChangeAsync(() => TermDraft.Remove(term))) CloseTermDrawer();
     }
     /// <summary>Guards + validation shared by the synchronous and asynchronous save paths.</summary>
     private bool TryPrepareTermSave(out List<GlossaryEntry> entries, out string path)
@@ -123,8 +123,14 @@ public partial class MainViewModel
     {
         if (!TryPrepareTermSave(out var entries, out var path)) return false;
         var committed = false;
+        var loadGateAcquired = false;
+        IsWorkspaceSaving = true;
+        IsGlossaryLoading = true;
+        TermFeedback = "正在保存并重新加载本机术语…";
         try
         {
+            await _glossaryLoadGate.WaitAsync();
+            loadGateAcquired = true;
             PersistWorkspace(entries);
             committed = true;
             // The glossary service must see the new file before anyone translates with these terms.
@@ -132,6 +138,12 @@ public partial class MainViewModel
             return CompleteTermSave(entries);
         }
         catch (Exception ex) { return FailTermSave(committed, ex); }
+        finally
+        {
+            if (loadGateAcquired) _glossaryLoadGate.Release();
+            IsWorkspaceSaving = false;
+            IsGlossaryLoading = false;
+        }
     }
 
     /// <summary>
