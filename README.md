@@ -12,7 +12,7 @@
 | `installer/` | 安装与卸载：`QLCAD.iss`（Inno Setup 编译成 Setup.exe）、`Install.ps1`/`Uninstall.ps1`/`InstallTransaction.ps1`（免管理员安装、按清单精确卸载、失败回滚）、`安装.cmd`/`使用说明.txt`（给用户的入口与说明）。**对编译 APP 本身没有作用** | 动安装行为/安装目录/快捷方式时 |
 | `tools/` | 交付链与运维脚本（发布、打包、安装器编译、包校验、品牌图标生成、截图取证）。分类索引见 [`tools/README.md`](./tools/README.md) | 发版时（`build-release.bat` 走的就是这里） |
 | `tests/` | 测试与探针：哪些会在发版时拦你、哪些是手工跑，见 [`tests/README.md`](./tests/README.md) | 改完代码验证时 |
-| `assets/` | 打包进程序的资源：`icons/`（品牌 SVG 与 ICO）、`glossaries/`（默认术语库）、`prompts/`（已退役提示词，仅作为"安装器要删除的历史路径"存在） | 换图标/改默认术语时 |
+| `assets/` | 打包进程序的资源：`icons/`（品牌 SVG 与 ICO）、`glossaries/`（默认术语库） | 换图标/改默认术语时 |
 | `cf-worker/` | **另一个技术栈**：Cloudflare Worker + D1（登录、会员额度、翻译代理、支付、管理后台）。有自己的 `package.json`/`wrangler.toml`/`migrations`/`tests`，与桌面应用的构建互不影响 | 改后端时 |
 | `release/` | **本机可运行版本**（`QLCAD.exe`），由 `build-release.bat` 产出并替换。位置被约定钉死，不要挪 | 只双击启动 |
 | `artifacts/` | 本地产物：构建候选、安装包、交付记录、回滚备份、历次任务证据。**不入仓库**（见 `.gitignore`），保留策略见 AGENTS.md | 排障时看 |
